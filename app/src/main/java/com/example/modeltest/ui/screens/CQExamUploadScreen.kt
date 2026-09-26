@@ -69,6 +69,7 @@ fun CQExamUploadScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Button(

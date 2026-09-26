@@ -99,6 +99,7 @@ fun ModelTestDetailScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
@@ -150,25 +151,19 @@ fun ModelTestDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (isMissed) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFEF4444)
-                            ) {
-                                Text(
-                                    text = "পরীক্ষা মিস হয়েছে",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = "পরীক্ষার নির্ধারিত সময় পার হয়ে গেছে। মূল পরীক্ষায় অংশগ্রহণের সুযোগ নেই, তবে তুমি প্র্যাকটিস টেস্ট দিয়ে নিজেকে যাচাই করতে পারো।",
-                                fontSize = 13.sp,
+                                text = "দুঃখিত!",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFDC2626)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "তুমি টেস্টটি মিস করেছো",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = Color(0xFF991B1B),
-                                textAlign = TextAlign.Center,
-                                lineHeight = 18.sp
+                                textAlign = TextAlign.Center
                             )
                         } else {
                             Text(
@@ -287,7 +282,7 @@ fun ModelTestDetailScreen(
                     }
                 }
 
-                // 3. MCQ & CQ Info Cards with Master Solution
+                // 3. MCQ & CQ Info Cards with Separate Master Solution Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -297,6 +292,13 @@ fun ModelTestDetailScreen(
                         count = "${toBengaliDigits((info?.mcq_count ?: 30).toString())} টি প্রশ্ন",
                         duration = "${toBengaliDigits((info?.mcq_duration_minutes ?: 30).toString())} মিনিট",
                         icon = Icons.Default.Quiz,
+                        showMasterSolution = isMissed,
+                        onMasterSolutionClick = {
+                            viewModel.loadMasterSolution(modelTestId, "mcq") { url ->
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                context.startActivity(intent)
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
                     ExamPartCard(
@@ -304,32 +306,15 @@ fun ModelTestDetailScreen(
                         count = "${toBengaliDigits((info?.cq_count ?: 2).toString())} টি প্রশ্ন",
                         duration = "${toBengaliDigits((info?.cq_duration_minutes ?: 100).toString())} মিনিট",
                         icon = Icons.Default.Description,
+                        showMasterSolution = isMissed,
+                        onMasterSolutionClick = {
+                            viewModel.loadMasterSolution(modelTestId, "cq") { url ->
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                context.startActivity(intent)
+                            }
+                        },
                         modifier = Modifier.weight(1f)
                     )
-                }
-
-                // Master Solution Button
-                OutlinedButton(
-                    onClick = {
-                        viewModel.loadMasterSolution(modelTestId) { url ->
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                            context.startActivity(intent)
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                ) {
-                    if (uiState.isMasterSolutionLoading) {
-                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("মাস্টার সলুশন লোড হচ্ছে...")
-                    } else {
-                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("মাস্টার সলুশন (PDF)", fontWeight = FontWeight.Bold)
-                    }
                 }
 
                 // 4. Practice Test Section (Dynamic Limit & History)
@@ -515,6 +500,8 @@ private fun ExamPartCard(
     count: String,
     duration: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    showMasterSolution: Boolean = false,
+    onMasterSolutionClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -530,6 +517,22 @@ private fun ExamPartCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = count, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(text = duration, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if (showMasterSolution) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onMasterSolutionClick,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8)),
+                    border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("মাস্টার সল্যুশন", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

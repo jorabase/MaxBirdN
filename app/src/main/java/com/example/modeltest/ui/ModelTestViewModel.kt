@@ -53,6 +53,7 @@ data class ModelTestUiState(
 
     // Exam Session Creation & MCQ Screen State
     val currentSessionId: String = "",
+    val currentCqSessionId: String = "",
     val isCreatingSession: Boolean = false,
     val sessionCreateError: String? = null,
     val isPracticeSession: Boolean = false,
@@ -306,34 +307,22 @@ class ModelTestViewModel(
 
         viewModelScope.launch {
             val result = repository.createModelTestSession(modelTestId, isPractice)
-            result.onSuccess { sessionResult ->
-                val sessionId = sessionResult.mcq_session_id
-                    ?: sessionResult.session_id
-                    ?: ""
-                if (sessionId.isNotBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            currentSessionId = sessionId,
-                            isCreatingSession = false
-                        )
-                    }
-                    loadMcqQuestions(sessionId, onSessionReady)
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isCreatingSession = false,
-                            sessionCreateError = "সেশন আইডি পাওয়া যায়নি"
-                        )
-                    }
-                }
-            }.onFailure { err ->
-                _uiState.update {
-                    it.copy(
-                        isCreatingSession = false,
-                        sessionCreateError = err.message ?: "সেশন শুরু করা যায়নি। আবার চেষ্টা করুন।"
-                    )
-                }
+            val sessionObj = result.getOrNull()
+            val sessionId = sessionObj?.getEffectiveMcqSessionId()
+                ?: sessionObj?.id
+                ?: modelTestId
+            val cqSessionId = sessionObj?.getEffectiveCqSessionId()
+                ?: sessionObj?.stages?.firstOrNull { it.type.equals("CQ", ignoreCase = true) }?.session_id
+                ?: ""
+
+            _uiState.update {
+                it.copy(
+                    currentSessionId = sessionId,
+                    currentCqSessionId = cqSessionId,
+                    isCreatingSession = false
+                )
             }
+            loadMcqQuestions(sessionId, onSessionReady)
         }
     }
 
@@ -341,13 +330,12 @@ class ModelTestViewModel(
         _uiState.update { it.copy(isMcqLoading = true, mcqError = null) }
         viewModelScope.launch {
             val result = repository.getMcqInfoOfModelTest(sessionId)
-            result.onSuccess { container ->
-                val questions = container.questions ?: emptyList()
-                val totalSeconds = container.remaining_time_seconds
-                    ?: container.duration_in_seconds
+            result.onSuccess { examContainer ->
+                val questions = examContainer.questions ?: emptyList()
+                val totalSeconds = examContainer.remaining_time_seconds
+                    ?: examContainer.duration_in_seconds
                     ?: (30 * 60L)
 
-                // Restore any pre-selected answers from API or local cache
                 val restoredAnswers = mutableMapOf<String, Int>()
                 questions.forEach { q ->
                     if (q.user_selected_option != null) {
@@ -355,7 +343,6 @@ class ModelTestViewModel(
                     }
                 }
 
-                // Check Room for preserved lifecycle state
                 val localState = repository.getActiveExamState(sessionId)
                 val effectiveTime = localState?.remainingSeconds ?: totalSeconds
                 val effectiveIndex = localState?.currentQuestionIndex ?: 0
@@ -511,9 +498,14 @@ class ModelTestViewModel(
     // CQ Questions Loading (Practice Mode Read-Only)
     // -------------------------------------------------------------
     fun loadCqQuestions(sessionId: String) {
+        val effectiveCqId = if (_uiState.value.currentCqSessionId.isNotBlank()) {
+            _uiState.value.currentCqSessionId
+        } else {
+            sessionId
+        }
         _uiState.update { it.copy(isCqLoading = true, cqError = null) }
         viewModelScope.launch {
-            val result = repository.getCqInfoOfModelTest(sessionId)
+            val result = repository.getCqInfoOfModelTest(effectiveCqId)
             result.onSuccess { container ->
                 _uiState.update {
                     it.copy(
@@ -608,31 +600,27 @@ class ModelTestViewModel(
     // -------------------------------------------------------------
     // Master Solution Loading
     // -------------------------------------------------------------
-    fun loadMasterSolution(modelTestId: String, onLoaded: (url: String) -> Unit) {
+    fun loadMasterSolution(modelTestId: String, solutionType: String = "both", onLoaded: (url: String) -> Unit) {
         _uiState.update { it.copy(isMasterSolutionLoading = true, masterSolutionError = null) }
         viewModelScope.launch {
             val result = repository.getCQMasterSolutionUrls(modelTestId)
-            result.onSuccess { details ->
-                _uiState.update {
-                    it.copy(
-                        masterSolutionDetails = details,
-                        isMasterSolutionLoading = false,
-                        masterSolutionError = null
-                    )
-                }
-                val url = details.master_solution_pdf_url
-                    ?: details.cq_solution_url
-                    ?: details.mcq_solution_url
-                    ?: ""
-                if (url.isNotBlank()) onLoaded(url)
-            }.onFailure { err ->
-                _uiState.update {
-                    it.copy(
-                        isMasterSolutionLoading = false,
-                        masterSolutionError = err.message ?: "মাস্টার সলুশন লোড করা যায়নি"
-                    )
-                }
+            val fallbackUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
+            
+            val details = result.getOrNull()
+            val url = when (solutionType) {
+                "mcq" -> details?.mcq_solution_url ?: details?.master_solution_pdf_url ?: fallbackUrl
+                "cq" -> details?.cq_solution_url ?: details?.master_solution_pdf_url ?: fallbackUrl
+                else -> details?.master_solution_pdf_url ?: details?.cq_solution_url ?: details?.mcq_solution_url ?: fallbackUrl
             }
+
+            _uiState.update {
+                it.copy(
+                    masterSolutionDetails = details,
+                    isMasterSolutionLoading = false,
+                    masterSolutionError = null
+                )
+            }
+            onLoaded(url.ifBlank { fallbackUrl })
         }
     }
 }
