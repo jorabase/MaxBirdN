@@ -34,14 +34,13 @@ class ModelTestRepository(
                   id
                   content_id
                   content_type
+                  program_id
+                  user_activity_state
                   start_time
                   end_time
                   subject_name
-                  user_activity_state
                   model_test {
                     result_publish_time
-                    type
-                    exam_category
                   }
                   live_class {
                     chapter_id
@@ -53,11 +52,12 @@ class ModelTestRepository(
                     subject_id
                     id
                     type
-                    playback_url
-                    recording_url
-                    stream_url
-                    video_url
                   }
+                  model_test {
+                    type
+                    exam_category
+                  }
+                  phase_id
                 }
               }
             }
@@ -77,8 +77,13 @@ class ModelTestRepository(
                 variables = variables
             )
             val response = apiService.getStudentLessons(q)
+            if (response.errors != null && response.errors.isNotEmpty()) {
+                val errorMsg = response.errors.firstOrNull()?.message ?: "GraphQL Error"
+                Log.e("ModelTestRepository", "GraphQL error in getSubjectSpecificLessons: $errorMsg")
+                return@withContext Result.failure(Exception(errorMsg))
+            }
             val lessons = response.data?.studentSpecificLessons?.data ?: emptyList()
-            Log.d("ModelTestRepository", "Fetched ${lessons.size} items for contentType=$contentType, subjectId=$subjectId")
+            Log.d("ModelTestRepository", "Fetched ${lessons.size} items for contentType=$contentType, subjectId=$subjectId, phaseId=$phaseId, programId=$programId")
             Result.success(lessons)
         } catch (e: Exception) {
             Log.e("ModelTestRepository", "Error loading $contentType for subject $subjectId: ${e.message}", e)

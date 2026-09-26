@@ -167,7 +167,7 @@ fun ModelTestSubjectScreen(
                         ModelTestListView(
                             items = uiState.modelTests,
                             isLoading = uiState.isModelTestsLoading,
-                            errorMessage = uiState.errorMessage,
+                            errorMessage = uiState.modelTestsError,
                             subjectColor = subjectColor,
                             onRetry = { viewModel.loadModelTests(forceRefresh = true) },
                             onItemClick = onOpenExam
@@ -177,7 +177,7 @@ fun ModelTestSubjectScreen(
                         ClassListView(
                             items = uiState.liveClasses,
                             isLoading = uiState.isClassesLoading,
-                            errorMessage = uiState.errorMessage,
+                            errorMessage = uiState.classesError,
                             subjectColor = subjectColor,
                             onRetry = { viewModel.loadClasses(forceRefresh = true) },
                             onItemClick = onOpenClass

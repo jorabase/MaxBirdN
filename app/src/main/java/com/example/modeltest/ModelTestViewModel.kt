@@ -20,13 +20,20 @@ data class ModelTestUiState(
     val liveClasses: List<StudentLessonItem> = emptyList(),
     val isModelTestsLoading: Boolean = false,
     val isClassesLoading: Boolean = false,
-    val errorMessage: String? = null,
+    val modelTestsError: String? = null,
+    val classesError: String? = null,
     val programId: String = "",
     val phaseId: String = "",
     val subjectCode: String = "",
     val subjectTitle: String = "",
     val subjectColor: String = ""
-)
+) {
+    val currentErrorMessage: String?
+        get() = when (selectedTab) {
+            ModelTestTab.MODEL_TEST -> modelTestsError
+            ModelTestTab.CLASS -> classesError
+        }
+}
 
 class ModelTestViewModel(
     private val repository: ModelTestRepository
@@ -54,7 +61,8 @@ class ModelTestViewModel(
                     selectedTab = ModelTestTab.MODEL_TEST,
                     modelTests = emptyList(),
                     liveClasses = emptyList(),
-                    errorMessage = null
+                    modelTestsError = null,
+                    classesError = null
                 )
             }
             loadModelTests(forceRefresh = true)
@@ -84,7 +92,7 @@ class ModelTestViewModel(
         if (s.modelTests.isNotEmpty() && !forceRefresh) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isModelTestsLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isModelTestsLoading = true, modelTestsError = null) }
             val result = repository.getSubjectSpecificLessons(
                 programId = s.programId,
                 phaseId = s.phaseId,
@@ -95,14 +103,15 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         modelTests = tests,
-                        isModelTestsLoading = false
+                        isModelTestsLoading = false,
+                        modelTestsError = null
                     )
                 }
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
                         isModelTestsLoading = false,
-                        errorMessage = err.message ?: "মডেল টেস্ট লোড করতে সমস্যা হয়েছে"
+                        modelTestsError = err.message ?: "মডেল টেস্ট লোড করতে সমস্যা হয়েছে"
                     )
                 }
             }
@@ -115,7 +124,7 @@ class ModelTestViewModel(
         if (s.liveClasses.isNotEmpty() && !forceRefresh) return
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isClassesLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isClassesLoading = true, classesError = null) }
             val result = repository.getSubjectSpecificLessons(
                 programId = s.programId,
                 phaseId = s.phaseId,
@@ -126,14 +135,15 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         liveClasses = classes,
-                        isClassesLoading = false
+                        isClassesLoading = false,
+                        classesError = null
                     )
                 }
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
                         isClassesLoading = false,
-                        errorMessage = err.message ?: "ক্লাস লোড করতে সমস্যা হয়েছে"
+                        classesError = err.message ?: "ক্লাস লোড করতে সমস্যা হয়েছে"
                     )
                 }
             }

@@ -476,19 +476,22 @@ data class StudentLessonItem(
                 !live_class?.hls_url.isNullOrBlank()
 
     val isExam: Boolean
-        get() = content_type?.equals("LiveExam", ignoreCase = true) == true ||
+        get() {
+            if (content_type?.equals("LiveClass", ignoreCase = true) == true) {
+                return live_class?.type?.contains("EXAM", ignoreCase = true) == true ||
+                       live_class?.type?.contains("QUIZ", ignoreCase = true) == true
+            }
+            return content_type?.equals("LiveExam", ignoreCase = true) == true ||
                 content_type?.equals("ModelTest", ignoreCase = true) == true ||
                 content_type?.equals("Quiz", ignoreCase = true) == true ||
                 content_type?.contains("Exam", ignoreCase = true) == true ||
-                content_type?.contains("Test", ignoreCase = true) == true ||
                 content_type?.contains("Quiz", ignoreCase = true) == true ||
                 class_type?.contains("Exam", ignoreCase = true) == true ||
-                class_type?.contains("Test", ignoreCase = true) == true ||
                 class_type?.contains("Quiz", ignoreCase = true) == true ||
                 type?.contains("Exam", ignoreCase = true) == true ||
                 live_class?.class_type?.contains("Exam", ignoreCase = true) == true ||
-                live_class?.type.equals("EXAM", ignoreCase = true) == true ||
-                live_class?.type.equals("MODEL_TEST", ignoreCase = true) == true ||
+                live_class?.type?.contains("EXAM", ignoreCase = true) == true ||
+                live_class?.type?.contains("QUIZ", ignoreCase = true) == true ||
                 model_test != null ||
                 (title != null && (
                     title.contains("Exam", true) || 
@@ -497,6 +500,7 @@ data class StudentLessonItem(
                     title.contains("Quiz", true) ||
                     title.contains("কুইজ", true)
                 ))
+        }
 
     val classStartMs: Long
         get() {
