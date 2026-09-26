@@ -962,13 +962,346 @@ class ModelTestRepository(
         )
         return result.mapCatching { resp ->
             val solutions = resp.data?.cqExam?.master_solutions ?: emptyList()
-            val firstPdf = solutions.firstOrNull()?.url
-                ?: "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
+            
+            // Fallback distinct PDFs for MCQ and CQ
+            val defaultMcqPdf = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
+            val defaultCqPdf = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
+
+            val mcqMatch = solutions.firstOrNull { 
+                val t = it.title?.lowercase() ?: ""
+                t.contains("mcq") || t.contains("বহুনির্বাচনি") || t.contains("বহুনির্বাচনী") 
+            }?.url ?: solutions.firstOrNull()?.url ?: defaultMcqPdf
+
+            val cqMatch = solutions.firstOrNull { 
+                val t = it.title?.lowercase() ?: ""
+                t.contains("cq") || t.contains("সৃজনশীল") || t.contains("লিখিত") 
+            }?.url ?: solutions.getOrNull(1)?.url ?: solutions.firstOrNull()?.url ?: defaultCqPdf
+
             CQMasterSolutionUrlsDetails(
-                mcq_solution_url = firstPdf,
-                cq_solution_url = firstPdf,
-                master_solution_pdf_url = firstPdf
+                mcq_solution_url = mcqMatch,
+                cq_solution_url = cqMatch,
+                master_solution_pdf_url = mcqMatch
             )
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 13. GetCqUploadRelatedInfo
+    // -------------------------------------------------------------
+    suspend fun getCqUploadRelatedInfo(cqExamId: String): Result<CqUploadRelatedInfo> {
+        val query = """
+            query GetCqUploadRelatedInfo(${'$'}id: String!) {
+              cqExam(id: ${'$'}id) {
+                id
+                number_of_question
+                number_of_question_to_answer
+                submission_duration
+                exam_duration
+              }
+            }
+        """.trimIndent()
+
+        val result = executeApiQuery<GetCqUploadRelatedInfoResponse>(
+            operationName = "GetCqUploadRelatedInfo",
+            query = query,
+            variables = mapOf("id" to cqExamId)
+        )
+        return result.mapCatching {
+            it.data?.cqExam ?: CqUploadRelatedInfo(
+                id = cqExamId,
+                number_of_question = 2,
+                number_of_question_to_answer = 2,
+                submission_duration = 40,
+                exam_duration = 60
+            )
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 14. StartCqSessionSubmission
+    // -------------------------------------------------------------
+    suspend fun startCqSessionSubmission(sessionId: String): Result<CqSessionDetailedInfo> {
+        val query = """
+            mutation StartCqSessionSubmission(${'$'}session_id: String!) {
+              startCqSessionSubmission(session_id: ${'$'}session_id) {
+                message
+                session {
+                  exam_id
+                  expiry_time
+                  id
+                  is_final_submitted
+                  is_started
+                  question_answer {
+                    given_answers {
+                      original_file_info {
+                        file_id
+                        page_no
+                        url
+                      }
+                    }
+                    id
+                    is_submitted
+                    marks
+                    sub_questions {
+                      marks
+                      question
+                    }
+                    submit_time
+                  }
+                  questions {
+                    allocated_time
+                    description
+                    difficulty_level
+                    has_math_equation
+                    id
+                    markdown_version
+                    question_no
+                    question_type
+                    source
+                    sub_questions {
+                      marks
+                      question
+                    }
+                    title
+                    u_code
+                  }
+                  set_identifier
+                  stage
+                  start_time
+                  submission_end_time
+                  title
+                  user_id
+                }
+              }
+            }
+        """.trimIndent()
+
+        val result = executeApiQuery<StartCqSessionSubmissionResponse>(
+            operationName = "StartCqSessionSubmission",
+            query = query,
+            variables = mapOf("session_id" to sessionId)
+        )
+        return result.mapCatching { resp ->
+            resp.data?.startCqSessionSubmission?.session ?: throw Exception("Failed to start CQ submission")
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 15. GetPreSignedUrlList (AWS S3)
+    // -------------------------------------------------------------
+    suspend fun getPreSignedUrlList(
+        examId: String,
+        modelTestId: String,
+        fileNames: List<String>
+    ): Result<List<PreSignedUrlItem>> {
+        val query = """
+            query GetPreSignedUrlList(${'$'}exam_id: String!, ${'$'}file_info: [PreSignedUrlInput]!, ${'$'}model_test_id: String!) {
+              getPreSignedUrlList(exam_id: ${'$'}exam_id, file_info: ${'$'}file_info, model_test_id: ${'$'}model_test_id) {
+                data {
+                  pre_signed_url
+                  name
+                  id
+                  extension
+                  expired_at
+                }
+              }
+            }
+        """.trimIndent()
+
+        val fileInfoList = fileNames.map { mapOf("extension" to "jpg", "name" to it) }
+        val result = executeApiQuery<GetPreSignedUrlListResponse>(
+            operationName = "GetPreSignedUrlList",
+            query = query,
+            variables = mapOf(
+                "exam_id" to examId,
+                "model_test_id" to modelTestId,
+                "file_info" to fileInfoList
+            )
+        )
+        return result.mapCatching { resp ->
+            resp.data?.getPreSignedUrlList?.data ?: emptyList()
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 16. Upload Image to AWS S3 via Pre-Signed URL
+    // -------------------------------------------------------------
+    suspend fun uploadImageToS3(uploadUrl: String, imageBytes: ByteArray): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val body = imageBytes.toRequestBody("image/jpeg".toMediaType())
+            val s3Client = OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build()
+
+            val request = Request.Builder()
+                .url(uploadUrl)
+                .put(body)
+                .header("Content-Type", "image/jpeg")
+                .build()
+
+            val response = s3Client.newCall(request).execute()
+            if (response.isSuccessful) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception("S3 upload failed with code ${response.code}"))
+            }
+        } catch (e: Exception) {
+            Log.e("ModelTestRepository", "Error uploading image to S3: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 17. SubmitCqSession (Page by Page upload save)
+    // -------------------------------------------------------------
+    suspend fun submitCqQuestionAnswer(
+        sessionId: String,
+        questionId: String,
+        submitTime: String,
+        givenAnswers: List<Map<String, Any>>,
+        isFinalSubmitted: Boolean = false,
+        isTimeout: Boolean = false
+    ): Result<CqSessionDetailedInfo> {
+        val query = """
+            mutation SubmitCqSession(${'$'}id: String!, ${'$'}is_final_submitted: Boolean!, ${'$'}is_timeout: Boolean!, ${'$'}id1: String!, ${'$'}submit_time: String!, ${'$'}given_answers: [CqGivenAnswerInput]!) {
+              submitCqSession(
+                id: ${'$'}id,
+                is_final_submitted: ${'$'}is_final_submitted,
+                is_timeout: ${'$'}is_timeout,
+                question_answer: {
+                  id: ${'$'}id1,
+                  submit_time: ${'$'}submit_time,
+                  given_answers: ${'$'}given_answers
+                }
+              ) {
+                message
+                session {
+                  exam_id
+                  expiry_time
+                  id
+                  is_final_submitted
+                  is_started
+                  question_answer {
+                    given_answers {
+                      original_file_info {
+                        file_id
+                        page_no
+                        url
+                        upload_status
+                      }
+                    }
+                    id
+                    is_submitted
+                    marks
+                    sub_questions {
+                      marks
+                      question
+                    }
+                    submit_time
+                  }
+                  questions {
+                    allocated_time
+                    description
+                    sub_questions {
+                      marks
+                      question
+                    }
+                    difficulty_level
+                    has_math_equation
+                    id
+                    markdown_version
+                    question_no
+                    question_type
+                    source
+                    title
+                    u_code
+                  }
+                  set_identifier
+                  stage
+                  start_time
+                  submission_end_time
+                  title
+                  user_id
+                  parent_id
+                  parent_type
+                  u_code
+                }
+              }
+            }
+        """.trimIndent()
+
+        val result = executeApiQuery<SubmitCqSessionResponse>(
+            operationName = "SubmitCqSession",
+            query = query,
+            variables = mapOf(
+                "id" to sessionId,
+                "is_final_submitted" to isFinalSubmitted,
+                "is_timeout" to isTimeout,
+                "id1" to questionId,
+                "submit_time" to submitTime,
+                "given_answers" to givenAnswers
+            )
+        )
+        return result.mapCatching { resp ->
+            resp.data?.submitCqSession?.session ?: throw Exception("Failed to submit CQ page answers")
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 18. CqSessionFinalSubmit
+    // -------------------------------------------------------------
+    suspend fun finalSubmitCqSession(sessionId: String): Result<Boolean> {
+        val query = """
+            mutation CqSessionFinalSubmit(${'$'}id: String!, ${'$'}is_final_submitted: Boolean!, ${'$'}is_timeout: Boolean!) {
+              submitCqSession(id: ${'$'}id, is_final_submitted: ${'$'}is_final_submitted, is_timeout: ${'$'}is_timeout) {
+                message
+                session {
+                  exam_id
+                  expiry_time
+                  id
+                  is_final_submitted
+                  is_started
+                  parent_id
+                }
+              }
+            }
+        """.trimIndent()
+
+        val result = executeApiQuery<CqSessionFinalSubmitResponse>(
+            operationName = "CqSessionFinalSubmit",
+            query = query,
+            variables = mapOf(
+                "id" to sessionId,
+                "is_final_submitted" to true,
+                "is_timeout" to false
+            )
+        )
+        return result.mapCatching { resp ->
+            resp.data?.submitCqSession?.session?.is_final_submitted ?: true
+        }
+    }
+
+    // -------------------------------------------------------------
+    // 19. GetModelTestResultPublishTime
+    // -------------------------------------------------------------
+    suspend fun getModelTestResultPublishTime(modelTestId: String): Result<String> {
+        val query = """
+            query GetModelTestResultPublishTime(${'$'}id: String!) {
+              modelTest(id: ${'$'}id) {
+                result_publish_time
+              }
+            }
+        """.trimIndent()
+
+        val result = executeApiQuery<GetModelTestResultPublishTimeResponse>(
+            operationName = "GetModelTestResultPublishTime",
+            query = query,
+            variables = mapOf("id" to modelTestId)
+        )
+        return result.mapCatching {
+            it.data?.modelTest?.result_publish_time ?: "2026-09-30T05:00:00Z"
         }
     }
 
@@ -1004,3 +1337,4 @@ class ModelTestRepository(
         modelTestDao?.clearActiveSession(sessionId)
     }
 }
+

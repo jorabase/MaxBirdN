@@ -766,13 +766,56 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
 
-            CQExamUploadScreen(
-                sessionId = sessionId,
+            LaunchedEffect(sessionId) {
+                modelTestViewModel.startLiveCqExam(sessionId) {}
+            }
+
+            LiveCqExamScreen(
                 viewModel = modelTestViewModel,
-                onNavigateToResult = { sId ->
-                    navController.navigate("model_test_result/$sId") {
-                        popUpTo("model_test_cq_upload/$sId") { inclusive = true }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToUploadDashboard = {
+                    navController.navigate("model_test_live_cq_dash/$sessionId")
+                }
+            )
+        }
+
+        animatedComposable(
+            route = "model_test_live_cq_dash/{sessionId}",
+            anim = NavAnim.forward,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+
+            LiveCqUploadDashboardScreen(
+                viewModel = modelTestViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToPageUpload = { questionId ->
+                    navController.navigate("model_test_live_cq_page/$sessionId/$questionId")
+                },
+                onFinalSubmitted = {
+                    navController.navigate("model_test_result/$sessionId") {
+                        popUpTo("model_test_cq_upload/$sessionId") { inclusive = true }
                     }
+                }
+            )
+        }
+
+        animatedComposable(
+            route = "model_test_live_cq_page/{sessionId}/{questionId}",
+            anim = NavAnim.forward,
+            arguments = listOf(
+                navArgument("sessionId") { type = NavType.StringType },
+                navArgument("questionId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val questionId = backStackEntry.arguments?.getString("questionId") ?: ""
+
+            LiveCqPageUploadScreen(
+                questionId = questionId,
+                viewModel = modelTestViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onSubmittedSuccessfully = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -784,16 +827,15 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
 
-            ModelTestResultScreen(
-                sessionId = sessionId,
+            LiveExamResultScreen(
                 viewModel = modelTestViewModel,
-                onViewFeedback = { sId ->
-                    navController.navigate("model_test_feedback/$sId")
-                },
-                onNavigateHome = {
+                onNavigateBack = {
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
+                },
+                onNavigateToFeedback = { sId ->
+                    navController.navigate("model_test_feedback/$sId")
                 }
             )
         }

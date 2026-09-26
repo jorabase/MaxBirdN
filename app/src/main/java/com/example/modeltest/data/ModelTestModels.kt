@@ -42,7 +42,33 @@ data class ModelTestInfoDetails(
     val master_solution_available: Boolean? = null,
     val stages: List<ModelTestStageRaw>? = null,
     val stage_grouping: StageGroupingRaw? = null,
-    val exam_slots: List<ExamSlotRaw>? = null
+    val exam_slots: List<ExamSlotRaw>? = null,
+    val subjects: List<ModelTestSubjectRaw>? = null,
+    val hierarchy: List<ModelTestHierarchyRaw>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ModelTestSubjectRaw(
+    val code: String? = null,
+    val color_code: String? = null,
+    val display_bn: String? = null,
+    val parent_code: String? = null,
+    val group: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ModelTestHierarchyRaw(
+    val code: String? = null,
+    val display_bn: String? = null,
+    val icon: String? = null,
+    val chapters: List<ModelTestChapterRaw>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ModelTestChapterRaw(
+    val id: String? = null,
+    val no: Int? = null,
+    val name: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -526,3 +552,180 @@ data class CQMasterSolutionUrlsDetails(
     val cq_solution_url: String? = null,
     val master_solution_pdf_url: String? = null
 )
+
+// 12. GetCqUploadRelatedInfo
+@JsonClass(generateAdapter = true)
+data class GetCqUploadRelatedInfoResponse(
+    val data: GetCqUploadRelatedInfoData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class GetCqUploadRelatedInfoData(
+    val cqExam: CqUploadRelatedInfo? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqUploadRelatedInfo(
+    val id: String? = null,
+    val number_of_question: Int? = null,
+    val number_of_question_to_answer: Int? = null,
+    val submission_duration: Int? = null,
+    val exam_duration: Int? = null
+)
+
+// 13. GetPreSignedUrlList (AWS S3)
+@JsonClass(generateAdapter = true)
+data class GetPreSignedUrlListResponse(
+    val data: GetPreSignedUrlListData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class GetPreSignedUrlListData(
+    val getPreSignedUrlList: GetPreSignedUrlListContainer? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class GetPreSignedUrlListContainer(
+    val data: List<PreSignedUrlItem>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class PreSignedUrlItem(
+    val id: String? = null,
+    val name: String? = null,
+    val extension: String? = null,
+    val expired_at: String? = null,
+    val pre_signed_url: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class PreSignedUrlInput(
+    val extension: String = "jpg",
+    val name: String
+)
+
+// 14. StartCqSessionSubmission
+@JsonClass(generateAdapter = true)
+data class StartCqSessionSubmissionResponse(
+    val data: StartCqSessionSubmissionData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class StartCqSessionSubmissionData(
+    val startCqSessionSubmission: StartCqSessionSubmissionResult? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class StartCqSessionSubmissionResult(
+    val message: String? = null,
+    val session: CqSessionDetailedInfo? = null
+)
+
+// 15. SubmitCqSession (Page by Page upload submission)
+@JsonClass(generateAdapter = true)
+data class SubmitCqSessionResponse(
+    val data: SubmitCqSessionData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SubmitCqSessionData(
+    val submitCqSession: SubmitCqSessionResult? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SubmitCqSessionResult(
+    val message: String? = null,
+    val session: CqSessionDetailedInfo? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqSessionDetailedInfo(
+    val id: String? = null,
+    val exam_id: String? = null,
+    val title: String? = null,
+    val u_code: String? = null,
+    val user_id: String? = null,
+    val is_started: Boolean? = null,
+    val is_final_submitted: Boolean? = null,
+    val stage: String? = null,
+    val start_time: String? = null,
+    val expiry_time: String? = null,
+    val submission_end_time: String? = null,
+    val set_identifier: String? = null,
+    val question_answer: List<CqQuestionAnswerItemRaw>? = null,
+    val questions: List<ShikhoCqQuestionRaw>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqQuestionAnswerItemRaw(
+    val id: String,
+    val is_submitted: Boolean? = null,
+    val marks: Double? = null,
+    val submit_time: String? = null,
+    val given_answers: List<CqGivenAnswerItemRaw>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqGivenAnswerItemRaw(
+    val page_no: Int? = null,
+    val file_id: String? = null,
+    val upload_status: String? = null,
+    val original_file_info: OriginalFileInfoRaw? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class OriginalFileInfoRaw(
+    val file_id: String? = null,
+    val page_no: Int? = null,
+    val url: String? = null,
+    val upload_status: String? = null
+)
+
+// 16. GetModelTestResultPublishTime
+@JsonClass(generateAdapter = true)
+data class GetModelTestResultPublishTimeResponse(
+    val data: GetModelTestResultPublishTimeData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class GetModelTestResultPublishTimeData(
+    val modelTest: ModelTestPublishTimeContainer? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ModelTestPublishTimeContainer(
+    val result_publish_time: String? = null
+)
+
+// 17. CqSessionFinalSubmit
+@JsonClass(generateAdapter = true)
+data class CqSessionFinalSubmitResponse(
+    val data: CqSessionFinalSubmitData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqSessionFinalSubmitData(
+    val submitCqSession: CqSessionFinalSubmitResult? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqSessionFinalSubmitResult(
+    val message: String? = null,
+    val session: CqSessionMinimalRaw? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CqSessionMinimalRaw(
+    val id: String? = null,
+    val exam_id: String? = null,
+    val is_final_submitted: Boolean? = null,
+    val is_started: Boolean? = null,
+    val expiry_time: String? = null
+)
+

@@ -1,59 +1,95 @@
-# Implementation Plan: Model Test Exact GraphQL Schema & Navigation Bar Padding Fix
+# Implementation Plan - Live Exam System (লাইভ এক্সাম সিষ্টেম)
 
-Fix the UI navigation bar overlap and integrate 100% real GraphQL API queries matching the provided Shikho HAR capture.
+We will implement the complete, authentic Live Exam workflow matching the 13 provided screenshots and GraphQL network payloads from the HAR files.
 
----
+## User Journey & Workflow
 
-## 1. User Review Required
-> [!IMPORTANT]
-> - The GraphQL queries, mutation names, variable schemas, and response parsers will be strictly matched with the official Shikho HAR logs (`getModelTestSession`, `getMcqSession`, `submitMcqSession`, `getMcqSessionMinimumResult`, `getCqSession`, `practiceModelTestSessions`, `cqExam`, etc.).
-> - Navigation bar padding (`Modifier.navigationBarsPadding()`) will be applied to all bottom bars in MCQ, CQ, Detail, Feedback, and Dashboard screens to prevent the Android navigation buttons from covering the UI actions.
-
----
-
-## 2. Proposed Changes
-
-### UI & Navigation Insets (`com.example.modeltest.ui.screens`)
-- **`MCQExamScreen.kt`**: Add `Modifier.navigationBarsPadding()` to the bottom bar surface and action row so "পূর্ববর্তী" (Previous), "এগিয়ে যাও" (Next), and "সাবমিট করো" (Submit) are completely visible above the system navigation bar.
-- **`CQExamScreen.kt` & `CQExamUploadScreen.kt`**: Add `Modifier.navigationBarsPadding()` to bottom action containers.
-- **`ModelTestDetailScreen.kt`**: Add `Modifier.navigationBarsPadding()` to the bottom bar container.
-- **`MCQFeedbackScreen.kt` & `ModelTestResultScreen.kt`**: Ensure bottom controls respect navigation bar insets.
-
-### Data Models (`com.example.modeltest.data.ModelTestModels.kt`)
-- Update / add Moshi data models matching the real GraphQL schema:
-  - `ModelTestSessionResult` with `stages: List<ModelTestStageSession>` (`session_id`, `type`, `is_running`, `is_completed`, `start_time`, `end_time`).
-  - `McqSessionContainer` & `McqSession` containing `questions: List<ShikhoMcqQuestion>` (`id`, `question_no`, `title`, `mcq_options: List<ShikhoMcqOption> { no, description }`).
-  - `SubmitMcqSessionInput` (`answers: List<Map<String, Any>>`).
-  - `McqSessionMinimumResult` (`total`, `correct`).
-  - `CqSessionContainer` & `CqSession` (`questions: List<ShikhoCqQuestion> { id, title, sub_questions { question, marks } }`).
-  - `PracticeModelTestSessionsResponse` (`data: List<PracticeSessionData>`).
-  - `CqExamMasterSolutionResponse` (`master_solutions: List<MasterSolutionItem> { title, url }`).
-
-### Repository (`com.example.modeltest.data.ModelTestRepository.kt`)
-- Replace all legacy GraphQL queries with exact Shikho queries:
-  - `getModelTestSession(is_practice: $is_practice, model_test_id: $model_test_id, lesson_id: $lesson_id, query_only: $query_only)`
-  - `getMcqSession(session_id: $session_id)`
-  - `submitMcqSession(id: $id, is_final_submitted: $is_final_submitted, is_timeout: $is_timeout, question_answer: $answers)`
-  - `getMcqSessionMinimumResult(session_id: $sessionId)`
-  - `getCqSession(session_id: $session_id)`
-  - `practiceModelTestSessions(model_test_id: $model_test_id)`
-  - `cqExam(id: $cqId) { master_solutions { title, url } }`
-- Remove hardcoded 2-question fallback so all questions are dynamically received and parsed from the real GraphQL endpoints.
-
-### ViewModel (`com.example.modeltest.ui.ModelTestViewModel.kt`)
-- In `startExamSession`, locate the active MCQ stage session ID (`stage.type == "MCQ"`) and pass it to `loadMcqQuestions`.
-- Support multiple question formats (options as `mcq_options: List<{ no: String, description: String }>` and title text).
-- Map option letter selection (`A`, `B`, `C`, `D` <-> Bengali indices `ক`, `খ`, `গ`, `ঘ`) seamlessly.
+```
+[Exam Slot / Details Screen]
+      │ (Tap "টেস্ট শুরু করো")
+      ▼
+[Live MCQ Stage] (30 mins countdown, real-time submit)
+      │ (MCQ Finished / Auto-transition)
+      ▼
+[Live CQ Writing Stage]
+  - Unique Code Card ("তোমার ইউনিক কোড : ৪২৮৭")
+  - Rules (Writing: 1 hr, Upload: 40 mins)
+  - Questions (ক, খ, গ, ঘ) with stimulus & math equations
+      │ (Tap "উত্তরপত্র আপলোড করো")
+      ▼
+[CQ Answer Upload Dashboard]
+  - Progress tracker (e.g. ০/২, ১/২, ২/২)
+  - Question Cards with "সম্পূর্ণ প্রশ্ন দেখো" dialog
+  - "উত্তরপত্র আপলোড করো" & "উত্তরপত্র রিভিউ করো" states
+      │ (Tap on question upload)
+      ▼
+[Page Photo Capture & S3 Upload Screen]
+  - Page boxes (১ নম্বর পৃষ্ঠা, ২ নম্বর পৃষ্ঠা...)
+  - Camera / Gallery Photo Picker with thumbnail & "রিমুভ করো"
+  - "আরো ছবি যুক্ত করো" button
+  - AWS S3 Pre-signed URL upload & Submit mutation
+      │ (All questions completed)
+      ▼
+[Submit Confirmation Dialog]
+  - "তুমি কি টেস্ট সাবমিট করতে চাও? একবার সাবমিট করলে আর সাবমিট করতে পারবে না"
+      │ (Tap "হ্যাঁ, সাবমিট করবো")
+      ▼
+[Live Exam Result & Celebration Screen]
+  - Confetti party ribbons & "অভিনন্দন!" banner
+  - Result publish date/time notice (e.g. ৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়)
+  - MCQ Exam instant result card (পাস/ফেল, সঠিক, ভুল, উত্তর দেয়নি)
+  - "মাস্টার সল্যুশন" & "ফিডব্যাক দেখো" buttons
+  - "হোম এ ফিরে যাও" button
+```
 
 ---
 
-## 3. Verification Plan
+## Proposed Changes
 
-### Automated Verification
-- Run `compile_applet` to confirm successful Kotlin compilation with no type mismatch or syntax errors.
+### 1. Data Layer (`ModelTestModels.kt` & `ModelTestRepository.kt`)
+- Add data models for:
+  - `StartModelTestSession` / `GetMTSessionQueryOnly`
+  - `GetCqInfoOfModelTest` & `GetCqUploadRelatedInfo`
+  - `StartCqSessionSubmission`
+  - `GetPreSignedUrlList` (AWS S3 signed upload URL)
+  - `SubmitCqSession` (attaching uploaded `file_id` & `page_no` to question answer)
+  - `CqSessionFinalSubmit` (final submission)
+  - `GetModelTestResultPublishTime` & `GetModelTestPreResult`
+- Implement repository functions for all of the above GraphQL operations and direct image bytes PUT upload to S3 pre-signed URLs.
 
-### Manual Verification
-1. Open Model Test Detail screen and verify "টেস্টের নিয়মাবলী" and separate "মাস্টার সল্যুশন" buttons for MCQ/CQ.
-2. Click "প্র্যাকটিস টেস্ট শুরু করো" -> Verify real 30 MCQ questions load directly from GraphQL API.
-3. Verify that the bottom navigation bar buttons ("পূর্ববর্তী", "এগিয়ে যাও", "সাবমিট করো") are clearly elevated above the Android system navigation bar.
-4. Select options and submit -> Verify minimal score popup and feedback screen with real analytics data.
+### 2. State Management (`ModelTestViewModel.kt`)
+- Track live exam stages (`MCQ`, `CQ_READING`, `CQ_DASHBOARD`, `CQ_PAGE_UPLOAD`, `CONFIRMATION`, `RESULT`).
+- Manage CQ Unique Code (e.g., `4287` or dynamic `u_code`), writing timer (e.g., 60 mins) and upload timer (40 mins).
+- Handle page image selection (camera/gallery picker), temporary previews, upload status per page, and overall progress (`0/2`, `1/2`, `2/2`).
+- Seamless stage transitions and auto-save.
+
+### 3. UI Screens & Components
+- **`CqLiveExamScreen.kt`**:
+  - Top live timer (`৫৬ : ১০`).
+  - Unique Code card with copy/highlight.
+  - Test instructions and question list with LaTeX/Markdown math rendering.
+  - Upload dashboard with progress indicator and action buttons.
+  - Page upload sub-screen with camera/gallery launcher, image compression, preview, and "আরো ছবি যুক্ত করো".
+  - Confirmation alert dialog matching Screenshot 9.
+- **`LiveExamResultScreen.kt`**:
+  - Full-screen confetti particle celebration animation.
+  - "অভিনন্দন! তোমার টেস্টটি সফলভাবে সম্পন্ন হয়েছে" banner.
+  - Result publish notice card.
+  - MCQ Result scorecard (পাস/ফেল, ১০টি সঠিক, ২০টি ভুল, ০টি উত্তর দেয়নি).
+  - CQ summary, Master Solution & Feedback buttons.
+  - "হোম এ ফিরে যাও" navigation.
+- **`ModelTestDetailScreen.kt`**:
+  - Live Exam Slot card (`06.00 PM - 08.10 PM`).
+  - Live Exam Started alert (`তোমার এক্সাম শুরু হয়েছে ৫০ মিনিট আগে`).
+  - Correct completion ticks for finished stages.
+
+---
+
+## Verification Plan
+
+### Automated & Manual Verification
+1. **Compilation Check**: Run `compile_applet` to ensure clean build with no syntax or type errors.
+2. **Live Exam Initiation**: Test starting a Live Exam session from the details screen.
+3. **CQ Live Screen**: Test question viewing, timer countdown, and unique code display.
+4. **Photo Capture & Upload**: Test picking/capturing answer sheet photos for page 1, page 2, etc., and verifying progress updates (`১/২`, `২/২`).
+5. **Final Submission**: Test tapping "সবগুলো সাবমিট করো", confirming in the dialog, and verifying transition to the celebration result screen with MCQ score summary and result publish time.

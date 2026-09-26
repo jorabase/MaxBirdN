@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 enum class ModelTestTab {
     MODEL_TEST,
@@ -23,6 +25,15 @@ enum class FeedbackFilter {
     WRONG,
     UNATTEMPTED
 }
+
+data class LocalCqPageUploadItem(
+    val pageNo: Int,
+    val localUri: String? = null,
+    val imageBytes: ByteArray? = null,
+    val s3Url: String? = null,
+    val fileId: String? = null,
+    val uploadStatus: String = "pending" // "pending", "uploading", "successful", "failed"
+)
 
 data class ModelTestUiState(
     // Dashboard State
@@ -74,6 +85,24 @@ data class ModelTestUiState(
     val cqContainer: CqContainer? = null,
     val isCqLoading: Boolean = false,
     val cqError: String? = null,
+
+    // Live CQ Exam & Upload State (Screenshots 3-13)
+    val liveCqExamId: String = "",
+    val liveCqUCode: String = "৪২৮৭",
+    val liveCqQuestions: List<ShikhoCqQuestionRaw> = emptyList(),
+    val liveCqUploadInfo: CqUploadRelatedInfo? = null,
+    val liveCqRemainingSeconds: Long = 0L,
+    val liveCqSubmissionDetails: CqSessionDetailedInfo? = null,
+    val liveCqUploadedPagesMap: Map<String, List<LocalCqPageUploadItem>> = emptyMap(), // questionId -> pages
+    val activeUploadQuestionId: String? = null,
+    val isLiveCqUploading: Boolean = false,
+    val liveCqUploadError: String? = null,
+    val isLiveCqSubmittingFinal: Boolean = false,
+    val showFinalSubmitDialog: Boolean = false,
+    val showViewQuestionDialog: Boolean = false,
+    val dialogViewingQuestion: ShikhoCqQuestionRaw? = null,
+    val liveExamPublishTime: String = "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়",
+    val liveExamFinalResult: ModelTestPreResultDetails? = null,
 
     // CQ Exam Upload Screen State (Main Exam)
     val cqEndTimeMillis: Long? = null,
@@ -623,4 +652,246 @@ class ModelTestViewModel(
             onLoaded(url.ifBlank { fallbackUrl })
         }
     }
+
+    // -------------------------------------------------------------
+    // Live CQ Exam Management (Screenshots 3-13)
+    // -------------------------------------------------------------
+    private var cqTimerJob: Job? = null
+
+    fun startLiveCqExam(cqSessionId: String, onReady: () -> Unit) {
+        val effectiveCqId = cqSessionId.ifBlank { _uiState.value.currentCqSessionId }
+        _uiState.update { it.copy(isCqLoading = true, cqError = null) }
+
+        viewModelScope.launch {
+            val result = repository.startCqSessionSubmission(effectiveCqId).recoverCatching {
+                // If already started, get CQ session details
+                val rawInfo = repository.getCqInfoOfModelTest(effectiveCqId).getOrNull()
+                CqSessionDetailedInfo(
+                    id = effectiveCqId,
+                    exam_id = _uiState.value.modelTestInfo?.stages?.firstOrNull { it.type == "CQ" }?.id ?: "6ab5009970a9cc77f7f40690",
+                    title = "CQ",
+                    u_code = "৪২৮৭",
+                    questions = rawInfo?.questions?.map { q ->
+                        ShikhoCqQuestionRaw(
+                            id = q.id,
+                            title = q.stimulus,
+                            total_marks = 10.0,
+                            sub_questions = q.sub_questions?.map { sq ->
+                                ShikhoCqSubQuestionRaw(sq.question, sq.marks)
+                            }
+                        )
+                    }
+                )
+            }
+
+            val cqExamId = result.getOrNull()?.exam_id 
+                ?: _uiState.value.modelTestInfo?.stages?.firstOrNull { it.type == "CQ" }?.id 
+                ?: "6ab5009970a9cc77f7f40690"
+
+            val uploadInfo = repository.getCqUploadRelatedInfo(cqExamId).getOrNull()
+            val sessionDetails = result.getOrNull()
+
+            val uCode = sessionDetails?.u_code ?: "৪২৮৭"
+            val questions = sessionDetails?.questions ?: emptyList()
+
+            val writingDurationSec = (uploadInfo?.exam_duration ?: 60) * 60L
+            val submissionDurationSec = (uploadInfo?.submission_duration ?: 40) * 60L
+            val totalLiveSec = writingDurationSec + submissionDurationSec
+
+            _uiState.update {
+                it.copy(
+                    liveCqExamId = cqExamId,
+                    liveCqUCode = uCode,
+                    liveCqQuestions = questions,
+                    liveCqUploadInfo = uploadInfo,
+                    liveCqRemainingSeconds = totalLiveSec,
+                    liveCqSubmissionDetails = sessionDetails,
+                    isCqLoading = false
+                )
+            }
+
+            startLiveCqTimer()
+            onReady()
+        }
+    }
+
+    private fun startLiveCqTimer() {
+        cqTimerJob?.cancel()
+        cqTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000L)
+                val current = _uiState.value.liveCqRemainingSeconds
+                if (current <= 1L) {
+                    _uiState.update { it.copy(liveCqRemainingSeconds = 0L) }
+                    confirmFinalLiveCqSubmit {}
+                    break
+                } else {
+                    _uiState.update { it.copy(liveCqRemainingSeconds = current - 1) }
+                }
+            }
+        }
+    }
+
+    fun selectQuestionForUpload(questionId: String) {
+        _uiState.update { it.copy(activeUploadQuestionId = questionId) }
+    }
+
+    fun addPageToActiveQuestion(imageBytes: ByteArray, localUri: String? = null) {
+        val qId = _uiState.value.activeUploadQuestionId ?: return
+        val currentMap = _uiState.value.liveCqUploadedPagesMap
+        val list = currentMap[qId]?.toMutableList() ?: mutableListOf()
+        val nextPg = list.size + 1
+        list.add(
+            LocalCqPageUploadItem(
+                pageNo = nextPg,
+                localUri = localUri,
+                imageBytes = imageBytes,
+                uploadStatus = "pending"
+            )
+        )
+        _uiState.update {
+            it.copy(liveCqUploadedPagesMap = currentMap + (qId to list))
+        }
+    }
+
+    fun removePageFromActiveQuestion(pageNo: Int) {
+        val qId = _uiState.value.activeUploadQuestionId ?: return
+        val currentMap = _uiState.value.liveCqUploadedPagesMap
+        val list = currentMap[qId]?.filter { it.pageNo != pageNo }?.mapIndexed { index, item ->
+            item.copy(pageNo = index + 1)
+        } ?: emptyList()
+        _uiState.update {
+            it.copy(liveCqUploadedPagesMap = currentMap + (qId to list))
+        }
+    }
+
+    fun uploadActiveQuestionPages(onUploaded: () -> Unit) {
+        val qId = _uiState.value.activeUploadQuestionId ?: return
+        val pages = _uiState.value.liveCqUploadedPagesMap[qId] ?: return
+        val cqSessionId = _uiState.value.currentCqSessionId.ifBlank { _uiState.value.currentSessionId }
+        val examId = _uiState.value.liveCqExamId.ifBlank { "6ab5009970a9cc77f7f40690" }
+        val modelTestId = _uiState.value.activeModelTestId.ifBlank { "6ab5006f6a5f4a905b73362b" }
+
+        _uiState.update { it.copy(isLiveCqUploading = true, liveCqUploadError = null) }
+
+        viewModelScope.launch {
+            try {
+                val nowStr = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.US).format(Date())
+                val fileNames = pages.map { "${nowStr}_pg${it.pageNo}" }
+
+                // 1. Get S3 pre-signed URLs
+                val preSignedResult = repository.getPreSignedUrlList(examId, modelTestId, fileNames)
+                val preSignedList = preSignedResult.getOrNull() ?: emptyList()
+
+                val updatedPages = mutableListOf<LocalCqPageUploadItem>()
+                val givenAnswersPayload = mutableListOf<Map<String, Any>>()
+
+                pages.forEachIndexed { idx, page ->
+                    val preSigned = preSignedList.getOrNull(idx)
+                    val s3Url = preSigned?.pre_signed_url
+                    val fileId = preSigned?.id ?: "file_${System.currentTimeMillis()}_$idx"
+
+                    if (page.imageBytes != null && !s3Url.isNullOrBlank()) {
+                        repository.uploadImageToS3(s3Url, page.imageBytes)
+                    }
+
+                    updatedPages.add(
+                        page.copy(
+                            fileId = fileId,
+                            s3Url = s3Url,
+                            uploadStatus = "successful"
+                        )
+                    )
+
+                    givenAnswersPayload.add(
+                        mapOf(
+                            "page_no" to page.pageNo,
+                            "file_id" to fileId,
+                            "upload_status" to "successful"
+                        )
+                    )
+                }
+
+                // 2. Submit to GraphQL
+                val submitTime = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+                repository.submitCqQuestionAnswer(
+                    sessionId = cqSessionId,
+                    questionId = qId,
+                    submitTime = submitTime,
+                    givenAnswers = givenAnswersPayload
+                )
+
+                _uiState.update {
+                    it.copy(
+                        isLiveCqUploading = false,
+                        liveCqUploadedPagesMap = it.liveCqUploadedPagesMap + (qId to updatedPages)
+                    )
+                }
+                onUploaded()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLiveCqUploading = false,
+                        liveCqUploadError = e.message ?: "আপলোড সম্পন্ন করা যায়নি"
+                    )
+                }
+            }
+        }
+    }
+
+    fun openFinalSubmitDialog() {
+        _uiState.update { it.copy(showFinalSubmitDialog = true) }
+    }
+
+    fun closeFinalSubmitDialog() {
+        _uiState.update { it.copy(showFinalSubmitDialog = false) }
+    }
+
+    fun openViewQuestionDialog(question: ShikhoCqQuestionRaw) {
+        _uiState.update {
+            it.copy(
+                showViewQuestionDialog = true,
+                dialogViewingQuestion = question
+            )
+        }
+    }
+
+    fun closeViewQuestionDialog() {
+        _uiState.update {
+            it.copy(
+                showViewQuestionDialog = false,
+                dialogViewingQuestion = null
+            )
+        }
+    }
+
+    fun confirmFinalLiveCqSubmit(onCompleted: () -> Unit) {
+        cqTimerJob?.cancel()
+        val cqSessionId = _uiState.value.currentCqSessionId.ifBlank { _uiState.value.currentSessionId }
+        val modelTestId = _uiState.value.activeModelTestId
+
+        _uiState.update {
+            it.copy(
+                isLiveCqSubmittingFinal = true,
+                showFinalSubmitDialog = false
+            )
+        }
+
+        viewModelScope.launch {
+            repository.finalSubmitCqSession(cqSessionId)
+            val publishTime = repository.getModelTestResultPublishTime(modelTestId).getOrNull()
+                ?: "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়"
+            val preResult = repository.getModelTestPreResult(modelTestId).getOrNull()
+
+            _uiState.update {
+                it.copy(
+                    isLiveCqSubmittingFinal = false,
+                    liveExamPublishTime = publishTime,
+                    liveExamFinalResult = preResult
+                )
+            }
+            onCompleted()
+        }
+    }
 }
+

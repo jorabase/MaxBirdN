@@ -1,7 +1,10 @@
 package com.example.modeltest.ui.screens
 
-import android.content.Intent
-import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,6 +32,7 @@ import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestCountdownTimer
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.modeltest.ui.components.parseIsoDateToMillis
+import com.example.ui.components.SlideViewerDialog
 import com.example.utils.toBengaliDigits
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +51,10 @@ fun ModelTestDetailScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+
+    var activePdfUrl by remember { mutableStateOf<String?>(null) }
+    var activePdfTitle by remember { mutableStateOf("") }
+    var isSyllabusExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(modelTestId) {
         viewModel.loadModelTestDetails(modelTestId, lessonStartTime, lessonEndTime)
@@ -103,16 +111,17 @@ fun ModelTestDetailScreen(
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    OutlinedButton(
+                    Button(
                         onClick = onNavigateHome,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp)
+                            .height(48.dp)
                     ) {
                         Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("হোম এ ফিরে যাও", fontWeight = FontWeight.SemiBold)
+                        Text("হোম এ ফিরে যাও", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
             }
@@ -223,101 +232,248 @@ fun ModelTestDetailScreen(
                     }
                 }
 
-                // 2. Exam Rules & Instructions Section
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Rule,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
+                // 2. Exam Rules & Instructions Section (shown when upcoming/active)
+                if (!isMissed) {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            val defaultRules = listOf(
+                                "পরীক্ষা শুধুমাত্র একবারই দেওয়া যাবে।",
+                                "CQ পরীক্ষার উত্তরের ছবি আপলোড করার জন্য নির্ধারিত অতিরিক্ত সময় পাওয়া যাবে।"
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "টেস্টের নিয়মাবলী",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                            val rulesToDisplay = info?.instructions?.ifEmpty { defaultRules } ?: defaultRules
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        val defaultRules = listOf(
-                            "পরীক্ষা শুরুর আগে ইন্টারনেট কানেকশন স্থিতিশীল রাখুন।",
-                            "MCQ-এর জন্য নির্দিষ্ট সময় থাকবে এবং প্রতিটি প্রশ্নের সঠিক উত্তরের জন্য নম্বর বরাদ্দ থাকবে।",
-                            "পরীক্ষা শুধুমাত্র একবারই দেওয়া যাবে।",
-                            "CQ পরীক্ষার উত্তরের ছবি আপলোড করার জন্য নির্ধারিত অতিরিক্ত সময় পাওয়া যাবে।"
-                        )
-                        val rulesToDisplay = info?.instructions?.ifEmpty { defaultRules } ?: defaultRules
-
-                        rulesToDisplay.forEachIndexed { idx, rule ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Text(
-                                    text = "•",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text(
-                                    text = rule,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    lineHeight = 18.sp
-                                )
+                            rulesToDisplay.forEach { rule ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text(
+                                        text = "•",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2563EB),
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                    Text(
+                                        text = rule,
+                                        fontSize = 13.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 19.sp
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // 3. MCQ & CQ Info Cards with Separate Master Solution Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    ExamPartCard(
-                        title = "MCQ অংশ",
-                        count = "${toBengaliDigits((info?.mcq_count ?: 30).toString())} টি প্রশ্ন",
-                        duration = "${toBengaliDigits((info?.mcq_duration_minutes ?: 30).toString())} মিনিট",
-                        icon = Icons.Default.Quiz,
-                        showMasterSolution = isMissed,
-                        onMasterSolutionClick = {
-                            viewModel.loadMasterSolution(modelTestId, "mcq") { url ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                context.startActivity(intent)
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ExamPartCard(
-                        title = "CQ অংশ",
-                        count = "${toBengaliDigits((info?.cq_count ?: 2).toString())} টি প্রশ্ন",
-                        duration = "${toBengaliDigits((info?.cq_duration_minutes ?: 100).toString())} মিনিট",
-                        icon = Icons.Default.Description,
-                        showMasterSolution = isMissed,
-                        onMasterSolutionClick = {
-                            viewModel.loadMasterSolution(modelTestId, "cq") { url ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                context.startActivity(intent)
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
+                // 3. MCQ & CQ Info Cards with Distinct Master Solution Buttons
+                val mcqMinutes = info?.mcq_duration_minutes ?: 30
+                val cqMinutes = info?.cq_duration_minutes ?: 100
+                val cqDurationFormatted = if (cqMinutes >= 60) {
+                    val hours = cqMinutes / 60
+                    val mins = cqMinutes % 60
+                    if (mins > 0) "${toBengaliDigits(hours.toString())} ঘণ্টা ${toBengaliDigits(mins.toString())} মিনিট"
+                    else "${toBengaliDigits(hours.toString())} ঘণ্টা"
+                } else {
+                    "${toBengaliDigits(cqMinutes.toString())} মিনিট"
                 }
 
-                // 4. Practice Test Section (Dynamic Limit & History)
+                // MCQ Card
+                ExamPartBlockCard(
+                    title = "MCQ",
+                    count = "${toBengaliDigits((info?.mcq_count ?: 30).toString())}টি প্রশ্ন",
+                    duration = "সময় ${toBengaliDigits(mcqMinutes.toString())} মিনিট",
+                    icon = Icons.Default.FactCheck,
+                    iconBg = Color(0xFFE0F2FE),
+                    iconTint = Color(0xFF0284C7),
+                    showMasterSolution = true,
+                    onMasterSolutionClick = {
+                        viewModel.loadMasterSolution(modelTestId, "mcq") { url ->
+                            activePdfUrl = url
+                            activePdfTitle = "${info?.title ?: "মডেল টেস্ট"} - বহুনির্বাচনি সমাধান"
+                        }
+                    }
+                )
+
+                // CQ Card
+                ExamPartBlockCard(
+                    title = "CQ",
+                    count = "${toBengaliDigits((info?.cq_count ?: 2).toString())}টি প্রশ্ন",
+                    duration = "সময় $cqDurationFormatted",
+                    icon = Icons.Default.EditNote,
+                    iconBg = Color(0xFFFEF3C7),
+                    iconTint = Color(0xFFD97706),
+                    showMasterSolution = true,
+                    onMasterSolutionClick = {
+                        viewModel.loadMasterSolution(modelTestId, "cq") { url ->
+                            activePdfUrl = url
+                            activePdfTitle = "${info?.title ?: "মডেল টেস্ট"} - সৃজনশীল সমাধান"
+                        }
+                    }
+                )
+
+                // 4. Subject & Chapter (বিষয় ও অধ্যায়) Expandable Card
+                val subjectName = info?.subject_name 
+                    ?: info?.subjects?.firstOrNull()?.display_bn 
+                    ?: (info?.title?.split(" ")?.firstOrNull() ?: "বিষয়")
+                
+                val chapterItems = info?.hierarchy?.firstOrNull()?.chapters ?: emptyList()
+                val chapterCount = if (chapterItems.isNotEmpty()) chapterItems.size else 1
+                val subjectCount = if (!info?.subjects.isNullOrEmpty()) info?.subjects!!.size else 1
+
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isSyllabusExpanded = !isSyllabusExpanded }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Book 3D-styled Icon
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFFEFF6FF),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoStories,
+                                        contentDescription = null,
+                                        tint = Color(0xFF3B82F6),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // Subject Count
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "বিষয়",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "${toBengaliDigits(subjectCount.toString())}টি",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            // Vertical Divider
+                            Box(
+                                modifier = Modifier
+                                    .height(28.dp)
+                                    .width(1.dp)
+                                    .background(MaterialTheme.colorScheme.outlineVariant)
+                            )
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // Chapter Count
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "অধ্যায়",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "${toBengaliDigits(chapterCount.toString())}টি",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            // Expand Arrow
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFF1F5F9),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = if (isSyllabusExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = if (isSyllabusExpanded) "Collapse" else "Expand",
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Expanded Subject & Chapter details
+                        AnimatedVisibility(
+                            visible = isSyllabusExpanded,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 16.dp)) {
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = "অন্তর্ভুক্ত সিলেবাস ও বিষয়:",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFFF8FAFC),
+                                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "📖 $subjectName",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF1E293B)
+                                        )
+
+                                        if (chapterItems.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            chapterItems.forEach { chap ->
+                                                Text(
+                                                    text = "• ${chap.name ?: "অধ্যায় ${chap.no}"}",
+                                                    fontSize = 12.5.sp,
+                                                    color = Color(0xFF475569),
+                                                    modifier = Modifier.padding(vertical = 2.dp)
+                                                )
+                                            }
+                                        } else {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "• অধ্যায়ভিত্তিক পূর্ণাঙ্গ মডেল টেস্ট",
+                                                fontSize = 12.5.sp,
+                                                color = Color(0xFF475569)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 5. Practice Test Section (প্র্যাকটিস টেস্ট)
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -331,63 +487,24 @@ fun ModelTestDetailScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "প্র্যাকটিস টেস্ট",
-                                fontSize = 16.sp,
+                                text = "প্র্যাকটিস টেস্ট দিয়ে নিজেকে যাচাই করে নাও",
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color(0xFF1E3A8A),
+                                modifier = Modifier.weight(1f)
                             )
-
-                            // Dynamic limit indicator
-                            val limitText = if (uiState.attemptedPracticeCount > 0) {
-                                "আর মাত্র ${toBengaliDigits(uiState.remainingPracticeCount.toString())} বার"
-                            } else {
-                                "সর্বমোট ${toBengaliDigits(uiState.totalPracticeAllowed.toString())} বার"
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (uiState.isPracticeLimitReached) Color(0xFFEF4444).copy(alpha = 0.12f) else Color(0xFF10B981).copy(alpha = 0.12f)
-                            ) {
-                                Text(
-                                    text = limitText,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (uiState.isPracticeLimitReached) Color(0xFFDC2626) else Color(0xFF059669),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
 
+                        val remainingTries = uiState.remainingPracticeCount
+                        val triesBengali = toBengaliDigits(remainingTries.toString())
                         Text(
-                            text = "প্র্যাকটিস টেস্ট দিয়ে নিজেকে যাচাই করে নাও। প্র্যাকটিস টেস্টের ক্ষেত্রে শুধু MCQ টেস্ট দিতে পারবে এবং তাৎক্ষণিক ফিডব্যাক পাবে। CQ অংশটি শুধুমাত্র পড়ার জন্য থাকবে।",
+                            text = "আর মাত্র $triesBengali বার প্র্যাকটিস টেস্ট দিতে পারবে",
                             fontSize = 12.5.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 17.sp
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFDC2626)
                         )
-
-                        if (uiState.isPracticeLimitReached) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFFEF2F2),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "তোমার প্র্যাকটিস টেস্টের লিমিট শেষ হয়ে গেছে!",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFDC2626)
-                                    )
-                                }
-                            }
-                        }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
@@ -402,6 +519,7 @@ fun ModelTestDetailScreen(
                             },
                             enabled = !uiState.isPracticeLimitReached && !uiState.isCreatingSession,
                             shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(46.dp)
@@ -413,76 +531,101 @@ fun ModelTestDetailScreen(
                             } else {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("প্র্যাকটিস টেস্ট শুরু করো", fontWeight = FontWeight.Bold)
+                                Text("প্র্যাকটিস টেস্ট শুরু করো", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
 
-                        // List of Previous Practice Sessions
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Notice Card (Yellow highlight)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFFFFBEB),
+                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFF59E0B),
+                                    modifier = Modifier.size(18.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "i",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "প্র্যাকটিস টেস্টের ক্ষেত্রে শুধু MCQ টেস্ট দিতে পারবে এবং ফিডব্যাক পাবে। CQ উত্তরপত্র সাবমিট ও রিভিঊয়ের জন্য তোমাকে নির্ধারিত সময়ে মডেল টেস্ট দিতে হবে।",
+                                    fontSize = 12.5.sp,
+                                    color = Color(0xFF92400E),
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+
+                        // Practice Test History & "ফিডব্যাক দেখো" action buttons (Screenshot 4)
                         val practiceSessions = uiState.retakeContainer?.sessions ?: emptyList()
-                        if (practiceSessions.isNotEmpty()) {
+                        val effectiveSessions = if (practiceSessions.isNotEmpty()) {
+                            practiceSessions
+                        } else if (uiState.attemptedPracticeCount > 0) {
+                            (1..uiState.attemptedPracticeCount).map { 
+                                com.example.modeltest.data.RetakeSessionItem(
+                                    session_id = "${modelTestId}_practice_$it",
+                                    attempt_number = it,
+                                    is_completed = true
+                                )
+                            }
+                        } else emptyList()
+
+                        if (effectiveSessions.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(16.dp))
-                            HorizontalDivider()
-                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                            Text(
-                                text = "তোমার পূর্ববর্তী প্র্যাকটিস সেশনসমূহ",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            practiceSessions.forEachIndexed { index, session ->
+                            effectiveSessions.forEachIndexed { index, session ->
                                 val attemptNum = session.attempt_number ?: (index + 1)
-                                val isCompleted = session.is_completed == true
+                                val sid = session.session_id ?: "${modelTestId}_practice_${attemptNum}"
 
-                                Card(
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
+                                        .padding(vertical = 6.dp)
                                 ) {
-                                    Row(
+                                    Text(
+                                        text = "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF1E3A8A)
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    // Full-width "ফিডব্যাক দেখো" button matching Screenshot 4
+                                    Button(
+                                        onClick = { onViewFeedback(sid) },
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFFEFF6FF),
+                                            contentColor = Color(0xFF1D4ED8)
+                                        ),
+                                        border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .height(44.dp)
                                     ) {
-                                        Column {
-                                            Text(
-                                                text = "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            if (session.score != null) {
-                                                Text(
-                                                    text = "স্কোর: ${toBengaliDigits(session.score.toInt().toString())} / ${toBengaliDigits((session.total_marks?.toInt() ?: 30).toString())}",
-                                                    fontSize = 12.sp,
-                                                    color = Color(0xFF10B981),
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                            }
-                                        }
-
-                                        if (isCompleted && !session.session_id.isNullOrBlank()) {
-                                            TextButton(
-                                                onClick = { onViewFeedback(session.session_id) }
-                                            ) {
-                                                Icon(Icons.Default.Analytics, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("ফিডব্যাক দেখো", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                                            }
-                                        } else {
-                                            Text(
-                                                text = "অসম্পূর্ণ",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
+                                        Text(
+                                            text = "ফিডব্যাক দেখো",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
                                     }
                                 }
                             }
@@ -492,45 +635,85 @@ fun ModelTestDetailScreen(
             }
         }
     }
+
+    // In-app Master Solution PDF Viewer Dialog
+    activePdfUrl?.let { pdfUrl ->
+        SlideViewerDialog(
+            slideUrl = pdfUrl,
+            title = activePdfTitle,
+            onDismiss = { activePdfUrl = null }
+        )
+    }
 }
 
 @Composable
-private fun ExamPartCard(
+private fun ExamPartBlockCard(
     title: String,
     count: String,
     duration: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    showMasterSolution: Boolean = false,
-    onMasterSolutionClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    iconBg: Color,
+    iconTint: Color,
+    showMasterSolution: Boolean = true,
+    onMasterSolutionClick: () -> Unit = {}
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = modifier
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = count, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = duration, fontSize = 12.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = iconBg,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = title, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = count, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1.2f)) {
+                    Text(text = duration, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
 
             if (showMasterSolution) {
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
                     onClick = onMasterSolutionClick,
                     shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8)),
-                    border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFEFF6FF),
+                        contentColor = Color(0xFF1D4ED8)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
                 ) {
-                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("মাস্টার সল্যুশন", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    Text("মাস্টার সল্যুশন", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
