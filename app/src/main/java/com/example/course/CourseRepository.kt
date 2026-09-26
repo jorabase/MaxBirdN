@@ -207,6 +207,7 @@ class CourseRepository(
                       course_progress_percentage
                       start_date
                       end_date
+                      type
                     }
                   }
                 }

@@ -571,13 +571,16 @@ class CourseViewModel(
                             ?: fetchedPhases.firstOrNull()
 
                         currentPhaseId = activePhase?.id ?: ""
+                        val isModelTest = activePhase?.type.equals("ModelTest", ignoreCase = true) ||
+                                          fetchedPhases.any { it.type.equals("ModelTest", ignoreCase = true) }
                         _uiState.update {
                             it.copy(
                                 programId = programId,
                                 phases = phasesList,
                                 selectedPhase = activePhase,
                                 activePhaseId = currentPhaseId,
-                                activePhaseTitle = activePhase?.title ?: ""
+                                activePhaseTitle = activePhase?.title ?: "",
+                                isModelTestCourse = isModelTest
                             )
                         }
                     } catch (e: Exception) {

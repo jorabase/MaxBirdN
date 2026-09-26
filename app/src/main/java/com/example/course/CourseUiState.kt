@@ -37,6 +37,8 @@ data class CourseUiState(
     val phases: List<PhaseItem> = emptyList(),
     val selectedPhase: PhaseItem? = null,
 
+    val isModelTestCourse: Boolean = false,
+
     // Tier 1: Subjects
     val subjects: List<SubjectWithProgress> = emptyList(),
     val isSubjectsLoading: Boolean = false,

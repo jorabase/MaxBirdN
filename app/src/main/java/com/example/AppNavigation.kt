@@ -57,6 +57,10 @@ import com.example.saved.SavedViewModel
 import com.example.saved.SavedViewModelFactory
 import com.example.smartnotes.SmartNotesViewModel
 import com.example.smartnotes.SmartNotesViewModelFactory
+import com.example.modeltest.ModelTestRepository
+import com.example.modeltest.ModelTestViewModel
+import com.example.modeltest.ModelTestViewModelFactory
+import com.example.modeltest.ModelTestSubjectScreen
 import com.example.ui.screens.*
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -79,6 +83,7 @@ object Routes {
     const val SMART_NOTES = "smart_notes/{subjectCode}?title={title}&color={color}&phaseId={phaseId}"
     const val CHAPTER_RESOURCES = "chapter_resources/{chapterId}?name={name}&subjectCode={subjectCode}&phaseId={phaseId}"
     const val SUBJECT_CHAPTERS = "subject_chapters/{subjectCode}?title={title}&color={color}"
+    const val MODEL_TEST_SUBJECT = "model_test_subject/{subjectCode}?title={title}&color={color}&programId={programId}&phaseId={phaseId}"
     const val CHAPTER_LESSONS = "chapter_lessons/{chapterId}?name={name}&status={status}&initialTab={initialTab}&subjectCode={subjectCode}&subjectTitle={subjectTitle}&subjectColor={subjectColor}"
     const val LESSON_DETAIL_PLAYER = "lesson_detail_player"
     const val VIDEO_PLAYER = "video_player?url={url}&title={title}&subject={subject}&color={color}&isLive={isLive}"
@@ -238,6 +243,11 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
     val smartNotesViewModel: SmartNotesViewModel = viewModel(
         factory = SmartNotesViewModelFactory(apiService, sessionManager)
+    )
+
+    val modelTestRepository = remember { ModelTestRepository(apiService) }
+    val modelTestViewModel: ModelTestViewModel = viewModel(
+        factory = ModelTestViewModelFactory(modelTestRepository)
     )
 
     val authState by authViewModel.authState.collectAsState()
@@ -402,7 +412,14 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateToSubjectChapters = { subjectCode, subjectTitle, subjectColor ->
                     val encodedTitle = URLEncoder.encode(subjectTitle, "UTF-8")
                     val encodedColor = URLEncoder.encode(subjectColor, "UTF-8")
-                    navController.navigate("subject_chapters/$subjectCode?title=$encodedTitle&color=$encodedColor")
+                    val courseState = courseViewModel.uiState.value
+                    if (courseState.isModelTestCourse) {
+                        val pId = courseState.programId
+                        val phId = courseState.activePhaseId
+                        navController.navigate("model_test_subject/$subjectCode?title=$encodedTitle&color=$encodedColor&programId=$pId&phaseId=$phId")
+                    } else {
+                        navController.navigate("subject_chapters/$subjectCode?title=$encodedTitle&color=$encodedColor")
+                    }
                 },
                 onNavigateToEditProfile = {
                     navController.navigate(Routes.EDIT_PROFILE)
@@ -587,6 +604,50 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val encodedSubject = URLEncoder.encode(subjectName, "UTF-8")
                     val encodedColor = URLEncoder.encode(subjectColor, "UTF-8")
                     navController.navigate("video_player?url=$encodedUrl&title=$encodedTitle&subject=$encodedSubject&color=$encodedColor&isLive=$isLive")
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_SUBJECT,
+            anim = NavAnim.forward,
+            arguments = listOf(
+                navArgument("subjectCode") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("color") { type = NavType.StringType; defaultValue = "" },
+                navArgument("programId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("phaseId") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val subjectCode = backStackEntry.arguments?.getString("subjectCode") ?: ""
+            val title = backStackEntry.arguments?.getString("title")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val color = backStackEntry.arguments?.getString("color")?.let { URLDecoder.decode(it, "UTF-8") }
+            val programId = backStackEntry.arguments?.getString("programId") ?: courseViewModel.uiState.value.programId
+            val phaseId = backStackEntry.arguments?.getString("phaseId") ?: courseViewModel.uiState.value.activePhaseId
+
+            LaunchedEffect(subjectCode, phaseId, programId) {
+                modelTestViewModel.initSubject(
+                    programId = programId,
+                    phaseId = phaseId,
+                    subjectCode = subjectCode,
+                    subjectTitle = title,
+                    subjectColor = color ?: "#0072EC"
+                )
+            }
+
+            ModelTestSubjectScreen(
+                subjectCode = subjectCode,
+                subjectTitle = title,
+                subjectColorHex = color,
+                viewModel = modelTestViewModel,
+                onBack = {
+                    navController.popBackStack()
+                },
+                onOpenExam = { lesson: com.example.api.StudentLessonItem ->
+                    handleOpenLessonDetail(lesson)
+                },
+                onOpenClass = { lesson: com.example.api.StudentLessonItem ->
+                    handleOpenLessonDetail(lesson)
                 }
             )
         }
