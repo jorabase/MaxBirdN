@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for Model Test and Revision course architecture with dedicated tabs for Model Tests and Classes.",
-  "updatedAt":  "2026-09-26T02:15:40.530338981Z",
+  "summary":  "মডেল টেস্ট (Model Test) ফিচারের চূড়ান্ত ইমপ্লিমেন্টেশন ব্লুপ্রিন্ট। এতে নতুনভাবে যুক্ত করা হয়েছে: ১) পরীক্ষা শুরুর আগে সেশন ক্রিয়েশন স্টেপ [GetModelTestSessions(is_practice: false/true) -> session_id -> GetMcqInfoOfModelTest(session_id) -> MCQExamScreen], যা Mermaid চার্ট ও টেক্সটে সুস্পষ্টভাবে অন্তর্ভুক্ত; এবং ২) অ্যাপ লাইফসাইকেল হ্যান্ডলিং (onPause/onStop-এ বর্তমান টাইমার ও উত্তরসমূহ Room DB-তে ক্যাশ রাখা এবং অ্যাপ রিস্টোর হলে সেখান থেকেই পরীক্ষা চালু করা)।",
+  "updatedAt":  "2026-09-26T07:41:31.253567010Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

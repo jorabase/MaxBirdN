@@ -411,7 +411,7 @@ class HomeViewModel(
                         "group" to (if (className.uppercase() in listOf("C5", "C6", "C7", "C8", "C05", "C06", "C07", "C08")) "None" else when(group.lowercase()) {
                             "humanities", "arts", "hum" -> "Humanities"
                             "science", "sci" -> "Science"
-                            "business_studies", "business", "commerce" -> "Business_Studies"
+                            "business_studies", "businessstudies", "business", "commerce", "bus" -> "BusinessStudies"
                             else -> "None"
                         }),
                         "vendor" to vendor

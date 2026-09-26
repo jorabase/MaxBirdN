@@ -36,6 +36,8 @@ data class ChangeSyllabusUiState(
     val selectedBatch: BatchOptionItem? = null,
     val currentClassCode: String? = null,     // user এখানে already enrolled
     val currentGroupCode: String? = null,
+    val currentPassingYear: String? = null,
+    val currentBatchLabel: String? = null,
     val errorMessage: String? = null,
     val showConfirmBottomSheet: Boolean = false
 ) {
@@ -68,6 +70,18 @@ data class ChangeSyllabusUiState(
             if (isGroupRequiredForSelectedClass && !currentGroupCode.isNullOrBlank()) {
                 if (selectedGroup?.matchesCodeOrName(currentGroupCode) != true) return false
             }
+            if (batchOptions.isNotEmpty() && selectedBatch != null) {
+                val selectedYear = selectedBatch.yearString.trim()
+                val currentYear = currentPassingYear?.trim()
+                val selectedLabel = selectedBatch.label?.trim()
+                val currentLabel = currentBatchLabel?.trim()
+
+                if (selectedYear.isNotBlank() && !currentYear.isNullOrBlank()) {
+                    if (!selectedYear.equals(currentYear, ignoreCase = true)) return false
+                } else if (!selectedLabel.isNullOrBlank() && !currentLabel.isNullOrBlank()) {
+                    if (!selectedLabel.equals(currentLabel, ignoreCase = true)) return false
+                }
+            }
             return true
         }
 }
@@ -81,13 +95,12 @@ class ChangeSyllabusViewModel(
     val uiState: StateFlow<ChangeSyllabusUiState> = _uiState.asStateFlow()
 
     /**
-     * Fallback groups — শুধু তখন use হবে যখন API class_list-এ groups field absent থাকে।
-     * Capture-এ দেখা গেছে class_list response-এ groups field নেই, তাই এটা প্রয়োজন।
+     * Fallback groups — StudyGroupTypeEnum: "Science", "Humanities", "BusinessStudies"
      */
     val standardStudyGroups = listOf(
         StudyGroupItem(code = "Science", name_bn = "বিজ্ঞান", name_en = "Science"),
         StudyGroupItem(code = "Humanities", name_bn = "মানবিক", name_en = "Humanities"),
-        StudyGroupItem(code = "Business_Studies", name_bn = "ব্যবসায় শিক্ষা", name_en = "Business Studies")
+        StudyGroupItem(code = "BusinessStudies", name_bn = "ব্যবসায় শিক্ষা", name_en = "Business Studies")
     )
 
     init { loadClassList() }
@@ -116,6 +129,8 @@ class ChangeSyllabusViewModel(
 
                 val storedClassCode = sessionManager.getUserClassName()
                 val storedGroupRaw = sessionManager.getUserGroup()
+                val storedPassingYear = sessionManager.getAcademicPassingYear()
+                val storedBatchLabel = sessionManager.getUserBatchId()
 
                 val preselectedClass = classes.find {
                     it.code.equals(storedClassCode, true)
@@ -137,15 +152,17 @@ class ChangeSyllabusViewModel(
                     selectedClass = preselectedClass,
                     selectedGroup = preselectedGroup,
                     currentClassCode = storedClassCode,
-                    currentGroupCode = storedGroupRaw
+                    currentGroupCode = storedGroupRaw,
+                    currentPassingYear = storedPassingYear,
+                    currentBatchLabel = storedBatchLabel
                 )
 
                 // FIX #2: exam year + label দিয়ে batch preselection
                 preselectedClass?.code?.let { code ->
                     fetchBatchOptions(
                         classCode = code,
-                        preferredLabel = sessionManager.getUserBatchId(),
-                        preferredYear = sessionManager.getAcademicPassingYear()
+                        preferredLabel = storedBatchLabel,
+                        preferredYear = storedPassingYear
                     )
                 }
             } catch (e: Exception) {
@@ -282,18 +299,11 @@ class ChangeSyllabusViewModel(
             )
 
             try {
-                // ===== Candidate list for study_group enum =====
-                // প্রথমে user যা select করল, এরপর stored raw value.
-                // API নিজে যেটা accept করে সেটাই থাকবে — no hardcoded preference.
+                // ===== Study group enum resolution =====
                 val candidates: List<String?> =
                     if (selectedClass.isGroupRequired && selectedGroup != null) {
-                        buildList {
-                            selectedGroup.code.trim().takeIf { it.isNotBlank() }?.let { add(it) }
-                            sessionManager.getUserGroup()?.trim()?.takeIf { it.isNotBlank() }?.let {
-                                if (this.none { c -> c.equals(it, true) }) add(it)
-                            }
-                            if (isEmpty()) add(null)
-                        }
+                        val normalized = normalizeStudyGroup(selectedGroup.code)
+                        listOfNotNull(normalized, selectedGroup.code).distinct()
                     } else listOf(null)
 
                 var lastException: Exception? = null
@@ -373,8 +383,16 @@ class ChangeSyllabusViewModel(
                 }
 
                 // ===== 4) Local persistence =====
+                val effectiveBatchId = when {
+                    selectedClass.code.equals("C11", true) && passingYear.isNotBlank() -> "HSC $passingYear"
+                    selectedClass.code.equals("C12", true) && passingYear.isNotBlank() -> "HSC $passingYear"
+                    selectedClass.code.equals("C10", true) && passingYear.isNotBlank() -> "SSC $passingYear"
+                    selectedClass.code.equals("C9", true) && passingYear.isNotBlank() -> "SSC $passingYear"
+                    else -> selectedBatch?.label ?: passingYear.ifBlank { null }
+                }
+
                 sessionManager.saveUserAcademicInfo(
-                    batchId = selectedBatch?.label ?: passingYear.ifBlank { null },
+                    batchId = effectiveBatchId,
                     className = selectedClass.code,
                     group = successfulEnumVal ?: selectedGroup?.code,
                     vendor = selectedClass.vendor ?: "BD",
@@ -449,6 +467,21 @@ class ChangeSyllabusViewModel(
                 )
                 context.startActivity(launchIntent)
             } catch (_: Exception) {}
+        }
+    }
+
+    private fun normalizeStudyGroup(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return when (raw.trim().lowercase()) {
+            "humanities", "hum", "arts" -> "Humanities"
+            "science", "sci" -> "Science"
+            "businessstudies", "business_studies", "business", "commerce", "bus" -> "BusinessStudies"
+            "bcs" -> "BCS"
+            "bank" -> "Bank"
+            "all" -> "All"
+            "others" -> "Others"
+            "none" -> "None"
+            else -> raw.trim()
         }
     }
 }

@@ -1,7 +1,8 @@
-package com.example.modeltest
+package com.example.modeltest.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.modeltest.data.ModelTestRepository
 
 class ModelTestViewModelFactory(
     private val repository: ModelTestRepository

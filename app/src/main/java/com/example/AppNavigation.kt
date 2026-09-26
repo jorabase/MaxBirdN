@@ -57,10 +57,10 @@ import com.example.saved.SavedViewModel
 import com.example.saved.SavedViewModelFactory
 import com.example.smartnotes.SmartNotesViewModel
 import com.example.smartnotes.SmartNotesViewModelFactory
-import com.example.modeltest.ModelTestRepository
-import com.example.modeltest.ModelTestViewModel
-import com.example.modeltest.ModelTestViewModelFactory
-import com.example.modeltest.ModelTestSubjectScreen
+import com.example.modeltest.data.ModelTestRepository
+import com.example.modeltest.ui.ModelTestViewModel
+import com.example.modeltest.ui.ModelTestViewModelFactory
+import com.example.modeltest.ui.screens.*
 import com.example.ui.screens.*
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -84,6 +84,12 @@ object Routes {
     const val CHAPTER_RESOURCES = "chapter_resources/{chapterId}?name={name}&subjectCode={subjectCode}&phaseId={phaseId}"
     const val SUBJECT_CHAPTERS = "subject_chapters/{subjectCode}?title={title}&color={color}"
     const val MODEL_TEST_SUBJECT = "model_test_subject/{subjectCode}?title={title}&color={color}&programId={programId}&phaseId={phaseId}"
+    const val MODEL_TEST_DETAIL = "model_test_detail/{modelTestId}?title={title}&startTime={startTime}&endTime={endTime}"
+    const val MODEL_TEST_MCQ_EXAM = "model_test_mcq_exam/{sessionId}"
+    const val MODEL_TEST_CQ_READONLY = "model_test_cq_readonly/{sessionId}"
+    const val MODEL_TEST_CQ_UPLOAD = "model_test_cq_upload/{sessionId}"
+    const val MODEL_TEST_RESULT = "model_test_result/{sessionId}"
+    const val MODEL_TEST_FEEDBACK = "model_test_feedback/{sessionId}"
     const val CHAPTER_LESSONS = "chapter_lessons/{chapterId}?name={name}&status={status}&initialTab={initialTab}&subjectCode={subjectCode}&subjectTitle={subjectTitle}&subjectColor={subjectColor}"
     const val LESSON_DETAIL_PLAYER = "lesson_detail_player"
     const val VIDEO_PLAYER = "video_player?url={url}&title={title}&subject={subject}&color={color}&isLive={isLive}"
@@ -245,7 +251,13 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         factory = SmartNotesViewModelFactory(apiService, sessionManager)
     )
 
-    val modelTestRepository = remember { ModelTestRepository(apiService) }
+    val modelTestRepository = remember { 
+        ModelTestRepository(
+            apiService = apiService,
+            sessionManager = sessionManager,
+            modelTestDao = appDatabase.modelTestDao()
+        ) 
+    }
     val modelTestViewModel: ModelTestViewModel = viewModel(
         factory = ModelTestViewModelFactory(modelTestRepository)
     )
@@ -635,7 +647,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 )
             }
 
-            ModelTestSubjectScreen(
+            ModelTestDashboardScreen(
                 subjectCode = subjectCode,
                 subjectTitle = title,
                 subjectColorHex = color,
@@ -643,12 +655,154 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onBack = {
                     navController.popBackStack()
                 },
-                onOpenExam = { lesson: com.example.api.StudentLessonItem ->
-                    handleOpenLessonDetail(lesson)
+                onOpenModelTest = { lesson: com.example.api.StudentLessonItem ->
+                    val mTestId = lesson.content_id ?: lesson.id ?: ""
+                    val encT = URLEncoder.encode(lesson.title ?: "মডেল টেস্ট", "UTF-8")
+                    val encStart = URLEncoder.encode(lesson.start_time ?: "", "UTF-8")
+                    val encEnd = URLEncoder.encode(lesson.end_time ?: "", "UTF-8")
+                    navController.navigate("model_test_detail/$mTestId?title=$encT&startTime=$encStart&endTime=$encEnd")
                 },
                 onOpenClass = { lesson: com.example.api.StudentLessonItem ->
                     handleOpenLessonDetail(lesson)
+                },
+                onNavigateHome = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
                 }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_DETAIL,
+            anim = NavAnim.forward,
+            arguments = listOf(
+                navArgument("modelTestId") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("startTime") { type = NavType.StringType; defaultValue = "" },
+                navArgument("endTime") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val modelTestId = backStackEntry.arguments?.getString("modelTestId") ?: ""
+            val title = backStackEntry.arguments?.getString("title")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val startTime = backStackEntry.arguments?.getString("startTime")?.let { URLDecoder.decode(it, "UTF-8") }
+            val endTime = backStackEntry.arguments?.getString("endTime")?.let { URLDecoder.decode(it, "UTF-8") }
+
+            ModelTestDetailScreen(
+                modelTestId = modelTestId,
+                lessonTitle = title,
+                lessonStartTime = startTime,
+                lessonEndTime = endTime,
+                viewModel = modelTestViewModel,
+                onBack = { navController.popBackStack() },
+                onStartExam = { sessionId ->
+                    navController.navigate("model_test_mcq_exam/$sessionId")
+                },
+                onViewFeedback = { sessionId ->
+                    navController.navigate("model_test_feedback/$sessionId")
+                },
+                onNavigateHome = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_MCQ_EXAM,
+            anim = NavAnim.forward,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+
+            MCQExamScreen(
+                sessionId = sessionId,
+                viewModel = modelTestViewModel,
+                onNavigateToCqReadOnly = { sId ->
+                    navController.navigate("model_test_cq_readonly/$sId") {
+                        popUpTo("model_test_mcq_exam/$sId") { inclusive = true }
+                    }
+                },
+                onNavigateToCqUpload = { sId ->
+                    navController.navigate("model_test_cq_upload/$sId") {
+                        popUpTo("model_test_mcq_exam/$sId") { inclusive = true }
+                    }
+                },
+                onExitExam = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_CQ_READONLY,
+            anim = NavAnim.forward,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+
+            CQExamScreen(
+                sessionId = sessionId,
+                viewModel = modelTestViewModel,
+                onFinishPracticeExam = { sId ->
+                    navController.navigate("model_test_feedback/$sId") {
+                        popUpTo("model_test_cq_readonly/$sId") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_CQ_UPLOAD,
+            anim = NavAnim.forward,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+
+            CQExamUploadScreen(
+                sessionId = sessionId,
+                viewModel = modelTestViewModel,
+                onNavigateToResult = { sId ->
+                    navController.navigate("model_test_result/$sId") {
+                        popUpTo("model_test_cq_upload/$sId") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_RESULT,
+            anim = NavAnim.forward,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+
+            ModelTestResultScreen(
+                sessionId = sessionId,
+                viewModel = modelTestViewModel,
+                onViewFeedback = { sId ->
+                    navController.navigate("model_test_feedback/$sId")
+                },
+                onNavigateHome = {
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.HOME) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.MODEL_TEST_FEEDBACK,
+            anim = NavAnim.forward,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+
+            MCQFeedbackScreen(
+                sessionId = sessionId,
+                viewModel = modelTestViewModel,
+                onBack = { navController.popBackStack() }
             )
         }
 

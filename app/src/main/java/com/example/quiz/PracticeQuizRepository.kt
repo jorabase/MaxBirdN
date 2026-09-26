@@ -37,7 +37,7 @@ class PracticeQuizRepository(
         val groupEnumVal = when (rawGroup.lowercase()) {
             "science", "sci" -> "Science"
             "humanities", "arts", "hum" -> "Humanities"
-            "business_studies", "business", "commerce" -> "Business_Studies"
+            "business_studies", "businessstudies", "business", "commerce", "bus" -> "BusinessStudies"
             "none", "" -> "None"
             else -> if (classEnumVal in listOf("C6", "C7", "C8")) "None" else rawGroup
         }

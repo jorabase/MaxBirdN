@@ -27,7 +27,7 @@ class CourseRepository(
             when (group?.lowercase()) {
                 "humanities", "arts", "hum" -> "Humanities"
                 "science", "sci" -> "Science"
-                "business_studies", "business", "commerce" -> "Business_Studies"
+                "business_studies", "businessstudies", "business", "commerce", "bus" -> "BusinessStudies"
                 else -> "None"
             }
         }
