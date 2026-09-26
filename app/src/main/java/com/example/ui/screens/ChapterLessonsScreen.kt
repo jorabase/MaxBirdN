@@ -387,13 +387,15 @@ fun ChapterLessonsScreen(
                                                 lesson.content_type?.contains("EXAM", ignoreCase = true) == true ||
                                                 lesson.class_type?.contains("EXAM", ignoreCase = true) == true
 
-                                        if (isExamLesson && onNavigateToExam != null) {
+                                        if (lesson.isModelTest && onOpenLessonDetail != null) {
+                                            onOpenLessonDetail(lesson)
+                                        } else if (isExamLesson && onNavigateToExam != null) {
                                             viewModel.selectLesson(lesson)
                                             val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.id
-                                            val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title)
+                                            val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
                                             onNavigateToExam(sessionId, lesson.id, formattedTitle, chapterName)
                                         } else if (onOpenLessonDetail != null) {
                                             onOpenLessonDetail(lesson)

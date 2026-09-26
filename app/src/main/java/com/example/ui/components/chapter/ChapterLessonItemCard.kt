@@ -64,6 +64,8 @@ fun ChapterLessonItemCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isModelTest = lesson.isModelTest
+    val isLiveExam = lesson.isLiveExam
     val isExam = lesson.isExam
     val isLiveNow = lesson.isLiveNow
     val isUpcoming = lesson.isUpcoming
@@ -96,8 +98,17 @@ fun ChapterLessonItemCard(
             "পুনরায় দেখুন",
             Color(0xFF059669)
         )
-        isExam -> Tuple7(
-            "লাইভ পরীক্ষা / এক্সাম",
+        isModelTest -> Tuple7(
+            "মডেল টেস্ট",
+            Color(0xFF7C3AED).copy(alpha = 0.15f),
+            Color(0xFF7C3AED),
+            Color(0xFF7C3AED).copy(alpha = 0.45f),
+            Icons.Default.Quiz,
+            "মডেল টেস্ট দিন",
+            Color(0xFF7C3AED)
+        )
+        isLiveExam || isExam -> Tuple7(
+            "লাইভ চ্যাপ্টার পরীক্ষা",
             Color(0xFFF59E0B).copy(alpha = 0.15f),
             Color(0xFFD97706),
             Color(0xFFF59E0B).copy(alpha = 0.45f),
@@ -302,7 +313,8 @@ fun ChapterLessonItemCard(
             ) {
                 Text(
                     text = when {
-                        isExam -> "অধ্যায় পরীক্ষা এবং মূল্যায়ন"
+                        isModelTest -> if (!lesson.model_test?.type.isNullOrBlank()) "${lesson.model_test?.type} মডেল টেস্ট • পূর্ণাঙ্গ মূল্যায়ন" else "পূর্ণাঙ্গ মডেল টেস্ট ও জাতীয় র‍্যাংকিং"
+                        isLiveExam || isExam -> "অধ্যায় পরীক্ষা এবং মূল্যায়ন"
                         isLiveNow -> "সরাসরি শিক্ষক ও সহপাঠীদের সাথে"
                         isUpcoming -> "নির্ধারিত সময়ে ক্লাস শুরু হবে"
                         isRecorded -> "রেকর্ড ভিডিও ও লেকচার শিট"

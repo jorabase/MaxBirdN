@@ -475,15 +475,36 @@ data class StudentLessonItem(
                 !live_class?.playback_url.isNullOrBlank() ||
                 !live_class?.hls_url.isNullOrBlank()
 
+    val isModelTest: Boolean
+        get() = content_type?.equals("ModelTest", ignoreCase = true) == true ||
+                model_test != null ||
+                class_type?.contains("ModelTest", ignoreCase = true) == true ||
+                type?.contains("ModelTest", ignoreCase = true) == true ||
+                tag?.contains("ModelTest", ignoreCase = true) == true ||
+                (title != null && (title.contains("Model Test", ignoreCase = true) || title.contains("মডেল টেস্ট", ignoreCase = true)))
+
+    val isLiveExam: Boolean
+        get() = !isModelTest && (
+                content_type?.equals("LiveExam", ignoreCase = true) == true ||
+                content_type?.contains("Exam", ignoreCase = true) == true ||
+                class_type?.contains("LiveExam", ignoreCase = true) == true ||
+                type?.contains("LiveExam", ignoreCase = true) == true ||
+                (isExam && !isModelTest)
+        )
+
     val isExam: Boolean
         get() {
+            if (content_type?.equals("ModelTest", ignoreCase = true) == true || model_test != null) {
+                return true
+            }
+            if (content_type?.equals("LiveExam", ignoreCase = true) == true) {
+                return true
+            }
             if (content_type?.equals("LiveClass", ignoreCase = true) == true) {
                 return live_class?.type?.contains("EXAM", ignoreCase = true) == true ||
                        live_class?.type?.contains("QUIZ", ignoreCase = true) == true
             }
-            return content_type?.equals("LiveExam", ignoreCase = true) == true ||
-                content_type?.equals("ModelTest", ignoreCase = true) == true ||
-                content_type?.equals("Quiz", ignoreCase = true) == true ||
+            return content_type?.equals("Quiz", ignoreCase = true) == true ||
                 content_type?.contains("Exam", ignoreCase = true) == true ||
                 content_type?.contains("Quiz", ignoreCase = true) == true ||
                 class_type?.contains("Exam", ignoreCase = true) == true ||
@@ -492,7 +513,6 @@ data class StudentLessonItem(
                 live_class?.class_type?.contains("Exam", ignoreCase = true) == true ||
                 live_class?.type?.contains("EXAM", ignoreCase = true) == true ||
                 live_class?.type?.contains("QUIZ", ignoreCase = true) == true ||
-                model_test != null ||
                 (title != null && (
                     title.contains("Exam", true) || 
                     title.contains("পরীক্ষা", true) || 
@@ -784,8 +804,8 @@ data class LiveClassDetails(
 
 @JsonClass(generateAdapter = true)
 data class ModelTestDetails(
-    val exam_category: String?,
-    val type: String?,
+    val exam_category: String? = null,
+    val type: String? = null,
     val result_publish_time: String? = null
 )
 

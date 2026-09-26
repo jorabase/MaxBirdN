@@ -495,6 +495,8 @@ fun ShikhoRoutineCard(
     val timeString = formatTimeRange(startCal, endCal)
     val durationString = calculateDurationText(startCal, endCal)
 
+    val isModelTest = lesson.isModelTest
+    val isLiveExam = lesson.isLiveExam
     val isExam = lesson.isExam
     val isLive = lesson.isLive
 
@@ -503,6 +505,7 @@ fun ShikhoRoutineCard(
     val endMs = endCal?.timeInMillis ?: (if (startMs != Long.MAX_VALUE) startMs + (90 * 60 * 1000L) else Long.MAX_VALUE)
     val isLiveNow = lesson.isLiveNow
     val isExamNow = isExam && (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs)
+    val isModelTestNow = isModelTest && (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs)
 
     val classTypeBadge = ClassTypeUtils.getClassTypeBadgeStyle(lesson)
 
@@ -511,17 +514,7 @@ fun ShikhoRoutineCard(
     val subjectColors = SubjectColorUtils.getColorScheme(subjectName)
 
     val handleCardClick = {
-        if (isExam && onNavigateToExam != null) {
-            val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
-                ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
-                ?: lesson.content_id?.takeIf { it.isNotBlank() }
-                ?: lesson.id
-            val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
-            val chapterName = lesson.subject_name ?: ""
-            onNavigateToExam(sessionId, lesson.id, formattedTitle, chapterName)
-        } else {
-            onClick()
-        }
+        onClick()
     }
 
     val interaction = remember { MutableInteractionSource() }
@@ -541,13 +534,16 @@ fun ShikhoRoutineCard(
 
     val cardBorderColor = when {
         isLiveNow -> Color(0xFFEF4444)
+        isModelTestNow -> Color(0xFF7C3AED)
         isExamNow -> Color(0xFFF59E0B)
+        isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.8f)
         isExam -> Color(0xFFFBBF24).copy(alpha = 0.8f)
         else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     }
 
     val cardBackgroundGradient = when {
         isLiveNow -> Brush.linearGradient(listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E6)))
+        isModelTestNow || isModelTest -> Brush.linearGradient(listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF).copy(alpha = 0.6f)))
         isExamNow -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7)))
         isExam -> Brush.linearGradient(listOf(Color(0xFFFFFDF5), Color(0xFFFEF9C3).copy(alpha = 0.45f)))
         else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)))
@@ -584,6 +580,7 @@ fun ShikhoRoutineCard(
                     .background(
                         when {
                             isLiveNow -> Brush.horizontalGradient(listOf(Color(0xFFEF4444), Color(0xFFF43F5E)))
+                            isModelTestNow || isModelTest -> Brush.horizontalGradient(listOf(Color(0xFF7C3AED), Color(0xFFA855F7)))
                             isExamNow -> Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFD97706)))
                             isExam -> Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFFCD34D)))
                             else -> Brush.horizontalGradient(listOf(subjectColors.textColor, subjectColors.textColor.copy(alpha = 0.4f)))
@@ -629,6 +626,7 @@ fun ShikhoRoutineCard(
                         shape = RoundedCornerShape(7.dp),
                         color = when {
                             isLiveNow -> Color(0xFFFEE2E2)
+                            isModelTestNow || isModelTest -> Color(0xFFEDE9FE)
                             isExamNow -> Color(0xFFFEF3C7)
                             isExam -> Color(0xFFFFF7ED)
                             else -> classTypeBadge.backgroundColor.copy(alpha = 0.9f)
@@ -637,6 +635,7 @@ fun ShikhoRoutineCard(
                             0.8.dp,
                             when {
                                 isLiveNow -> Color(0xFFEF4444).copy(alpha = 0.3f)
+                                isModelTestNow || isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.35f)
                                 isExamNow || isExam -> Color(0xFFF59E0B).copy(alpha = 0.3f)
                                 else -> classTypeBadge.textColor.copy(alpha = 0.2f)
                             }
@@ -664,6 +663,36 @@ fun ShikhoRoutineCard(
                                     )
                                 }
                             }
+                            isModelTestNow -> {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF7C3AED))
+                                    )
+                                    Text(
+                                        "মডেল টেস্ট চলছে",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF6D28D9)
+                                    )
+                                }
+                            }
+                            isModelTest -> {
+                                Text(
+                                    text = "মডেল টেস্ট",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6D28D9),
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
                             isExamNow -> {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
@@ -687,7 +716,7 @@ fun ShikhoRoutineCard(
                             }
                             isExam -> {
                                 Text(
-                                    text = "পরীক্ষা",
+                                    text = "চ্যাপ্টার এক্সাম",
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFB45309),

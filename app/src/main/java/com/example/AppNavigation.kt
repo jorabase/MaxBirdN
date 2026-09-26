@@ -275,12 +275,18 @@ fun AppNavigation(modifier: Modifier = Modifier) {
     }
 
     val handleOpenLessonDetail: (com.example.api.StudentLessonItem) -> Unit = { lesson ->
-        if (lesson.isExam) {
+        if (lesson.isModelTest || lesson.content_type?.equals("ModelTest", ignoreCase = true) == true || lesson.model_test != null) {
+            val mTestId = lesson.content_id?.takeIf { it.isNotBlank() } ?: lesson.id
+            val encT = URLEncoder.encode(lesson.title ?: "মডেল টেস্ট", "UTF-8")
+            val encStart = URLEncoder.encode(lesson.start_time ?: "", "UTF-8")
+            val encEnd = URLEncoder.encode(lesson.end_time ?: "", "UTF-8")
+            navController.navigate("model_test_detail/$mTestId?title=$encT&startTime=$encStart&endTime=$encEnd")
+        } else if (lesson.isLiveExam || lesson.isExam || lesson.content_type?.equals("LiveExam", ignoreCase = true) == true) {
             val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
                 ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                 ?: lesson.id
-            val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
+            val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
             val chapter = lesson.subject_name ?: ""
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val encodedChapter = URLEncoder.encode(chapter, "UTF-8")

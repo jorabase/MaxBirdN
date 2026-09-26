@@ -44,6 +44,8 @@ fun TimelineRoutineCard(
         if (duration.isNotBlank()) "$timeRange • $duration" else timeRange
     }
 
+    val isModelTest = lesson.isModelTest
+    val isLiveExam = lesson.isLiveExam
     val isExam = lesson.isExam
     val isLive = lesson.isLive
 
@@ -53,12 +55,15 @@ fun TimelineRoutineCard(
 
     val isLiveNow = lesson.isLiveNow
     val isExamNow = isExam && (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs)
+    val isModelTestNow = isModelTest && (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs)
 
     val classTypeBadge = ClassTypeUtils.getClassTypeBadgeStyle(lesson)
     val typeText = when {
         isLiveNow -> "🔴 লাইভ চলছে"
+        isModelTestNow -> "✍️ মডেল টেস্ট চলছে"
+        isModelTest -> "✍️ মডেল টেস্ট (Model Test)"
         isExamNow -> "✍️ পরীক্ষা চলছে"
-        isExam -> "✍️ পরীক্ষা (Exam)"
+        isLiveExam || isExam -> "✍️ চ্যাপ্টার এক্সাম"
         else -> classTypeBadge.label
     }
 
@@ -67,17 +72,7 @@ fun TimelineRoutineCard(
     val subjectColors = SubjectColorUtils.getColorScheme(subjectName)
 
     val handleCardClick = {
-        if (isExam && onNavigateToExam != null) {
-            val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
-                ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
-                ?: lesson.content_id?.takeIf { it.isNotBlank() }
-                ?: lesson.id
-            val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
-            val chapterName = lesson.subject_name ?: ""
-            onNavigateToExam(sessionId, lesson.id, formattedTitle, chapterName)
-        } else {
-            onClick()
-        }
+        onClick()
     }
 
     val titleFontSize = when {
@@ -121,6 +116,7 @@ fun TimelineRoutineCard(
                     .background(
                         when {
                             isLiveNow -> Color(0xFFFEE2E2)
+                            isModelTestNow || isModelTest -> Color(0xFFEDE9FE)
                             isExamNow || isExam -> Color(0xFFFEF3C7)
                             else -> Color(0xFFE0F2FE)
                         }
@@ -129,14 +125,15 @@ fun TimelineRoutineCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(if (isLiveNow || isExamNow) 10.dp else 8.dp)
+                        .size(if (isLiveNow || isExamNow || isModelTestNow) 10.dp else 8.dp)
                         .graphicsLayer {
-                            if (isLiveNow || isExamNow) { scaleX = liveDotScale; scaleY = liveDotScale }
+                            if (isLiveNow || isExamNow || isModelTestNow) { scaleX = liveDotScale; scaleY = liveDotScale }
                         }
                         .clip(CircleShape)
                         .background(
                             when {
                                 isLiveNow -> Color(0xFFEF4444)
+                                isModelTestNow || isModelTest -> Color(0xFF7C3AED)
                                 isExamNow || isExam -> Color(0xFFD97706)
                                 else -> Color(0xFF0284C7)
                             }
@@ -157,14 +154,18 @@ fun TimelineRoutineCard(
             colors = CardDefaults.cardColors(
                 containerColor = when {
                     isLiveNow -> Color(0xFFFFF1F2)
+                    isModelTestNow -> Color(0xFFFAF5FF)
+                    isModelTest -> Color(0xFFFAF5FF)
                     isExamNow -> Color(0xFFFFFBEB)
                     isExam -> Color(0xFFFEF3C7).copy(alpha = 0.25f)
                     else -> MaterialTheme.colorScheme.surface
                 }
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isLiveNow || isExamNow) 3.5.dp else 1.5.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = if (isLiveNow || isExamNow || isModelTestNow) 3.5.dp else 1.5.dp),
             border = when {
                 isLiveNow -> BorderStroke(1.5.dp, Color(0xFFEF4444))
+                isModelTestNow -> BorderStroke(1.5.dp, Color(0xFF7C3AED))
+                isModelTest -> BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.5f))
                 isExamNow -> BorderStroke(1.5.dp, Color(0xFFF59E0B))
                 isExam -> BorderStroke(1.dp, Color(0xFFFCD34D))
                 else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))

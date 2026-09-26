@@ -26,6 +26,8 @@ object ClassTypeUtils {
         if (raw.isNullOrBlank()) return null
         val lower = raw.trim().lowercase()
         return when {
+            lower.contains("modeltest") || lower.contains("model_test") || lower.contains("model test") -> "মডেল টেস্ট"
+            lower.contains("liveexam") || lower.contains("live_exam") || lower.contains("chapter_exam") -> "চ্যাপ্টার এক্সাম"
             lower.contains("doubt") -> "ডাউট  ক্লাস"
             lower.contains("orientation") -> "ওরিয়েনটেশন ক্লাস"
             lower.contains("solving") || lower.contains("solution") -> "সলভিং ক্লাস"
@@ -45,6 +47,14 @@ object ClassTypeUtils {
      * Evaluates class_type, live_class type, content_type, and title.
      */
     fun getClassTypeBangla(lesson: StudentLessonItem): String {
+        // 0. Highest priority: content_type check
+        if (lesson.isModelTest || lesson.content_type.equals("ModelTest", ignoreCase = true)) {
+            return "মডেল টেস্ট"
+        }
+        if (lesson.isLiveExam || lesson.content_type.equals("LiveExam", ignoreCase = true)) {
+            return "চ্যাপ্টার এক্সাম"
+        }
+
         // 1. Explicit class_type from root or live_class
         translateClassType(lesson.class_type)?.let { return it }
         translateClassType(lesson.live_class?.class_type)?.let { return it }
@@ -54,6 +64,7 @@ object ClassTypeUtils {
         // 2. Detect keywords from lesson title
         val titleLower = (lesson.title ?: "").lowercase()
         when {
+            titleLower.contains("model test") || titleLower.contains("মডেল টেস্ট") -> return "মডেল টেস্ট"
             titleLower.contains("doubt") -> return "ডাউট  ক্লাস"
             titleLower.contains("orientation") -> return "ওরিয়েনটেশন ক্লাস"
             titleLower.contains("solving") || titleLower.contains("solution") -> return "সলভিং ক্লাস"
@@ -67,6 +78,7 @@ object ClassTypeUtils {
 
         // 3. Fallback based on lesson characteristics
         return when {
+            lesson.isModelTest -> "মডেল টেস্ট"
             lesson.isExam -> "চ্যাপ্টার এক্সাম"
             lesson.isLive -> "লাইভ ক্লাস"
             lesson.isRecorded -> "লেকচার ক্লাস"
@@ -80,6 +92,11 @@ object ClassTypeUtils {
     fun getClassTypeBadgeStyle(lesson: StudentLessonItem): ClassTypeBadgeStyle {
         val label = getClassTypeBangla(lesson)
         return when (label) {
+            "মডেল টেস্ট" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF7C3AED),
+                backgroundColor = Color(0xFFEDE9FE)
+            )
             "ডাউট  ক্লাস", "ডাউট ক্লাস" -> ClassTypeBadgeStyle(
                 label = label,
                 textColor = Color(0xFF7C3AED),

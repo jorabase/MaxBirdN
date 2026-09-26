@@ -553,12 +553,14 @@ fun FullRoutineScreen(
                             TimelineRoutineCard(
                                 lesson = lesson,
                                 onClick = {
-                                    if (lesson.isExam && onNavigateToExam != null) {
+                                    if (lesson.isModelTest) {
+                                        onOpenLessonDetail?.invoke(lesson)
+                                    } else if (lesson.isExam && onNavigateToExam != null) {
                                         val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
                                             ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                                             ?: lesson.content_id?.takeIf { it.isNotBlank() }
                                             ?: lesson.id
-                                        val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
+                                        val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
                                         val chapterName = lesson.subject_name ?: ""
                                         onNavigateToExam(sessionId, lesson.id, formattedTitle, chapterName)
                                     } else {

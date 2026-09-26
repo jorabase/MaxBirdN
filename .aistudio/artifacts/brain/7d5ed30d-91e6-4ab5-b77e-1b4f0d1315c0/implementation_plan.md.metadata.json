@@ -1,6 +1,6 @@
 {
-  "summary":  "মডেল টেস্ট (Model Test) ফিচারের চূড়ান্ত ইমপ্লিমেন্টেশন ব্লুপ্রিন্ট। এতে নতুনভাবে যুক্ত করা হয়েছে: ১) পরীক্ষা শুরুর আগে সেশন ক্রিয়েশন স্টেপ [GetModelTestSessions(is_practice: false/true) -> session_id -> GetMcqInfoOfModelTest(session_id) -> MCQExamScreen], যা Mermaid চার্ট ও টেক্সটে সুস্পষ্টভাবে অন্তর্ভুক্ত; এবং ২) অ্যাপ লাইফসাইকেল হ্যান্ডলিং (onPause/onStop-এ বর্তমান টাইমার ও উত্তরসমূহ Room DB-তে ক্যাশ রাখা এবং অ্যাপ রিস্টোর হলে সেখান থেকেই পরীক্ষা চালু করা)।",
-  "updatedAt":  "2026-09-26T07:41:31.253567010Z",
+  "summary":  "Implementation plan for integrating dynamic exam routing across Routine, Course Subjects, Chapter Lessons, and Model Test based on content_type (LiveExam vs ModelTest).",
+  "updatedAt":  "2026-09-26T09:11:57.246069061Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
