@@ -293,9 +293,9 @@ fun ModelTestDetailScreen(
                     icon = Icons.Default.FactCheck,
                     iconBg = Color(0xFFE0F2FE),
                     iconTint = Color(0xFF0284C7),
-                    showMasterSolution = true,
+                    showMasterSolution = !uiState.mcqMasterSolutionUrl.isNullOrBlank(),
                     onMasterSolutionClick = {
-                        viewModel.loadMasterSolution(modelTestId, "mcq") { url ->
+                        uiState.mcqMasterSolutionUrl?.let { url ->
                             activePdfUrl = url
                             activePdfTitle = "${info?.title ?: "মডেল টেস্ট"} - বহুনির্বাচনি সমাধান"
                         }
@@ -310,9 +310,9 @@ fun ModelTestDetailScreen(
                     icon = Icons.Default.EditNote,
                     iconBg = Color(0xFFFEF3C7),
                     iconTint = Color(0xFFD97706),
-                    showMasterSolution = true,
+                    showMasterSolution = !uiState.cqMasterSolutionUrl.isNullOrBlank(),
                     onMasterSolutionClick = {
-                        viewModel.loadMasterSolution(modelTestId, "cq") { url ->
+                        uiState.cqMasterSolutionUrl?.let { url ->
                             activePdfUrl = url
                             activePdfTitle = "${info?.title ?: "মডেল টেস্ট"} - সৃজনশীল সমাধান"
                         }
@@ -497,13 +497,11 @@ fun ModelTestDetailScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        val remainingTries = uiState.remainingPracticeCount
-                        val triesBengali = toBengaliDigits(remainingTries.toString())
                         Text(
-                            text = "আর মাত্র $triesBengali বার প্র্যাকটিস টেস্ট দিতে পারবে",
+                            text = "তুমি যতবার খুশি প্র্যাকটিস টেস্ট দিতে পারবে (আনলিমিটেড)",
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFDC2626)
+                            color = Color(0xFF16A34A)
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))

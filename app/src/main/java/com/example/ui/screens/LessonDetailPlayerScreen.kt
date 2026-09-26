@@ -169,13 +169,7 @@ fun LessonDetailPlayerScreen(
     val sessionManager = remember(context) { com.example.auth.SessionManager(context) }
     val courseRepository = remember(sessionManager) { CourseRepository(ShikhoApiService.create(sessionManager)) }
 
-    LaunchedEffect(lesson?.id, lesson?.content_id) {
-        val lId = lesson?.id ?: ""
-        val cId = lesson?.content_id ?: ""
-        if (lId.isNotBlank()) sessionManager.markLessonCompleted(lId)
-        if (cId.isNotBlank()) sessionManager.markLessonCompleted(cId)
-        if (!lesson?.live_class?.id.isNullOrBlank()) sessionManager.markLessonCompleted(lesson!!.live_class!!.id)
-    }
+
     val coroutineScope = rememberCoroutineScope()
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current

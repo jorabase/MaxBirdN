@@ -314,25 +314,25 @@ fun LiveExamResultScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        viewModel.loadMasterSolution(uiState.activeModelTestId, "mcq") { url ->
-                                            activePdfViewerUrl = url
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF0F9FF)),
-                                    border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                ) {
-                                    Text(
-                                        text = "মাস্টার সল্যুশন",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0284C7)
-                                    )
+                                if (!uiState.mcqMasterSolutionUrl.isNullOrBlank()) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            uiState.mcqMasterSolutionUrl?.let { activePdfViewerUrl = it }
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF0F9FF)),
+                                        border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(44.dp)
+                                    ) {
+                                        Text(
+                                            text = "মাস্টার সল্যুশন",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0284C7)
+                                        )
+                                    }
                                 }
 
                                 Button(
@@ -409,25 +409,25 @@ fun LiveExamResultScreen(
                             HorizontalDivider(color = Color(0xFFF1F5F9))
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.loadMasterSolution(uiState.activeModelTestId, "cq") { url ->
-                                        activePdfViewerUrl = url
-                                    }
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF0F9FF)),
-                                border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                            ) {
-                                Text(
-                                    text = "মাস্টার সল্যুশন",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0284C7)
-                                )
+                            if (!uiState.cqMasterSolutionUrl.isNullOrBlank()) {
+                                OutlinedButton(
+                                    onClick = {
+                                        uiState.cqMasterSolutionUrl?.let { activePdfViewerUrl = it }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF0F9FF)),
+                                    border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
+                                ) {
+                                    Text(
+                                        text = "মাস্টার সল্যুশন",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0284C7)
+                                    )
+                                }
                             }
                         }
                     }

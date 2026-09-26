@@ -941,9 +941,9 @@ class ModelTestRepository(
     }
 
     // -------------------------------------------------------------
-    // 12. GetCQMasterSolutionUrls (analytics.shikho.com)
+    // 12. GetCQMasterSolutionUrls & GetMCQMasterSolutionUrls
     // -------------------------------------------------------------
-    suspend fun getCQMasterSolutionUrls(cqId: String): Result<CQMasterSolutionUrlsDetails> {
+    suspend fun getCQMasterSolutionUrls(cqId: String): Result<String?> {
         val query = """
             query GetCQMasterSolutionUrls(${'$'}cqId: String!) {
               cqExam(id: ${'$'}cqId) {
@@ -961,27 +961,31 @@ class ModelTestRepository(
             variables = mapOf("cqId" to cqId)
         )
         return result.mapCatching { resp ->
-            val solutions = resp.data?.cqExam?.master_solutions ?: emptyList()
-            
-            // Fallback distinct PDFs for MCQ and CQ
-            val defaultMcqPdf = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
-            val defaultCqPdf = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
+            val url = resp.data?.cqExam?.master_solutions?.firstOrNull()?.url
+            if (!url.isNullOrBlank()) url else null
+        }
+    }
 
-            val mcqMatch = solutions.firstOrNull { 
-                val t = it.title?.lowercase() ?: ""
-                t.contains("mcq") || t.contains("বহুনির্বাচনি") || t.contains("বহুনির্বাচনী") 
-            }?.url ?: solutions.firstOrNull()?.url ?: defaultMcqPdf
+    suspend fun getMCQMasterSolutionUrls(mcqId: String): Result<String?> {
+        val query = """
+            query GetMCQMasterSolutionUrls(${'$'}mcqId: String!) {
+              mcqExam(id: ${'$'}mcqId) {
+                master_solutions {
+                  title
+                  url
+                }
+              }
+            }
+        """.trimIndent()
 
-            val cqMatch = solutions.firstOrNull { 
-                val t = it.title?.lowercase() ?: ""
-                t.contains("cq") || t.contains("সৃজনশীল") || t.contains("লিখিত") 
-            }?.url ?: solutions.getOrNull(1)?.url ?: solutions.firstOrNull()?.url ?: defaultCqPdf
-
-            CQMasterSolutionUrlsDetails(
-                mcq_solution_url = mcqMatch,
-                cq_solution_url = cqMatch,
-                master_solution_pdf_url = mcqMatch
-            )
+        val result = executeAnalyticsQuery<MCQMasterSolutionUrlsResponse>(
+            operationName = "GetMCQMasterSolutionUrls",
+            query = query,
+            variables = mapOf("mcqId" to mcqId)
+        )
+        return result.mapCatching { resp ->
+            val url = resp.data?.mcqExam?.master_solutions?.firstOrNull()?.url
+            if (!url.isNullOrBlank()) url else null
         }
     }
 

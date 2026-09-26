@@ -176,13 +176,26 @@ fun AnimatedLessonPlayerScreen(
 
     // Periodic time progress tracker
     LaunchedEffect(exoPlayer, isPlaying) {
+        val progressMgr = com.example.player.VideoProgressManager.getInstance(context)
+        val key = progressMgr.generateVideoKey(lessonId = null, remoteUrl = videoUrl, title = title)
+
         while (true) {
             if (exoPlayer.playbackState == Player.STATE_READY) {
                 currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
                 totalDuration = exoPlayer.duration.coerceAtLeast(0L)
                 bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
+
+                if (currentPosition > 2000L) {
+                    progressMgr.saveProgress(
+                        videoKey = key,
+                        title = title,
+                        subjectName = subjectName,
+                        positionMs = currentPosition,
+                        durationMs = totalDuration
+                    )
+                }
             }
-            delay(500)
+            delay(1000)
         }
     }
 

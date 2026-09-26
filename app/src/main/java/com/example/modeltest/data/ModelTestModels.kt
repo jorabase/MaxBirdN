@@ -521,7 +521,7 @@ data class FeedbackQuestionItem(
     val solution_image: String? = null
 )
 
-// 11. GetCQMasterSolutionUrls / cqExam
+// 11. GetCQMasterSolutionUrls & GetMCQMasterSolutionUrls
 @JsonClass(generateAdapter = true)
 data class CQMasterSolutionUrlsResponse(
     val data: CQMasterSolutionUrlsData? = null,
@@ -532,6 +532,23 @@ data class CQMasterSolutionUrlsResponse(
 data class CQMasterSolutionUrlsData(
     val cqExam: CqExamMasterSolutionRaw? = null,
     val getCQMasterSolutionUrls: CQMasterSolutionUrlsDetails? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MCQMasterSolutionUrlsResponse(
+    val data: MCQMasterSolutionUrlsData? = null,
+    val errors: List<com.example.api.GraphQlError>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MCQMasterSolutionUrlsData(
+    val mcqExam: McqExamMasterSolutionRaw? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class McqExamMasterSolutionRaw(
+    val id: String? = null,
+    val master_solutions: List<MasterSolutionItemRaw>? = null
 )
 
 @JsonClass(generateAdapter = true)

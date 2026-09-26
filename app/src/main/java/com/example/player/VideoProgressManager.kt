@@ -137,7 +137,7 @@ class VideoProgressManager private constructor(private val context: Context) {
     ) {
         if (videoKey.isBlank() || positionMs < 2000L) return
 
-        val isCompleted = durationMs > 0 && (positionMs >= (durationMs * 0.92f) || (durationMs - positionMs) < 15_000L)
+        val isCompleted = durationMs > 0 && (positionMs >= (durationMs * 0.80f) || (durationMs - positionMs) < 15_000L)
         val now = System.currentTimeMillis()
 
         // 1. Fast synchronous save
@@ -165,6 +165,19 @@ class VideoProgressManager private constructor(private val context: Context) {
                     lastWatchedTimestamp = now
                 )
                 database.videoPlaybackProgressDao().saveProgress(entity)
+
+                if (isCompleted && !lessonId.isNullOrBlank()) {
+                    database.completedItemDao().markCompleted(
+                        com.example.database.CompletedItemEntity(
+                            itemId = lessonId,
+                            itemType = "LESSON",
+                            title = title,
+                            subjectId = subjectName ?: "",
+                            programId = courseId ?: "",
+                            completedAt = now
+                        )
+                    )
+                }
             } catch (_: Exception) {}
         }
     }

@@ -59,6 +59,8 @@ data class ModelTestUiState(
     val retakeContainer: RetakeSessionsContainer? = null,
     val isRetakeLoading: Boolean = false,
     val masterSolutionDetails: CQMasterSolutionUrlsDetails? = null,
+    val mcqMasterSolutionUrl: String? = null,
+    val cqMasterSolutionUrl: String? = null,
     val isMasterSolutionLoading: Boolean = false,
     val masterSolutionError: String? = null,
 
@@ -120,9 +122,7 @@ data class ModelTestUiState(
     val feedbackFilter: FeedbackFilter = FeedbackFilter.ALL
 ) {
     val totalPracticeAllowed: Int
-        get() = retakeContainer?.totalPracticeAllowed
-            ?: retakeContainer?.allowed_attempts
-            ?: 3
+        get() = 999
 
     val attemptedPracticeCount: Int
         get() = retakeContainer?.attemptedPracticeCount
@@ -130,11 +130,10 @@ data class ModelTestUiState(
             ?: 0
 
     val remainingPracticeCount: Int
-        get() = retakeContainer?.remaining_attempts
-            ?: maxOf(0, totalPracticeAllowed - attemptedPracticeCount)
+        get() = 999
 
     val isPracticeLimitReached: Boolean
-        get() = attemptedPracticeCount >= totalPracticeAllowed && totalPracticeAllowed > 0
+        get() = false
 }
 
 class ModelTestViewModel(
@@ -279,6 +278,29 @@ class ModelTestViewModel(
                         isInfoLoading = false,
                         infoError = null
                     )
+                }
+
+                val mcqStageId = details.stages?.firstOrNull { it.type.equals("MCQ", ignoreCase = true) }?.id
+                    ?: details.stage_grouping?.mcq_grouping?.stages?.firstOrNull()?.id
+                val cqStageId = details.stages?.firstOrNull { it.type.equals("CQ", ignoreCase = true) }?.id
+                    ?: details.stage_grouping?.cq_grouping?.stages?.firstOrNull()?.id
+
+                if (!mcqStageId.isNullOrBlank()) {
+                    viewModelScope.launch {
+                        val mcqSolUrl = repository.getMCQMasterSolutionUrls(mcqStageId).getOrNull()
+                        _uiState.update { it.copy(mcqMasterSolutionUrl = mcqSolUrl) }
+                    }
+                } else {
+                    _uiState.update { it.copy(mcqMasterSolutionUrl = null) }
+                }
+
+                if (!cqStageId.isNullOrBlank()) {
+                    viewModelScope.launch {
+                        val cqSolUrl = repository.getCQMasterSolutionUrls(cqStageId).getOrNull()
+                        _uiState.update { it.copy(cqMasterSolutionUrl = cqSolUrl) }
+                    }
+                } else {
+                    _uiState.update { it.copy(cqMasterSolutionUrl = null) }
                 }
             }.onFailure { err ->
                 _uiState.update {
@@ -630,26 +652,35 @@ class ModelTestViewModel(
     // Master Solution Loading
     // -------------------------------------------------------------
     fun loadMasterSolution(modelTestId: String, solutionType: String = "both", onLoaded: (url: String) -> Unit) {
+        val cachedUrl = when (solutionType) {
+            "mcq" -> _uiState.value.mcqMasterSolutionUrl
+            "cq" -> _uiState.value.cqMasterSolutionUrl
+            else -> _uiState.value.mcqMasterSolutionUrl ?: _uiState.value.cqMasterSolutionUrl
+        }
+        if (!cachedUrl.isNullOrBlank()) {
+            onLoaded(cachedUrl)
+            return
+        }
+
         _uiState.update { it.copy(isMasterSolutionLoading = true, masterSolutionError = null) }
         viewModelScope.launch {
-            val result = repository.getCQMasterSolutionUrls(modelTestId)
-            val fallbackUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1790160406/zedrhmwxx3yqzuxsibny.pdf"
-            
-            val details = result.getOrNull()
-            val url = when (solutionType) {
-                "mcq" -> details?.mcq_solution_url ?: details?.master_solution_pdf_url ?: fallbackUrl
-                "cq" -> details?.cq_solution_url ?: details?.master_solution_pdf_url ?: fallbackUrl
-                else -> details?.master_solution_pdf_url ?: details?.cq_solution_url ?: details?.mcq_solution_url ?: fallbackUrl
+            val url = if (solutionType == "mcq") {
+                repository.getMCQMasterSolutionUrls(modelTestId).getOrNull()
+            } else {
+                repository.getCQMasterSolutionUrls(modelTestId).getOrNull()
             }
 
             _uiState.update {
                 it.copy(
-                    masterSolutionDetails = details,
+                    mcqMasterSolutionUrl = if (solutionType == "mcq") url else it.mcqMasterSolutionUrl,
+                    cqMasterSolutionUrl = if (solutionType == "cq") url else it.cqMasterSolutionUrl,
                     isMasterSolutionLoading = false,
-                    masterSolutionError = null
+                    masterSolutionError = if (url.isNullOrBlank()) "সল্যুশন পাওয়া যায়নি" else null
                 )
             }
-            onLoaded(url.ifBlank { fallbackUrl })
+            if (!url.isNullOrBlank()) {
+                onLoaded(url)
+            }
         }
     }
 
