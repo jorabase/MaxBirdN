@@ -23,6 +23,10 @@ data class CourseUiState(
     val otherPrograms: List<OtherProgram> = emptyList(),
     val isProgramsLoading: Boolean = false,
     val selectedCourseProgram: EnrolledProgram? = null,
+    val enrollingProgramId: String? = null,
+    val enrollmentSuccessMessage: String? = null,
+    val enrollmentErrorMessage: String? = null,
+    val pendingEnrollmentProgram: OtherProgram? = null,
 
     // Active Program Info
     val programId: String = "",
@@ -57,5 +61,6 @@ data class CourseUiState(
 
     // Tier 4: Selected Lesson Detail
     val selectedLesson: StudentLessonItem? = null,
-    val isLessonDetailLoading: Boolean = false
+    val isLessonDetailLoading: Boolean = false,
+    val selectedLessonTopicVideos: List<com.example.api.TopicFullItem> = emptyList()
 )

@@ -37,7 +37,6 @@ import com.example.utils.formatBanglaDateTime
 fun PlayerErrorOverlay(
     playbackError: String,
     playbackErrorDetails: String?,
-    isLive: Boolean,
     slideUrl: String?,
     onRefreshLesson: (() -> Unit)?,
     onRetryPlayback: () -> Unit,
@@ -85,19 +84,6 @@ fun PlayerErrorOverlay(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isLive && onRefreshLesson != null) {
-                    Button(
-                        onClick = onRefreshLesson,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("লাইভ ক্লাস রিফ্রেশ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
                 OutlinedButton(
                     onClick = onRetryPlayback,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
@@ -167,10 +153,8 @@ fun PlayerErrorOverlay(
  */
 @Composable
 fun LessonStreamPlaceholder(
-    isLive: Boolean,
     lesson: StudentLessonItem?,
     slideUrl: String?,
-    onJoinLiveClass: ((StudentLessonItem) -> Unit)?,
     onRefreshLesson: (() -> Unit)?,
     onViewSlide: (LessonAttachmentItem) -> Unit,
     onBack: () -> Unit,
@@ -195,7 +179,7 @@ fun LessonStreamPlaceholder(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (isLive) "লাইভ ক্লাসের সংযোগ গ্রহণ করা হচ্ছে..." else "এই ক্লাসের সরাসরি রেকর্ডিং লিংক পাওয়া যায়নি",
+                text = "এই ক্লাসের সরাসরি রেকর্ডিং লিংক পাওয়া যায়নি",
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -203,7 +187,7 @@ fun LessonStreamPlaceholder(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (isLive) "লাইভ স্ট্রিমে যুক্ত হতে নিচের বাটনে ক্লিক করুন" else "কোর্সে সরাসরি ভর্তি না থাকলে বা ক্লাস অপ্রস্তুত থাকলে Shikho API লিংক পাঠায় না।",
+                text = "কোর্সে সরাসরি ভর্তি না থাকলে বা ক্লাস অপ্রস্তুত থাকলে Shikho API লিংক পাঠায় না।",
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
@@ -214,19 +198,6 @@ fun LessonStreamPlaceholder(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isLive && onJoinLiveClass != null && lesson != null) {
-                    Button(
-                        onClick = { onJoinLiveClass.invoke(lesson) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE11D48)),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.LiveTv, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("লাইভ ক্লাসে যুক্ত হন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
                 if (onRefreshLesson != null) {
                     Button(
                         onClick = onRefreshLesson,
@@ -282,159 +253,6 @@ fun LessonStreamPlaceholder(
 }
 
 /**
- * Live Class Active Room Banner & Control Card.
- */
-@Composable
-fun LiveClassRoomBanner(
-    isLiveOngoing: Boolean,
-    liveProvider: String,
-    hmsRoomId: String?,
-    livePlayerMode: String,
-    effectiveMeetingUrl: String,
-    onTogglePlayerMode: () -> Unit,
-    onRefreshLesson: (() -> Unit)?,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1F2)),
-        border = BorderStroke(1.5.dp, Color(0xFFFDA4AF)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 14.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color(0xFFE11D48),
-                    ) {
-                        Box(modifier = Modifier.size(10.dp).padding(2.dp))
-                    }
-                    Text(
-                        text = if (isLiveOngoing) "🔴 সরাসরি লাইভ ক্লাস সম্প্রচার চলছে" else "🔴 লাইভ রুম নির্ধারিত",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = Color(0xFF9F1239)
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFFBE123C).copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = liveProvider.uppercase(),
-                        color = Color(0xFF9F1239),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            if (!hmsRoomId.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Room ID: $hmsRoomId",
-                    fontSize = 11.sp,
-                    color = Color(0xFF881337),
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onTogglePlayerMode,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (livePlayerMode == "MEETING") Color(0xFF2563EB) else Color(0xFFE11D48)
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        if (livePlayerMode == "MEETING") Icons.Default.LiveTv else Icons.Default.Groups,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        if (livePlayerMode == "MEETING") "HLS প্লেয়ারে যান" else "100ms লাইভ রুমে যান",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                if (onRefreshLesson != null) {
-                    IconButton(
-                        onClick = onRefreshLesson,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White)
-                            .border(1.dp, Color(0xFFFDA4AF), RoundedCornerShape(10.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "রিফ্রেশ",
-                            tint = Color(0xFF9F1239),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                if (effectiveMeetingUrl.isNotBlank()) {
-                    IconButton(
-                        onClick = {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(effectiveMeetingUrl)).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {}
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White)
-                            .border(1.dp, Color(0xFFFDA4AF), RoundedCornerShape(10.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.OpenInBrowser,
-                            contentDescription = "ব্রাউজার",
-                            tint = Color(0xFF9F1239),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
  * Class Header & Info Section with Bengali Date-Time formatting.
  */
 @Composable
@@ -444,12 +262,91 @@ fun LessonDetailHeader(
 ) {
     val teacher = lesson?.live_class?.teacher 
         ?: lesson?.live_class?.instructor
+    val subjectName = lesson?.subject_name
+        ?: lesson?.live_class?.subject_name
+        ?: "বিষয়"
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
+        // Badges Row: Subject Tag + Teacher
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // 1. Subject Pill (Teal background, white text)
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF14B8A6),
+                shadowElevation = 0.dp
+            ) {
+                Text(
+                    text = subjectName,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+
+            // 2. Teacher Pill
+            if (teacher != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    val avatarUrl = teacher.displayAvatar
+                    val teacherName = teacher.displayName
+                    val context = LocalContext.current
+
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF2563EB).copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!avatarUrl.isNullOrBlank() && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))) {
+                            coil.compose.AsyncImage(
+                                model = coil.request.ImageRequest.Builder(context)
+                                    .data(avatarUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = teacherName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = teacherName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
         // Title
         Text(
             text = lesson?.title ?: "ক্লাস লেকচার",
@@ -484,134 +381,6 @@ fun LessonDetailHeader(
             )
         }
 
-        // Teacher Profile Card (Issue #5)
-        if (teacher != null) {
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                thickness = 0.8.dp,
-                modifier = Modifier.padding(bottom = 14.dp)
-            )
 
-            Text(
-                text = "ক্লাস শিক্ষক (Teacher)",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
-                ),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Avatar Box
-                    val avatarUrl = teacher.displayAvatar
-                    val teacherName = teacher.displayName
-                    val context = LocalContext.current
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary,
-                                        MaterialTheme.colorScheme.secondary
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val isValidUrl = !avatarUrl.isNullOrBlank() && (avatarUrl.startsWith("http://") || avatarUrl.startsWith("https://"))
-                        if (isValidUrl) {
-                            coil.compose.SubcomposeAsyncImage(
-                                model = coil.request.ImageRequest.Builder(context)
-                                    .data(avatarUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = teacherName,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                error = {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = teacherName.firstOrNull()?.toString()?.uppercase() ?: "T",
-                                            color = Color.White,
-                                            fontSize = 20.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = teacherName.firstOrNull()?.toString()?.uppercase() ?: "T",
-                                    color = Color.White,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(14.dp))
-
-                    // Text Details
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = teacherName,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        
-                        val designation = teacher.designation ?: teacher.bio ?: "মেন্টর ও শিক্ষক"
-                        Text(
-                            text = designation,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        val degrees = teacher.university_degree
-                        if (!degrees.isNullOrEmpty()) {
-                            Text(
-                                text = degrees.joinToString(", "),
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
     }
 }

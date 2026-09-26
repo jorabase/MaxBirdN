@@ -159,10 +159,18 @@ object ShikhoPlayerManager {
     ): ExoPlayer {
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
         val seekIncrement = if (classType == PlayerClassType.ANIMATED) 5000L else 10000L
+        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+            .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+            .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_SPEECH)
+            .build()
+
         val builder = ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .setSeekBackIncrementMs(seekIncrement)
             .setSeekForwardIncrementMs(seekIncrement)
+            .setWakeMode(androidx.media3.common.C.WAKE_MODE_LOCAL)
+            .setHandleAudioBecomingNoisy(true)
+            .setAudioAttributes(audioAttributes, true)
 
         if (trackSelector != null) {
             builder.setTrackSelector(trackSelector)

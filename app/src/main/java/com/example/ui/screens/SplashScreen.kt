@@ -140,7 +140,7 @@ fun SplashScreen(
             val isLoggedIn = sessionManager.getAccessToken() != null
             onNavigateOnline(isLoggedIn)
         } else {
-            connectionStatusText = "⚠️ ইন্টারনেট নেই, অফলাইন মোড চালু হচ্ছে..."
+            connectionStatusText = "অফলাইন মোডে প্রবেশ করা হচ্ছে..."
             delay(600)
             onNavigateOffline()
         }

@@ -118,12 +118,12 @@ object ClassAlarmScheduler {
                         if (alarmManager.canScheduleExactAlarms()) {
                             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
                         } else {
-                            alarmManager.set(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
+                            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
                         }
                     } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
                     } else {
-                        alarmManager.set(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
                     }
 
                     Log.d(TAG, "⏰ Scheduled alarm ($leadTimeMinutes mins before) for $subjectName: $lessonTitle at ${Date(alarmTriggerTime)}")
@@ -136,6 +136,103 @@ object ClassAlarmScheduler {
         editor.putStringSet("scheduled_alarm_ids", scheduledIds.map { it.toString() }.toSet())
         editor.apply()
         Log.d(TAG, "✅ Scheduled ${scheduledIds.size} class alarms for program $programId")
+    }
+
+    fun scheduleCustomAlarm(context: Context, alarmId: String, title: String, body: String, triggerTimeMs: Long) {
+        createNotificationChannel(context)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+        val intent = Intent(context, ClassAlarmReceiver::class.java).apply {
+            putExtra("custom_title", title)
+            putExtra("custom_body", body)
+            putExtra("lesson_id", alarmId)
+        }
+
+        val requestCode = alarmId.hashCode()
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            pendingIntentFlags
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTimeMs, pendingIntent)
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTimeMs, pendingIntent)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTimeMs, pendingIntent)
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerTimeMs, pendingIntent)
+        }
+
+        Log.d(TAG, "⏰ Scheduled custom alarm '$title' at ${Date(triggerTimeMs)}")
+    }
+
+    fun cancelCustomAlarm(context: Context, alarmId: String) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, ClassAlarmReceiver::class.java)
+        val requestCode = alarmId.hashCode()
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getBroadcast(context, requestCode, intent, pendingIntentFlags)
+        try {
+            alarmManager.cancel(pendingIntent)
+        } catch (_: Exception) {}
+    }
+
+    fun triggerInstantTestNotification(context: Context, title: String, body: String) {
+        createNotificationChannel(context)
+        val notificationManager = androidx.core.app.NotificationManagerCompat.from(context)
+
+        val mainIntent = Intent(context, com.example.MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_ONE_SHOT
+        }
+
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            (System.currentTimeMillis() % 10000).toInt(),
+            mainIntent,
+            pendingIntentFlags
+        )
+
+        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+        val builder = androidx.core.app.NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(com.example.R.drawable.ic_notification)
+            .setColor(0xFF0072EC.toInt())
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(body))
+            .setAutoCancel(true)
+            .setSound(soundUri)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setVibrate(longArrayOf(0, 300, 200, 300))
+            .setContentIntent(pendingIntent)
+
+        val notificationId = (System.currentTimeMillis() % 100000).toInt()
+        try {
+            notificationManager.notify(notificationId, builder.build())
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException sending instant test notification: ${e.message}")
+        }
     }
 
     fun cancelAllAlarms(context: Context) {

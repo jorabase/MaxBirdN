@@ -51,7 +51,7 @@ fun TimelineRoutineCard(
     val startMs = startCal?.timeInMillis ?: Long.MAX_VALUE
     val endMs = endCal?.timeInMillis ?: (if (startMs != Long.MAX_VALUE) startMs + (90 * 60 * 1000L) else Long.MAX_VALUE)
 
-    val isLiveNow = lesson.isLiveNow || (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs && !isExam)
+    val isLiveNow = lesson.isLiveNow
     val isExamNow = isExam && (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs)
 
     val classTypeBadge = ClassTypeUtils.getClassTypeBadgeStyle(lesson)

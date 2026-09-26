@@ -89,6 +89,7 @@ class HomeViewModel(
         )
     )
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    val wallpaperConfigFlow: StateFlow<com.example.ui.theme.HeaderWallpaperConfig> = sessionManager.headerWallpaperFlow
 
     init {
         loadData()
@@ -421,7 +422,6 @@ class HomeViewModel(
             val enrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
             val others = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
 
-            // সার্ভার থেকে আসা other_programs কেও enrolled হিসেবে প্রমোট করে সব আনলক রাখা
             val promotedOthers = others.map { it.toEnrolledProgram() }
             val allPrograms = (enrolled + promotedOthers).distinctBy { it.id }
 

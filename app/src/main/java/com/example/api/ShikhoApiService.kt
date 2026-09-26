@@ -79,12 +79,6 @@ interface ShikhoApiService {
     suspend fun getAcademicLiveClassDetails(@Body query: GraphQlQuery): AcademicLiveClassDetailsResponse
 
     @POST("/graphql")
-    suspend fun joinLiveClass(@Body query: GraphQlQuery): JoinLiveClassResponse
-
-    @POST("/hms/token")
-    suspend fun getHmsToken(@Body request: HmsTokenRequest): HmsTokenResponse
-
-    @POST("/graphql")
     suspend fun getTeacherDetails(@Body query: GraphQlQuery): TeacherDetailsResponse
 
     @POST("/graphql")
@@ -104,6 +98,12 @@ interface ShikhoApiService {
 
     @POST("/graphql")
     suspend fun getBatchOptions(@Body query: GraphQlQuery): BatchOptionsResponse
+
+    @POST("/graphql")
+    suspend fun availTrial(@Body query: GraphQlQuery): AvailTrialResponse
+
+    @POST("/graphql")
+    suspend fun enrollInFreeProgram(@Body query: GraphQlQuery): EnrollInFreeProgramResponse
 
     @POST("/graphql")
     suspend fun changeSyllabus(@Body query: GraphQlQuery): ChangeSyllabusResponse
@@ -253,9 +253,6 @@ interface ShikhoApiService {
                         }
                         
                         val newBody = modifiedString.toResponseBody(contentType)
-                        if (modifiedString.contains("getQuizResultSummery") || modifiedString.contains("SubmitPracticeQuizMcqSession") || modifiedString.contains("submitPracticeQuizMcqSession")) {
-                            android.util.Log.d("QUIZ_RAW_RESPONSE", ">>> RAW GRAPHQL RESPONSE:\n$modifiedString")
-                        }
                         return@Interceptor response.newBuilder().body(newBody).build()
                     }
                 } catch (_: Exception) {}

@@ -22,8 +22,11 @@ class ClassAlarmReceiver : BroadcastReceiver() {
 
         Log.d("ClassAlarmReceiver", "🚨 Alarm triggered for $subjectName: $lessonTitle")
 
-        val title = "⏰ $subjectName ক্লাস রিমাইন্ডার"
-        val body = "আপনার $subjectName ($lessonTitle) ক্লাস $classStartTimeStr এ শুরু হবে, রেডি হন! 🚀"
+        val customTitle = intent.getStringExtra("custom_title")
+        val customBody = intent.getStringExtra("custom_body")
+
+        val title = customTitle ?: "⏰ $subjectName ক্লাস রিমাইন্ডার"
+        val body = customBody ?: "আপনার $subjectName ($lessonTitle) ক্লাস $classStartTimeStr এ শুরু হবে, রেডি হন! 🚀"
 
         ClassAlarmScheduler.createNotificationChannel(context)
         val notificationManager = NotificationManagerCompat.from(context)

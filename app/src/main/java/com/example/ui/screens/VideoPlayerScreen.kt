@@ -5,38 +5,30 @@ import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -47,7 +39,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
-import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -57,17 +48,23 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.LocalPictureInPictureMode
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
+import com.example.player.PlayerClassType
 import com.example.player.ShikhoPlayerManager
+import com.example.player.VideoProgressManager
 import com.example.player.VideoTrackQuality
+import com.example.ui.components.AmbientAudioVisualizerOverlay
 import com.example.ui.components.PlaybackSpeedDialog
+import com.example.ui.components.PlayerControlsOverlay
 import com.example.ui.components.VideoDownloadQualityDialog
 import com.example.ui.components.VideoQualityDialog
+import com.example.util.PipHelper
+import com.example.util.SetupPipController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.Locale
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -82,6 +79,8 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
 
     // Player state
     var isPlaying by remember { mutableStateOf(true) }
@@ -121,6 +120,26 @@ fun VideoPlayerScreen(
         }
     }
 
+    // Video Playback Progress & Resume Management
+    val videoProgressManager = remember { VideoProgressManager.getInstance(context) }
+    val videoKey = remember(videoUrl, title) {
+        videoProgressManager.generateVideoKey(
+            lessonId = null,
+            remoteUrl = videoUrl,
+            title = title
+        )
+    }
+
+    var hasAutoResumed by remember(videoKey) { mutableStateOf(false) }
+    var resumeNotificationText by remember { mutableStateOf<String?>(null) }
+
+    // Quick One-Tap Mute / Unmute State
+    var isMuted by remember { mutableStateOf(false) }
+    var previousVolume by remember { mutableFloatStateOf(1f) }
+
+    // Audio-Only Listening Mode State ("শোনার বাটন" / Screen-off Audio)
+    var isAudioOnlyMode by remember { mutableStateOf(false) }
+
     // Fallback URL if passed URL is empty
     val effectivePlaybackUrl = remember(videoUrl, downloadedItem) {
         val completedLocal = if (downloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED) {
@@ -139,19 +158,6 @@ fun VideoPlayerScreen(
         effectivePlaybackUrl.startsWith("/") || effectivePlaybackUrl.startsWith("file://")
     }
 
-    // Subject color
-    val badgeColor = remember(subjectColorHex) {
-        try {
-            if (!subjectColorHex.isNullOrBlank()) {
-                Color(android.graphics.Color.parseColor(subjectColorHex))
-            } else {
-                Color(0xFF0072EC)
-            }
-        } catch (_: Exception) {
-            Color(0xFF0072EC)
-        }
-    }
-
     // ExoPlayer instance configured with Shikho CDN headers or Local Offline source
     val exoPlayer = remember(context, effectivePlaybackUrl) {
         ShikhoPlayerManager.buildExoPlayer(context).apply {
@@ -163,6 +169,80 @@ fun VideoPlayerScreen(
             setMediaSource(mediaSource)
             prepare()
             playWhenReady = true
+        }
+    }
+
+    val onToggleMute: () -> Unit = {
+        if (isMuted) {
+            exoPlayer.volume = if (previousVolume > 0f) previousVolume else 1f
+            isMuted = false
+            Toast.makeText(context, "🔊 সাউন্ড চালু করা হয়েছে", Toast.LENGTH_SHORT).show()
+        } else {
+            previousVolume = if (exoPlayer.volume > 0f) exoPlayer.volume else 1f
+            exoPlayer.volume = 0f
+            isMuted = true
+            Toast.makeText(context, "🔇 সাউন্ড বন্ধ করা হয়েছে (Muted)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onToggleAudioOnlyMode: () -> Unit = {
+        isAudioOnlyMode = !isAudioOnlyMode
+        val act = activity ?: (context as? Activity)
+        if (isAudioOnlyMode) {
+            act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Toast.makeText(context, "অডিও মোড চালু হয়েছে! এখন স্ক্রিন বন্ধ করলেও লেকচার শুনতে পারবেন। 🎧", Toast.LENGTH_SHORT).show()
+        } else {
+            act?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Toast.makeText(context, "ভিডিও মোডে ফিরে আসা হয়েছে", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onRestartFromBeginning: () -> Unit = {
+        exoPlayer.seekTo(0L)
+        resumeNotificationText = null
+        videoProgressManager.resetProgress(videoKey)
+        Toast.makeText(context, "শুরু থেকে প্লে করা হচ্ছে", Toast.LENGTH_SHORT).show()
+    }
+
+    val toggleResizeMode: () -> Unit = {
+        resizeMode = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+        val modeName = when (resizeMode) {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ভিডিও সাইজ: ফিট স্ক্রিন"
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন"
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ভিডিও সাইজ: ফুল স্ক্রিন"
+            else -> "ফিট স্ক্রিন"
+        }
+        Toast.makeText(context, modeName, Toast.LENGTH_SHORT).show()
+    }
+
+    val saveCurrentProgress: () -> Unit = {
+        try {
+            val pos = if (currentPosition > 0L) currentPosition else exoPlayer.currentPosition
+            val dur = if (totalDuration > 0L) totalDuration else exoPlayer.duration
+            if (pos > 2000L) {
+                videoProgressManager.saveProgress(
+                    videoKey = videoKey,
+                    lessonId = null,
+                    title = title,
+                    subjectName = subjectName,
+                    courseId = null,
+                    positionMs = pos,
+                    durationMs = dur
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
+    // Auto-detect physical rotation
+    LaunchedEffect(configuration.orientation) {
+        if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && !isFullscreen) {
+            isFullscreen = true
+        } else if (configuration.orientation == Configuration.ORIENTATION_PORTRAIT && isFullscreen) {
+            isFullscreen = false
         }
     }
 
@@ -178,17 +258,28 @@ fun VideoPlayerScreen(
                 insetsController.systemBarsBehavior =
                     WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
-                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
         }
 
         onDispose {
             activity?.let { act ->
-                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 val insetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }
+        }
+    }
+
+    // Handle hardware back button to exit fullscreen first
+    BackHandler {
+        if (isFullscreen) {
+            isFullscreen = false
+        } else {
+            saveCurrentProgress()
+            exoPlayer.stop()
+            onBack()
         }
     }
 
@@ -204,6 +295,9 @@ fun VideoPlayerScreen(
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+                if (!playing) {
+                    saveCurrentProgress()
+                }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -232,7 +326,6 @@ fun VideoPlayerScreen(
                         }
                     }
                 }
-                // Sort descending by resolution
                 availableQualities = qualities.distinctBy { it.label }
             }
         }
@@ -240,13 +333,32 @@ fun VideoPlayerScreen(
         exoPlayer.addListener(listener)
 
         onDispose {
+            saveCurrentProgress()
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
     }
 
-    // Periodic time update loop
-    LaunchedEffect(exoPlayer, isPlaying) {
+    // Auto-Resume from Last Saved Playback Position (Even after days or app restarts)
+    LaunchedEffect(exoPlayer, videoKey, isBuffering) {
+        if (!isBuffering && !hasAutoResumed) {
+            val savedProgress = videoProgressManager.getProgress(videoKey)
+            if (savedProgress != null && savedProgress.isEligibleForResume) {
+                hasAutoResumed = true
+                exoPlayer.seekTo(savedProgress.positionMs)
+                val timeFormatted = ShikhoPlayerManager.formatTime(savedProgress.positionMs, true)
+                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                coroutineScope.launch {
+                    delay(8000)
+                    resumeNotificationText = null
+                }
+            }
+        }
+    }
+
+    // Continuous progress tracking loop
+    LaunchedEffect(exoPlayer, videoKey, isPlaying) {
+        var tick = 0
         while (true) {
             if (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.playbackState == Player.STATE_BUFFERING) {
                 if (!isSeeking) {
@@ -254,20 +366,32 @@ fun VideoPlayerScreen(
                 }
                 bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
                 totalDuration = exoPlayer.duration.coerceAtLeast(0L)
+
+                tick++
+                if (tick % 4 == 0 && currentPosition > 2000L && isPlaying) {
+                    saveCurrentProgress()
+                }
             }
             delay(500)
         }
     }
 
+    // Save Progress on screen exit / dispose
+    DisposableEffect(videoKey) {
+        onDispose {
+            saveCurrentProgress()
+        }
+    }
+
     // Auto-hide controls timer (4 seconds)
     LaunchedEffect(areControlsVisible, isPlaying) {
-        if (areControlsVisible && isPlaying) {
+        if (areControlsVisible && isPlaying && !isSeeking) {
             delay(4000)
             areControlsVisible = false
         }
     }
 
-    // Handle App Lifecycle (Pause video on background)
+    // Handle App Lifecycle (Keep playing in background when Audio Mode is active)
     val mediaSession = remember(exoPlayer) {
         try {
             MediaSession.Builder(context, exoPlayer)
@@ -285,17 +409,22 @@ fun VideoPlayerScreen(
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, isAudioOnlyMode) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> {
-                    val act = context as? Activity
-                    if (act?.isInPictureInPictureMode != true) {
-                        exoPlayer.pause()
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    saveCurrentProgress()
+                    if (isAudioOnlyMode) {
+                        // Keep playing audio uninterrupted when screen is turned off or app backgrounded!
+                    } else {
+                        val act = context as? Activity
+                        if (act?.isInPictureInPictureMode != true) {
+                            exoPlayer.pause()
+                        }
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    if (isPlaying) {
+                    if (isPlaying && !isAudioOnlyMode) {
                         exoPlayer.play()
                     }
                 }
@@ -304,58 +433,76 @@ fun VideoPlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            saveCurrentProgress()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
-    val coroutineScope = rememberCoroutineScope()
-    var doubleTapSide by remember { mutableStateOf<String?>(null) } // "LEFT" or "RIGHT"
+    val isPipMode = LocalPictureInPictureMode.current
+
+    SetupPipController(
+        player = exoPlayer,
+        isPlaying = isPlaying,
+        aspectRatio = Rational(16, 9),
+        onPipEntered = {
+            if (isFullscreen) {
+                isFullscreen = false
+            }
+        }
+    )
+
+    fun enterPipMode() {
+        val act = activity ?: (context as? Activity)
+        PipHelper.enterPipMode(act, isPlaying, Rational(16, 9))
+    }
+
+    // Picture In Picture View Mode (Compact floating window with gestures)
+    if (isPipMode) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .pointerInput(totalDuration) {
+                    val componentWidth = size.width
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            if (offset.x < componentWidth * 0.4f) {
+                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+                                exoPlayer.seekTo(target)
+                            } else if (offset.x > componentWidth * 0.6f) {
+                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(totalDuration)
+                                exoPlayer.seekTo(target)
+                            } else {
+                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                            }
+                        }
+                    )
+                }
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(totalDuration, isLive) {
-                detectTapGestures(
-                    onTap = {
-                        areControlsVisible = !areControlsVisible
-                    },
-                    onDoubleTap = { offset ->
-                        val screenWidth = size.width
-                        if (!isLive) {
-                            if (offset.x < screenWidth * 0.38f) {
-                                // Double tapped LEFT: seek -10s
-                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                exoPlayer.seekTo(target)
-                                doubleTapSide = "LEFT"
-                                coroutineScope.launch {
-                                    delay(650)
-                                    if (doubleTapSide == "LEFT") doubleTapSide = null
-                                }
-                            } else if (offset.x > screenWidth * 0.62f) {
-                                // Double tapped RIGHT: seek +10s
-                                val maxDur = if (totalDuration > 0) totalDuration else exoPlayer.duration.coerceAtLeast(0L)
-                                val target = (exoPlayer.currentPosition + 10000L).let {
-                                    if (maxDur > 0) it.coerceAtMost(maxDur) else it
-                                }
-                                exoPlayer.seekTo(target)
-                                doubleTapSide = "RIGHT"
-                                coroutineScope.launch {
-                                    delay(650)
-                                    if (doubleTapSide == "RIGHT") doubleTapSide = null
-                                }
-                            } else {
-                                // Double tapped CENTER: Play / Pause toggle
-                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                            }
-                        } else {
-                            if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                        }
-                    }
-                )
-            }
     ) {
-        // 1. ExoPlayer Surface
+        // 1. ExoPlayer Video Surface
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -374,664 +521,107 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 1.1 Double-Tap Animated Seek Visual Indicators
-        AnimatedVisibility(
-            visible = doubleTapSide == "LEFT",
-            enter = fadeIn() + scaleIn(initialScale = 0.85f),
-            exit = fadeOut() + scaleOut(targetScale = 0.85f),
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 32.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color.Black.copy(alpha = 0.72f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Replay10,
-                        contentDescription = "১০ সেকেন্ড পেছনে",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "-১০ সেকেন্ড",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+        // 2. Ambient Audio Visualizer Overlay (Battery-saving screen for screen-off listen mode)
+        if (isAudioOnlyMode) {
+            AmbientAudioVisualizerOverlay(
+                title = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
+                subjectName = subjectName ?: "",
+                isPlaying = isPlaying,
+                isMuted = isMuted,
+                onTogglePlayPause = {
+                    if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                },
+                onToggleMute = onToggleMute,
+                onExitAudioMode = { onToggleAudioOnlyMode() },
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
-        AnimatedVisibility(
-            visible = doubleTapSide == "RIGHT",
-            enter = fadeIn() + scaleIn(initialScale = 0.85f),
-            exit = fadeOut() + scaleOut(targetScale = 0.85f),
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 32.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color.Black.copy(alpha = 0.72f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Forward10,
-                        contentDescription = "১০ সেকেন্ড সামনে",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "+১০ সেকেন্ড",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+        // 3. Unified Adaptive Player Controls Overlay
+        val seekStep = 10000L
+        PlayerControlsOverlay(
+            title = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
+            subjectName = subjectName ?: "",
+            isPlaying = isPlaying,
+            isBuffering = isBuffering,
+            currentPosition = if (isSeeking) seekPosition else currentPosition,
+            bufferedPosition = bufferedPosition,
+            totalDuration = totalDuration,
+            areControlsVisible = areControlsVisible,
+            isFullscreen = isFullscreen,
+            playbackSpeed = playbackSpeed,
+            classType = if (isLive) PlayerClassType.LIVE else PlayerClassType.RECORDED_LECTURE,
+            isLive = isLive,
+            downloadedItem = downloadedItem,
+            onTogglePlayPause = {
+                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+            },
+            onSeekBack = {
+                val target = (exoPlayer.currentPosition - seekStep).coerceAtLeast(0L)
+                exoPlayer.seekTo(target)
+            },
+            onSeekForward = {
+                val target = (exoPlayer.currentPosition + seekStep).coerceAtMost(totalDuration)
+                exoPlayer.seekTo(target)
+            },
+            onSeekStarted = {
+                isSeeking = true
+                seekPosition = it
+            },
+            onSeekChanged = {
+                seekPosition = it
+            },
+            onSeekFinished = { targetPos ->
+                currentPosition = targetPos
+                seekPosition = targetPos
+                exoPlayer.seekTo(targetPos)
+                coroutineScope.launch {
+                    delay(350)
+                    isSeeking = false
                 }
-            }
-        }
-
-        // 2. Buffering Spinner
-        if (isBuffering) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.25f)),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 3.dp,
-                    modifier = Modifier.size(52.dp)
-                )
-            }
-        }
-
-        // 3. Overlay Controls
-        AnimatedVisibility(
-            visible = areControlsVisible || isBuffering,
-            enter = fadeIn(animationSpec = tween(220)),
-            exit = fadeOut(animationSpec = tween(220))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.82f),
-                                Color.Black.copy(alpha = 0.15f),
-                                Color.Black.copy(alpha = 0.88f)
-                            )
-                        )
-                    )
-            ) {
-                // TOP BAR: Back Button, Title, Badges, Action Strip
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .then(if (isFullscreen) Modifier.statusBarsPadding() else Modifier)
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Left: Back button + Title info
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.18f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    if (isFullscreen) {
-                                        isFullscreen = false
-                                    } else {
-                                        onBack()
-                                    }
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(19.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            if (!subjectName.isNullOrBlank()) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = badgeColor.copy(alpha = 0.85f),
-                                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
-                                ) {
-                                    Text(
-                                        text = subjectName,
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            if (isLive) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFFE53935),
-                                    border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.3f))
-                                ) {
-                                    Text(
-                                        text = "🔴 LIVE",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+            },
+            onToggleFullscreen = { isFullscreen = !isFullscreen },
+            onToggleControls = { areControlsVisible = !areControlsVisible },
+            onSpeedClick = { showSpeedDialog = true },
+            onQualityClick = { showQualityDialog = true },
+            selectedQualityLabel = selectedQualityLabel,
+            onPipClick = { enterPipMode() },
+            onDownloadClick = {
+                when (downloadedItem?.status) {
+                    DownloadedItemEntity.STATUS_DOWNLOADING -> {
+                        downloadManager.cancelDownload(downloadId)
+                        Toast.makeText(context, "ভিডিও ডাউনলোড বাতিল করা হয়েছে", Toast.LENGTH_SHORT).show()
                     }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Right: Action Strip (PiP, Zoom, Quality, Offline Download, Speed)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        // Picture-in-Picture button
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color.White.copy(alpha = 0.16f),
-                                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                                modifier = Modifier.clickable {
-                                    try {
-                                        val params = PictureInPictureParams.Builder()
-                                            .setAspectRatio(Rational(16, 9))
-                                            .build()
-                                        activity?.enterPictureInPictureMode(params)
-                                    } catch (_: Exception) {
-                                        Toast.makeText(context, "PiP মোড এই ডিভাইসে সমর্থিত নয়", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PictureInPictureAlt,
-                                        contentDescription = "PiP",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(
-                                        text = "PiP",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // Aspect ratio resize toggle
-                        val resizeModeLabel = when (resizeMode) {
-                            AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ফিট"
-                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "জুম"
-                            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ফুল"
-                            else -> "ফিট"
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.White.copy(alpha = 0.16f),
-                            border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                            modifier = Modifier.clickable {
-                                resizeMode = when (resizeMode) {
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                }
-                            }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AspectRatio,
-                                    contentDescription = "Aspect Ratio",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = resizeModeLabel,
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // Quality selector
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.White.copy(alpha = 0.16f),
-                            border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                            modifier = Modifier.clickable { showQualityDialog = true }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.HighQuality,
-                                    contentDescription = "Quality",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = selectedQualityLabel,
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // Offline In-App Download Action
-                        when (downloadedItem?.status) {
-                            DownloadedItemEntity.STATUS_DOWNLOADING -> {
-                                val item = downloadedItem!!
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFF0284C7).copy(alpha = 0.4f),
-                                    border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.6f)),
-                                    modifier = Modifier.clickable {
-                                        downloadManager.cancelDownload(downloadId)
-                                        Toast.makeText(context, "ডাউনলোড বাতিল করা হয়েছে", Toast.LENGTH_SHORT).show()
-                                    }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                                    ) {
-                                        CircularProgressIndicator(
-                                            progress = { item.progressFraction },
-                                            color = Color(0xFF38BDF8),
-                                            strokeWidth = 2.dp,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "${item.progressPercent}%",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
-                                }
-                            }
-                            DownloadedItemEntity.STATUS_COMPLETED -> {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFF10B981).copy(alpha = 0.3f),
-                                    border = BorderStroke(0.8.dp, Color(0xFF34D399).copy(alpha = 0.6f)),
-                                    modifier = Modifier.clickable { showDeleteDownloadDialog = true }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.DownloadDone,
-                                            contentDescription = "অফলাইন ডাউনলোড সম্পন্ন",
-                                            tint = Color(0xFF34D399),
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = "সেভড",
-                                            color = Color(0xFF34D399),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                            else -> {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color.White.copy(alpha = 0.16f),
-                                    border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                                    modifier = Modifier.clickable { showDownloadQualityDialog = true }
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Download,
-                                            contentDescription = "ডাউনলোড",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text(
-                                            text = "ডাউনলোড",
-                                            color = Color.White,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Playback Speed
-                        if (!isLive) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color.White.copy(alpha = 0.16f),
-                                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                                modifier = Modifier.clickable { showSpeedDialog = true }
-                            ) {
-                                val displaySpeed = String.format(Locale.US, "%.2f", playbackSpeed).removeSuffix(".00")
-                                Text(
-                                    text = "${displaySpeed}x",
-                                    color = Color.White,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
+                    DownloadedItemEntity.STATUS_COMPLETED -> {
+                        showDeleteDownloadDialog = true
                     }
-                }
-
-                // CENTER CONTROLS: -10s, Play/Pause, +10s
-                Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(28.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Rewind 10 seconds
-                    if (!isLive) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    val newPos = (exoPlayer.currentPosition - 10000).coerceAtLeast(0)
-                                    exoPlayer.seekTo(newPos)
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Replay10,
-                                    contentDescription = "Rewind 10 seconds",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Play / Pause Button
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White,
-                        shadowElevation = 8.dp,
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                if (exoPlayer.isPlaying) {
-                                    exoPlayer.pause()
-                                } else {
-                                    exoPlayer.play()
-                                }
-                            }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = Color(0xFF0F172A),
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-                    }
-
-                    // Forward 10 seconds
-                    if (!isLive) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    val newPos = (exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration)
-                                    exoPlayer.seekTo(newPos)
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Forward10,
-                                    contentDescription = "Forward 10 seconds",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // BOTTOM CONTROLS: Seekbar + Bengali time + Fullscreen Toggle
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .then(if (isFullscreen) Modifier.navigationBarsPadding() else Modifier)
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    if (!isLive) {
-                        val bufferedFraction = if (totalDuration > 0) {
-                            (bufferedPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
-
-                        val currentFraction = if (totalDuration > 0) {
-                            (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
-
-                        val seekValue = if (isSeeking) {
-                            (seekPosition.toFloat() / (if (totalDuration > 0) totalDuration else 1L).toFloat()).coerceIn(0f, 1f)
+                    else -> {
+                        if (effectivePlaybackUrl.isNotBlank()) {
+                            showDownloadQualityDialog = true
                         } else {
-                            currentFraction
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(26.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // Secondary Track for Buffering
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 6.dp)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Color.White.copy(alpha = 0.2f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(bufferedFraction)
-                                        .fillMaxHeight()
-                                        .background(Color.White.copy(alpha = 0.45f))
-                                )
-                            }
-
-                            // Interactive Slider
-                            Slider(
-                                value = seekValue,
-                                onValueChange = { fraction ->
-                                    isSeeking = true
-                                    seekPosition = (fraction * totalDuration).toLong().coerceIn(0L, totalDuration)
-                                },
-                                onValueChangeFinished = {
-                                    currentPosition = seekPosition
-                                    exoPlayer.seekTo(seekPosition)
-                                    coroutineScope.launch {
-                                        delay(300)
-                                        isSeeking = false
-                                    }
-                                },
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = Color(0xFFE11D48),
-                                    inactiveTrackColor = Color.Transparent
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Duration Text
-                            val curPos = if (isSeeking) seekPosition else currentPosition
-                            val timeString = "${ShikhoPlayerManager.formatTime(curPos, true)} / ${ShikhoPlayerManager.formatTime(totalDuration, true)}"
-                            Text(
-                                text = timeString,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-
-                            // Fullscreen Toggle
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.White.copy(alpha = 0.16f),
-                                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .clickable { isFullscreen = !isFullscreen }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                        contentDescription = if (isFullscreen) "Exit Fullscreen" else "Enter Fullscreen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        // LIVE BAR
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFE11D48))
-                                )
-                                Text(
-                                    text = "🔴 সরাসরি লাইভ সম্প্রচার চলছে (Live)",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.White.copy(alpha = 0.16f),
-                                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .clickable { isFullscreen = !isFullscreen }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                        contentDescription = if (isFullscreen) "Exit Fullscreen" else "Enter Fullscreen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                            }
+                            Toast.makeText(context, "ভিডিও ডাউনলোড লিংক পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
+            },
+            resizeMode = resizeMode,
+            onToggleResizeMode = toggleResizeMode,
+            isMuted = isMuted,
+            onToggleMute = onToggleMute,
+            isAudioOnlyMode = isAudioOnlyMode,
+            onToggleAudioOnlyMode = onToggleAudioOnlyMode,
+            resumeNotificationText = resumeNotificationText,
+            onRestartFromBeginning = onRestartFromBeginning,
+            onBack = {
+                if (isFullscreen) {
+                    isFullscreen = false
+                } else {
+                    saveCurrentProgress()
+                    exoPlayer.stop()
+                    onBack()
+                }
             }
-        }
+        )
 
         // Speed Selector Dialog
         if (showSpeedDialog) {

@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Base64
 
 plugins {
   alias(libs.plugins.android.application)
@@ -9,6 +10,45 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+// Ensure debug.keystore is decoded from debug.keystore.base64 if debug.keystore does not exist,
+// so that every build maintains the exact same signing signature certificate.
+val ksFile = file("${rootDir}/debug.keystore")
+val ksBase64File = file("${rootDir}/debug.keystore.base64")
+if (!ksFile.exists() && ksBase64File.exists()) {
+  try {
+    val base64Str = ksBase64File.readText().trim()
+    if (base64Str.isNotBlank()) {
+      val decodedBytes = Base64.getDecoder().decode(base64Str)
+      ksFile.writeBytes(decodedBytes)
+      println("Decoded debug.keystore from debug.keystore.base64 successfully.")
+    }
+  } catch (e: Exception) {
+    println("Warning: Failed to decode debug.keystore.base64: ${e.message}")
+  }
+}
+
+// Ensure Release keystore my-upload-key.jks is decoded from KEYSTORE_BASE64 secret or keystore_base64.txt
+val uploadKsFile = file("${rootDir}/my-upload-key.jks")
+val keystoreBase64Env = System.getenv("KEYSTORE_BASE64") ?: System.getenv("KEYSTORE_BASE64_SECRET")
+val txtKsFile = file("${rootDir}/keystore_base64.txt")
+if (!uploadKsFile.exists() || uploadKsFile.length() == 0L) {
+  val base64ToUse = when {
+    !keystoreBase64Env.isNullOrBlank() -> keystoreBase64Env.trim()
+    txtKsFile.exists() && txtKsFile.readText().trim().isNotBlank() -> txtKsFile.readText().trim()
+    else -> null
+  }
+  if (base64ToUse != null) {
+    try {
+      val cleanBase64 = base64ToUse.replace("\\s".toRegex(), "")
+      val decodedBytes = Base64.getDecoder().decode(cleanBase64)
+      uploadKsFile.writeBytes(decodedBytes)
+      println("Decoded my-upload-key.jks successfully for Release build.")
+    } catch (e: Exception) {
+      println("Warning: Failed to decode release keystore: ${e.message}")
+    }
+  }
+}
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -17,8 +57,9 @@ android {
     applicationId = "com.maxbird.ff.app"
     minSdk = 26
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    val envVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
+    versionCode = envVersionCode ?: (System.currentTimeMillis() / 1000).toInt()
+    versionName = System.getenv("VERSION_NAME") ?: "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -28,18 +69,23 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       val storePasswordEnv = System.getenv("STORE_PASSWORD")
       val keyPasswordEnv = System.getenv("KEY_PASSWORD")
+      val keyAliasEnv = System.getenv("KEY_ALIAS")
       
-      if (!storePasswordEnv.isNullOrBlank() && file(keystorePath).exists()) {
+      if (file(keystorePath).exists()) {
         storeFile = file(keystorePath)
-        storePassword = storePasswordEnv
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
-        keyPassword = keyPasswordEnv ?: storePasswordEnv
+        storePassword = storePasswordEnv?.takeIf { it.isNotBlank() } ?: "android"
+        keyAlias = keyAliasEnv?.takeIf { it.isNotBlank() } ?: "upload"
+        keyPassword = keyPasswordEnv?.takeIf { it.isNotBlank() } ?: storePasswordEnv ?: "android"
+        enableV1Signing = true
+        enableV2Signing = true
       } else {
         // Fallback to debug keystore if release keys are not provided
         storeFile = file("${rootDir}/debug.keystore")
         storePassword = "android"
         keyAlias = "androiddebugkey"
         keyPassword = "android"
+        enableV1Signing = true
+        enableV2Signing = true
       }
     }
     create("debugConfig") {
@@ -47,13 +93,16 @@ android {
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
+      enableV1Signing = true
+      enableV2Signing = true
     }
   }
 
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
@@ -70,7 +119,7 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
   dependenciesInfo {
     includeInApk = false
-    includeInBundle = true
+    includeInBundle = false
   }
 }
 

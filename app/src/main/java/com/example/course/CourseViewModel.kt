@@ -55,23 +55,8 @@ class CourseViewModel(
     private val _uiState = MutableStateFlow(CourseUiState())
     val uiState: StateFlow<CourseUiState> = _uiState.asStateFlow()
 
-    // 100ms Live Class Interactive WebSocket Manager
-    val liveSocketManager = com.example.player.HmsLiveSocketManager()
-
-    fun connectLiveSocket(token: String, roomId: String?) {
-        val userName = sessionManager.getUserFullName()
-            ?: sessionManager.getUserFirstName()
-            ?: "Student"
-        liveSocketManager.connect(token, roomId, userName)
-    }
-
-    fun disconnectLiveSocket() {
-        liveSocketManager.disconnect()
-    }
-
     override fun onCleared() {
         super.onCleared()
-        liveSocketManager.disconnect()
     }
 
     init {
@@ -127,16 +112,12 @@ class CourseViewModel(
                 val enrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
                 val otherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
 
-                // সার্ভার থেকে আসা other_programs কেও enrolled হিসেবে প্রমোট করে সব কোর্স আনলক রাখা
-                val promotedEnrolled = otherAll.map { it.toEnrolledProgram() }
-                val allEnrolled = (enrolled + promotedEnrolled).distinctBy { it.id }
-
                 val freeList = otherAll.filter { it.is_free == true }
                 val paidOtherList = otherAll.filter { it.is_free != true }
 
                 _uiState.update {
                     it.copy(
-                        enrolledPrograms = allEnrolled,
+                        enrolledPrograms = enrolled,
                         freePrograms = freeList,
                         otherPrograms = paidOtherList,
                         isProgramsLoading = false
@@ -146,11 +127,11 @@ class CourseViewModel(
                 _uiState.update { current ->
                     val userClassName = sessionManager.getUserClassName() ?: "C11"
                     val group = sessionManager.getUserGroup() ?: "Humanities"
-                    if (current.enrolledPrograms.isEmpty()) {
+                    if (current.enrolledPrograms.isEmpty() && current.freePrograms.isEmpty() && current.otherPrograms.isEmpty()) {
                         current.copy(
                             enrolledPrograms = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group),
-                            freePrograms = if (current.freePrograms.isEmpty()) CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group) else current.freePrograms,
-                            otherPrograms = if (current.otherPrograms.isEmpty()) CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group) else current.otherPrograms,
+                            freePrograms = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group),
+                            otherPrograms = CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group),
                             isProgramsLoading = false
                         )
                     } else {
@@ -161,10 +142,119 @@ class CourseViewModel(
         }
     }
 
+    fun enrollInCourse(
+        program: OtherProgram,
+        context: android.content.Context? = null,
+        onEnrollmentSuccess: ((EnrolledProgram) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    enrollingProgramId = program.id,
+                    enrollmentErrorMessage = null
+                )
+            }
+
+            val userId = sessionManager.getUserId() ?: ""
+            val isFreeCourse = program.is_free == true
+            
+            var result = if (isFreeCourse) {
+                repository.enrollInFreeProgram(program.id)
+            } else {
+                repository.generateFreeTrialEnrolment(program.id, userId)
+            }
+
+            // Fallback: If free enrollment failed with "not free", try trial enrolment
+            if (result.isFailure && isFreeCourse) {
+                val errMsg = result.exceptionOrNull()?.message ?: ""
+                if (errMsg.contains("not free", ignoreCase = true) || errMsg.contains("400", ignoreCase = true)) {
+                    result = repository.generateFreeTrialEnrolment(program.id, userId)
+                }
+            } else if (result.isFailure && !isFreeCourse) {
+                val errMsg = result.exceptionOrNull()?.message ?: ""
+                if (errMsg.contains("free", ignoreCase = true) || errMsg.contains("trial", ignoreCase = true) || errMsg.contains("400", ignoreCase = true)) {
+                    result = repository.enrollInFreeProgram(program.id)
+                }
+            }
+
+            result.onSuccess { successMsg ->
+                val feedbackText = if (isFreeCourse) "ফ্রি কোর্সে সফলভাবে ভর্তি হয়েছে!" else "৩ দিনের ফ্রি ট্রায়ালে সফলভাবে ভর্তি হয়েছে!"
+                if (context != null) {
+                    android.widget.Toast.makeText(context, feedbackText, android.widget.Toast.LENGTH_SHORT).show()
+                }
+
+                // Refresh programs from server to fetch the latest server-generated enrollment record
+                try {
+                    val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
+                    val userClassName = sessionManager.getUserClassName() ?: "C11"
+                    val group = sessionManager.getUserGroup() ?: "Humanities"
+                    val vendor = sessionManager.getUserVendor() ?: "BD"
+
+                    val response = repository.getAcademicProgramByEnrollment(
+                        batchId = batchId,
+                        className = userClassName,
+                        group = group,
+                        vendor = vendor
+                    )
+                    val enrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
+                    val otherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
+                    val freeList = otherAll.filter { it.is_free == true }
+                    val paidOtherList = otherAll.filter { it.is_free != true }
+
+                    val newlyEnrolled = enrolled.find { it.id == program.id } ?: program.toEnrolledProgram()
+
+                    _uiState.update {
+                        it.copy(
+                            enrolledPrograms = if (enrolled.isNotEmpty()) enrolled else (it.enrolledPrograms + newlyEnrolled).distinctBy { p -> p.id },
+                            freePrograms = freeList,
+                            otherPrograms = paidOtherList,
+                            enrollingProgramId = null,
+                            enrollmentSuccessMessage = feedbackText,
+                            enrollmentErrorMessage = null
+                        )
+                    }
+
+                    // Open the course
+                    openCourse(newlyEnrolled)
+                    onEnrollmentSuccess?.invoke(newlyEnrolled)
+                } catch (_: Exception) {
+                    val fallbackEnrolled = program.toEnrolledProgram()
+                    _uiState.update {
+                        it.copy(
+                            enrolledPrograms = (it.enrolledPrograms + fallbackEnrolled).distinctBy { p -> p.id },
+                            enrollingProgramId = null,
+                            enrollmentSuccessMessage = feedbackText,
+                            enrollmentErrorMessage = null
+                        )
+                    }
+                    openCourse(fallbackEnrolled)
+                    onEnrollmentSuccess?.invoke(fallbackEnrolled)
+                }
+            }.onFailure { error ->
+                val reason = error.localizedMessage ?: "সার্ভার রেসপন্স দেয়নি"
+                val errText = "ভর্তি হতে সমস্যা হয়েছে: $reason"
+                if (context != null) {
+                    android.widget.Toast.makeText(context, errText, android.widget.Toast.LENGTH_LONG).show()
+                }
+                _uiState.update {
+                    it.copy(
+                        enrollingProgramId = null,
+                        enrollmentErrorMessage = errText
+                    )
+                }
+            }
+        }
+    }
+
     fun selectLesson(lesson: StudentLessonItem) {
         val hasDirectStream = lesson.candidateStreamUrls.any { it.isNotBlank() && it != "null" }
-        val liveClassId = lesson.live_class?.id ?: lesson.content_id ?: lesson.id
-        val needsFetch = liveClassId.isNotBlank() && (!hasDirectStream || lesson.attachments.isNullOrEmpty())
+        val candidateIds = listOfNotNull(
+            lesson.content_id?.takeIf { it.isNotBlank() },
+            lesson.live_class?.id?.takeIf { it.isNotBlank() },
+            lesson.id.takeIf { it.isNotBlank() },
+            lesson.session_id?.takeIf { it.isNotBlank() }
+        ).distinct()
+        val needsFetch = candidateIds.isNotEmpty() && (!hasDirectStream || lesson.attachments.isNullOrEmpty())
 
         _uiState.update {
             it.copy(
@@ -173,44 +263,132 @@ class CourseViewModel(
             )
         }
 
-        if (liveClassId.isNotBlank()) {
+        android.util.Log.d("LectureDebug", "selectLesson: ${lesson.title}, candidateIds: $candidateIds, hasDirectStream: $hasDirectStream, needsFetch: $needsFetch")
+
+        if (candidateIds.isNotEmpty()) {
             viewModelScope.launch {
                 try {
-                    val liveClassData = repository.getLiveClassDetails(liveClassId)
-                    if (liveClassData != null) {
-                        val pbUrl = liveClassData.playback_url
-                        val updatedLiveClass = (lesson.live_class ?: LiveClassDetails()).copy(
-                            id = liveClassData.id ?: lesson.live_class?.id,
-                            playback_url = pbUrl ?: lesson.live_class?.playback_url,
-                            recording_url = pbUrl ?: lesson.live_class?.recording_url,
-                            start_time = liveClassData.start_time ?: lesson.live_class?.start_time,
-                            end_time = liveClassData.end_time ?: lesson.live_class?.end_time,
-                            teacher = liveClassData.teacher ?: lesson.live_class?.teacher,
-                            topics = if (!liveClassData.topics.isNullOrEmpty()) liveClassData.topics else lesson.live_class?.topics
-                        )
+                    var liveClassData: AcademicProgramLiveClassItem? = null
+                    var foundWorkingId: String? = null
 
+                    // Try candidate IDs until we find one that returns valid live class details
+                    for (cid in candidateIds) {
+                        val details = repository.getLiveClassDetails(cid)
+                        if (details != null) {
+                            if (liveClassData == null) {
+                                liveClassData = details
+                                foundWorkingId = cid
+                            }
+                            // If this candidate ID gave us playback_url, prioritize it!
+                            if (!details.playback_url.isNullOrBlank()) {
+                                liveClassData = details
+                                foundWorkingId = cid
+                                break
+                            }
+                        }
+                    }
+
+                    android.util.Log.d("LectureDebug", "api response (chosen id=$foundWorkingId): $liveClassData")
+                    android.util.Log.d("LectureDebug", "playback_url: ${liveClassData?.playback_url}")
+
+                    var pbUrl = liveClassData?.playback_url?.takeIf { it.isNotBlank() && it != "null" }
+                        ?: liveClassData?.recording_url?.takeIf { it.isNotBlank() && it != "null" }
+                        ?: liveClassData?.stream_url?.takeIf { it.isNotBlank() && it != "null" }
+                        ?: liveClassData?.video_url?.takeIf { it.isNotBlank() && it != "null" }
+                        ?: liveClassData?.url?.takeIf { it.isNotBlank() && it != "null" }
+                        ?: liveClassData?.hls_url?.takeIf { it.isNotBlank() && it != "null" }
+
+                    // If liveClassData didn't have playback_url directly, check topics videos
+                    if (pbUrl.isNullOrBlank()) {
+                        val topicIds = liveClassData?.topics?.mapNotNull { it.id }?.filter { it.isNotBlank() }
+                            ?: lesson.topics?.mapNotNull { it.id }?.filter { it.isNotBlank() }
+                            ?: emptyList()
+                        val chapterId = lesson.chapter_id ?: _uiState.value.selectedChapterId
+                        if (topicIds.isNotEmpty() || chapterId.isNotBlank()) {
+                            try {
+                                val topicsWithVideos = repository.getTopics(chapterId, topicIds.ifEmpty { null })
+                                val topicVideoUrl = topicsWithVideos.firstNotNullOfOrNull { top ->
+                                    top.videos?.data?.firstNotNullOfOrNull { v ->
+                                        v.playback_url?.takeIf { it.isNotBlank() && it != "null" }
+                                    }
+                                }
+                                if (!topicVideoUrl.isNullOrBlank()) {
+                                    pbUrl = topicVideoUrl
+                                    android.util.Log.d("LectureDebug", "Found playback_url from topics: $pbUrl")
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.w("LectureDebug", "Failed to fetch topic videos: ${e.message}")
+                            }
+                        }
+                    }
+
+                    if (liveClassData != null || !pbUrl.isNullOrBlank()) {
                         val newAttachments = mutableListOf<LessonAttachmentItem>()
-                        liveClassData.study_materials?.forEach { mat ->
+                        liveClassData?.study_materials?.forEach { mat ->
                             if (!mat.file_url.isNullOrBlank()) {
-                                newAttachments.add(LessonAttachmentItem(id = mat.id, title = mat.name ?: "লেকচার স্লাইড (PDF)", url = mat.file_url, file_type = "pdf"))
+                                newAttachments.add(
+                                    LessonAttachmentItem(
+                                        id = mat.id,
+                                        title = mat.name ?: "লেকচার স্লাইড (PDF)",
+                                        url = mat.file_url,
+                                        file_type = "pdf"
+                                    )
+                                )
                             }
                         }
                         lesson.attachments?.let { newAttachments.addAll(it) }
 
+                        val primarySlideUrl = liveClassData?.study_materials?.firstNotNullOfOrNull { it.file_url?.takeIf { u -> u.isNotBlank() } }
+                            ?: lesson.slide_url
+                            ?: lesson.live_class?.slide_url
+                            ?: newAttachments.firstOrNull { it.downloadUrl?.contains(".pdf", ignoreCase = true) == true }?.downloadUrl
+
+                        val subjectNameResolved = liveClassData?.subject?.display_bn
+                            ?: liveClassData?.subject?.display
+                            ?: lesson.subject_name
+                            ?: lesson.live_class?.subject_name
+
                         val chapterIdResolved = lesson.chapter_id?.takeIf { it.isNotBlank() }
-                            ?: liveClassData.chapter?.id?.takeIf { it.isNotBlank() }
+                            ?: liveClassData?.chapter?.id?.takeIf { it.isNotBlank() }
+
+                        val chapterNameResolved = liveClassData?.chapter?.name
+                            ?: lesson.chapter_name
+                            ?: lesson.live_class?.chapter_name
+
+                        val updatedLiveClass = (lesson.live_class ?: LiveClassDetails()).copy(
+                            id = liveClassData?.id ?: lesson.live_class?.id ?: foundWorkingId,
+                            playback_url = pbUrl ?: lesson.live_class?.playback_url,
+                            recording_url = pbUrl ?: lesson.live_class?.recording_url,
+                            stream_url = pbUrl ?: lesson.live_class?.stream_url,
+                            video_url = pbUrl ?: lesson.live_class?.video_url,
+                            slide_url = primarySlideUrl,
+                            attachments = newAttachments.distinctBy { it.downloadUrl },
+                            start_time = liveClassData?.start_time ?: lesson.live_class?.start_time,
+                            end_time = liveClassData?.end_time ?: lesson.live_class?.end_time,
+                            chapter_id = chapterIdResolved,
+                            chapter_name = chapterNameResolved,
+                            subject_name = subjectNameResolved,
+                            teacher = liveClassData?.teacher ?: liveClassData?.instructor ?: lesson.live_class?.teacher,
+                            topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else lesson.live_class?.topics
+                        )
 
                         val updatedLesson = lesson.copy(
+                            title = liveClassData?.title ?: lesson.title,
+                            slide_url = primarySlideUrl,
+                            subject_name = subjectNameResolved,
+                            chapter_name = chapterNameResolved,
+                            chapter_id = chapterIdResolved,
                             live_class = updatedLiveClass,
                             attachments = newAttachments.distinctBy { it.downloadUrl },
-                            chapter_id = chapterIdResolved,
-                            topics = if (!liveClassData.topics.isNullOrEmpty()) liveClassData.topics else lesson.topics
+                            topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else lesson.topics
                         )
 
                         var currentLessonState = updatedLesson
+                        android.util.Log.d("LectureDebug", "resolved video url: ${currentLessonState.resolvedVideoUrl}")
+                        android.util.Log.d("LectureDebug", "resolved slide url: ${currentLessonState.resolvedSlideUrl}, attachments: ${currentLessonState.allAttachments.size}")
 
                         // 1. Fetch Teacher Details if teacher_id exists
-                        val teacherId = liveClassData.teacher?.id
+                        val teacherId = liveClassData?.teacher?.id
                         if (!teacherId.isNullOrBlank()) {
                             try {
                                 val fullTeacher = repository.getTeacherDetails(teacherId)
@@ -221,84 +399,40 @@ class CourseViewModel(
                             } catch (_: Exception) {}
                         }
 
-                        if (_uiState.value.selectedLesson?.id == lesson.id) {
+                        // 2. Fetch Animated Topic Videos
+                        var topicVideos: List<TopicFullItem> = emptyList()
+                        val finalTopicIds = currentLessonState.topics?.mapNotNull { it.id }?.filter { it.isNotBlank() }
+                            ?: currentLessonState.live_class?.topics?.mapNotNull { it.id }?.filter { it.isNotBlank() }
+                            ?: emptyList()
+                        val finalChapId = currentLessonState.chapter_id ?: _uiState.value.selectedChapterId
+                        if (finalTopicIds.isNotEmpty() && finalChapId.isNotBlank()) {
+                            try {
+                                topicVideos = repository.getTopics(finalChapId, finalTopicIds)
+                            } catch (e: Exception) {
+                                android.util.Log.w("LectureDebug", "Failed to fetch topic videos: ${e.message}")
+                            }
+                        }
+
+                        val cur = _uiState.value.selectedLesson
+                        if (cur == null || cur.id == lesson.id || cur.content_id == lesson.content_id || candidateIds.contains(cur.live_class?.id)) {
                             _uiState.update { 
                                 it.copy(
                                     selectedLesson = currentLessonState,
+                                    selectedLessonTopicVideos = topicVideos,
                                     isLessonDetailLoading = false
                                 ) 
                             }
                         }
-
-                        // 2. Attempt to fetch live room & meeting link via JoinLiveClass mutation
-                        joinLiveClass(currentLessonState)
                     } else {
                         _uiState.update { it.copy(isLessonDetailLoading = false) }
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    android.util.Log.e("LectureDebug", "Error in selectLesson: ${e.message}", e)
                     _uiState.update { it.copy(isLessonDetailLoading = false) }
                 }
             }
         } else {
             _uiState.update { it.copy(isLessonDetailLoading = false) }
-        }
-    }
-
-    /**
-     * Executes the GraphQL mutation JoinLiveClass to obtain live room ID, join link, and streaming credentials.
-     */
-    fun joinLiveClass(lesson: StudentLessonItem, onResult: ((JoinLiveClassPayload?) -> Unit)? = null) {
-        val liveClassId = lesson.live_class?.id ?: lesson.content_id ?: lesson.id
-        val lessonId = lesson.id.ifBlank { lesson.content_id ?: liveClassId }
-
-        if (liveClassId.isBlank()) {
-            onResult?.invoke(null)
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                val payload = repository.joinLiveClass(liveClassId, lessonId)
-                if (payload != null) {
-                    var hmsToken: String? = null
-                    var isChatBlocked: Boolean? = false
-
-                    // Extract room_id (from hms_room_id field or parsed from join_link)
-                    val effectiveRoomId = payload.hms_room_id?.trim()
-                        ?: payload.join_link?.substringAfterLast("/meeting/")?.substringAfterLast("/")?.trim()
-
-                    if (!effectiveRoomId.isNullOrBlank()) {
-                        try {
-                            val tokenResp = repository.getHmsToken(effectiveRoomId)
-                            hmsToken = tokenResp.token
-                            isChatBlocked = tokenResp.blocked_chat
-                        } catch (_: Exception) {
-                            // Non-fatal if token call fails, fallback to join_link
-                        }
-                    }
-
-                    val currentSelected = _uiState.value.selectedLesson
-                    if (currentSelected != null && (currentSelected.id == lesson.id || currentSelected.content_id == lesson.content_id || currentSelected.live_class?.id == liveClassId)) {
-                        val updatedLiveClass = (currentSelected.live_class ?: LiveClassDetails()).copy(
-                            join_link = payload.join_link ?: currentSelected.live_class?.join_link,
-                            provider = payload.provider ?: currentSelected.live_class?.provider,
-                            hms_room_id = effectiveRoomId ?: currentSelected.live_class?.hms_room_id,
-                            hms_token = hmsToken ?: currentSelected.live_class?.hms_token,
-                            blocked_chat = isChatBlocked ?: currentSelected.live_class?.blocked_chat
-                        )
-                        _uiState.update {
-                            it.copy(selectedLesson = currentSelected.copy(live_class = updatedLiveClass))
-                        }
-
-                        if (!hmsToken.isNullOrBlank()) {
-                            connectLiveSocket(hmsToken, effectiveRoomId)
-                        }
-                    }
-                }
-                onResult?.invoke(payload)
-            } catch (_: Exception) {
-                onResult?.invoke(null)
-            }
         }
     }
 

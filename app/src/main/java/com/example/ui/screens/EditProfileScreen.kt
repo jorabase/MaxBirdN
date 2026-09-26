@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -53,43 +54,56 @@ fun EditProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var showAvatarPickerSheet by remember { mutableStateOf(false) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
 
-    // Android Photo Picker Launcher (Google Play Policy Compliant)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null) {
-            viewModel.onAvatarSelected(uri.toString())
+        uri?.let { viewModel.onAvatarSelected(it.toString()) }
+    }
+
+    // ===== Date picker — current value নিয়ে খোলা =====
+    val openDatePicker: () -> Unit = remember(uiState.dobIso) {
+        {
+            val cal = Calendar.getInstance()
+            if (uiState.dobIso.isNotBlank()) {
+                try {
+                    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+                    fmt.parse(uiState.dobIso.take(19))?.let { cal.time = it }
+                } catch (_: Exception) {
+                    cal.add(Calendar.YEAR, -16)
+                }
+            } else {
+                cal.add(Calendar.YEAR, -16)
+            }
+            val dlg = DatePickerDialog(
+                context,
+                { _, y, m, d -> viewModel.onDobSelected(y, m, d) },
+                cal.get(Calendar.YEAR),
+                cal.get(Calendar.MONTH),
+                cal.get(Calendar.DAY_OF_MONTH)
+            )
+            dlg.datePicker.maxDate = System.currentTimeMillis()
+            dlg.show()
         }
     }
 
-    // DatePicker Dialog
-    val calendar = remember { Calendar.getInstance() }
-    val datePickerDialog = remember {
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                viewModel.onDobSelected(year, month, dayOfMonth)
-            },
-            calendar.get(Calendar.YEAR) - 16,
-            0,
-            1
-        )
+    // ===== Back with unsaved guard =====
+    val handleBack: () -> Unit = {
+        if (uiState.hasUnsavedChanges && !uiState.isSaving) {
+            showDiscardDialog = true
+        } else {
+            onBack()
+        }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = "প্রোফাইল এডিট",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("প্রোফাইল এডিট", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = handleBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -99,9 +113,7 @@ fun EditProfileScreen(
         },
         bottomBar = {
             Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(elevation = 8.dp),
+                modifier = Modifier.fillMaxWidth().shadow(elevation = 8.dp),
                 color = MaterialTheme.colorScheme.surface
             ) {
                 Box(
@@ -111,14 +123,10 @@ fun EditProfileScreen(
                         .padding(16.dp)
                 ) {
                     Button(
-                        onClick = {
-                            viewModel.saveProfile(onSuccess = onBack)
-                        },
+                        onClick = { viewModel.saveProfile(onSuccess = onBack) },
                         enabled = !uiState.isSaving && !uiState.isLoading,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
@@ -127,13 +135,16 @@ fun EditProfileScreen(
                             CircularProgressIndicator(
                                 color = Color.White,
                                 strokeWidth = 2.5.dp,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(22.dp)
                             )
+                            Spacer(Modifier.width(10.dp))
+                            Text("সংরক্ষণ হচ্ছে...", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         } else {
+                            Icon(Icons.Default.Save, null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "পরিবর্তন সংরক্ষণ করুন",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold
+                                text = if (uiState.hasUnsavedChanges) "পরিবর্তন সংরক্ষণ করো" else "সংরক্ষণ করো",
+                                fontSize = 16.sp, fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -143,13 +154,9 @@ fun EditProfileScreen(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
+
         if (uiState.isLoading) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else {
@@ -159,52 +166,79 @@ fun EditProfileScreen(
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                // Success / Error Banner
-                if (uiState.errorMessage != null) {
+                // ===== Banners =====
+                uiState.errorMessage?.let { err ->
+                    BannerCard(
+                        text = err,
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        icon = Icons.Default.ErrorOutline
+                    )
+                }
+                uiState.successMessage?.let { msg ->
+                    BannerCard(
+                        text = msg,
+                        containerColor = Color(0xFFE8F5E9),
+                        contentColor = Color(0xFF2E7D32),
+                        icon = Icons.Default.CheckCircle
+                    )
+                }
+                uiState.nameChangeWarning?.let { warn ->
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFFFFF7E6),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = uiState.errorMessage ?: "",
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(14.dp)
-                        )
+                        Row(
+                            Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "নাম পরিবর্তন হয়নি",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF92400E)
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    warn,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF92400E),
+                                    lineHeight = 17.sp
+                                )
+                            }
+                            IconButton(
+                                onClick = { viewModel.clearNameChangeWarning() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    "Dismiss",
+                                    tint = Color(0xFF92400E),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
-                if (uiState.successMessage != null) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFE8F5E9),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = uiState.successMessage ?: "",
-                            color = Color(0xFF2E7D32),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(14.dp)
-                        )
-                    }
-                }
-
-                // Avatar & Change Photo Section
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                // ===== Avatar =====
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             modifier = Modifier
-                                .size(96.dp)
+                                .size(104.dp)
                                 .clip(CircleShape)
                                 .clickable { showAvatarPickerSheet = true }
                         ) {
@@ -214,71 +248,79 @@ fun EditProfileScreen(
                                     .clip(CircleShape)
                                     .background(
                                         Brush.linearGradient(
-                                            colors = listOf(
+                                            listOf(
                                                 MaterialTheme.colorScheme.primary,
                                                 MaterialTheme.colorScheme.secondary
                                             )
                                         )
-                                    ),
+                                    )
+                                    .padding(2.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                val avatarRequest = remember(uiState.avatarUrl, uiState.firstName, context) {
-                                    AvatarUtils.buildImageRequest(context, uiState.avatarUrl, uiState.firstName)
-                                }
-                                SubcomposeAsyncImage(
-                                    model = avatarRequest,
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    error = {
-                                        Text(
-                                            text = uiState.firstName.firstOrNull()?.toString()?.uppercase() ?: "S",
-                                            color = Color.White,
-                                            fontSize = 36.sp,
-                                            fontWeight = FontWeight.Bold
+                                Box(
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surface)
+                                ) {
+                                    val req = remember(uiState.avatarUrl, uiState.firstName, context) {
+                                        AvatarUtils.buildImageRequest(
+                                            context, uiState.avatarUrl, uiState.firstName
                                         )
                                     }
-                                )
+                                    SubcomposeAsyncImage(
+                                        model = req,
+                                        contentDescription = "Avatar",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                        error = {
+                                            Box(
+                                                Modifier.fillMaxSize().background(
+                                                    Brush.linearGradient(
+                                                        listOf(
+                                                            MaterialTheme.colorScheme.primary,
+                                                            MaterialTheme.colorScheme.secondary
+                                                        )
+                                                    )
+                                                ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    uiState.firstName.trim()
+                                                        .firstOrNull()?.toString()?.uppercase() ?: "S",
+                                                    color = Color.White,
+                                                    fontSize = 36.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
                             }
-
-                            // Camera Edit Badge
                             Surface(
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.primary,
                                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface),
                                 shadowElevation = 3.dp,
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .align(Alignment.BottomEnd)
+                                modifier = Modifier.size(32.dp).align(Alignment.BottomEnd)
                             ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Default.CameraAlt,
-                                        contentDescription = "Change Photo",
+                                        Icons.Default.CameraAlt, "Change",
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
                         }
-
-                        // Text Action
-                        TextButton(
-                            onClick = { showAvatarPickerSheet = true },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                        ) {
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = { showAvatarPickerSheet = true }) {
                             Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = null,
+                                Icons.Default.PhotoCamera, null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(Modifier.width(6.dp))
                             Text(
-                                text = "প্রোফাইল ছবি পরিবর্তন করুন",
+                                "প্রোফাইল ছবি পরিবর্তন করো",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -287,86 +329,94 @@ fun EditProfileScreen(
                     }
                 }
 
-                // 1. ব্যক্তিগত তথ্য (Personal Info)
+                // ===== 1. ব্যক্তিগত তথ্য =====
                 FormSectionCard(
                     title = "ব্যক্তিগত তথ্য",
                     icon = Icons.Default.Person,
                     iconTint = MaterialTheme.colorScheme.primary
                 ) {
-                    // First Name
                     OutlinedTextField(
                         value = uiState.firstName,
                         onValueChange = { viewModel.onFirstNameChange(it) },
                         label = { Text("পূর্ণ নাম") },
                         placeholder = { Text("তোমার নাম লিখো") },
-                        leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Default.Badge, null) },
+                        isError = uiState.fieldErrors.containsKey("firstName"),
+                        supportingText = uiState.fieldErrors["firstName"]?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
+                    if (uiState.isNameChanged) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Info, null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "নাম পরিবর্তন ৬০ দিনে একবার করা যায়",
+                                fontSize = 11.sp,
+                                color = Color(0xFFD97706)
+                            )
+                        }
+                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(Modifier.height(12.dp))
 
-                    // Phone Number (Read Only)
                     OutlinedTextField(
                         value = uiState.phone,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("ফোন নম্বর (অ্যাকাউন্ট)") },
-                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                        trailingIcon = { Icon(Icons.Default.Lock, contentDescription = "Locked", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                        leadingIcon = { Icon(Icons.Default.Phone, null) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Default.Lock, "Locked",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Gender Selector
-                    Text(
-                        text = "লিঙ্গ",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(Modifier.height(14.dp))
+                    FieldLabel("লিঙ্গ")
+                    Spacer(Modifier.height(6.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        val genders = listOf("Male" to "পুরুষ", "Female" to "মহিলা")
-                        genders.forEach { (key, label) ->
-                            val isSelected = uiState.gender.equals(key, ignoreCase = true)
+                        listOf("Male" to "পুরুষ", "Female" to "মহিলা").forEach { (k, l) ->
                             ChoiceChipButton(
-                                text = label,
-                                isSelected = isSelected,
-                                onClick = { viewModel.onGenderChange(key) },
+                                text = l,
+                                isSelected = uiState.gender.equals(k, true),
+                                onClick = { viewModel.onGenderChange(k) },
                                 modifier = Modifier.weight(1f)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Date of Birth
-                    Text(
-                        text = "জন্মতারিখ",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(Modifier.height(14.dp))
+                    FieldLabel("জন্মতারিখ")
+                    Spacer(Modifier.height(6.dp))
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { datePickerDialog.show() },
+                            .clickable { openDatePicker() },
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                            Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
@@ -375,20 +425,20 @@ fun EditProfileScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.CalendarToday,
-                                    contentDescription = null,
+                                    Icons.Default.CalendarToday, null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
                                     text = uiState.dobDisplay.ifBlank { "জন্মতারিখ নির্বাচন করো" },
                                     fontSize = 14.sp,
-                                    color = if (uiState.dobDisplay.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (uiState.dobDisplay.isNotBlank())
+                                        MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Icon(
-                                imageVector = Icons.Default.EditCalendar,
-                                contentDescription = "Pick Date",
+                                Icons.Default.EditCalendar, "Pick",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -396,7 +446,7 @@ fun EditProfileScreen(
                     }
                 }
 
-                // 2. অভিভাবকের তথ্য (Guardian Info)
+                // ===== 2. অভিভাবকের তথ্য =====
                 FormSectionCard(
                     title = "অভিভাবকের তথ্য",
                     icon = Icons.Default.FamilyRestroom,
@@ -406,153 +456,151 @@ fun EditProfileScreen(
                         value = uiState.guardianName,
                         onValueChange = { viewModel.onGuardianNameChange(it) },
                         label = { Text("অভিভাবকের নাম") },
-                        placeholder = { Text("মাতা / পিতার নাম লিখো") },
-                        leadingIcon = { Icon(Icons.Default.PersonOutline, contentDescription = null) },
+                        placeholder = { Text("মাতা / পিতার নাম") },
+                        leadingIcon = { Icon(Icons.Default.PersonOutline, null) },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
+                    Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = uiState.guardianMobile,
-                        onValueChange = { viewModel.onGuardianMobileChange(it) },
+                        onValueChange = { viewModel.onGuardianMobileChange(it.filter { c -> c.isDigit() }.take(11)) },
                         label = { Text("অভিভাবকের মোবাইল নম্বর") },
-                        placeholder = { Text("০১XXXXXXXXX") },
-                        leadingIcon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null) },
+                        placeholder = { Text("01XXXXXXXXX") },
+                        leadingIcon = { Icon(Icons.Default.PhoneAndroid, null) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        isError = uiState.fieldErrors.containsKey("guardianMobile"),
+                        supportingText = uiState.fieldErrors["guardianMobile"]?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
                 }
 
-                // 3. শিক্ষাপ্রতিষ্ঠান নির্বাচন (Educational Institution)
+                // ===== 3. শিক্ষাপ্রতিষ্ঠান =====
                 FormSectionCard(
                     title = "শিক্ষাপ্রতিষ্ঠান",
                     icon = Icons.Default.School,
                     iconTint = Color(0xFF059669)
                 ) {
-                    // Current Class & Group Preview
+                    // Class/Group preview (read-only info)
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = null,
+                                Icons.Default.Info, null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "শ্রেণি: ${uiState.userClassDisplay.ifBlank { uiState.userClassCode }}  |  বিভাগ: ${uiState.userGroup.ifBlank { "সাধারণ" }}",
+                                text = "শ্রেণি: ${
+                                    uiState.userClassDisplay.ifBlank { uiState.userClassCode }
+                                }  |  বিভাগ: ${
+                                    bengaliGroupName(uiState.userGroup)
+                                }",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Shift Selector
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "শিফট (Shift)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        "শ্রেণি/বিভাগ পরিবর্তন করতে 'সিলেবাস পরিবর্তন' অপশন ব্যবহার করো।",
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Spacer(Modifier.height(14.dp))
+                    FieldLabel("শিফট")
+                    Spacer(Modifier.height(6.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val shifts = listOf("Morning" to "মর্নিং", "Day" to "ডে", "NA" to "প্রযোজ্য নয়")
-                        shifts.forEach { (key, label) ->
-                            val isSelected = uiState.shift.equals(key, ignoreCase = true)
+                        listOf(
+                            "Morning" to "মর্নিং",
+                            "Day" to "ডে",
+                            "NA" to "প্রযোজ্য নয়"
+                        ).forEach { (k, l) ->
                             ChoiceChipButton(
-                                text = label,
-                                isSelected = isSelected,
-                                onClick = { viewModel.onShiftChange(key) },
+                                text = l,
+                                isSelected = uiState.shift.equals(k, true),
+                                onClick = { viewModel.onShiftChange(k) },
                                 modifier = Modifier.weight(1f)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Division Dropdown
+                    Spacer(Modifier.height(14.dp))
                     DropdownSelectorField(
                         label = "বিভাগ (Division)",
                         selectedValue = uiState.selectedDivisionName.ifBlank { "বিভাগ নির্বাচন করো" },
                         items = uiState.divisions.map { it.display ?: "" },
-                        onItemSelected = { selectedName ->
-                            val item = uiState.divisions.find { it.display == selectedName }
-                            if (item != null) viewModel.onSelectDivision(item)
+                        onItemSelected = { name ->
+                            uiState.divisions.find { it.display == name }
+                                ?.let { viewModel.onSelectDivision(it) }
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // District Dropdown
+                    Spacer(Modifier.height(12.dp))
                     DropdownSelectorField(
                         label = "জেলা (District)",
                         selectedValue = when {
-                            uiState.isDistrictsLoading -> "জেলা লোড হচ্ছে..."
+                            uiState.isDistrictsLoading -> "লোড হচ্ছে..."
                             uiState.selectedDistrictName.isNotBlank() -> uiState.selectedDistrictName
                             else -> "জেলা নির্বাচন করো"
                         },
                         items = uiState.districts.map { it.display ?: "" },
-                        enabled = uiState.districts.isNotEmpty(),
-                        onItemSelected = { selectedName ->
-                            val item = uiState.districts.find { it.display == selectedName }
-                            if (item != null) viewModel.onSelectDistrict(item)
+                        enabled = uiState.districts.isNotEmpty() && !uiState.isDistrictsLoading,
+                        onItemSelected = { name ->
+                            uiState.districts.find { it.display == name }
+                                ?.let { viewModel.onSelectDistrict(it) }
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // School Name / Picker Button
-                    Text(
-                        text = "স্কুল / কলেজ",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(Modifier.height(12.dp))
+                    FieldLabel("স্কুল / কলেজ")
+                    Spacer(Modifier.height(6.dp))
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable {
-                                viewModel.setSchoolSearchDialogVisible(true)
-                            },
+                            .clickable { viewModel.setSchoolSearchDialogVisible(true) },
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                            Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = uiState.selectedSchoolName.ifBlank { "স্কুল / কলেজ খুঁজুন ও নির্বাচন করুন" },
+                                text = uiState.selectedSchoolName.ifBlank {
+                                    "স্কুল / কলেজ খুঁজে বেছে নাও"
+                                },
                                 fontSize = 14.sp,
-                                fontWeight = if (uiState.selectedSchoolName.isNotBlank()) FontWeight.Medium else FontWeight.Normal,
-                                color = if (uiState.selectedSchoolName.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.weight(1f)
+                                fontWeight = if (uiState.selectedSchoolName.isNotBlank())
+                                    FontWeight.Medium else FontWeight.Normal,
+                                color = if (uiState.selectedSchoolName.isNotBlank())
+                                    MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search School",
+                                Icons.Default.Search, "Search",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -560,92 +608,98 @@ fun EditProfileScreen(
                     }
                 }
 
-                // 4. বোর্ড পরীক্ষার তথ্য (Board Exam Info)
+                // ===== 4. বোর্ড পরীক্ষার তথ্য =====
                 FormSectionCard(
                     title = "বোর্ড পরীক্ষার তথ্য",
                     icon = Icons.Default.Assignment,
                     iconTint = Color(0xFFD97706)
                 ) {
-                    // SSC Board Name
                     DropdownSelectorField(
                         label = "এসএসসি বোর্ড (SSC Board)",
-                        selectedValue = uiState.sscBoardName,
+                        selectedValue = uiState.sscBoardName.ifBlank { "নির্বাচন করো" },
                         items = viewModel.educationBoards,
                         onItemSelected = { viewModel.onSscBoardChange(it) }
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // SSC Roll
+                    Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = uiState.sscRollNumber,
-                        onValueChange = { viewModel.onSscRollChange(it) },
-                        label = { Text("এসএসসি রোল নম্বর (SSC Roll)") },
+                        onValueChange = { viewModel.onSscRollChange(it.filter { c -> c.isDigit() }.take(10)) },
+                        label = { Text("এসএসসি রোল নম্বর") },
                         placeholder = { Text("যেমন: 762180") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = uiState.fieldErrors.containsKey("sscRoll"),
+                        supportingText = uiState.fieldErrors["sscRoll"]?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Board Reg Number
+                    Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = uiState.boardRegNumber,
-                        onValueChange = { viewModel.onBoardRegChange(it) },
-                        label = { Text("বোর্ড রেজিস্ট্রেশন নম্বর (Reg No)") },
+                        onValueChange = { viewModel.onBoardRegChange(it.filter { c -> c.isDigit() }.take(12)) },
+                        label = { Text("বোর্ড রেজিস্ট্রেশন নম্বর") },
                         placeholder = { Text("যেমন: 2213531789") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = uiState.fieldErrors.containsKey("regNo"),
+                        supportingText = uiState.fieldErrors["regNo"]?.let {
+                            { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
 
-                    // For HSC / C11 / C12, show HSC Board & HSC Roll
-                    val isHscOrHigher = uiState.userClassCode.uppercase() in listOf("C11", "C12", "HSC", "ADMISSION")
-                    if (isHscOrHigher) {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                        Spacer(modifier = Modifier.height(14.dp))
+                    if (uiState.isHscRelevant) {
+                        Spacer(Modifier.height(14.dp))
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                        Spacer(Modifier.height(14.dp))
 
                         DropdownSelectorField(
-                            label = "এইচএসসি বোর্ড (HSC Board)",
-                            selectedValue = uiState.hscBoardName,
+                            label = "এইচএসসি বোর্ড",
+                            selectedValue = uiState.hscBoardName.ifBlank { "নির্বাচন করো" },
                             items = viewModel.educationBoards,
                             onItemSelected = { viewModel.onHscBoardChange(it) }
                         )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
+                        Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = uiState.hscRollNumber,
-                            onValueChange = { viewModel.onHscRollChange(it) },
-                            label = { Text("এইচএসসি রোল নম্বর (HSC Roll - যদি থাকে)") },
+                            onValueChange = { viewModel.onHscRollChange(it.filter { c -> c.isDigit() }.take(10)) },
+                            label = { Text("এইচএসসি রোল নম্বর (যদি থাকে)") },
                             placeholder = { Text("যেমন: 880000") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError = uiState.fieldErrors.containsKey("hscRoll"),
+                            supportingText = uiState.fieldErrors["hscRoll"]?.let {
+                                { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 11.sp) }
+                            },
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
                     }
                 }
+
+                Spacer(Modifier.height(40.dp))
             }
         }
     }
 
-    // School Search Dialog
+    // ===== School search dialog =====
     if (uiState.showSchoolSearchDialog) {
         SchoolSearchDialog(
             searchResults = uiState.schoolSearchResults,
             isLoading = uiState.isSchoolSearching,
-            onSearchQuery = { query -> viewModel.searchSchools(query) },
-            onSelectSchool = { school -> viewModel.onSelectSchool(school) },
+            selectedDistrict = uiState.selectedDistrictName,
+            onSearchQuery = { viewModel.searchSchools(it) },
+            onSelectSchool = { viewModel.onSelectSchool(it) },
             onDismiss = { viewModel.setSchoolSearchDialogVisible(false) }
         )
     }
 
-    // Avatar Selection Bottom Sheet
+    // ===== Avatar sheet =====
     if (showAvatarPickerSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAvatarPickerSheet = false },
@@ -653,25 +707,21 @@ fun EditProfileScreen(
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
+                Modifier.fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 8.dp)
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "প্রোফাইল ছবি পরিবর্তন",
+                    "প্রোফাইল ছবি পরিবর্তন",
                     fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontWeight = FontWeight.Bold
                 )
 
-                // 1. Pick from Gallery
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                    modifier = Modifier
-                        .fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             showAvatarPickerSheet = false
@@ -681,96 +731,90 @@ fun EditProfileScreen(
                         }
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
+                            Modifier.size(42.dp).clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AddPhotoAlternate,
-                                contentDescription = null,
+                                Icons.Default.AddPhotoAlternate, null,
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f)) {
                             Text(
-                                text = "গ্যালারি থেকে ছবি বেছে নিন",
+                                "গ্যালারি থেকে ছবি বেছে নাও",
                                 fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "তোমার ডিভাইস থেকে নতুন ছবি আপলোড করো",
+                                "তোমার ডিভাইস থেকে নতুন ছবি",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
 
-                // 2. Preset Avatars
                 Text(
-                    text = "অথবা একটি অবতার বেছে নিন",
+                    "অথবা একটি অবতার বেছে নাও",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 val presetAvatars = listOf(
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Felix",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Aneka",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Sam",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Milo",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Zoe",
-                    "https://api.dicebear.com/7.x/bottts/png?seed=StudentRobot"
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Felix" to "এডভেঞ্চারার ১",
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Aneka" to "এডভেঞ্চারার ২",
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Sam" to "এডভেঞ্চারার ৩",
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Milo" to "এডভেঞ্চারার ৪",
+                    "https://api.dicebear.com/7.x/bottts/png?seed=Robot1" to "রোবট ১",
+                    "https://api.dicebear.com/7.x/bottts/png?seed=Robot2" to "রোবট ২"
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    presetAvatars.forEach { avatarUrl ->
-                        Surface(
-                            shape = CircleShape,
-                            border = BorderStroke(
-                                2.dp,
-                                if (uiState.avatarUrl == avatarUrl) MaterialTheme.colorScheme.primary else Color.Transparent
-                            ),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    viewModel.onAvatarSelected(avatarUrl)
-                                    showAvatarPickerSheet = false
-                                }
-                        ) {
-                            SubcomposeAsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(avatarUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Preset Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
+                // 3-column grid, 2 rows
+                presetAvatars.chunked(3).forEach { row ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        row.forEach { (url, _) ->
+                            val isSelected = uiState.avatarUrl == url
+                            Surface(
+                                shape = CircleShape,
+                                border = BorderStroke(
+                                    2.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                ),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(64.dp)
+                                    .clip(CircleShape)
+                                    .clickable {
+                                        viewModel.onAvatarSelected(url)
+                                        showAvatarPickerSheet = false
+                                    }
+                            ) {
+                                SubcomposeAsyncImage(
+                                    model = ImageRequest.Builder(context).data(url).crossfade(true).build(),
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+                        if (row.size < 3) {
+                            repeat(3 - row.size) { Spacer(Modifier.size(64.dp)) }
                         }
                     }
                 }
 
-                // 3. Remove photo (if has custom avatar)
                 if (!uiState.avatarUrl.isNullOrBlank()) {
                     OutlinedButton(
                         onClick = {
@@ -783,22 +827,89 @@ fun EditProfileScreen(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "বর্তমান ছবি মুছে ফেলুন",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Icon(Icons.Default.DeleteOutline, null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("বর্তমান ছবি মুছে ফেলো", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
             }
+        }
+    }
+
+    // ===== Discard changes dialog =====
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            icon = { Icon(Icons.Default.WarningAmber, null, tint = Color(0xFFD97706)) },
+            title = { Text("পরিবর্তন বাতিল করবে?", fontWeight = FontWeight.Bold) },
+            text = { Text("তুমি কিছু তথ্য পরিবর্তন করেছ কিন্তু সংরক্ষণ করনি। বের হলে পরিবর্তন হারিয়ে যাবে।") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    onBack()
+                }) {
+                    Text("হ্যাঁ, বাতিল করো", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("না, থাক")
+                }
+            }
+        )
+    }
+}
+
+// ============================================================
+//  Small helper composables
+// ============================================================
+
+private fun bengaliGroupName(raw: String?): String {
+    return when (raw?.trim()?.lowercase()) {
+        "hum", "humanities", "humanities_group" -> "মানবিক"
+        "sci", "science", "science_group" -> "বিজ্ঞান"
+        "bs", "bsc", "business", "business_studies", "commerce" -> "ব্যবসায় শিক্ষা"
+        else -> raw?.ifBlank { "সাধারণ" } ?: "সাধারণ"
+    }
+}
+
+@Composable
+private fun FieldLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun BannerCard(
+    text: String,
+    containerColor: Color,
+    contentColor: Color,
+    icon: ImageVector
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = containerColor,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(icon, null, tint = contentColor, modifier = Modifier.size(20.dp))
+            Text(
+                text = text,
+                color = contentColor,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -817,30 +928,22 @@ private fun FormSectionCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         shadowElevation = 1.dp
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+        Column(Modifier.padding(16.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(bottom = 14.dp)
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(36.dp)
+                    Modifier.size(36.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(iconTint.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(icon, null, tint = iconTint, modifier = Modifier.size(20.dp))
                 }
                 Text(
-                    text = title,
+                    title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -859,25 +962,26 @@ private fun ChoiceChipButton(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() },
+        modifier = modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
         border = BorderStroke(
-            width = if (isSelected) 1.5.dp else 1.dp,
-            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+            1.dp,
+            if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant
         )
     ) {
         Box(
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+            Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = text,
                 fontSize = 13.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -893,15 +997,9 @@ private fun DropdownSelectorField(
     enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
-
     Column {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(6.dp))
+        FieldLabel(label)
+        Spacer(Modifier.height(6.dp))
         ExposedDropdownMenuBox(
             expanded = expanded && enabled,
             onExpandedChange = { if (enabled) expanded = !expanded }
@@ -911,11 +1009,11 @@ private fun DropdownSelectorField(
                 onValueChange = {},
                 readOnly = true,
                 enabled = enabled,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
+                modifier = Modifier.fillMaxWidth().menuAnchor(),
                 singleLine = true
             )
             ExposedDropdownMenu(
@@ -940,6 +1038,7 @@ private fun DropdownSelectorField(
 private fun SchoolSearchDialog(
     searchResults: List<SchoolItem>,
     isLoading: Boolean,
+    selectedDistrict: String,
     onSearchQuery: (String) -> Unit,
     onSelectSchool: (SchoolItem) -> Unit,
     onDismiss: () -> Unit
@@ -950,31 +1049,34 @@ private fun SchoolSearchDialog(
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.75f)
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(18.dp)
-            ) {
+            Column(Modifier.fillMaxSize().padding(18.dp)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "স্কুল / কলেজ খুঁজুন",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "স্কুল / কলেজ খুঁজুন",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (selectedDistrict.isNotBlank()) {
+                            Text(
+                                selectedDistrict,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, "Close")
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = query,
@@ -982,64 +1084,57 @@ private fun SchoolSearchDialog(
                         query = it
                         onSearchQuery(it)
                     },
-                    placeholder = { Text("প্রতিষ্ঠানের নাম লিখুন...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    placeholder = { Text("প্রতিষ্ঠানের নাম লিখো...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
 
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
+                when {
+                    isLoading -> Box(
+                        Modifier.fillMaxWidth().weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     }
-                } else if (searchResults.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
+                    searchResults.isEmpty() -> Box(
+                        Modifier.fillMaxWidth().weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "কোনো প্রতিষ্ঠান পাওয়া যায়নি",
+                            if (query.isBlank()) "স্কুল খুঁজতে নাম লিখো"
+                            else "কোনো প্রতিষ্ঠান পাওয়া যায়নি",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
+                    else -> LazyColumn(
+                        Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(searchResults, key = { it.id ?: UUID.randomUUID().toString() }) { school ->
+                        items(searchResults, key = { it.id ?: it.name ?: UUID.randomUUID().toString() }) { school ->
                             Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth()
                                     .clip(RoundedCornerShape(10.dp))
                                     .clickable { onSelectSchool(school) },
                                 shape = RoundedCornerShape(10.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(12.dp),
+                                    Modifier.padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.School,
-                                        contentDescription = null,
+                                        Icons.Default.School, null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
-                                        text = school.name ?: "",
+                                        school.name ?: "",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurface

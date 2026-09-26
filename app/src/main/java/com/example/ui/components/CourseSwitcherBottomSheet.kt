@@ -45,7 +45,8 @@ fun getProgramBadge(program: EnrolledProgram): ProgramBadgeInfo {
     val details = program.enrollment_details
     val type = details?.type
     val isActive = details?.is_active == true
-    val isTrial = type == "FullApTrial" || program.trial_enabled == true
+    val isTrial = type == "FullApTrial" || (program.trial_enabled == true && program.is_free != true)
+    val isFree = program.is_free == true || type == "FREE"
 
     val isTrialExpired = if (isTrial && !details?.trial_end_date.isNullOrBlank()) {
         try {
@@ -60,6 +61,7 @@ fun getProgramBadge(program: EnrolledProgram): ProgramBadgeInfo {
     }
 
     return when {
+        isFree -> ProgramBadgeInfo("সম্পূর্ণ ফ্রি", Color(0xFFDCFCE7), Color(0xFF15803D))
         isTrial && (isTrialExpired || !isActive) -> ProgramBadgeInfo("ফ্রিতে শেখা শেষ", Color(0xFFFFF3E0), Color(0xFFE65100))
         isActive && !isTrial -> ProgramBadgeInfo("ভর্তি হয়েছো", Color(0xFFE8F5E9), Color(0xFF2E7D32))
         isActive && isTrial -> ProgramBadgeInfo("ফ্রি ট্রায়াল", Color(0xFFE3F2FD), Color(0xFF1565C0))

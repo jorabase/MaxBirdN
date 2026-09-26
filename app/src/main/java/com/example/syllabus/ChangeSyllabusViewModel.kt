@@ -14,17 +14,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Utility function to convert English digits to Bengali digits
+ * ইংরেজি ডিজিট → বাংলা ডিজিট
  */
 fun convertToBengaliDigits(input: String?): String {
     if (input == null) return ""
     val bengaliDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
     return input.map { ch ->
-        if (ch in '0'..'9') {
-            bengaliDigits[ch - '0']
-        } else {
-            ch
-        }
+        if (ch in '0'..'9') bengaliDigits[ch - '0'] else ch
     }.joinToString("")
 }
 
@@ -38,6 +34,8 @@ data class ChangeSyllabusUiState(
     val selectedGroup: StudyGroupItem? = null,
     val batchOptions: List<BatchOptionItem> = emptyList(),
     val selectedBatch: BatchOptionItem? = null,
+    val currentClassCode: String? = null,     // user এখানে already enrolled
+    val currentGroupCode: String? = null,
     val errorMessage: String? = null,
     val showConfirmBottomSheet: Boolean = false
 ) {
@@ -51,6 +49,27 @@ data class ChangeSyllabusUiState(
             if (batchOptions.isNotEmpty() && selectedBatch == null) return false
             return true
         }
+
+    /** Confirmation sheet-এ user-friendly summary */
+    val summaryLine: String
+        get() = buildList {
+            selectedClass?.let { add(it.bengaliClassName()) }
+            selectedGroup?.let { add(it.displayNameBn) }
+            selectedBatch?.yearString?.takeIf { it.isNotBlank() }?.let {
+                add(convertToBengaliDigits(it))
+            }
+        }.filter { it.isNotBlank() }.joinToString(" • ")
+
+    /** বর্তমান selection আসল selection-এর সমান কি না */
+    val isSameAsCurrent: Boolean
+        get() {
+            if (currentClassCode.isNullOrBlank()) return false
+            if (!selectedClass?.code.equals(currentClassCode, ignoreCase = true)) return false
+            if (isGroupRequiredForSelectedClass && !currentGroupCode.isNullOrBlank()) {
+                if (selectedGroup?.matchesCodeOrName(currentGroupCode) != true) return false
+            }
+            return true
+        }
 }
 
 class ChangeSyllabusViewModel(
@@ -61,19 +80,20 @@ class ChangeSyllabusViewModel(
     private val _uiState = MutableStateFlow(ChangeSyllabusUiState(isLoadingClasses = true))
     val uiState: StateFlow<ChangeSyllabusUiState> = _uiState.asStateFlow()
 
-    // Standard available study groups for secondary/higher-secondary
+    /**
+     * Fallback groups — শুধু তখন use হবে যখন API class_list-এ groups field absent থাকে।
+     * Capture-এ দেখা গেছে class_list response-এ groups field নেই, তাই এটা প্রয়োজন।
+     */
     val standardStudyGroups = listOf(
         StudyGroupItem(code = "Science", name_bn = "বিজ্ঞান", name_en = "Science"),
         StudyGroupItem(code = "Humanities", name_bn = "মানবিক", name_en = "Humanities"),
         StudyGroupItem(code = "Business_Studies", name_bn = "ব্যবসায় শিক্ষা", name_en = "Business Studies")
     )
 
-    init {
-        loadClassList()
-    }
+    init { loadClassList() }
 
     /**
-     * Step 1: REST GET https://api.shikho.com/class_list?vendor=BD&type=syllabus
+     * Step 1: REST GET /class_list?vendor=BD&type=syllabus
      */
     fun loadClassList() {
         viewModelScope.launch {
@@ -83,68 +103,75 @@ class ChangeSyllabusViewModel(
             )
             try {
                 val response = apiService.getClassList(vendor = "BD", type = "syllabus")
-                // Filter only valid academic syllabus classes (C5, C6, C7, C8, C9, C10, C11, C12)
-                val classes = (response.classes ?: response.data ?: emptyList()).filter { item ->
-                    item.is_active == true &&
-                    item.show_on_boarding == true &&
-                    item.code.matches(Regex("(?i)C\\d+"))
-                }
 
-                val currentClassCode = sessionManager.getUserClassName()
-                val currentGroupCode = sessionManager.getUserGroup()
-                val currentBatchId = sessionManager.getUserBatchId()
+                // Regex: C{num} — C9V2 বাদ (শুধু real academic classes)
+                // is_active == false হলে বাদ, কিন্তু null হলে allow (future-proof)
+                val classes = (response.classes ?: response.data ?: emptyList())
+                    .filter { item ->
+                        item.code.matches(Regex("(?i)C\\d+")) &&
+                                item.is_active != false &&
+                                item.show_on_boarding != false
+                    }
+                    .sortedBy { it.serial ?: Int.MAX_VALUE }
 
-                val preselectedClass = classes.find { it.code.equals(currentClassCode, ignoreCase = true) }
-                    ?: classes.firstOrNull()
+                val storedClassCode = sessionManager.getUserClassName()
+                val storedGroupRaw = sessionManager.getUserGroup()
 
-                val availableGroups = if (preselectedClass?.groups.isNullOrEmpty()) standardStudyGroups else preselectedClass?.groups!!
+                val preselectedClass = classes.find {
+                    it.code.equals(storedClassCode, true)
+                } ?: classes.firstOrNull()
+
+                val availableGroups = preselectedClass?.groups
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: standardStudyGroups
+
+                // FIX #1: loose match — "HUM" → "Humanities"
                 val preselectedGroup = if (preselectedClass?.isGroupRequired == true) {
-                    availableGroups.find {
-                        it.code.equals(currentGroupCode, ignoreCase = true) ||
-                        it.name_en.equals(currentGroupCode, ignoreCase = true) ||
-                        it.title_en.equals(currentGroupCode, ignoreCase = true)
-                    } ?: availableGroups.firstOrNull()
-                } else {
-                    null
-                }
+                    availableGroups.find { it.matchesCodeOrName(storedGroupRaw) }
+                        ?: availableGroups.firstOrNull()
+                } else null
 
                 _uiState.value = _uiState.value.copy(
                     isLoadingClasses = false,
                     classList = classes,
                     selectedClass = preselectedClass,
-                    selectedGroup = preselectedGroup
+                    selectedGroup = preselectedGroup,
+                    currentClassCode = storedClassCode,
+                    currentGroupCode = storedGroupRaw
                 )
 
-                // Fetch batch options for preselected class if available
+                // FIX #2: exam year + label দিয়ে batch preselection
                 preselectedClass?.code?.let { code ->
-                    fetchBatchOptions(code, currentBatchId)
+                    fetchBatchOptions(
+                        classCode = code,
+                        preferredLabel = sessionManager.getUserBatchId(),
+                        preferredYear = sessionManager.getAcademicPassingYear()
+                    )
                 }
-
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingClasses = false,
-                    errorMessage = "ক্লাসের তালিকা লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                    errorMessage = "ক্লাসের তালিকা লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
                 )
             }
         }
     }
 
     /**
-     * Step 2: Dynamic Batch Options GraphQL Query on selecting class
+     * User নতুন class select করলে — group + batch reload
      */
     fun selectClass(classItem: ClassItem) {
         if (_uiState.value.selectedClass?.code == classItem.code) return
 
-        val availableGroups = if (classItem.groups.isNullOrEmpty()) standardStudyGroups else classItem.groups!!
+        val availableGroups = classItem.groups
+            ?.takeIf { it.isNotEmpty() }
+            ?: standardStudyGroups
+        val storedGroupRaw = sessionManager.getUserGroup()
+
         val defaultGroup = if (classItem.isGroupRequired) {
-            val currentGroupCode = sessionManager.getUserGroup()
-            availableGroups.find {
-                it.code.equals(currentGroupCode, ignoreCase = true) ||
-                it.name_en.equals(currentGroupCode, ignoreCase = true)
-            } ?: availableGroups.firstOrNull()
-        } else {
-            null
-        }
+            availableGroups.find { it.matchesCodeOrName(storedGroupRaw) }
+                ?: availableGroups.firstOrNull()
+        } else null
 
         _uiState.value = _uiState.value.copy(
             selectedClass = classItem,
@@ -154,10 +181,21 @@ class ChangeSyllabusViewModel(
             errorMessage = null
         )
 
-        fetchBatchOptions(classItem.code)
+        fetchBatchOptions(
+            classCode = classItem.code,
+            preferredLabel = sessionManager.getUserBatchId(),
+            preferredYear = sessionManager.getAcademicPassingYear()
+        )
     }
 
-    private fun fetchBatchOptions(classCode: String, preferredBatchYearOrLabel: String? = null) {
+    /**
+     * Step 2: BatchOptions GraphQL query
+     */
+    private fun fetchBatchOptions(
+        classCode: String,
+        preferredLabel: String? = null,
+        preferredYear: String? = null
+    ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingBatches = true)
             try {
@@ -181,24 +219,20 @@ class ChangeSyllabusViewModel(
                 val response = apiService.getBatchOptions(query)
                 val options = response.data?.batchOptions?.options ?: emptyList()
 
-                val selectedBatch = if (!preferredBatchYearOrLabel.isNullOrBlank()) {
-                    options.find {
-                        it.yearString == preferredBatchYearOrLabel ||
-                        it.label?.contains(preferredBatchYearOrLabel, ignoreCase = true) == true
-                    } ?: options.firstOrNull()
-                } else {
-                    options.firstOrNull()
-                }
+                // pickDefaultBatch দিয়ে smart default (SyllabusUtils.kt-এ define করা)
+                val selectedBatch = pickDefaultBatch(
+                    options = options,
+                    storedPassingYear = preferredYear,
+                    storedBatchLabel = preferredLabel
+                )
 
                 _uiState.value = _uiState.value.copy(
                     isLoadingBatches = false,
                     batchOptions = options,
                     selectedBatch = selectedBatch
                 )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoadingBatches = false
-                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingBatches = false)
             }
         }
     }
@@ -217,6 +251,12 @@ class ChangeSyllabusViewModel(
             _uiState.value = state.copy(errorMessage = "অনুগ্রহ করে সকল তথ্য সঠিকভাবে নির্বাচন করো")
             return
         }
+        if (state.isSameAsCurrent) {
+            _uiState.value = state.copy(
+                errorMessage = "তুমি ইতিমধ্যে এই সিলেবাসেই আছো। ভিন্ন কিছু নির্বাচন করো।"
+            )
+            return
+        }
         _uiState.value = state.copy(showConfirmBottomSheet = true, errorMessage = null)
     }
 
@@ -225,8 +265,8 @@ class ChangeSyllabusViewModel(
     }
 
     /**
-     * Steps 3 & 4: Execute ChangeSyllabus mutation, update tokens, execute UpdateExamYear mutation,
-     * clear cache and restart the application cleanly.
+     * Steps 3 & 4: ChangeSyllabus mutation + token update + UpdateExamYear +
+     * save academic info + restart
      */
     fun applySyllabusChange(context: Context) {
         val state = _uiState.value
@@ -242,28 +282,28 @@ class ChangeSyllabusViewModel(
             )
 
             try {
-                // Determine StudyGroupTypeEnum formatted values (candidates)
-                val candidates = if (selectedClass.isGroupRequired && selectedGroup != null) {
-                    when (selectedGroup.code.lowercase()) {
-                        "humanities", "hum", "humanities_group" -> listOf("Humanities")
-                        "science", "science_group" -> listOf("Science")
-                        "business", "business_studies", "commerce", "businessstudies" -> listOf("Business_Studies", "BusinessStudies", "Commerce", "Business")
-                        else -> listOf(selectedGroup.code.replace("-", "_"))
-                    }
-                } else {
-                    listOf(null)
-                }
+                // ===== Candidate list for study_group enum =====
+                // প্রথমে user যা select করল, এরপর stored raw value.
+                // API নিজে যেটা accept করে সেটাই থাকবে — no hardcoded preference.
+                val candidates: List<String?> =
+                    if (selectedClass.isGroupRequired && selectedGroup != null) {
+                        buildList {
+                            selectedGroup.code.trim().takeIf { it.isNotBlank() }?.let { add(it) }
+                            sessionManager.getUserGroup()?.trim()?.takeIf { it.isNotBlank() }?.let {
+                                if (this.none { c -> c.equals(it, true) }) add(it)
+                            }
+                            if (isEmpty()) add(null)
+                        }
+                    } else listOf(null)
 
                 var lastException: Exception? = null
                 var successfulEnumVal: String? = null
-                var tokenPayload: com.example.api.AuthTokensPayload? = null
+                var tokenPayload: AuthTokensPayload? = null
 
                 for (candidate in candidates) {
                     try {
                         val variables = mutableMapOf<String, Any?>("userclass" to selectedClass.code)
-                        if (candidate != null) {
-                            variables["study_group"] = candidate
-                        }
+                        if (candidate != null) variables["study_group"] = candidate
 
                         val changeSyllabusQuery = GraphQlQuery(
                             operationName = "ChangeSyllabus",
@@ -283,33 +323,33 @@ class ChangeSyllabusViewModel(
                         tokenPayload = changeResponse.data?.changeSyllabus
                         successfulEnumVal = candidate
                         lastException = null
-                        break // Success! Exit candidate loop
-                    } catch (e: Exception) {
+                        break
+                    } catch (e: retrofit2.HttpException) {
                         lastException = e
-                        if (e is retrofit2.HttpException && e.code() == 400) {
-                            continue // Try next candidate
-                        } else {
-                            // Real non-400 exception (e.g. timeout, connection), but continue to be safe
-                            continue
-                        }
+                        // FIX #5: শুধু 400 (bad enum) হলে next candidate try করব,
+                        // অন্য HTTP error (401/500/etc) হলে সাথে সাথে fail
+                        if (e.code() != 400) throw e
+                    }
+                    // Network exception / timeout → propagate (mask করা হবে না)
+                }
+
+                if (tokenPayload == null && lastException != null) {
+                    throw lastException!!
+                }
+
+                // ===== 2) Token update =====
+                tokenPayload?.let { payload ->
+                    if (!payload.access_token.isNullOrBlank()) {
+                        sessionManager.updateAuthTokens(
+                            accessToken = payload.access_token,
+                            refreshToken = payload.refresh_token,
+                            idToken = payload.id_token
+                        )
                     }
                 }
 
-                if (lastException != null) {
-                    throw lastException
-                }
-
-                // 2. Replace JWT tokens in encrypted preferences
-                if (tokenPayload?.access_token != null) {
-                    sessionManager.updateAuthTokens(
-                        accessToken = tokenPayload.access_token,
-                        refreshToken = tokenPayload.refresh_token,
-                        idToken = tokenPayload.id_token
-                    )
-                }
-
-                // 3. UpdateExamYear Mutation
-                val passingYear = selectedBatch?.yearString ?: ""
+                // ===== 3) UpdateExamYear mutation =====
+                val passingYear = selectedBatch?.yearString.orEmpty()
                 if (passingYear.isNotBlank()) {
                     try {
                         val updateExamQuery = GraphQlQuery(
@@ -328,16 +368,17 @@ class ChangeSyllabusViewModel(
                         )
                         apiService.updateExamYear(updateExamQuery)
                     } catch (_: Exception) {
-                        // Safe fallback
+                        // non-fatal — token already updated, exam year failed চুপচাপ ignore
                     }
                 }
 
-                // 4. Save Academic Info & Clear Local Program Cache
+                // ===== 4) Local persistence =====
                 sessionManager.saveUserAcademicInfo(
-                    batchId = selectedBatch?.label ?: selectedBatch?.yearString ?: "",
+                    batchId = selectedBatch?.label ?: passingYear.ifBlank { null },
                     className = selectedClass.code,
-                    group = successfulEnumVal ?: "General",
-                    vendor = selectedClass.vendor ?: "BD"
+                    group = successfulEnumVal ?: selectedGroup?.code,
+                    vendor = selectedClass.vendor ?: "BD",
+                    passingYear = passingYear.ifBlank { null }
                 )
 
                 sessionManager.saveUserProfile(
@@ -345,7 +386,8 @@ class ChangeSyllabusViewModel(
                     lastName = "",
                     avatar = sessionManager.getUserAvatar(),
                     schoolName = sessionManager.getUserSchoolName(),
-                    classDisplay = selectedClass.displayNameBn
+                    // FIX #4: Settings-এর সাথে consistent বাংলা ordinal নাম
+                    classDisplay = selectedClass.bengaliClassName()
                 )
 
                 sessionManager.clearActiveProgram()
@@ -355,7 +397,7 @@ class ChangeSyllabusViewModel(
                     isSuccess = true
                 )
 
-                // 5. Restart application
+                // ===== 5) Proper restart =====
                 restartApp(context)
 
             } catch (e: Exception) {
@@ -371,19 +413,43 @@ class ChangeSyllabusViewModel(
                 }
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,
-                    errorMessage = "সিলেবাস পরিবর্তন ব্যর্থ হয়েছে: ${errorDetails ?: "সার্ভার এরর"}"
+                    errorMessage = "সিলেবাস পরিবর্তন ব্যর্থ হয়েছে: ${errorDetails ?: "সার্ভার এরর"}"
                 )
             }
         }
     }
 
+    /**
+     * Smooth in-app restart: Launches a fresh MainActivity task and finishes the current activity,
+     * seamlessly reloading all ViewModels, SessionManager state, and new syllabus courses without closing the app.
+     */
     private fun restartApp(context: Context) {
-        val packageManager = context.packageManager
-        val intent = packageManager.getLaunchIntentForPackage(context.packageName)
-            ?: Intent(context, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-        context.startActivity(intent)
-        Runtime.getRuntime().exit(0)
+        try {
+            android.widget.Toast.makeText(context.applicationContext, "সিলেবাস সফলভাবে পরিবর্তন করা হয়েছে! ✨", android.widget.Toast.LENGTH_SHORT).show()
+
+            val intent = Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            context.startActivity(intent)
+
+            if (context is android.app.Activity) {
+                context.finish()
+            } else if (context is android.content.ContextWrapper && context.baseContext is android.app.Activity) {
+                (context.baseContext as android.app.Activity).finish()
+            }
+        } catch (_: Exception) {
+            try {
+                val launchIntent = context.packageManager
+                    .getLaunchIntentForPackage(context.packageName)
+                    ?: Intent(context, MainActivity::class.java)
+                launchIntent.addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP
+                )
+                context.startActivity(launchIntent)
+            } catch (_: Exception) {}
+        }
     }
 }
 

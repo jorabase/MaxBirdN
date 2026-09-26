@@ -91,9 +91,16 @@ object Routes {
     const val PRACTICE_QUIZ_RESULT = "practice_quiz_result/{sessionId}"
     const val PRACTICE_QUIZ_FEEDBACK = "practice_quiz_feedback/{sessionId}"
     const val NOTIFICATION_SETTINGS = "notification_settings"
+    const val HEADER_WALLPAPER_SETTINGS = "header_wallpaper_settings"
     const val ANIMATED_LESSON_CHAPTERS = "animated_lesson_chapters/{subjectId}?title={title}&color={color}&programId={programId}&phaseId={phaseId}"
     const val ANIMATED_LESSON_LIST = "animated_lesson_list/{chapterId}?chapterName={chapterName}&subjectColor={subjectColor}&fromChapterPage={fromChapterPage}"
     const val ANIMATED_LESSON_PLAYER = "animated_lesson_player?url={url}&title={title}"
+    const val LIVE_CLASS = "live_class/{classId}/{lessonId}?lessonTitle={lessonTitle}&subjectName={subjectName}"
+    fun liveClassRoute(classId: String, lessonId: String, lessonTitle: String = "", subjectName: String = ""): String {
+        val encTitle = try { URLEncoder.encode(lessonTitle, "UTF-8") } catch (_: Exception) { lessonTitle }
+        val encSubject = try { URLEncoder.encode(subjectName, "UTF-8") } catch (_: Exception) { subjectName }
+        return "live_class/$classId/$lessonId?lessonTitle=$encTitle&subjectName=$encSubject"
+    }
 }
 
 // ============================================================
@@ -242,6 +249,33 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             if (currentRoute == null || !currentRoute.startsWith(Routes.LOGIN)) {
                 showSessionExpiredDialog = true
             }
+        }
+    }
+
+    val handleOpenLessonDetail: (com.example.api.StudentLessonItem) -> Unit = { lesson ->
+        if (lesson.isExam) {
+            val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
+                ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
+                ?: lesson.content_id?.takeIf { it.isNotBlank() }
+                ?: lesson.id
+            val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
+            val chapter = lesson.subject_name ?: ""
+            val encodedTitle = URLEncoder.encode(title, "UTF-8")
+            val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
+            navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
+        } else if (lesson.isLiveNow) {
+            val classId = lesson.live_class?.id?.takeIf { it.isNotBlank() } ?: lesson.id
+            val lessonId = lesson.id
+            val title = lesson.title ?: "লাইভ ক্লাস"
+            val subject = lesson.subject_name ?: "সাধারণ"
+            navController.navigate(Routes.liveClassRoute(classId = classId, lessonId = lessonId, lessonTitle = title, subjectName = subject))
+        } else if (lesson.isUpcoming) {
+            val startCal = com.example.utils.RoutineDateUtils.parseIsoToDhakaCalendar(lesson.start_time ?: lesson.live_class?.start_time)
+            val startStr = com.example.utils.RoutineDateUtils.formatTimeRange(startCal, null).ifBlank { "নির্ধারিত সময়ে" }
+            android.widget.Toast.makeText(context, "ক্লাসটি $startStr শুরু হবে।", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            courseViewModel.selectLesson(lesson)
+            navController.navigate(Routes.LESSON_DETAIL_PLAYER)
         }
     }
 
@@ -397,22 +431,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val phId = phaseId ?: ""
                     navController.navigate("report_card?programId=$pId&programTitle=$encTitle&phaseId=$phId")
                 },
-                onOpenLessonDetail = { lesson ->
-                    if (lesson.isExam) {
-                        val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
-                            ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
-                            ?: lesson.content_id?.takeIf { it.isNotBlank() }
-                            ?: lesson.id
-                        val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
-                        val chapter = lesson.subject_name ?: ""
-                        val encodedTitle = URLEncoder.encode(title, "UTF-8")
-                        val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
-                        navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
-                    } else {
-                        courseViewModel.selectLesson(lesson)
-                        navController.navigate(Routes.LESSON_DETAIL_PLAYER)
-                    }
-                },
+                onOpenLessonDetail = handleOpenLessonDetail,
                 onNavigateToExam = { sessionId, lessonId, title, chapter ->
                     val encodedTitle = URLEncoder.encode(title, "UTF-8")
                     val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
@@ -431,11 +450,23 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateToNotification = {
                     navController.navigate(Routes.NOTIFICATION_SETTINGS)
                 },
+                onNavigateToHeaderWallpaper = {
+                    navController.navigate(Routes.HEADER_WALLPAPER_SETTINGS)
+                },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
+                }
+            )
+        }
+
+        animatedComposable(Routes.HEADER_WALLPAPER_SETTINGS, anim = NavAnim.forward) {
+            HeaderWallpaperSettingsScreen(
+                sessionManager = sessionManager,
+                onBack = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -456,22 +487,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onBack = {
                     navController.popBackStack()
                 },
-                onOpenLessonDetail = { lesson ->
-                    if (lesson.isExam) {
-                        val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
-                            ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
-                            ?: lesson.content_id?.takeIf { it.isNotBlank() }
-                            ?: lesson.id
-                        val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "পরীক্ষা")
-                        val chapter = lesson.subject_name ?: ""
-                        val encodedTitle = URLEncoder.encode(title, "UTF-8")
-                        val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
-                        navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
-                    } else {
-                        courseViewModel.selectLesson(lesson)
-                        navController.navigate(Routes.LESSON_DETAIL_PLAYER)
-                    }
-                },
+                onOpenLessonDetail = handleOpenLessonDetail,
                 onNavigateToExam = { sessionId, lessonId, title, chapter ->
                     val encodedTitle = URLEncoder.encode(title, "UTF-8")
                     val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
@@ -632,10 +648,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val encodedColor = URLEncoder.encode(subjectColor ?: "", "UTF-8")
                     navController.navigate("animated_lesson_list/$cId?chapterName=$encodedName&subjectColor=$encodedColor&fromChapterPage=true")
                 },
-                onOpenLessonDetail = { lesson ->
-                    courseViewModel.selectLesson(lesson)
-                    navController.navigate(Routes.LESSON_DETAIL_PLAYER)
-                },
+                onOpenLessonDetail = handleOpenLessonDetail,
                 onPlayVideo = { videoUrl, title, subjectName, subjectColor, isLive ->
                     val encodedUrl = URLEncoder.encode(videoUrl, "UTF-8")
                     val encodedTitle = URLEncoder.encode(title, "UTF-8")
@@ -678,12 +691,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 isLessonLoading = courseUiState.isLessonDetailLoading,
                 subjectName = courseUiState.selectedSubjectTitle,
                 subjectColorHex = courseUiState.selectedSubjectColor,
-                socketManager = courseViewModel.liveSocketManager,
                 onRefreshLesson = {
                     courseViewModel.reloadSelectedLesson()
-                },
-                onJoinLiveClass = { lesson ->
-                    courseViewModel.joinLiveClass(lesson)
                 },
                 onNavigateToExam = { sessionId, lessonId, title, chapter ->
                     val encodedTitle = URLEncoder.encode(title, "UTF-8")
@@ -697,8 +706,23 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val encodedTitle = URLEncoder.encode(title, "UTF-8")
                     navController.navigate("animated_lesson_player?url=$encodedUrl&title=$encodedTitle")
                 },
+                onOpenChapterResources = {
+                    val chapterId = courseUiState.selectedLesson?.chapter_id?.takeIf { it.isNotBlank() }
+                        ?: courseUiState.selectedLesson?.live_class?.chapter_id
+                        ?: ""
+                    if (chapterId.isNotBlank()) {
+                        val encodedName = URLEncoder.encode(courseUiState.selectedSubjectTitle, "UTF-8")
+                        val encodedSubCode = URLEncoder.encode(courseUiState.selectedLesson?.subject_code ?: "", "UTF-8")
+                        val encodedPhase = URLEncoder.encode(courseUiState.selectedLesson?.phase_id ?: "", "UTF-8")
+                        navController.navigate("chapter_resources/$chapterId?name=$encodedName&subjectCode=$encodedSubCode&phaseId=$encodedPhase")
+                    } else {
+                        navController.navigate(Routes.SMART_NOTES)
+                    }
+                },
+                onOpenSubjectResources = {
+                    navController.navigate(Routes.SMART_NOTES)
+                },
                 onBack = {
-                    courseViewModel.disconnectLiveSocket()
                     navController.popBackStack()
                 }
             )
@@ -1138,6 +1162,35 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             ReportCardScreen(
                 viewModel = reportCardViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = Routes.LIVE_CLASS,
+            arguments = listOf(
+                navArgument("classId") { type = NavType.StringType },
+                navArgument("lessonId") { type = NavType.StringType },
+                navArgument("lessonTitle") { type = NavType.StringType; defaultValue = "" },
+                navArgument("subjectName") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val classId = backStackEntry.arguments?.getString("classId") ?: ""
+            val lessonId = backStackEntry.arguments?.getString("lessonId") ?: ""
+            val rawTitle = backStackEntry.arguments?.getString("lessonTitle") ?: ""
+            val rawSubject = backStackEntry.arguments?.getString("subjectName") ?: ""
+
+            val lessonTitle = try { URLDecoder.decode(rawTitle, "UTF-8") } catch (_: Exception) { rawTitle }
+            val subjectName = try { URLDecoder.decode(rawSubject, "UTF-8") } catch (_: Exception) { rawSubject }
+
+            com.example.liveclass.LiveClassPage(
+                classId = classId,
+                lessonId = lessonId,
+                lessonTitle = lessonTitle.ifBlank { "লাইভ ক্লাস" },
+                subjectName = subjectName.ifBlank { "সাধারণ" },
+                sessionManager = sessionManager,
                 onBack = {
                     navController.popBackStack()
                 }

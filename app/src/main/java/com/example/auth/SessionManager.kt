@@ -75,7 +75,26 @@ class SessionManager(context: Context) {
     }
 
     fun getAccessToken(): String? = sharedPreferences.getString("access_token", null)
-    fun getUserId(): String? = sharedPreferences.getString("user_id", null)
+    fun getUserId(): String? {
+        val stored = sharedPreferences.getString("user_id", null)
+        if (!stored.isNullOrBlank()) return stored
+        val token = getAccessToken()
+        if (!token.isNullOrBlank()) {
+            try {
+                val parts = token.split(".")
+                if (parts.size >= 2) {
+                    val decoded = String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP))
+                    val json = org.json.JSONObject(decoded)
+                    val aud = json.optString("aud", "")
+                    if (aud.isNotBlank()) {
+                        sharedPreferences.edit().putString("user_id", aud).apply()
+                        return aud
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return null
+    }
 
     fun setFcmToken(token: String) {
         sharedPreferences.edit()
@@ -124,15 +143,27 @@ class SessionManager(context: Context) {
             .apply()
     }
 
-    fun saveUserAcademicInfo(batchId: String?, className: String?, group: String?, vendor: String? = "BD") {
-        sharedPreferences.edit()
+    fun saveUserAcademicInfo(
+        batchId: String?,
+        className: String?,
+        group: String?,
+        vendor: String? = "BD",
+        passingYear: String? = null
+    ) {
+        val editor = sharedPreferences.edit()
             .putString("academic_batch_id", batchId)
             .putString("academic_class_name", className)
             .putString("academic_group", group)
             .putString("academic_vendor", vendor ?: "BD")
-            .apply()
+        if (!passingYear.isNullOrBlank()) {
+            editor.putString("academic_passing_year", passingYear)
+        }
+        editor.apply()
         _userProfileUpdateFlow.value = System.currentTimeMillis()
     }
+
+    fun getAcademicPassingYear(): String? =
+        sharedPreferences.getString("academic_passing_year", null)
 
     fun getUserBatchId(): String? = sharedPreferences.getString("academic_batch_id", null)
     fun getUserClassName(): String? = sharedPreferences.getString("academic_class_name", "C11")
@@ -215,6 +246,36 @@ class SessionManager(context: Context) {
         _themeModeFlow.value = mode
     }
 
+    // Header Wallpaper & Live Theme Management
+    private val _headerWallpaperFlow = kotlinx.coroutines.flow.MutableStateFlow(getHeaderWallpaperConfig())
+    val headerWallpaperFlow: kotlinx.coroutines.flow.StateFlow<com.example.ui.theme.HeaderWallpaperConfig> = _headerWallpaperFlow
+
+    fun getHeaderWallpaperConfig(): com.example.ui.theme.HeaderWallpaperConfig {
+        val type = sharedPreferences.getString("header_wallpaper_type", com.example.ui.theme.HeaderWallpaperConfig.PRESET_COSMIC) ?: com.example.ui.theme.HeaderWallpaperConfig.PRESET_COSMIC
+        val uri = sharedPreferences.getString("header_wallpaper_custom_uri", null)
+        val title = sharedPreferences.getString("header_wallpaper_custom_title", null)
+        val anim = sharedPreferences.getBoolean("header_wallpaper_anim_enabled", true)
+        val dim = sharedPreferences.getFloat("header_wallpaper_dim", 0.25f)
+        return com.example.ui.theme.HeaderWallpaperConfig(
+            type = type,
+            customUri = uri,
+            customTitle = title,
+            isAnimationEnabled = anim,
+            dimOpacity = dim
+        )
+    }
+
+    fun setHeaderWallpaperConfig(config: com.example.ui.theme.HeaderWallpaperConfig) {
+        sharedPreferences.edit()
+            .putString("header_wallpaper_type", config.type)
+            .putString("header_wallpaper_custom_uri", config.customUri)
+            .putString("header_wallpaper_custom_title", config.customTitle)
+            .putBoolean("header_wallpaper_anim_enabled", config.isAnimationEnabled)
+            .putFloat("header_wallpaper_dim", config.dimOpacity)
+            .apply()
+        _headerWallpaperFlow.value = config
+    }
+
     // Class Notification Lead Time (Default 25 minutes)
     private val _classNotificationLeadTimeFlow = kotlinx.coroutines.flow.MutableStateFlow(getClassNotificationLeadTimeMinutes())
     val classNotificationLeadTimeFlow: kotlinx.coroutines.flow.StateFlow<Int> = _classNotificationLeadTimeFlow
@@ -278,6 +339,43 @@ class SessionManager(context: Context) {
         val current = getDisabledAlarmIds().toMutableSet()
         if (disabled) current.add(id) else current.remove(id)
         sharedPreferences.edit().putStringSet("disabled_alarm_ids", current).apply()
+    }
+
+    // Custom Alarms Persistence
+    fun getCustomAlarms(): List<CustomAlarmData> {
+        val json = sharedPreferences.getString("custom_alarms_list", "[]") ?: "[]"
+        val list = mutableListOf<CustomAlarmData>()
+        try {
+            val array = org.json.JSONArray(json)
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(
+                    CustomAlarmData(
+                        id = obj.optString("id"),
+                        title = obj.optString("title"),
+                        message = obj.optString("message"),
+                        triggerTimeMs = obj.optLong("triggerTimeMs"),
+                        isEnabled = obj.optBoolean("isEnabled", true)
+                    )
+                )
+            }
+        } catch (_: Exception) {}
+        return list
+    }
+
+    fun saveCustomAlarms(list: List<CustomAlarmData>) {
+        val array = org.json.JSONArray()
+        for (item in list) {
+            val obj = org.json.JSONObject().apply {
+                put("id", item.id)
+                put("title", item.title)
+                put("message", item.message)
+                put("triggerTimeMs", item.triggerTimeMs)
+                put("isEnabled", item.isEnabled)
+            }
+            array.put(obj)
+        }
+        sharedPreferences.edit().putString("custom_alarms_list", array.toString()).apply()
     }
 
     // Account Completion Status
@@ -358,6 +456,7 @@ class SessionManager(context: Context) {
             .remove("academic_class_name")
             .remove("academic_group")
             .remove("academic_vendor")
+            .remove("academic_passing_year")
             .remove("user_first_name")
             .remove("user_last_name")
             .remove("user_avatar")
@@ -367,3 +466,11 @@ class SessionManager(context: Context) {
         _userProfileUpdateFlow.value = System.currentTimeMillis()
     }
 }
+
+data class CustomAlarmData(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val title: String,
+    val message: String,
+    val triggerTimeMs: Long,
+    val isEnabled: Boolean = true
+)

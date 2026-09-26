@@ -114,12 +114,7 @@ object RoutineDateUtils {
         }
 
         fun isLessonLiveNow(lesson: StudentLessonItem): Boolean {
-            if (lesson.isLiveNow) return true
-            if (lesson.isExam) return false
-            if (lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true)) return true
-            val startMs = getStartMs(lesson)
-            val endMs = getEndMs(lesson)
-            return (startMs != Long.MAX_VALUE && nowMs in (startMs - 5 * 60 * 1000L)..endMs)
+            return lesson.isLiveNow
         }
 
         fun isLessonPassed(lesson: StudentLessonItem): Boolean {

@@ -43,23 +43,24 @@ fun LessonTopicsAccordion(
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val topics = lesson?.live_class?.topics ?: emptyList()
+    val topics = lesson?.topics?.takeIf { it.isNotEmpty() }
+        ?: lesson?.live_class?.topics
+        ?: emptyList()
     val topicTitles = topics.map { it.displayTitle }.filter { it.isNotBlank() }
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color(0xFFF1F7FF) // Soft ice-blue from screenshot
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        border = BorderStroke(
+            1.dp,
+            Color(0xFFDCEAFE)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                RoundedCornerShape(16.dp)
-            )
     ) {
         Column(
             modifier = Modifier.fillMaxWidth()
@@ -73,41 +74,21 @@ fun LessonTopicsAccordion(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onToggleExpand() }
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(subjectThemeColor.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MenuBook,
-                            contentDescription = null,
-                            tint = subjectThemeColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Text(
-                        text = "ক্লাসের বিষয়বস্তু",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                Text(
+                    text = "ক্লাসের বিষয়বস্তু",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2563EB) // Blue from screenshot
+                )
 
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isExpanded) "সংকোচন করুন" else "প্রসারিত করুন",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = Color(0xFF2563EB),
                     modifier = Modifier.rotate(rotationState)
                 )
             }
@@ -120,33 +101,33 @@ fun LessonTopicsAccordion(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 20.dp, end = 20.dp, bottom = 16.dp)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                 ) {
                     HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        color = Color(0xFFBFDBFE).copy(alpha = 0.5f),
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
 
                     if (topicTitles.isNotEmpty()) {
-                        topicTitles.forEachIndexed { index, topic ->
+                        topicTitles.forEach { topic ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
+                                    .padding(vertical = 5.dp),
                                 verticalAlignment = Alignment.Top,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(top = 7.dp)
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(subjectThemeColor)
+                                Text(
+                                    text = "✦",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE11D48) // Rose/magenta bullet
                                 )
                                 Text(
                                     text = topic,
                                     fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF1E293B),
                                     lineHeight = 20.sp
                                 )
                             }
@@ -155,21 +136,21 @@ fun LessonTopicsAccordion(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 5.dp),
                             verticalAlignment = Alignment.Top,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(top = 7.dp)
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(subjectThemeColor)
-                                )
+                            Text(
+                                text = "✦",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE11D48)
+                            )
                             Text(
                                 text = lesson?.title ?: "এই ক্লাসের সকল মূল আলোচ্য বিষয় অন্তর্ভুক্ত রয়েছে",
                                 fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF1E293B),
                                 lineHeight = 20.sp
                             )
                         }
@@ -181,7 +162,7 @@ fun LessonTopicsAccordion(
 }
 
 /**
- * Slide and Documents List Section for Lesson Details.
+ * Slide and Documents List Section for Lesson Details ("ক্লাস রিসোর্সেস").
  */
 @Composable
 fun LessonDocumentsSection(
@@ -191,6 +172,8 @@ fun LessonDocumentsSection(
     isLoading: Boolean = false,
     onRefreshLesson: (() -> Unit)?,
     onViewAttachment: (LessonAttachmentItem) -> Unit,
+    onOpenChapterResources: (() -> Unit)? = null,
+    onOpenSubjectResources: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isRefreshingSlide by remember { mutableStateOf(false) }
@@ -201,7 +184,7 @@ fun LessonDocumentsSection(
             .padding(horizontal = 16.dp)
     ) {
         Text(
-            text = "লেকচার স্লাইড ও ডকুমেন্টস",
+            text = "ক্লাস রিসোর্সেস",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -211,136 +194,130 @@ fun LessonDocumentsSection(
 
         val allAttachments = lesson?.allAttachments ?: emptyList()
         val fallbackSlideUrl = lesson?.resolvedSlideUrl ?: lesson?.live_class?.lectureSlideUrl
-
-        if (isLoading) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                ),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.5.dp,
-                        color = MaterialTheme.colorScheme.primary
+        val primarySlideAttachment = remember(allAttachments, fallbackSlideUrl) {
+            allAttachments.firstOrNull { it.file_type.equals("pdf", ignoreCase = true) || it.downloadUrl?.contains(".pdf", ignoreCase = true) == true }
+                ?: allAttachments.firstOrNull()
+                ?: fallbackSlideUrl?.takeIf { it.isNotBlank() }?.let {
+                    LessonAttachmentItem(
+                        title = "লেকচার স্লাইড (PDF)",
+                        url = it,
+                        file_type = "pdf"
                     )
-                    Column {
-                        Text(
-                            text = "লেকচার স্লাইড ও ডকুমেন্টস খোঁজা হচ্ছে...",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "সার্ভার থেকে ডেটা লোড করা হচ্ছে",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
-            }
-        } else if (allAttachments.isNotEmpty()) {
-            val downloadManager = remember { com.example.download.AppFileDownloadManager.getInstance(context) }
-            allAttachments.forEach { attachment ->
-                val downloadUrl = attachment.downloadUrl
-                val pdfId = remember(downloadUrl) { "pdf_" + (downloadUrl?.hashCode().toString()) }
-                val downloadedPdf by downloadManager.getDownloadedItemById(pdfId).collectAsState(initial = null)
+        }
 
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                            RoundedCornerShape(16.dp)
-                        )
-                        .clickable {
-                            if (!downloadUrl.isNullOrBlank()) {
-                                onViewAttachment(attachment)
-                            } else {
-                                Toast.makeText(context, "এই ফাইলের লিঙ্ক উপলব্ধ নেই", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                ) {
+        // Primary Resource Card (লেকচার স্লাইড)
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (isLoading) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.5.dp,
+                            color = Color(0xFF2563EB)
+                        )
+                        Column {
+                            Text(
+                                text = "লেকচার স্লাইড খোঁজা হচ্ছে...",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "সার্ভার থেকে ডেটা লোড করা হচ্ছে",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else if (primarySlideAttachment != null && !primarySlideAttachment.downloadUrl.isNullOrBlank()) {
+                    val downloadManager = remember { com.example.download.AppFileDownloadManager.getInstance(context) }
+                    val downloadUrl = primarySlideAttachment.downloadUrl
+                    val pdfId = remember(downloadUrl) { "pdf_" + (downloadUrl?.hashCode().toString()) }
+                    val downloadedPdf by downloadManager.getDownloadedItemById(pdfId).collectAsState(initial = null)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onViewAttachment(primarySlideAttachment)
+                            }
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
                             modifier = Modifier.weight(1f)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
+                                    .size(44.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0xFFE11D48).copy(alpha = 0.12f)),
+                                    .background(Color(0xFFEBF3FE)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.PictureAsPdf,
-                                    contentDescription = "পিডিএফ স্লাইড",
-                                    tint = Color(0xFFE11D48),
+                                    imageVector = Icons.Default.CoPresent,
+                                    contentDescription = "লেকচার স্লাইড",
+                                    tint = Color(0xFF2563EB),
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
 
                             Column {
                                 Text(
-                                    text = attachment.displayTitle,
-                                    fontSize = 14.sp,
+                                    text = "লেকচার স্লাইড",
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = when (downloadedPdf?.status) {
                                         com.example.database.DownloadedItemEntity.STATUS_COMPLETED -> "ইন-অ্যাপ সংরক্ষিত • অফলাইনে দেখতে ট্যাপ করুন"
                                         com.example.database.DownloadedItemEntity.STATUS_DOWNLOADING -> "ডাউনলোড হচ্ছে... (${downloadedPdf?.progressPercent}%)"
-                                        else -> "ইন-অ্যাপ দেখুন • অফলাইন ডাউনলোড"
+                                        else -> primarySlideAttachment.displayTitle.takeIf { it.isNotBlank() && it != "লেকচার স্লাইড" } ?: "পিডিএফ স্লাইড ও নোটস পড়ুন"
                                     },
                                     fontSize = 12.sp,
-                                    color = if (downloadedPdf?.status == com.example.database.DownloadedItemEntity.STATUS_COMPLETED) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+                                    color = if (downloadedPdf?.status == com.example.database.DownloadedItemEntity.STATUS_COMPLETED) Color(0xFF10B981) else Color(0xFF2563EB),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (!downloadUrl.isNullOrBlank()) {
                                 when (downloadedPdf?.status) {
                                     com.example.database.DownloadedItemEntity.STATUS_DOWNLOADING -> {
                                         CircularProgressIndicator(
                                             progress = { downloadedPdf?.progressFraction ?: 0f },
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = Color(0xFF2563EB),
                                             strokeWidth = 2.5.dp,
                                             modifier = Modifier.size(20.dp).padding(2.dp)
                                         )
@@ -348,7 +325,7 @@ fun LessonDocumentsSection(
                                     com.example.database.DownloadedItemEntity.STATUS_COMPLETED -> {
                                         IconButton(
                                             onClick = {
-                                                Toast.makeText(context, "এই ফাইলটি ইতোমধ্যে অ্যাপে ডাউনলোড করা রয়েছে", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "এই ফাইলটি ইতোমধ্যে ডাউনলোড করা রয়েছে", Toast.LENGTH_SHORT).show()
                                             }
                                         ) {
                                             Icon(
@@ -362,13 +339,13 @@ fun LessonDocumentsSection(
                                     else -> {
                                         IconButton(
                                             onClick = {
-                                                downloadFile(context, downloadUrl, attachment.displayTitle)
+                                                downloadFile(context, downloadUrl, primarySlideAttachment.displayTitle)
                                             }
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Download,
                                                 contentDescription = "ডাউনলোড",
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = Color(0xFF2563EB),
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
@@ -379,184 +356,230 @@ fun LessonDocumentsSection(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                                 contentDescription = "দেখুন",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(15.dp)
                             )
+                        }
+                    }
+
+                    // Any extra attachments (e.g. solution sheets, exercises)
+                    val extraAttachments = allAttachments.filter { it.downloadUrl != primarySlideAttachment.downloadUrl }
+                    if (extraAttachments.isNotEmpty()) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                            thickness = 0.8.dp
+                        )
+                        extraAttachments.forEach { extra ->
+                            val extraUrl = extra.downloadUrl
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onViewAttachment(extra) }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Description,
+                                        contentDescription = null,
+                                        tint = Color(0xFFE11D48),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = extra.displayTitle,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Empty state row when slide hasn't been uploaded yet
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CoPresent,
+                                    contentDescription = "লেকচার স্লাইড",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = "লেকচার স্লাইড",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "এই ক্লাসের স্লাইড শীঘ্রই আপলোড করা হবে",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (onRefreshLesson != null) {
+                            IconButton(
+                                onClick = {
+                                    if (!isRefreshingSlide) {
+                                        isRefreshingSlide = true
+                                        onRefreshLesson.invoke()
+                                        Toast.makeText(context, "স্লাইড আপডেট চেক করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                        coroutineScope.launch {
+                                            delay(1500)
+                                            isRefreshingSlide = false
+                                        }
+                                    }
+                                }
+                            ) {
+                                if (isRefreshingSlide) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "রিফ্রেশ",
+                                        tint = Color(0xFF2563EB),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-        } else if (!fallbackSlideUrl.isNullOrBlank()) {
-            val singleAttachment = LessonAttachmentItem(
-                title = "লেকচার স্লাইড (PDF)",
-                url = fallbackSlideUrl,
-                file_type = "pdf"
-            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Side-by-side resources cards (চ্যাপ্টার রিসোর্সেস & সাবজেক্ট রিসোর্সেস)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // 1. চ্যাপ্টার রিসোর্সেস
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                ),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        RoundedCornerShape(16.dp)
-                    )
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable {
-                        onViewAttachment(singleAttachment)
+                        if (onOpenChapterResources != null) {
+                            onOpenChapterResources.invoke()
+                        } else {
+                            Toast.makeText(context, "চ্যাপ্টার রিসোর্সেস লোড করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+                        }
                     }
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(14.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFFE11D48).copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CoPresent,
-                                contentDescription = "লেকচার স্লাইড",
-                                tint = Color(0xFFE11D48),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        Column {
-                            Text(
-                                text = "লেকচার স্লাইড",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "ইন-অ্যাপ স্লাইড ভিউ বা ডাউনলোড করুন",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconButton(
-                            onClick = {
-                                downloadFile(context, fallbackSlideUrl, "লেকচার স্লাইড")
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "ডাউনলোড",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                            contentDescription = "ওপেন করুন",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = Color(0xFFD97706), // Warm amber
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "চ্যাপ্টার রিসোর্সেস",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
-        } else {
-            // Fallback state when server hasn't provided a slide yet
+
+            // 2. সাবজেক্ট রিসোর্সেস
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 border = BorderStroke(
                     1.dp,
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                 ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MenuBook,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "এই ক্লাসের লেকচার স্লাইড প্রক্রিয়াধীন",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "লাইভ ক্লাসের পর সাধারণত শিক্ষক স্লাইড আপলোড করেন। নতুন স্লাইড এসেছে কিনা চেক করতে রিফ্রেশ করুন।",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    if (onRefreshLesson != null) {
-                        FilledTonalButton(
-                            onClick = {
-                                if (!isRefreshingSlide) {
-                                    isRefreshingSlide = true
-                                    onRefreshLesson.invoke()
-                                    Toast.makeText(context, "স্লাইড আপডেট চেক করা হচ্ছে...", Toast.LENGTH_SHORT).show()
-                                    coroutineScope.launch {
-                                        delay(1500)
-                                        isRefreshingSlide = false
-                                    }
-                                }
-                            },
-                            enabled = !isRefreshingSlide
-                        ) {
-                            if (isRefreshingSlide) {
-                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                            }
-                            Text("এখনই চেক করুন")
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable {
+                        if (onOpenSubjectResources != null) {
+                            onOpenSubjectResources.invoke()
+                        } else {
+                            Toast.makeText(context, "সাবজেক্ট রিসোর্সেস লোড করা হচ্ছে...", Toast.LENGTH_SHORT).show()
                         }
                     }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LibraryBooks,
+                        contentDescription = null,
+                        tint = Color(0xFF059669), // Emerald
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "সাবজেক্ট রিসোর্সেস",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

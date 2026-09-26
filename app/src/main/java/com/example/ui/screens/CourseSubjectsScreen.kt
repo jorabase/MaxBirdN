@@ -59,6 +59,7 @@ fun CourseSubjectsScreen(
     onCourseSelected: ((EnrolledProgram) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedProgram = uiState.selectedCourseProgram
 
@@ -156,6 +157,11 @@ fun CourseSubjectsScreen(
                             viewModel.openCourse(converted)
                             onCourseSelected?.invoke(converted)
                         },
+                        onEnrollOtherCourse = { otherProgram ->
+                            viewModel.enrollInCourse(otherProgram, context) { newlyEnrolled ->
+                                onCourseSelected?.invoke(newlyEnrolled)
+                            }
+                        },
                         onRefresh = {
                             viewModel.fetchEnrolledPrograms()
                         }
@@ -214,6 +220,7 @@ private fun MyCoursesListView(
     uiState: CourseUiState,
     onOpenEnrolledCourse: (EnrolledProgram) -> Unit,
     onOpenOtherCourse: (OtherProgram) -> Unit,
+    onEnrollOtherCourse: (OtherProgram) -> Unit,
     onRefresh: () -> Unit
 ) {
     val enrolled = uiState.enrolledPrograms
@@ -421,7 +428,9 @@ private fun MyCoursesListView(
                     ) { program ->
                         FreeCourseBannerCard(
                             program = program,
-                            onOpen = { onOpenOtherCourse(program) }
+                            isEnrolling = uiState.enrollingProgramId == program.id,
+                            onOpen = { onOpenOtherCourse(program) },
+                            onEnroll = { onEnrollOtherCourse(program) }
                         )
                     }
                 }
@@ -445,7 +454,9 @@ private fun MyCoursesListView(
                     ) { program ->
                         OtherCourseBannerCard(
                             program = program,
-                            onOpen = { onOpenOtherCourse(program) }
+                            isEnrolling = uiState.enrollingProgramId == program.id,
+                            onOpen = { onOpenOtherCourse(program) },
+                            onEnroll = { onEnrollOtherCourse(program) }
                         )
                     }
                 }
@@ -541,7 +552,7 @@ private fun EnrolledCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Centered Banner Graphic Box with clean rounded frame (NO white misty overlay!)
+                // Centered Banner Graphic Box
                 if (!program.banner_url.isNullOrBlank()) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -579,7 +590,7 @@ private fun EnrolledCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Full Width High-Contrast Action Button: "শেখা চালিয়ে যাও"
+                // Full Width High-Contrast Action Button: "শেখো"
                 Surface(
                     shape = RoundedCornerShape(26.dp),
                     color = Color.White,
@@ -596,8 +607,15 @@ private fun EnrolledCourseBannerCard(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.MenuBook,
+                            contentDescription = null,
+                            tint = Color(0xFF0F172A),
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "শেখা চালিয়ে যাও",
+                            text = "শেখো",
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
@@ -619,7 +637,9 @@ private fun EnrolledCourseBannerCard(
 @Composable
 private fun FreeCourseBannerCard(
     program: OtherProgram,
-    onOpen: () -> Unit
+    isEnrolling: Boolean,
+    onOpen: () -> Unit,
+    onEnroll: () -> Unit
 ) {
     val context = LocalContext.current
     val title = program.title_bn ?: "ফ্রি কোর্স"
@@ -711,41 +731,18 @@ private fun FreeCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Dual Action Buttons: "শেখো" (Direct Open) and "ভর্তি হন" (Enroll)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    // Button 1: শেখো
                     Surface(
                         shape = RoundedCornerShape(26.dp),
-                        color = Color.White.copy(alpha = 0.15f),
-                        border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.7f)),
+                        color = Color.White.copy(alpha = 0.2f),
+                        border = BorderStroke(1.2.dp, Color.White),
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(26.dp))
-                            .clickable(onClick = onOpen)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = "বিস্তারিত দেখো",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 1
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(26.dp),
-                        color = Color.White,
-                        shadowElevation = 3.dp,
-                        modifier = Modifier
-                            .weight(1.3f)
                             .clip(RoundedCornerShape(26.dp))
                             .clickable(onClick = onOpen)
                     ) {
@@ -756,20 +753,69 @@ private fun FreeCourseBannerCard(
                                 .fillMaxWidth()
                                 .padding(vertical = 12.dp)
                         ) {
-                            Text(
-                                text = "ফ্রি'তে শুরু করো",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF15803D),
-                                maxLines = 1
+                            Icon(
+                                imageVector = Icons.Default.MenuBook,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = Color(0xFF15803D),
-                                modifier = Modifier.size(15.dp)
+                            Text(
+                                text = "শেখো",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1
                             )
+                        }
+                    }
+
+                    // Button 2: ভর্তি হন
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = Color.White,
+                        shadowElevation = 3.dp,
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .clip(RoundedCornerShape(26.dp))
+                            .clickable(enabled = !isEnrolling, onClick = onEnroll)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                        ) {
+                            if (isEnrolling) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFF15803D),
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ভর্তি হচ্ছে...",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF15803D)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.CardGiftcard,
+                                    contentDescription = null,
+                                    tint = Color(0xFF15803D),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ভর্তি হন",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF15803D),
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
@@ -781,11 +827,14 @@ private fun FreeCourseBannerCard(
 @Composable
 private fun OtherCourseBannerCard(
     program: OtherProgram,
-    onOpen: () -> Unit
+    isEnrolling: Boolean,
+    onOpen: () -> Unit,
+    onEnroll: () -> Unit
 ) {
     val context = LocalContext.current
     val title = program.title_bn ?: "কোর্স"
     val cardGradient = remember(program.id, title) { getCourseGradient(title) }
+    val trialDays = program.trial_duration ?: 3
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -804,6 +853,40 @@ private fun OtherCourseBannerCard(
                 .padding(20.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
+                // Badge Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFF59E0B).copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = Color(0xFFFBBF24),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "${toBengaliDigits(trialDays)} দিনের ফ্রি ট্রায়াল",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFEF3C7)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
                 if (!program.banner_url.isNullOrBlank()) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -840,35 +923,92 @@ private fun OtherCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Surface(
-                    shape = RoundedCornerShape(26.dp),
-                    color = Color.White,
-                    shadowElevation = 3.dp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
-                        .clickable(onClick = onOpen)
+                // Dual Action Buttons: "শেখো" (Direct Open) and "ভর্তি হন" (Enroll)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
+                    // Button 1: শেখো
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = Color.White.copy(alpha = 0.2f),
+                        border = BorderStroke(1.2.dp, Color.White),
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 13.dp)
+                            .weight(1f)
+                            .clip(RoundedCornerShape(26.dp))
+                            .clickable(onClick = onOpen)
                     ) {
-                        Text(
-                            text = "বিস্তারিত দেখো",
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = Color(0xFF0F172A),
-                            modifier = Modifier.size(17.dp)
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MenuBook,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "শেখো",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    // Button 2: ভর্তি হন
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = Color.White,
+                        shadowElevation = 3.dp,
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .clip(RoundedCornerShape(26.dp))
+                            .clickable(enabled = !isEnrolling, onClick = onEnroll)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                        ) {
+                            if (isEnrolling) {
+                                CircularProgressIndicator(
+                                    color = Color(0xFF0F172A),
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ভর্তি হচ্ছে...",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color(0xFFD97706),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ভর্তি হন",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A),
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             }

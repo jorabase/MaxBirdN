@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -63,6 +64,7 @@ fun SettingsScreen(
     onNavigateToDownloads: () -> Unit = {},
     onNavigateToReportCard: () -> Unit = {},
     onNavigateToNotification: () -> Unit = {},
+    onNavigateToHeaderWallpaper: () -> Unit = {},
     onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -131,19 +133,40 @@ fun SettingsScreen(
                     .clickable { onNavigateToEditProfile() },
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                shadowElevation = 2.dp
+                border = BorderStroke(
+                    1.dp,
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                    )
+                ),
+                shadowElevation = 4.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(60.dp)
+                            .size(62.dp)
+                            .shadow(
+                                elevation = 10.dp,
+                                shape = CircleShape,
+                                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                            )
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
@@ -339,6 +362,19 @@ fun SettingsScreen(
 
             // App Preferences & Theme Section
             SettingsSection(title = "অ্যাপ প্রেফারেন্স ও নোটিফিকেশন") {
+                // হেডার ও লাইভ ওয়ালপেপার
+                SettingsRowItem(
+                    icon = Icons.Default.Wallpaper,
+                    iconTint = Color(0xFFEC4899),
+                    iconBg = Color(0xFFFCE7F3),
+                    title = "হেডার ও লাইভ ওয়ালপেপার",
+                    subtitle = "হোম পেজের ব্যাকগ্রাউন্ড থিম ও নিজস্ব ওয়ালপেপার পরিবর্তন",
+                    badge = "থিম",
+                    onClick = onNavigateToHeaderWallpaper
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
                 SettingsRowItem(
                     icon = Icons.Default.NotificationsActive,
                     iconTint = Color(0xFFD97706),
@@ -481,20 +517,32 @@ private fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 4.dp)
-        )
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.3.sp
+            )
+        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            shadowElevation = 1.dp
+            shadowElevation = 3.dp
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 content()
@@ -554,15 +602,16 @@ private fun SettingsRowItem(
 
         if (badge != null) {
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
             ) {
                 Text(
                     text = badge,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                 )
             }
         }

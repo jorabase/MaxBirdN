@@ -168,6 +168,8 @@ fun NotificationSettingsScreen(
 
     var selectedLeadTime by remember { mutableIntStateOf(sessionManager.getClassNotificationLeadTimeMinutes()) }
     var disabledAlarmIds by remember { mutableStateOf(sessionManager.getDisabledAlarmIds()) }
+    var customAlarms by remember { mutableStateOf(sessionManager.getCustomAlarms()) }
+    var showAddCustomDialog by remember { mutableStateOf(false) }
 
     val homeUiState = homeViewModel?.uiState?.collectAsState()?.value
     val selectedSubjectCodes = homeUiState?.selectedSubjectCodes ?: emptySet()
@@ -189,8 +191,8 @@ fun NotificationSettingsScreen(
                 val startMs = lesson.classStartMs
                 val endMs = lesson.classEndMs
 
-                // Filter out past lessons
-                if (startMs == Long.MAX_VALUE || endMs < now) {
+                // Filter out past lessons (if start time has already passed)
+                if (startMs == Long.MAX_VALUE || startMs <= now) {
                     return@mapNotNull null
                 }
 
@@ -725,6 +727,67 @@ fun NotificationSettingsScreen(
             }
 
             // ==========================================
+            // CUSTOM ALARMS & TEST NOTIFICATIONS CARD
+            // ==========================================
+            CustomAlarmSectionCard(
+                context = context,
+                customAlarms = customAlarms,
+                isAllEnabled = isAllEnabled,
+                onAddClick = { showAddCustomDialog = true },
+                onToggleAlarm = { alarm, enabled ->
+                    val updated = customAlarms.map {
+                        if (it.id == alarm.id) it.copy(isEnabled = enabled) else it
+                    }
+                    customAlarms = updated
+                    sessionManager.saveCustomAlarms(updated)
+                    if (enabled) {
+                        if (alarm.triggerTimeMs > System.currentTimeMillis()) {
+                            ClassAlarmScheduler.scheduleCustomAlarm(
+                                context,
+                                alarm.id,
+                                alarm.title,
+                                alarm.message,
+                                alarm.triggerTimeMs
+                            )
+                            Toast.makeText(context, "কাস্টম রিমাইন্ডার সক্রিয় করা হয়েছে ⏰", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        ClassAlarmScheduler.cancelCustomAlarm(context, alarm.id)
+                        Toast.makeText(context, "কাস্টম রিমাইন্ডার বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDeleteAlarm = { alarm ->
+                    ClassAlarmScheduler.cancelCustomAlarm(context, alarm.id)
+                    val updated = customAlarms.filter { it.id != alarm.id }
+                    customAlarms = updated
+                    sessionManager.saveCustomAlarms(updated)
+                    Toast.makeText(context, "রিমাইন্ডার মুছে ফেলা হয়েছে 🗑️", Toast.LENGTH_SHORT).show()
+                },
+                onQuickTest = { delaySec ->
+                    val triggerTimeMs = System.currentTimeMillis() + (delaySec * 1000L)
+                    val newAlarm = com.example.auth.CustomAlarmData(
+                        id = "test_${System.currentTimeMillis()}",
+                        title = "⏰ টেস্ট রিমাইন্ডার নোটিফিকেশন",
+                        message = "অভিনন্দন! আপনার নোটিফিকেশন সার্ভিস চমৎকারভাবে কাজ করছে! 🚀",
+                        triggerTimeMs = triggerTimeMs,
+                        isEnabled = true
+                    )
+                    val updated = customAlarms + newAlarm
+                    customAlarms = updated
+                    sessionManager.saveCustomAlarms(updated)
+                    ClassAlarmScheduler.scheduleCustomAlarm(
+                        context,
+                        newAlarm.id,
+                        newAlarm.title,
+                        newAlarm.message,
+                        triggerTimeMs
+                    )
+                    val label = if (delaySec < 60) "${delaySec.toString().toBengaliDigits()} সেকেন্ড" else "${(delaySec / 60).toString().toBengaliDigits()} মিনিট"
+                    Toast.makeText(context, "⏰ $label পর নোটিফিকেশন আসবে! অপেক্ষা করুন...", Toast.LENGTH_LONG).show()
+                }
+            )
+
+            // ==========================================
             // SCHEDULED ALARMS LIST CARD
             // ==========================================
             Surface(
@@ -971,6 +1034,33 @@ fun NotificationSettingsScreen(
             Spacer(modifier = Modifier.height(30.dp))
         }
 
+        if (showAddCustomDialog) {
+            AddCustomAlarmDialog(
+                onDismiss = { showAddCustomDialog = false },
+                onSave = { title, message, triggerTimeMs ->
+                    val newAlarm = com.example.auth.CustomAlarmData(
+                        id = "custom_${System.currentTimeMillis()}",
+                        title = title,
+                        message = message,
+                        triggerTimeMs = triggerTimeMs,
+                        isEnabled = true
+                    )
+                    val updated = customAlarms + newAlarm
+                    customAlarms = updated
+                    sessionManager.saveCustomAlarms(updated)
+                    ClassAlarmScheduler.scheduleCustomAlarm(
+                        context,
+                        newAlarm.id,
+                        newAlarm.title,
+                        newAlarm.message,
+                        triggerTimeMs
+                    )
+                    showAddCustomDialog = false
+                    Toast.makeText(context, "কাস্টম অ্যালার্ম সেট করা হয়েছে! ⏰", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+
         if (homeViewModel != null && homeUiState?.showSubjectFilterDialog == true) {
             com.example.ui.components.SubjectFilterDialog(
                 courseTitle = homeUiState.activeProgram?.title_bn ?: "সাবজেক্ট সাজাও",
@@ -1039,4 +1129,319 @@ private fun PreferenceSwitchRow(
             modifier = Modifier.height(28.dp)
         )
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CustomAlarmSectionCard(
+    context: Context,
+    customAlarms: List<com.example.auth.CustomAlarmData>,
+    isAllEnabled: Boolean,
+    onAddClick: () -> Unit,
+    onToggleAlarm: (com.example.auth.CustomAlarmData, Boolean) -> Unit,
+    onDeleteAlarm: (com.example.auth.CustomAlarmData) -> Unit,
+    onQuickTest: (seconds: Int) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFE0F2FE)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AddAlert,
+                            contentDescription = null,
+                            tint = Color(0xFF0284C7),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "কাস্টম টেস্ট ও রিমাইন্ডার অ্যালার্ম",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "নিজের মত সময় সেট করে নোটিফিকেশন পরীক্ষা করুন",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Quick Test Buttons Row
+            Text(
+                text = "⚡ কুইক টেস্ট অপশন:",
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                AssistChip(
+                    onClick = { onQuickTest(10) },
+                    label = { Text("⚡ ১০ সেকেন্ড পর", fontSize = 12.sp) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = Color(0xFFFEF3C7),
+                        labelColor = Color(0xFFD97706)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFFCD34D))
+                )
+
+                AssistChip(
+                    onClick = { onQuickTest(60) },
+                    label = { Text("⏰ ১ মিনিট পর", fontSize = 12.sp) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = Color(0xFFE0F2FE),
+                        labelColor = Color(0xFF0284C7)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFBAE6FD))
+                )
+
+                AssistChip(
+                    onClick = { onQuickTest(300) },
+                    label = { Text("🔔 ৫ মিনিট পর", fontSize = 12.sp) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = Color(0xFFF3E8FF),
+                        labelColor = Color(0xFF7C3AED)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFDDD6FE))
+                )
+
+                Button(
+                    onClick = onAddClick,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("➕ নতুন রিমাইন্ডার", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (customAlarms.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+
+                Text(
+                    text = "সেট করা কাস্টম অ্যালার্মসমূহ (${customAlarms.size.toString().toBengaliDigits()} টি)",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val now = System.currentTimeMillis()
+                    customAlarms.forEach { alarm ->
+                        val isExpired = alarm.triggerTimeMs <= now
+                        val remainingSec = ((alarm.triggerTimeMs - now) / 1000).coerceAtLeast(0)
+                        val remainingText = if (isExpired) "ট্রিগার হয়েছে / অতিবাহিত"
+                        else if (remainingSec < 60) "আর ${remainingSec.toString().toBengaliDigits()} সেকেন্ড বাকি"
+                        else "আর ${(remainingSec / 60).toString().toBengaliDigits()} মিনিট বাকি"
+
+                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = alarm.triggerTimeMs }
+                        val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+                        val min = cal.get(java.util.Calendar.MINUTE)
+                        val displayHour = if (hour % 12 == 0) 12 else hour % 12
+                        val period = if (hour < 12) "সকাল" else if (hour < 17) "দুপুর" else "রাত"
+                        val timeFormatted = "$period ${displayHour.toString().padStart(2, '0').toBengaliDigits()}:${min.toString().padStart(2, '0').toBengaliDigits()}"
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isExpired) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            else Color(0xFFF0FDF4),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isExpired) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                else Color(0xFFBBF7D0)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isExpired) Color.Gray.copy(alpha = 0.2f) else Color(0xFF16A34A).copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isExpired) Icons.Default.NotificationsOff else Icons.Default.NotificationsActive,
+                                        contentDescription = null,
+                                        tint = if (isExpired) Color.Gray else Color(0xFF16A34A),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = alarm.title,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = alarm.message,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "⏰ $timeFormatted • $remainingText",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isExpired) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF15803D)
+                                    )
+                                }
+
+                                Switch(
+                                    checked = alarm.isEnabled && !isExpired,
+                                    onCheckedChange = { onToggleAlarm(alarm, it) },
+                                    enabled = !isExpired && isAllEnabled,
+                                    modifier = Modifier.height(26.dp)
+                                )
+
+                                IconButton(
+                                    onClick = { onDeleteAlarm(alarm) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "মুছে ফেলুন",
+                                        tint = Color(0xFFDC2626),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AddCustomAlarmDialog(
+    onDismiss: () -> Unit,
+    onSave: (title: String, message: String, triggerTimeMs: Long) -> Unit
+) {
+    var title by remember { mutableStateOf("পদার্থবিজ্ঞান কাস্টম রিমাইন্ডার") }
+    var message by remember { mutableStateOf("পড়ার সময় হয়েছে, রিভিশন শুরু করুন! 🚀") }
+    var selectedMinutesDelay by remember { mutableIntStateOf(1) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AlarmAdd,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text("কাস্টম রিমাইন্ডার যোগ করুন", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("রিমাইন্ডারের শিরোনাম") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    label = { Text("বিবরণ / নোট") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2
+                )
+
+                Text(
+                    text = "কত মিনিট পর নোটিফিকেশন চান?",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                val delayOptions = listOf(1, 2, 5, 10, 15, 30, 60)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    delayOptions.forEach { mins ->
+                        val isSelected = selectedMinutesDelay == mins
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedMinutesDelay = mins },
+                            label = {
+                                Text(
+                                    if (mins < 60) "${mins.toString().toBengaliDigits()} মি." else "১ ঘণ্টা",
+                                    fontSize = 12.sp
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isBlank()) return@Button
+                    val triggerTimeMs = System.currentTimeMillis() + (selectedMinutesDelay * 60 * 1000L)
+                    onSave(title, message, triggerTimeMs)
+                }
+            ) {
+                Text("অ্যালার্ম সেট করুন")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("বাতিল")
+            }
+        }
+    )
 }

@@ -67,14 +67,10 @@ fun ChapterLessonsScreen(
 
     // Explicitly Separate Live Classes, Recorded Classes, and Exams
     val liveLessons = remember(uiState.lessons) {
-        uiState.lessons.filter { !it.isExam && (it.isLive || it.isLiveNow || it.isUpcoming || it.content_type?.contains("LiveClass", ignoreCase = true) == true) }
+        uiState.lessons.filter { !it.isExam && (it.isLiveNow || it.isUpcoming) }
     }
     val recordedLessons = remember(uiState.lessons) {
-        uiState.lessons.filter {
-            !it.isExam && !it.isLiveNow && !it.isUpcoming &&
-                    (it.isRecorded || it.hasRecording || it.content_type?.contains("Record", ignoreCase = true) == true ||
-                     it.content_type?.contains("Video", ignoreCase = true) == true || it.content_type?.contains("Live", ignoreCase = true) != true)
-        }
+        uiState.lessons.filter { !it.isExam && !it.isLiveNow && !it.isUpcoming }
     }
     val examLessons = remember(uiState.lessons) {
         uiState.lessons.filter { it.isExam }
@@ -387,13 +383,12 @@ fun ChapterLessonsScreen(
                                                 chapterId = lesson.chapter_id ?: ""
                                             )
                                         }
-                                        viewModel.selectLesson(lesson)
-
                                         val isExamLesson = lesson.isExam ||
                                                 lesson.content_type?.contains("EXAM", ignoreCase = true) == true ||
                                                 lesson.class_type?.contains("EXAM", ignoreCase = true) == true
 
                                         if (isExamLesson && onNavigateToExam != null) {
+                                            viewModel.selectLesson(lesson)
                                             val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
@@ -403,6 +398,7 @@ fun ChapterLessonsScreen(
                                         } else if (onOpenLessonDetail != null) {
                                             onOpenLessonDetail(lesson)
                                         } else {
+                                            viewModel.selectLesson(lesson)
                                             val videoUrl = lesson.resolvedVideoUrl
                                                 ?: lesson.live_class?.resolvedVideoUrl
                                                 ?: lesson.live_class?.recording_url

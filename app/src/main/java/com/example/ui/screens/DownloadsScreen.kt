@@ -191,37 +191,17 @@ fun DownloadsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "অফলাইন ডাউনলোড",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-
-                                if (isOfflineOnly) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFFFEE2E2)
-                                    ) {
-                                        Text(
-                                            text = "অফলাইন মোড",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFB91C1C),
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
+                            Text(
+                                text = "অফলাইন ডাউনলোড",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
 
                             Text(
-                                text = if (isOfflineOnly) "ইন্টারনেট ছাড়া সংরক্ষিত কন্টেন্ট উপভোগ করুন" else "অ্যাপের ভেতর সুরক্ষিতভাবে সংরক্ষিত",
+                                text = "সংরক্ষিত ভিডিও ও লেকচার নোটস",
                                 fontSize = 12.sp,
-                                color = if (isOfflineOnly) Color(0xFFE11D48) else Color(0xFF10B981),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -389,103 +369,7 @@ fun DownloadsScreen(
                     }
                 }
 
-                // ==========================================
-                // OFFLINE MODE INFORMATIVE BANNER CARD
-                // ==========================================
-                if (isOfflineOnly) {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFFFF1F2),
-                        border = BorderStroke(1.dp, Color(0xFFFECDD3)),
-                        shadowElevation = 1.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFFEE2E2)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.WifiOff,
-                                        contentDescription = null,
-                                        tint = Color(0xFFE11D48),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "ইন্টারনেট সংযোগ নেই",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF9F1239)
-                                    )
-                                    Text(
-                                        text = "আপনি বর্তমানে অফলাইন মোডে আছেন। আপনার ডাউনলোড করা ফাইলগুলো ইন্টারনেট ছাড়াই উপভোগ করতে পারবেন।",
-                                        fontSize = 11.5.sp,
-                                        color = Color(0xFF881337),
-                                        lineHeight = 16.sp
-                                    )
-                                }
-                            }
 
-                            // Retry Button
-                            Button(
-                                onClick = {
-                                    if (!isCheckingNetworkManually) {
-                                        isCheckingNetworkManually = true
-                                        coroutineScope.launch {
-                                            val reachable = NetworkUtils.isInternetReachable(context, timeoutMs = 2500)
-                                            isCheckingNetworkManually = false
-                                            if (reachable) {
-                                                Toast.makeText(context, "✅ ইন্টারনেট সংযোগ সচল হয়েছে!", Toast.LENGTH_SHORT).show()
-                                                onNavigateOnline?.invoke()
-                                            } else {
-                                                Toast.makeText(context, "⚠️ এখনও কোনো ইন্টারনেট সংযোগ পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    }
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFBE123C),
-                                    contentColor = Color.White
-                                ),
-                                modifier = Modifier.fillMaxWidth().height(38.dp),
-                                enabled = !isCheckingNetworkManually
-                            ) {
-                                if (isCheckingNetworkManually) {
-                                    CircularProgressIndicator(
-                                        strokeWidth = 2.dp,
-                                        color = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("যাচাই করা হচ্ছে...", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("ইন্টারনেট সংযোগ চেক করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
 
                 // ==========================================
                 // DOWNLOADS LIST
@@ -707,11 +591,7 @@ fun EmptyDownloadsView(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = if (isOfflineOnly) {
-                "বর্তমানে আপনার অফলাইন স্টোরেজে কোনো ডাউনলোড নেই। ইন্টারনেট সংযোগ চালু করে ক্লাস বা নোট ডাউনলোড করতে পারবেন।"
-            } else {
-                "ক্লাস বা স্মার্ট নোট দেখার সময় অফলাইন ডাউনলোড বাটনে চাপ দিয়ে ইন্টারনেট ছাড়াই দেখার জন্য সংরক্ষণ করুন।"
-            },
+            text = "সংরক্ষিত ফাইল এখানে দেখা যাবে",
             fontSize = 13.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

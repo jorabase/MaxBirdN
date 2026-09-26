@@ -97,7 +97,6 @@ import com.example.course.CourseRepository
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.player.ShikhoPlayerManager
-import com.example.player.HmsLiveSocketManager
 import com.example.player.PlayerClassType
 import com.example.player.VideoTrackQuality
 import com.example.ui.components.*
@@ -118,11 +117,11 @@ fun LessonDetailPlayerScreen(
     subjectName: String,
     subjectColorHex: String?,
     isLessonLoading: Boolean = false,
-    socketManager: HmsLiveSocketManager? = null,
     onRefreshLesson: (() -> Unit)? = null,
-    onJoinLiveClass: ((StudentLessonItem) -> Unit)? = null,
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
     onPlayAnimatedLesson: ((videoUrl: String, title: String) -> Unit)? = null,
+    onOpenChapterResources: (() -> Unit)? = null,
+    onOpenSubjectResources: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val isExamLesson = lesson?.isExam == true ||
@@ -181,66 +180,7 @@ fun LessonDetailPlayerScreen(
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Live Class Detection & Info
-    val isLive = remember(lesson) {
-        lesson?.isLive == true
-    }
-    val isLiveOngoing = remember(lesson) {
-        lesson?.live_class?.is_on_going == true || lesson?.content_type?.contains("LIVE", ignoreCase = true) == true
-    }
-    val joinLink = lesson?.live_class?.join_link
-    val hmsRoomId = lesson?.live_class?.hms_room_id
-    val liveProvider = lesson?.live_class?.provider ?: "100ms Live"
-
-    val effectiveMeetingUrl = remember(lesson?.live_class?.liveMeetingUrl, joinLink, hmsRoomId, lesson?.live_class?.hms_token, lesson?.id) {
-        val classId = lesson?.live_class?.id ?: lesson?.content_id ?: lesson?.id ?: ""
-        val lessonId = lesson?.id ?: ""
-
-        when {
-            // ১. Shikho সার্ভার থেকে সরাসরি পাওয়া আসল join_link
-            !joinLink.isNullOrBlank() && !joinLink.contains("live.shikho.com") -> {
-                val separator = if (joinLink.contains("?")) "&" else "?"
-                if (!lesson?.live_class?.hms_token.isNullOrBlank() && !joinLink.contains("token=")) {
-                    "$joinLink${separator}token=${lesson.live_class.hms_token}"
-                } else {
-                    joinLink
-                }
-            }
-            // ২. Shikho-র আসল ওয়েব লাইভ ক্লাস পেজ (যেখানে লাইভ ফ্রন্টএন্ড রান হয়)
-            classId.isNotBlank() -> {
-                "https://app.shikho.com/student/live-class/$classId?lesson_id=$lessonId"
-            }
-            // ৩. 100ms রুম আইডি থাকলে অফিসিয়াল 100ms মিটিং লিংক
-            !hmsRoomId.isNullOrBlank() -> {
-                val tokenParam = if (!lesson?.live_class?.hms_token.isNullOrBlank()) "?token=${lesson.live_class.hms_token}" else ""
-                "https://app.100ms.live/meeting/${hmsRoomId.trim()}$tokenParam"
-            }
-            else -> ""
-        }
-    }
-
-    // Live Join State
-    var isLiveJoined by remember(lesson?.id) { mutableStateOf(true) }
-
-    // Auto trigger joinLiveClass if it's a live class and joinLink or hmsRoomId is missing
-    LaunchedEffect(lesson?.id, isLive) {
-        if (isLive && lesson != null && (lesson.live_class?.join_link.isNullOrBlank() || lesson.live_class?.hms_room_id.isNullOrBlank()) && onJoinLiveClass != null) {
-            onJoinLiveClass.invoke(lesson)
-        }
-    }
-
-    // Auto bypass LiveGetStartedScreen directly into live stream
-    if (isLive && !isLiveJoined) {
-        isLiveJoined = true
-    }
-
-    var livePlayerMode by remember(isLive) { mutableStateOf("STREAM") }
-
-    val effectiveSocketManager = socketManager ?: remember { HmsLiveSocketManager() }
-    val viewerCount by effectiveSocketManager.viewerCount.collectAsState()
-    val isHandRaised by effectiveSocketManager.isHandRaised.collectAsState()
-    val pinnedMessage by effectiveSocketManager.pinnedMessage.collectAsState()
-    val activePoll by effectiveSocketManager.activePoll.collectAsState()
+    var livePlayerMode by remember { mutableStateOf("STREAM") }
 
     // Parse Subject Color
     val subjectThemeColor = remember(subjectColorHex) {
@@ -255,17 +195,11 @@ fun LessonDetailPlayerScreen(
         }
     }
 
-    val candidateStreams = remember(lesson, lesson?.live_class?.hms_room_id, lesson?.live_class?.recording_url, lesson?.live_class?.playback_url, isLive) {
+    val candidateStreams = remember(lesson, lesson?.live_class?.recording_url, lesson?.live_class?.playback_url) {
         val raw = lesson?.candidateStreamUrls?.filter { it.isNotBlank() && it != "null" } ?: emptyList()
-        if (isLive) {
-            val liveHls = raw.filter { it.contains("100ms.live") }
-            val other = raw.filterNot { it.contains("100ms.live") }
-            (liveHls + other).distinct()
-        } else {
-            raw.distinct()
-        }
+        raw.distinct()
     }
-    var currentStreamIndex by remember(lesson?.id, lesson?.live_class?.hms_room_id) { mutableIntStateOf(0) }
+    var currentStreamIndex by remember(lesson?.id) { mutableIntStateOf(0) }
     var activeStreamUrl by remember(candidateStreams, currentStreamIndex) {
         mutableStateOf(
             candidateStreams.getOrNull(currentStreamIndex)
@@ -275,30 +209,15 @@ fun LessonDetailPlayerScreen(
         )
     }
 
-    // Resolve class type: Animated vs Recorded Lecture vs Live
-    val classType = remember(lesson, activeStreamUrl, isLive) {
+    // Resolve class type: Animated vs Recorded Lecture
+    val classType = remember(lesson, activeStreamUrl) {
         PlayerClassType.resolve(
-            isLive = isLive,
+            isLive = false,
             contentType = lesson?.content_type,
             classType = lesson?.class_type ?: lesson?.live_class?.class_type,
             title = lesson?.title,
             url = activeStreamUrl
         )
-    }
-
-    // Connect 100ms WebSocket when Live Class is active with valid HMS token
-    LaunchedEffect(isLive, lesson?.live_class?.hms_token, lesson?.live_class?.hms_room_id) {
-        val token = lesson?.live_class?.hms_token
-        val roomId = lesson?.live_class?.hms_room_id
-        if (isLive && !token.isNullOrBlank()) {
-            effectiveSocketManager.connect(token, roomId)
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            effectiveSocketManager.disconnect()
-        }
     }
 
     LaunchedEffect(candidateStreams) {
@@ -332,6 +251,67 @@ fun LessonDetailPlayerScreen(
     var showQualityDialog by remember { mutableStateOf(false) }
     var availableQualities by remember { mutableStateOf<List<VideoTrackQuality>>(emptyList()) }
     var selectedQualityLabel by remember { mutableStateOf("অটো") }
+
+    // Video Playback Progress & Resume Management
+    val videoProgressManager = remember { com.example.player.VideoProgressManager.getInstance(context) }
+    val videoKey = remember(lesson, activeStreamUrl) {
+        videoProgressManager.generateVideoKey(
+            lessonId = lesson?.id,
+            contentId = lesson?.content_id,
+            remoteUrl = activeStreamUrl,
+            title = lesson?.title
+        )
+    }
+
+    var hasAutoResumed by remember(videoKey) { mutableStateOf(false) }
+    var resumeNotificationText by remember { mutableStateOf<String?>(null) }
+
+    // Quick One-Tap Mute / Unmute State
+    var isMuted by remember { mutableStateOf(false) }
+    var previousVolume by remember { mutableFloatStateOf(1f) }
+
+    // Audio-Only Listening Mode State ("শোনার বাটন" / Screen-off Audio)
+    var isAudioOnlyMode by remember { mutableStateOf(false) }
+
+    // ExoPlayer Instance with Shikho CDN headers & DefaultTrackSelector for HLS quality selection
+    val trackSelector = remember { DefaultTrackSelector(context) }
+    val exoPlayer = remember(classType) {
+        ShikhoPlayerManager.buildExoPlayer(context, trackSelector, classType).apply {
+            repeatMode = if (classType == PlayerClassType.ANIMATED) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        }
+    }
+
+    val onToggleMute: () -> Unit = {
+        if (isMuted) {
+            exoPlayer.volume = if (previousVolume > 0f) previousVolume else 1f
+            isMuted = false
+            Toast.makeText(context, "🔊 সাউন্ড চালু করা হয়েছে", Toast.LENGTH_SHORT).show()
+        } else {
+            previousVolume = if (exoPlayer.volume > 0f) exoPlayer.volume else 1f
+            exoPlayer.volume = 0f
+            isMuted = true
+            Toast.makeText(context, "🔇 সাউন্ড বন্ধ করা হয়েছে (Muted)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onToggleAudioOnlyMode: () -> Unit = {
+        isAudioOnlyMode = !isAudioOnlyMode
+        val act = context as? Activity
+        if (isAudioOnlyMode) {
+            act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Toast.makeText(context, "অডিও মোড চালু হয়েছে! এখন স্ক্রিন বন্ধ করলেও লেকচার শুনতে পারবেন। 🎧", Toast.LENGTH_SHORT).show()
+        } else {
+            act?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Toast.makeText(context, "ভিডিও মোডে ফিরে আসা হয়েছে", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val onRestartFromBeginning: () -> Unit = {
+        exoPlayer.seekTo(0L)
+        resumeNotificationText = null
+        videoProgressManager.resetProgress(videoKey)
+        Toast.makeText(context, "শুরু থেকে প্লে করা হচ্ছে", Toast.LENGTH_SHORT).show()
+    }
 
     val toggleResizeMode: () -> Unit = {
         resizeMode = when (resizeMode) {
@@ -416,19 +396,12 @@ fun LessonDetailPlayerScreen(
         )
     }
 
-    // ExoPlayer Instance with Shikho CDN headers & DefaultTrackSelector for HLS quality selection
-    val trackSelector = remember { DefaultTrackSelector(context) }
-    val exoPlayer = remember(classType) {
-        ShikhoPlayerManager.buildExoPlayer(context, trackSelector, classType).apply {
-            repeatMode = if (classType == PlayerClassType.ANIMATED) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        }
-    }
-
     // Initialize media source when activeStreamUrl or mode changes
-    LaunchedEffect(activeStreamUrl, isLive, livePlayerMode) {
+    LaunchedEffect(activeStreamUrl, livePlayerMode) {
+        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl")
         playbackError = null
         playbackErrorDetails = null
-        if (livePlayerMode == "MEETING" || livePlayerMode == "WEB_PLAYER") {
+        if (livePlayerMode == "WEB_PLAYER") {
             // When in WebView mode, stop ExoPlayer to prevent background stream fetching
             try {
                 exoPlayer.stop()
@@ -460,7 +433,7 @@ fun LessonDetailPlayerScreen(
 
             isBuffering = true
             try {
-                val mediaSource = ShikhoPlayerManager.createMediaSource(urlToPlay, isLive = isLive)
+                val mediaSource = ShikhoPlayerManager.createMediaSource(urlToPlay, isLive = false)
                 exoPlayer.setMediaSource(mediaSource)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
@@ -570,17 +543,70 @@ fun LessonDetailPlayerScreen(
         }
     }
 
-    // Periodic Progress Tracking Loop
-    LaunchedEffect(isPlaying, isSeeking) {
-        while (isPlaying && !isSeeking) {
-            currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
-            bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
-            totalDuration = exoPlayer.duration.coerceAtLeast(0L)
+    val saveCurrentProgress: () -> Unit = {
+        try {
+            val pos = if (currentPosition > 0L) currentPosition else exoPlayer.currentPosition
+            val dur = if (totalDuration > 0L) totalDuration else exoPlayer.duration
+            if (pos > 2000L) {
+                videoProgressManager.saveProgress(
+                    videoKey = videoKey,
+                    lessonId = lesson?.id,
+                    title = lesson?.title ?: "ক্লাস লেকচার",
+                    subjectName = subjectName,
+                    courseId = lesson?.phase_id,
+                    positionMs = pos,
+                    durationMs = dur
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
+    // Auto-Resume from Last Saved Playback Position (Even across app restarts & syllabus changes)
+    LaunchedEffect(exoPlayer, videoKey, isBuffering) {
+        if (!isBuffering && !hasAutoResumed) {
+            val savedProgress = videoProgressManager.getProgress(videoKey)
+            if (savedProgress != null && savedProgress.isEligibleForResume) {
+                hasAutoResumed = true
+                exoPlayer.seekTo(savedProgress.positionMs)
+                val timeFormatted = ShikhoPlayerManager.formatTime(savedProgress.positionMs, true)
+                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                coroutineScope.launch {
+                    delay(8000)
+                    resumeNotificationText = null
+                }
+            }
+        }
+    }
+
+    // Continuous Progress Tracking & Persistence Loop
+    LaunchedEffect(exoPlayer, videoKey, isPlaying) {
+        var tick = 0
+        while (true) {
+            if (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.playbackState == Player.STATE_BUFFERING) {
+                if (!isSeeking) {
+                    currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
+                }
+                bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
+                totalDuration = exoPlayer.duration.coerceAtLeast(0L)
+
+                tick++
+                // Persist progress every 2 seconds while actively playing
+                if (tick % 4 == 0 && currentPosition > 2000L && isPlaying) {
+                    saveCurrentProgress()
+                }
+            }
             delay(500)
         }
     }
 
-    // Controls Auto-Hide Timer
+    // Save Progress on screen exit / dispose
+    DisposableEffect(videoKey) {
+        onDispose {
+            saveCurrentProgress()
+        }
+    }
+
+    // Controls Auto-Hide Timer (Resets cleanly on state changes)
     LaunchedEffect(areControlsVisible, isPlaying) {
         if (areControlsVisible && isPlaying && !isSeeking) {
             delay(4000)
@@ -588,8 +614,7 @@ fun LessonDetailPlayerScreen(
         }
     }
 
-    // Lifecycle Observer (Pause on background, Resume on foreground)
-
+    // Lifecycle Observer (Pause on background UNLESS in Audio Mode, Resume on foreground)
     val mediaSession = remember(exoPlayer) {
         try {
             MediaSession.Builder(context, exoPlayer)
@@ -607,24 +632,31 @@ fun LessonDetailPlayerScreen(
         }
     }
     
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, isAudioOnlyMode) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> {
-                    val activity = context as? Activity
-                    if (activity?.isInPictureInPictureMode != true) {
-                        exoPlayer.pause()
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    saveCurrentProgress()
+                    if (isAudioOnlyMode) {
+                        // Keep playing audio uninterrupted when screen is turned off or app backgrounded!
+                    } else {
+                        val activity = context as? Activity
+                        if (activity?.isInPictureInPictureMode != true) {
+                            exoPlayer.pause()
+                        }
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    if (isPlaying) exoPlayer.play()
+                    if (isPlaying && !isAudioOnlyMode) {
+                        exoPlayer.play()
+                    }
                 }
-                Lifecycle.Event.ON_STOP -> exoPlayer.pause()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            saveCurrentProgress()
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -722,10 +754,10 @@ fun LessonDetailPlayerScreen(
                     detectTapGestures(
                         onDoubleTap = { offset ->
                             if (offset.x < componentWidth * 0.4f) {
-                                val target = (exoPlayer.currentPosition - 5000L).coerceAtLeast(0L)
+                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
                                 exoPlayer.seekTo(target)
                             } else if (offset.x > componentWidth * 0.6f) {
-                                val target = (exoPlayer.currentPosition + 5000L).coerceAtMost(totalDuration)
+                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(totalDuration)
                                 exoPlayer.seekTo(target)
                             } else {
                                 if (isPlaying) exoPlayer.pause() else exoPlayer.play()
@@ -757,25 +789,13 @@ fun LessonDetailPlayerScreen(
 
     // UI Structure
     if (isFullscreen) {
-        // FULLSCREEN VIDEO PLAYER / MEETING
+        // FULLSCREEN VIDEO PLAYER
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            if (isLive && effectiveMeetingUrl.isNotBlank()) {
-                LiveMeetingWebView(
-                    meetingUrl = effectiveMeetingUrl,
-                    studentName = sessionManager.getUserFirstName() ?: "Student",
-                    authToken = sessionManager.getAccessToken(),
-                    onStreamDiscovered = { discoveredM3u8 ->
-                        activeStreamUrl = discoveredM3u8
-                        livePlayerMode = "STREAM"
-                    },
-                    modifier = if (activeStreamUrl.isNotBlank() && livePlayerMode == "STREAM") Modifier.size(1.dp) else Modifier.fillMaxSize()
-                )
-            }
-            if (activeStreamUrl.isNotBlank() || (!isLive && candidateStreams.isNotEmpty())) {
+            if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) {
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
@@ -795,6 +815,22 @@ fun LessonDetailPlayerScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // Ambient Audio Only Mode Screen
+                if (isAudioOnlyMode) {
+                    AmbientAudioVisualizerOverlay(
+                        title = lesson?.title ?: "রেকর্ডকৃত ক্লাস",
+                        subjectName = subjectName,
+                        isPlaying = isPlaying,
+                        isMuted = isMuted,
+                        onTogglePlayPause = {
+                            if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                        },
+                        onToggleMute = onToggleMute,
+                        onExitAudioMode = { onToggleAudioOnlyMode() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
                 // Fullscreen Player Controls Overlay
                 val seekStep = if (classType == PlayerClassType.ANIMATED) 5000L else 10000L
                 PlayerControlsOverlay(
@@ -808,14 +844,7 @@ fun LessonDetailPlayerScreen(
                     areControlsVisible = areControlsVisible,
                     isFullscreen = true,
                     playbackSpeed = playbackSpeed,
-                    isLive = isLive,
-                    viewerCount = if (isLive) viewerCount else null,
                     classType = classType,
-                    hasMeeting = effectiveMeetingUrl.isNotBlank(),
-                    onSwitchToMeeting = {
-                        exoPlayer.pause()
-                        livePlayerMode = "MEETING"
-                    },
                     onTogglePlayPause = {
                         if (isPlaying) exoPlayer.pause() else exoPlayer.play()
                     },
@@ -852,6 +881,12 @@ fun LessonDetailPlayerScreen(
                     onDownloadClick = handleDownloadVideo,
                     resizeMode = resizeMode,
                     onToggleResizeMode = toggleResizeMode,
+                    isMuted = isMuted,
+                    onToggleMute = onToggleMute,
+                    isAudioOnlyMode = isAudioOnlyMode,
+                    onToggleAudioOnlyMode = onToggleAudioOnlyMode,
+                    resumeNotificationText = resumeNotificationText,
+                    onRestartFromBeginning = onRestartFromBeginning,
                     onPipClick = { enterPipMode() },
                     onBack = { toggleFullscreen() }
                 )
@@ -899,18 +934,6 @@ fun LessonDetailPlayerScreen(
                         .aspectRatio(16f / 9f)
                         .background(Color.Black)
                 ) {
-                    if (isLive && effectiveMeetingUrl.isNotBlank()) {
-                        LiveMeetingWebView(
-                            meetingUrl = effectiveMeetingUrl,
-                            studentName = sessionManager.getUserFirstName() ?: "Student",
-                            authToken = sessionManager.getAccessToken(),
-                            onStreamDiscovered = { discoveredM3u8 ->
-                                activeStreamUrl = discoveredM3u8
-                                livePlayerMode = "STREAM"
-                            },
-                            modifier = if (activeStreamUrl.isNotBlank() && livePlayerMode == "STREAM") Modifier.size(1.dp) else Modifier.fillMaxSize()
-                        )
-                    }
                     if (livePlayerMode == "WEB_PLAYER") {
                         val webStreamUrl = activeStreamUrl
                         if (webStreamUrl.isNotBlank()) {
@@ -928,7 +951,7 @@ fun LessonDetailPlayerScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                    } else if (activeStreamUrl.isNotBlank() || (!isLive && candidateStreams.isNotEmpty())) {
+                    } else if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) {
                         AndroidView(
                             factory = { ctx ->
                                 PlayerView(ctx).apply {
@@ -948,6 +971,22 @@ fun LessonDetailPlayerScreen(
                             modifier = Modifier.fillMaxSize()
                         )
 
+                        // Ambient Audio Mode Visualizer Screen in Portrait
+                        if (isAudioOnlyMode) {
+                            AmbientAudioVisualizerOverlay(
+                                title = lesson?.title ?: "ক্লাস",
+                                subjectName = subjectName,
+                                isPlaying = isPlaying,
+                                isMuted = isMuted,
+                                onTogglePlayPause = {
+                                    if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                },
+                                onToggleMute = onToggleMute,
+                                onExitAudioMode = { onToggleAudioOnlyMode() },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
                         // If playbackError is present, show a sleek diagnostic overlay on top of the player!
                         if (playbackError != null) {
                             val slideUrlForError = lesson?.resolvedSlideUrl
@@ -955,7 +994,6 @@ fun LessonDetailPlayerScreen(
                             PlayerErrorOverlay(
                                 playbackError = playbackError ?: "ক্লাস লোড ব্যর্থ হয়েছে",
                                 playbackErrorDetails = playbackErrorDetails,
-                                isLive = isLive,
                                 slideUrl = slideUrlForError,
                                 onRefreshLesson = onRefreshLesson,
                                 onRetryPlayback = {
@@ -984,14 +1022,7 @@ fun LessonDetailPlayerScreen(
                                 areControlsVisible = areControlsVisible,
                                 isFullscreen = false,
                                 playbackSpeed = playbackSpeed,
-                                isLive = isLive,
-                                viewerCount = if (isLive) viewerCount else null,
                                 classType = classType,
-                                hasMeeting = effectiveMeetingUrl.isNotBlank(),
-                                onSwitchToMeeting = {
-                                    exoPlayer.pause()
-                                    livePlayerMode = "MEETING"
-                                },
                                 onTogglePlayPause = {
                                     if (isPlaying) exoPlayer.pause() else exoPlayer.play()
                                 },
@@ -1028,6 +1059,12 @@ fun LessonDetailPlayerScreen(
                                 onDownloadClick = handleDownloadVideo,
                                 resizeMode = resizeMode,
                                 onToggleResizeMode = toggleResizeMode,
+                                isMuted = isMuted,
+                                onToggleMute = onToggleMute,
+                                isAudioOnlyMode = isAudioOnlyMode,
+                                onToggleAudioOnlyMode = onToggleAudioOnlyMode,
+                                resumeNotificationText = resumeNotificationText,
+                                onRestartFromBeginning = onRestartFromBeginning,
                                 onPipClick = { enterPipMode() },
                                 onBack = {
                                     exoPlayer.stop()
@@ -1070,41 +1107,18 @@ fun LessonDetailPlayerScreen(
                                 )
                             }
                         }
-                    } else if (!isLive) {
+                    } else {
                         // Empty / No Direct Stream State Placeholder with Diagnostics
                         val slideUrlForEmpty = lesson?.resolvedSlideUrl
                             ?: lesson?.live_class?.lectureSlideUrl
                         LessonStreamPlaceholder(
-                            isLive = false,
                             lesson = lesson,
                             slideUrl = slideUrlForEmpty,
-                            onJoinLiveClass = onJoinLiveClass,
                             onRefreshLesson = onRefreshLesson,
                             onViewSlide = { item -> viewingSlideItem = item },
                             onBack = onBack
                         )
                     }
-                }
-
-                // Live Class Active Room Banner & Control Card (if live)
-                if (isLive) {
-                    LiveClassRoomBanner(
-                        isLiveOngoing = isLiveOngoing,
-                        liveProvider = liveProvider,
-                        hmsRoomId = hmsRoomId,
-                        livePlayerMode = livePlayerMode,
-                        effectiveMeetingUrl = effectiveMeetingUrl,
-                        onTogglePlayerMode = {
-                            if (livePlayerMode == "MEETING") {
-                                livePlayerMode = "STREAM"
-                                exoPlayer.play()
-                            } else {
-                                exoPlayer.pause()
-                                livePlayerMode = "MEETING"
-                            }
-                        },
-                        onRefreshLesson = onRefreshLesson
-                    )
                 }
 
                 // 2. Class Header & Info Section
@@ -1129,7 +1143,7 @@ fun LessonDetailPlayerScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 4. "লেকচার স্লাইডস ও ডকুমেন্টস"
+                // 4. "ক্লাস রিসোর্সেস"
                 LessonDocumentsSection(
                     lesson = lesson,
                     context = context,
@@ -1138,7 +1152,9 @@ fun LessonDetailPlayerScreen(
                     onRefreshLesson = onRefreshLesson,
                     onViewAttachment = { attachment ->
                         viewingSlideItem = attachment
-                    }
+                    },
+                    onOpenChapterResources = onOpenChapterResources,
+                    onOpenSubjectResources = onOpenSubjectResources
                 )
 
                 // 5. "🎬 অ্যানিমেটেড লেসন" (Horizontal Scroll)
@@ -1290,29 +1306,24 @@ fun LessonAnimatedLessonsSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "🎬 অ্যানিমেটেড লেসন",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                if (animatedTopics.isNotEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = themeColor.copy(alpha = 0.12f)
-                    ) {
-                        Text(
-                            text = "${toBengaliDigits(animatedTopics.size)}টি",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = themeColor,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                        )
-                    }
+            Text(
+                text = "অ্যানিমেটেড লেসন",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            if (animatedTopics.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = themeColor.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "${toBengaliDigits(animatedTopics.size)}টি",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = themeColor,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
                 }
             }
         }
@@ -1339,7 +1350,10 @@ fun LessonAnimatedLessonsSection(
                 )
             }
         } else {
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
             LazyRow(
+                state = listState,
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -1364,6 +1378,32 @@ fun LessonAnimatedLessonsSection(
                     )
                 }
             }
+
+            // Dot indicators below the LazyRow
+            if (animatedTopics.size > 1) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val firstVisible = listState.firstVisibleItemIndex
+                    val displayCount = animatedTopics.size.coerceAtMost(8)
+                    repeat(displayCount) { index ->
+                        val isSelected = index == (firstVisible % displayCount)
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 2.5.dp)
+                                .height(4.dp)
+                                .width(if (isSelected) 14.dp else 5.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(
+                                    if (isSelected) themeColor else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1378,96 +1418,92 @@ fun AnimatedLessonMiniCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier
-            .width(200.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .width(230.dp)
+            .height(140.dp)
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                    .data(thumbnailUrl?.takeIf { it.isNotBlank() } ?: R.drawable.placeholder_animated)
+                    .crossfade(true)
+                    .error(R.drawable.placeholder_animated)
+                    .placeholder(R.drawable.placeholder_animated)
+                    .build(),
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Dark gradient overlay covering the whole card with heavy darkness at the bottom
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(Color(0xFF1E293B))
-            ) {
-                AsyncImage(
-                    model = coil.request.ImageRequest.Builder(LocalContext.current)
-                        .data(thumbnailUrl?.takeIf { it.isNotBlank() } ?: R.drawable.placeholder_animated)
-                        .crossfade(true)
-                        .error(R.drawable.placeholder_animated)
-                        .placeholder(R.drawable.placeholder_animated)
-                        .build(),
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Dark overlay gradient
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.15f),
+                                Color.Black.copy(alpha = 0.35f),
+                                Color.Black.copy(alpha = 0.85f)
                             )
                         )
-                )
+                    )
+            )
 
-                // Serial badge
-                if (serialNo.isNotBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(bottomEnd = 10.dp, topStart = 14.dp),
-                        color = themeColor,
-                        modifier = Modifier.align(Alignment.TopStart)
-                    ) {
-                        Text(
-                            text = serialNo,
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                        )
-                    }
-                }
-
-                // Center Play Icon
+            // Serial badge (Top-Left)
+            if (serialNo.isNotBlank()) {
                 Surface(
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.6f),
-                    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.85f)),
-                    modifier = Modifier
-                        .size(36.dp)
-                        .align(Alignment.Center)
+                    shape = RoundedCornerShape(bottomEnd = 10.dp, topStart = 16.dp),
+                    color = themeColor,
+                    modifier = Modifier.align(Alignment.TopStart)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Text(
+                        text = serialNo,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
                 }
             }
 
-            Column(
+            // Center Play Icon (Circular white background with dark play arrow)
+            Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.95f),
+                shadowElevation = 4.dp,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(10.dp)
+                    .size(40.dp)
+                    .align(Alignment.Center)
             ) {
-                Text(
-                    text = title,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "প্লে করুন",
+                        tint = Color(0xFF1E293B),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
+
+            // Title positioned at the bottom over the dark gradient
+            Text(
+                text = title,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            )
         }
     }
 }

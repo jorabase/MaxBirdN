@@ -409,7 +409,8 @@ data class UpcomingLessonsPhaseWisePayload(
 
 @JsonClass(generateAdapter = true)
 data class StudentSpecificLessonsResponse(
-    val data: StudentSpecificLessonsData?
+    val data: StudentSpecificLessonsData? = null,
+    val errors: List<GraphQlError>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -433,7 +434,9 @@ data class StudentLessonItem(
     val end_time: String? = null,
     val subject_id: String? = null,
     val subject_name: String? = null,
+    val subject_code: String? = null,
     val chapter_id: String? = null,
+    val chapter_name: String? = null,
     val batch_id: String? = null,
     val program_id: String? = null,
     val color_code: String? = null,
@@ -517,16 +520,47 @@ data class StudentLessonItem(
     val isLiveNow: Boolean
         get() {
             if (isExam) return false
+
+            // Explicitly not live if completed, ended, recorded, attended, or missed
+            if (user_activity_state.equals("COMPLETED", true) ||
+                user_activity_state.equals("ENDED", true) ||
+                user_activity_state.equals("RECORDED", true) ||
+                user_activity_state.equals("ATTENDED", true) ||
+                user_activity_state.equals("MISSED", true)
+            ) {
+                return false
+            }
+
+            // If live_class object explicitly says ongoing is false
+            if (live_class?.is_on_going == false) {
+                return false
+            }
+
+            // If content type is recorded class or video
+            if (content_type?.equals("RecordedClass", ignoreCase = true) == true ||
+                content_type?.equals("Video", ignoreCase = true) == true ||
+                content_type?.equals("Record", ignoreCase = true) == true
+            ) {
+                return false
+            }
+
+            if (hasRecording) {
+                return false
+            }
+
             if (live_class?.is_on_going == true || user_activity_state.equals("LIVE", ignoreCase = true)) {
                 return true
             }
+
             val startMs = classStartMs
             val endMs = classEndMs
-            if (startMs != Long.MAX_VALUE) {
+            if (startMs != Long.MAX_VALUE && endMs != Long.MAX_VALUE) {
                 val now = System.currentTimeMillis()
-                // Active from 5 mins before start time until the official end time
-                return now >= (startMs - 5 * 60 * 1000L) && now <= endMs
+                if (now in (startMs - 5 * 60 * 1000L)..endMs) {
+                    return live_class?.is_on_going != false
+                }
             }
+
             return false
         }
 
@@ -534,6 +568,15 @@ data class StudentLessonItem(
         get() {
             if (isExam) return false
             if (isLiveNow) return false
+            if (user_activity_state.equals("COMPLETED", true) ||
+                user_activity_state.equals("ENDED", true) ||
+                user_activity_state.equals("RECORDED", true) ||
+                user_activity_state.equals("ATTENDED", true) ||
+                user_activity_state.equals("MISSED", true) ||
+                live_class?.is_on_going == false
+            ) {
+                return false
+            }
             val startMs = classStartMs
             if (startMs != Long.MAX_VALUE) {
                 return System.currentTimeMillis() < (startMs - 5 * 60 * 1000L)
@@ -544,6 +587,13 @@ data class StudentLessonItem(
     val isLive: Boolean
         get() {
             if (isExam) return false
+            if (live_class?.is_on_going == false) return false
+            if (user_activity_state.equals("COMPLETED", true) ||
+                user_activity_state.equals("ENDED", true) ||
+                user_activity_state.equals("RECORDED", true) ||
+                user_activity_state.equals("ATTENDED", true) ||
+                user_activity_state.equals("MISSED", true)
+            ) return false
             val endMs = classEndMs
             if (endMs != Long.MAX_VALUE && System.currentTimeMillis() > endMs) {
                 return false
@@ -552,15 +602,7 @@ data class StudentLessonItem(
         }
 
     val isRecorded: Boolean
-        get() = !isExam && !isLiveNow && !isUpcoming && (
-            System.currentTimeMillis() > classEndMs ||
-            hasRecording ||
-            content_type?.equals("RecordedClass", ignoreCase = true) == true ||
-            content_type?.equals("Video", ignoreCase = true) == true ||
-            user_activity_state.equals("COMPLETED", true) ||
-            user_activity_state.equals("ATTENDED", true) ||
-            user_activity_state.equals("MISSED", true)
-        )
+        get() = !isExam && !isLiveNow && !isUpcoming
     val candidateStreamUrls: List<String>
         get() {
             val list = mutableListOf<String>()
@@ -768,6 +810,7 @@ data class AcademicProgramDetail(
 data class AcademicSubjectItem(
     val code: String? = null,
     val color_code: String? = null,
+    val display: String? = null,
     val display_bn: String? = null,
     val icon: String? = null
 )
@@ -1123,33 +1166,39 @@ data class GraphQlError(
 // 8.1. Join Live Class Mutation Models
 // ==========================================
 @JsonClass(generateAdapter = true)
-data class JoinLiveClassResponse(
-    val data: JoinLiveClassData? = null,
-    val errors: List<GraphQlError>? = null
+data class AvailTrialResponse(
+    val data: AvailTrialData? = null,
+    val errors: List<GraphQlError>? = null,
+    val message: String? = null,
+    val code: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class JoinLiveClassData(
-    val joinLiveCLass: JoinLiveClassPayload? = null
+data class AvailTrialData(
+    val generateFreeTrialEnrolment: GenerateFreeTrialEnrolmentResult? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class JoinLiveClassPayload(
-    val join_link: String? = null,
-    val provider: String? = null,
-    val hms_room_id: String? = null
+data class GenerateFreeTrialEnrolmentResult(
+    val message: String? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class HmsTokenRequest(
-    val room_id: String,
-    val type: String = "android"
+data class EnrollInFreeProgramResponse(
+    val data: EnrollInFreeProgramData? = null,
+    val errors: List<GraphQlError>? = null,
+    val message: String? = null,
+    val code: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class HmsTokenResponse(
-    val token: String? = null,
-    val blocked_chat: Boolean? = null
+data class EnrollInFreeProgramData(
+    val enrollInFreeProgram: EnrollInFreeProgramResult? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EnrollInFreeProgramResult(
+    val message: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -1191,7 +1240,8 @@ data class UpdateProfilePayload(
 // ==========================================
 @JsonClass(generateAdapter = true)
 data class AcademicLiveClassDetailsResponse(
-    val data: AcademicLiveClassDetailsData? = null
+    val data: AcademicLiveClassDetailsData? = null,
+    val errors: List<GraphQlError>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -1205,13 +1255,22 @@ data class AcademicProgramLiveClassItem(
     val title: String? = null,
     val class_type: String? = null,
     val playback_url: String? = null,
+    val recording_url: String? = null,
+    val stream_url: String? = null,
+    val video_url: String? = null,
+    val url: String? = null,
+    val hls_url: String? = null,
     val start_time: String? = null,
     val end_time: String? = null,
     val on_going: Boolean? = false,
     val chapter: HierarchyChapterItem? = null,
+    val subject: AcademicSubjectItem? = null,
     val study_materials: List<StudyMaterialItem>? = emptyList(),
     val teacher: TeacherItem? = null,
-    val topics: List<TopicItem>? = emptyList()
+    val instructor: TeacherItem? = null,
+    val topics: List<TopicItem>? = emptyList(),
+    val create_practice_mcq: Boolean? = null,
+    val batch_ids: List<String>? = emptyList()
 )
 
 @JsonClass(generateAdapter = true)

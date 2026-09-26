@@ -107,6 +107,89 @@ class CourseRepository(
         return getAcademicProgramByEnrollment(null, className, null, "BD")
     }
 
+    suspend fun generateFreeTrialEnrolment(programId: String, userId: String): Result<String> {
+        return try {
+            val query = GraphQlQuery(
+                operationName = "AvailTrial",
+                query = """
+                    mutation AvailTrial(${'$'}program_id: String = "" , ${'$'}user_id: String = "" ) {
+                      generateFreeTrialEnrolment(program_id: ${'$'}program_id, user_id: ${'$'}user_id) {
+                        message
+                      }
+                    }
+                """.trimIndent(),
+                variables = mapOf(
+                    "program_id" to programId,
+                    "user_id" to userId
+                )
+            )
+            val response = apiService.availTrial(query)
+            if (!response.errors.isNullOrEmpty()) {
+                val errMsg = response.errors.mapNotNull { it.message }.joinToString(", ")
+                Result.failure(Exception(errMsg.ifBlank { "সার্ভার থেকে ত্রুটি এসেছে" }))
+            } else {
+                val msg = response.data?.generateFreeTrialEnrolment?.message ?: response.message ?: "success"
+                Result.success(msg)
+            }
+        } catch (e: retrofit2.HttpException) {
+            val errorJson = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
+            if (errorJson != null && (errorJson.contains("already enrolled", ignoreCase = true) || errorJson.contains("success", ignoreCase = true))) {
+                Result.success("success")
+            } else {
+                val parsedMsg = try {
+                    val obj = org.json.JSONObject(errorJson ?: "")
+                    obj.optString("message", e.message())
+                } catch (_: Exception) {
+                    e.message()
+                }
+                Result.failure(Exception(parsedMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun enrollInFreeProgram(programId: String): Result<String> {
+        return try {
+            val query = GraphQlQuery(
+                operationName = "EnrollInFreeProgram",
+                query = """
+                    mutation EnrollInFreeProgram(${'$'}academic_program_id: String!) {
+                      enrollInFreeProgram(academic_program_id: ${'$'}academic_program_id) {
+                        message
+                      }
+                    }
+                """.trimIndent(),
+                variables = mapOf(
+                    "academic_program_id" to programId
+                )
+            )
+            val response = apiService.enrollInFreeProgram(query)
+            if (!response.errors.isNullOrEmpty()) {
+                val errMsg = response.errors.mapNotNull { it.message }.joinToString(", ")
+                Result.failure(Exception(errMsg.ifBlank { "সার্ভার থেকে ত্রুটি এসেছে" }))
+            } else {
+                val msg = response.data?.enrollInFreeProgram?.message ?: response.message ?: "success"
+                Result.success(msg)
+            }
+        } catch (e: retrofit2.HttpException) {
+            val errorJson = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
+            if (errorJson != null && errorJson.contains("already enrolled", ignoreCase = true)) {
+                Result.success("user already enrolled in this academic program")
+            } else {
+                val parsedMsg = try {
+                    val obj = org.json.JSONObject(errorJson ?: "")
+                    obj.optString("message", e.message())
+                } catch (_: Exception) {
+                    e.message()
+                }
+                Result.failure(Exception(parsedMsg))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getProgramPhases(programId: String): List<PhaseItem> {
         val phaseQuery = GraphQlQuery(
             operationName = "ProgramPhasesByStudent",
@@ -358,11 +441,6 @@ class CourseRepository(
               playback_url
               start_time
               end_time
-              type
-            }
-            model_test {
-              type
-              exam_category
             }
         """.trimIndent()
 
@@ -601,63 +679,164 @@ class CourseRepository(
     }
 
     suspend fun getLiveClassDetails(liveClassId: String): AcademicProgramLiveClassItem? {
-        val query = GraphQlQuery(
-            operationName = "academicProgramLiveClass",
-            query = """
-                query academicProgramLiveClass(${'$'}id: String!) {
-                  academicProgramLiveClass(id: ${'$'}id) {
-                    academic_program_id
-                    batch_ids
-                    chapter {
-                      id
-                      name
-                      no
-                      __typename
-                    }
-                    class_type
-                    end_time
-                    id
-                    on_going
-                    playback_url
-                    start_time
-                    study_materials {
-                      file_url
-                      id
-                      name
-                    }
-                    subject {
-                      attr
-                      class
-                      code
-                      color_code
-                      display
-                      display_bn
-                      group
-                      icon
-                      __typename
-                    }
-                    teacher {
-                      id
-                      name
-                      first_name
-                      last_name
-                      avatar
-                      marketing_avatar
-                    }
-                    topics {
-                      id
-                      name
-                      title
-                      description
-                    }
-                    __typename
-                  }
+        if (liveClassId.isBlank()) return null
+
+        // 1. Standard GetAcademicLiveClassDetails (exact schema from Shikho API)
+        val standardQueryStr = """
+            query GetAcademicLiveClassDetails(${'$'}id: String!) {
+              academicProgramLiveClass(id: ${'$'}id) {
+                batch_ids
+                create_practice_mcq
+                chapter {
+                  id
+                  name
+                  no
                 }
-            """.trimIndent(),
-            variables = mapOf("id" to liveClassId)
-        )
-        val res = apiService.getAcademicLiveClassDetails(query)
-        return res.data?.academicProgramLiveClass
+                class_type
+                end_time
+                id
+                on_going
+                playback_url
+                start_time
+                study_materials {
+                  file_url
+                  id
+                  name
+                }
+                subject {
+                  code
+                  color_code
+                  display
+                  display_bn
+                  icon
+                }
+                teacher {
+                  bio
+                  id
+                  marketing_avatar
+                  marketing_points
+                  name
+                  subjects
+                  university_degree
+                }
+                title
+                topics {
+                  id
+                  name
+                }
+              }
+            }
+        """.trimIndent()
+
+        try {
+            val query = GraphQlQuery(
+                operationName = "GetAcademicLiveClassDetails",
+                query = standardQueryStr,
+                variables = mapOf("id" to liveClassId)
+            )
+            val res = apiService.getAcademicLiveClassDetails(query)
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails standard response: $res")
+            if (!res.errors.isNullOrEmpty()) {
+                android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails errors: ${res.errors}")
+            }
+            if (res.data?.academicProgramLiveClass != null) {
+                return res.data.academicProgramLiveClass
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails standard failed: ${e.message}")
+        }
+
+        // 2. Minimal fallback with playback_url, study_materials and topics
+        val minimalQueryStr = """
+            query GetAcademicLiveClassDetails(${'$'}id: String!) {
+              academicProgramLiveClass(id: ${'$'}id) {
+                id
+                title
+                playback_url
+                study_materials {
+                  file_url
+                  id
+                  name
+                }
+                topics {
+                  id
+                  name
+                }
+              }
+            }
+        """.trimIndent()
+
+        try {
+            val query = GraphQlQuery(
+                operationName = "GetAcademicLiveClassDetails",
+                query = minimalQueryStr,
+                variables = mapOf("id" to liveClassId)
+            )
+            val res = apiService.getAcademicLiveClassDetails(query)
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails minimal response: $res")
+            if (res.data?.academicProgramLiveClass != null) {
+                return res.data.academicProgramLiveClass
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails minimal failed: ${e.message}")
+        }
+
+        // 3. Ultra-minimal fallback with just id and playback_url (absolute baseline)
+        val ultraMinimalQueryStr = """
+            query GetAcademicLiveClassDetails(${'$'}id: String!) {
+              academicProgramLiveClass(id: ${'$'}id) {
+                id
+                playback_url
+              }
+            }
+        """.trimIndent()
+
+        try {
+            val query = GraphQlQuery(
+                operationName = "GetAcademicLiveClassDetails",
+                query = ultraMinimalQueryStr,
+                variables = mapOf("id" to liveClassId)
+            )
+            val res = apiService.getAcademicLiveClassDetails(query)
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal response: $res")
+            if (res.data?.academicProgramLiveClass != null) {
+                return res.data.academicProgramLiveClass
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal failed: ${e.message}")
+        }
+
+        // 4. Try ID! type instead of String!
+        val idTypeQueryStr = """
+            query GetAcademicLiveClassDetails(${'$'}id: ID!) {
+              academicProgramLiveClass(id: ${'$'}id) {
+                id
+                playback_url
+                study_materials {
+                  id
+                  name
+                  file_url
+                }
+              }
+            }
+        """.trimIndent()
+
+        try {
+            val query = GraphQlQuery(
+                operationName = "GetAcademicLiveClassDetails",
+                query = idTypeQueryStr,
+                variables = mapOf("id" to liveClassId)
+            )
+            val res = apiService.getAcademicLiveClassDetails(query)
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails (ID! type) response: $res")
+            if (res.data?.academicProgramLiveClass != null) {
+                return res.data.academicProgramLiveClass
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails ID! type failed: ${e.message}")
+        }
+
+        return null
     }
 
     suspend fun getTeacherDetails(teacherId: String): TeacherItem? {
@@ -767,31 +946,5 @@ class CourseRepository(
         }
         val topRes = apiService.getTopics(topQuery)
         return topRes.data?.topics?.data ?: emptyList()
-    }
-
-    suspend fun joinLiveClass(liveClassId: String, lessonId: String): JoinLiveClassPayload? {
-        val joinQuery = GraphQlQuery(
-            operationName = "JoinLiveClass",
-            query = """
-                mutation JoinLiveClass(${'$'}id: String!, ${'$'}lesson_id: String) {
-                  joinLiveCLass(id: ${'$'}id, lesson_id: ${'$'}lesson_id) {
-                    join_link
-                    provider
-                    hms_room_id
-                    __typename
-                  }
-                }
-            """.trimIndent(),
-            variables = mapOf(
-                "id" to liveClassId,
-                "lesson_id" to lessonId
-            )
-        )
-        val response = apiService.joinLiveClass(joinQuery)
-        return response.data?.joinLiveCLass
-    }
-
-    suspend fun getHmsToken(roomId: String): HmsTokenResponse {
-        return apiService.getHmsToken(HmsTokenRequest(room_id = roomId, type = "android"))
     }
 }

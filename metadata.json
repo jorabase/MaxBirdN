@@ -1,6 +1,6 @@
 {
   "name": "MaxBird",
-  "description": "Shikho Learning Platform with Core Courses, Recorded Lectures, and Real-Time Interactive Live Classes with 100ms WebSocket.",
+  "description": "Shikho Learning Platform with Core Courses, Recorded Lectures, and Practice Quizzes.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

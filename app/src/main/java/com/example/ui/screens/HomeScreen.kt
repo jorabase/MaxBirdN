@@ -57,6 +57,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val wallpaperConfig by viewModel.wallpaperConfigFlow.collectAsState()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
 
@@ -172,20 +173,31 @@ fun HomeScreen(
                 unreadNotificationCount = 0,
                 onNotificationClick = {
                     android.widget.Toast.makeText(context, "আগামী ৭ দিনের ক্লাসের এলার্ম ও নোটিফিকেশন সেট করা আছে!", android.widget.Toast.LENGTH_SHORT).show()
-                }
+                },
+                wallpaperConfig = wallpaperConfig
             )
 
-            Column(
+            // Content Container with smooth rounded top corners (bKash style overlay)
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .graphicsLayer {
-                        alpha = contentAlpha
-                        translationY = contentTranslation
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .offset(y = (-10).dp)
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = MaterialTheme.colorScheme.background,
+                shadowElevation = 4.dp
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)
+                        .graphicsLayer {
+                            alpha = contentAlpha
+                            translationY = contentTranslation
+                        },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                 // ===== LOGIC: Banner condition (unchanged) =====
                 if (displayName == "শিক্ষার্থী" || uiState.userFirstName.isBlank()) {
                     AccountCompletionBanner(onCompleteClick = onNavigateToEditProfile)
@@ -241,7 +253,9 @@ fun HomeScreen(
                                     onNavigateToReportCard(prog?.id, prog?.title_bn, phase?.id)
                                 },
                             shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                            border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.35f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -331,6 +345,7 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
             }
 
             // Bottom spacing for floating nav bar

@@ -23,8 +23,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.launch
-import com.example.notification.ClassAlarmScheduler
 import com.example.auth.SessionManager
+import com.example.notification.ClassAlarmScheduler
+import com.example.security.AntiTamperSecurity
 import com.example.ui.theme.MyApplicationTheme
 
 val LocalPictureInPictureMode = compositionLocalOf { false }
@@ -35,6 +36,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 0. Anti-Tamper & Security Verification against MT Manager / Frida / Hooking
+        AntiTamperSecurity.exitIfTampered(this)
+
         enableEdgeToEdge()
 
         // 1. Immediately create notification channel on startup
