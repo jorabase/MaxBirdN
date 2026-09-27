@@ -274,6 +274,49 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
     }
 
+    LaunchedEffect(Unit) {
+        val initialPending = com.example.notification.NotificationDeepLinkDispatcher.consumePendingDeepLink()
+        if (!initialPending.isNullOrBlank()) {
+            com.example.notification.NotificationDeepLinkDispatcher.setPendingDeepLink(initialPending)
+        }
+        com.example.notification.NotificationDeepLinkDispatcher.deepLinkEvents.collect { link ->
+            if (link.isNotBlank()) {
+                try {
+                    if (link.startsWith("http://", ignoreCase = true) || link.startsWith("https://", ignoreCase = true)) {
+                        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link)).apply {
+                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(browserIntent)
+                    } else if (link.startsWith("shikho://", ignoreCase = true)) {
+                        val uri = android.net.Uri.parse(link)
+                        when (uri.host) {
+                            "chapter-report" -> {
+                                navController.navigate(Routes.REPORT_CARD)
+                            }
+                            "live-class" -> {
+                                val classId = uri.getQueryParameter("class_id") ?: uri.getQueryParameter("id") ?: ""
+                                val lessonId = uri.getQueryParameter("lesson_id") ?: classId
+                                if (classId.isNotBlank()) {
+                                    navController.navigate(Routes.liveClassRoute(classId, lessonId))
+                                }
+                            }
+                            else -> {
+                                val path = uri.path?.removePrefix("/") ?: uri.host
+                                if (!path.isNullOrBlank()) {
+                                    navController.navigate(path)
+                                }
+                            }
+                        }
+                    } else {
+                        navController.navigate(link)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("AppNavigation", "Error navigating deep link: $link", e)
+                }
+            }
+        }
+    }
+
     val handleOpenLessonDetail: (com.example.api.StudentLessonItem) -> Unit = { lesson ->
         if (lesson.isModelTest || lesson.content_type?.equals("ModelTest", ignoreCase = true) == true || lesson.model_test != null) {
             val mTestId = lesson.content_id?.takeIf { it.isNotBlank() } ?: lesson.id

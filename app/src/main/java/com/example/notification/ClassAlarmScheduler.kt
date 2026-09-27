@@ -64,7 +64,7 @@ object ClassAlarmScheduler {
         val isLiveEnabled = sessionManager.isLiveClassNotificationEnabled()
         val isExamEnabled = sessionManager.isExamNotificationEnabled()
 
-        val timeFormatBn = SimpleDateFormat("hh:mm a", Locale("bn", "BD"))
+        val timeFormat12Hr = SimpleDateFormat("hh:mm a", Locale.US)
 
         for ((index, lesson) in lessons.withIndex()) {
             val startTimeStr = lesson.start_time ?: lesson.live_class?.start_time ?: continue
@@ -77,34 +77,45 @@ object ClassAlarmScheduler {
             if (!isExam && !isLiveEnabled) continue
             if (disabledAlarmIds.contains(lessonId)) continue
 
+            val mentorName = lesson.live_class?.teacher?.displayName
+                ?: lesson.live_class?.instructor?.displayName
+                ?: ""
+
+            val mentorAvatar = lesson.live_class?.teacher?.displayAvatar
+                ?: lesson.live_class?.instructor?.displayAvatar
+                ?: ""
+
             try {
                 val date = isoFormat.parse(startTimeStr) ?: continue
                 val classStartTimeMillis = date.time
                 val alarmTriggerTime = classStartTimeMillis - leadTimeMillis
 
-                if (alarmTriggerTime > currentTime) {
-                    val requestCode = (lessonId.hashCode() + index) % 1000000
-                    scheduledIds.add(requestCode)
+                val classStartTimeDisplay = try {
+                    timeFormat12Hr.format(date)
+                } catch (_: Exception) {
+                    "নির্দিষ্ট সময়ে"
+                }
 
-                    val classStartTimeDisplay = try {
-                        val formatted = timeFormatBn.format(date)
-                        formatted.replace("AM", "সকাল").replace("PM", "সন্ধ্যা/রাত")
-                    } catch (_: Exception) {
-                        "নির্দিষ্ট সময়ে"
-                    }
+                val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+
+                // 1. Alarm: Pre-class Reminder (e.g. 30 mins before)
+                if (alarmTriggerTime > currentTime) {
+                    val requestCode = kotlin.math.abs((lessonId.hashCode() + index) * 31 + 1) % 1000000
+                    scheduledIds.add(requestCode)
 
                     val intent = Intent(context, ClassAlarmReceiver::class.java).apply {
                         putExtra("subject_name", subjectName)
                         putExtra("lesson_title", lessonTitle)
                         putExtra("lesson_id", lessonId)
                         putExtra("class_start_time_str", classStartTimeDisplay)
+                        putExtra("mentor_name", mentorName)
+                        putExtra("mentor_avatar", mentorAvatar)
                         putExtra("lead_time_minutes", leadTimeMinutes)
-                    }
-
-                    val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    } else {
-                        PendingIntent.FLAG_UPDATE_CURRENT
+                        putExtra("is_start_now", false)
                     }
 
                     val pendingIntent = PendingIntent.getBroadcast(
@@ -126,7 +137,45 @@ object ClassAlarmScheduler {
                         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarmTriggerTime, pendingIntent)
                     }
 
-                    Log.d(TAG, "⏰ Scheduled alarm ($leadTimeMinutes mins before) for $subjectName: $lessonTitle at ${Date(alarmTriggerTime)}")
+                    Log.d(TAG, "⏰ Scheduled 30-min reminder for $subjectName ($mentorName) at ${Date(alarmTriggerTime)}")
+                }
+
+                // 2. Alarm: Class Start Notification (at exact start time)
+                if (classStartTimeMillis > currentTime) {
+                    val requestCodeStart = kotlin.math.abs((lessonId.hashCode() + index) * 31 + 2) % 1000000
+                    scheduledIds.add(requestCodeStart)
+
+                    val intentStart = Intent(context, ClassAlarmReceiver::class.java).apply {
+                        putExtra("subject_name", subjectName)
+                        putExtra("lesson_title", lessonTitle)
+                        putExtra("lesson_id", lessonId)
+                        putExtra("class_start_time_str", classStartTimeDisplay)
+                        putExtra("mentor_name", mentorName)
+                        putExtra("mentor_avatar", mentorAvatar)
+                        putExtra("lead_time_minutes", 0)
+                        putExtra("is_start_now", true)
+                    }
+
+                    val pendingIntentStart = PendingIntent.getBroadcast(
+                        context,
+                        requestCodeStart,
+                        intentStart,
+                        pendingIntentFlags
+                    )
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        if (alarmManager.canScheduleExactAlarms()) {
+                            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, classStartTimeMillis, pendingIntentStart)
+                        } else {
+                            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, classStartTimeMillis, pendingIntentStart)
+                        }
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, classStartTimeMillis, pendingIntentStart)
+                    } else {
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, classStartTimeMillis, pendingIntentStart)
+                    }
+
+                    Log.d(TAG, "🔴 Scheduled class start notification for $subjectName at ${Date(classStartTimeMillis)}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing start time '$startTimeStr': ${e.message}")

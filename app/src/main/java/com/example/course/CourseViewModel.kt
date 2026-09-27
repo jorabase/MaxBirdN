@@ -561,9 +561,9 @@ class CourseViewModel(
                             it.copy(has_enrolment = true) 
                         }
                         phasesList = fetchedPhases
-                        val activePhase = if (!targetPhaseId.isNullOrBlank()) {
+                        val activePhase = (if (!targetPhaseId.isNullOrBlank()) {
                             fetchedPhases.find { it.id == targetPhaseId }
-                        } else null
+                        } else null)
                             ?: fetchedPhases.firstOrNull { it.is_current == true }
                             ?: fetchedPhases.firstOrNull { it.status.equals("ACTIVE", ignoreCase = true) }
                             ?: fetchedPhases.firstOrNull { it.has_enrolment == true && !it.status.equals("COMPLETED", true) }
@@ -582,6 +582,15 @@ class CourseViewModel(
                                 activePhaseTitle = activePhase?.title ?: "",
                                 isModelTestCourse = isModelTest
                             )
+                        }
+                        if (programId.isNotBlank() && currentPhaseId.isNotBlank()) {
+                            try {
+                                com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
+                                    com.example.ShikhoApp.instance,
+                                    programId,
+                                    currentPhaseId
+                                )
+                            } catch (_: Throwable) {}
                         }
                     } catch (e: Exception) {
                         Log.e("CourseViewModel", "Error fetching phases for programId=$programId: ${e.message}", e)
@@ -784,6 +793,16 @@ class CourseViewModel(
     }
 
     fun onSelectPhaseTab(phase: PhaseItem) {
+        val progId = _uiState.value.programId.ifBlank { sessionManager.getActiveProgramId() ?: "" }
+        if (progId.isNotBlank()) {
+            try {
+                com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
+                    com.example.ShikhoApp.instance,
+                    progId,
+                    phase.id
+                )
+            } catch (_: Throwable) {}
+        }
         val currentSubjectCode = _uiState.value.selectedSubjectCode
         _uiState.update {
             it.copy(

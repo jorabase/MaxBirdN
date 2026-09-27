@@ -45,6 +45,7 @@ import com.example.auth.SessionManager
 import com.example.home.HomeViewModel
 import com.example.notification.ClassAlarmReceiver
 import com.example.notification.ClassAlarmScheduler
+import com.example.ui.dialogs.FcmLiveTerminalDialog
 import com.example.utils.toBengaliDigits
 
 data class ClassAlarmItem(
@@ -239,6 +240,8 @@ fun NotificationSettingsScreen(
         }
     }
 
+    var showTerminalDialog by remember { mutableStateOf(false) }
+
     val hasNotificationPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
@@ -270,6 +273,15 @@ fun NotificationSettingsScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = { showTerminalDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Terminal,
+                            contentDescription = "FCM লাইভ টার্মিনাল",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -286,6 +298,80 @@ fun NotificationSettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            // ==========================================
+            // TEMPORARY FCM TERMINAL & CLOUD MONITOR
+            // ==========================================
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { showTerminalDialog = true },
+                color = Color(0xFF0F172A),
+                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF1E293B)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = Color(0xFF38BDF8),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF22C55E))
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "FCM লাইভ টার্মিনাল (মনিটর)",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "টপিক সাবস্ক্রিপশন ও ক্লাউড কানেকশন ভেরিফাই করুন",
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { showTerminalDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(text = "টার্মিনাল", fontSize = 12.sp, color = Color.White)
+                    }
+                }
+            }
+
             // ==========================================
             // MASTER SWITCH CARD
             // ==========================================
@@ -640,29 +726,24 @@ fun NotificationSettingsScreen(
                         }
 
                         Button(
-                            onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                                ) {
-                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    triggerGeneralTestNotification(context)
-                                }
-                            },
+                            onClick = { showTerminalDialog = true },
                             shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier.height(34.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Send,
+                                imageVector = Icons.Default.Terminal,
                                 contentDescription = null,
+                                tint = Color(0xFF38BDF8),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "টেস্ট নোটিফিকেশন",
+                                text = "FCM টার্মিনাল",
                                 fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
                     }
@@ -1073,6 +1154,13 @@ fun NotificationSettingsScreen(
                 onClearAll = { homeViewModel.clearAllSubjectSelection() },
                 onSave = { homeViewModel.saveSubjectFilter() },
                 onDismiss = { homeViewModel.dismissSubjectFilterDialog() }
+            )
+        }
+
+        if (showTerminalDialog) {
+            FcmLiveTerminalDialog(
+                sessionManager = sessionManager,
+                onDismissRequest = { showTerminalDialog = false }
             )
         }
     }

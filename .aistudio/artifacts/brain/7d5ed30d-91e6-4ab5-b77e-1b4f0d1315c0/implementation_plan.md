@@ -1,75 +1,58 @@
-# Database-Backed Automatic Video Lesson Completion
+# Real Shikho Live Class Notification Strategy & Plan
 
-Automate video lecture completion by persisting completion states in the Room database when video playback reaches 80%-90% or finishes. Remove any manual click-to-complete actions so that completion status reflects real database state only.
-
-## User Review & Critical Decisions
+## User Review & Critical Clarifications
 
 > [!IMPORTANT]
-> The following rules were specified by the user:
-> - **Completion Threshold**: A lecture class is marked completed automatically in the database when the video is watched up to **80%-90%** of its total duration or when playback finishes.
-> - **Database-Driven UI**: The app will query the Room database (`completed_items` table) to display the "কমপ্লিট" (Completed) status. Manual clicks on cards/buttons will no longer toggle completion state.
+> Based on your feedback and Shikho's official live class notification lifecycle:
+> 1. **Course Selection Requirement**:
+>    - **Yes**, the target course/program (e.g., HSC 2026, SSC, or specific batch) **must be selected** in the app.
+>    - *Reason*: Shikho's backend broadcasts live class alerts specifically to `LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}` and `LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}` topics. When you select a course, our app automatically subscribes your device to that course's live broadcast channel.
+> 2. **Two-Stage Live Class Notifications with Photo**:
+>    - **Stage 1 (30 minutes before class)**:
+>      - *"⏰ তোমার ক্লাস [সময়] এ শুরু হবে! শিক্ষক: [নাম], বিষয়: [বিষয়]"*
+>      - Displays the teacher's profile photo or subject banner (`BigPictureStyle`).
+>    - **Stage 2 (Class starts now)**:
+>      - *"🔴 তোমার ক্লাস শুরু হয়েছে! এখনই জয়েন করো"*
+>      - One-tap direct launch into the live class player.
+> 3. **Dual Delivery (FCM Cloud Push + Local Precise Scheduler)**:
+>    - **Cloud Push**: Receives real-time broadcast from `shikho-tech` Firebase directly when Shikho teachers start the class.
+>    - **Local Backup Alarm**: Fetches scheduled class times from the syllabus API and sets device alarms for 30 minutes in advance with teacher photos, ensuring no class is ever missed even if FCM is delayed by device battery savers.
+> 4. **100% Real Verification**:
+>    - As you rightly suggested, waiting for the actual scheduled live class from Shikho is the most authentic test. We will also display a subtle connection indicator in Settings showing active course subscriptions (`shikho-tech` connected, topics active).
 
 ---
 
-## 1. Overview & Core Concept
-
-Previously, some UI elements or click actions could immediately mark a lesson as completed without verifying video playback. This update ensures that:
-1. Video playback progress is monitored in real-time.
-2. When video progress reaches >= 80% (or playback finishes), a `CompletedItemEntity` is inserted into the local Room database (`completed_items`).
-3. The UI reactively observes the Room database state (`CompletedItemDao` / `CompletedItemRepository`), displaying "কমপ্লিট" only when an actual entry exists in the database.
-
----
-
-## 2. User Experience & Visual Design
-
-- **Automatic Video Completion**:
-  - As students watch a video lecture, progress is saved in `VideoProgressManager`.
-  - Upon reaching 80%+ playback, the status silently updates in the Room database.
-  - The lesson item in the course list immediately updates to display a green "কমপ্লিট" badge or checkmark driven reactively by the database `Flow`.
-- **Elimination of Fake Click Completions**:
-  - Clicking on a lesson or card will only open the player or view details—it will not manually set completion status.
-
----
-
-## 3. Key Product Decisions & Trade-Offs
-
-- **Decision 1: 80% Playback Threshold in `VideoProgressManager`**:
-  - *Chosen Approach*: Update `VideoProgressManager.saveProgress` and player listeners to check if `positionMs >= durationMs * 0.80f`.
-  - *Why*: Satisfies the 80%-90% watch requirement specified by the user and ensures genuine completion tracking.
-- **Decision 2: Room Database as Single Source of Truth**:
-  - *Chosen Approach*: Observe `CompletedItemDao.getAllCompletedItemIds()` reactively via `CompletedItemRepository`.
-  - *Why*: Guarantees that the "কমপ্লিট" badge is shown only if the completion row actually exists in Room DB.
-
----
-
-## 4. Technical Architecture & Data Strategy
+## 1. Technical Architecture & Flow
 
 ```
-┌────────────────────────────────────────────────────────┐
-│            ExoPlayer / ShikhoPlayerManager             │
-│        (Monitors positionMs / durationMs in loop)      │
-└───────────────────────────┬────────────────────────────┘
-                            │ position >= 80% duration
-┌───────────────────────────▼────────────────────────────┐
-│                  VideoProgressManager                  │
-│       • Checks isCompleted threshold (>= 0.80f)        │
-│       • Triggers CompletedItemDao.markCompleted()      │
-└───────────────────────────┬────────────────────────────┘
-                            │
-┌───────────────────────────▼────────────────────────────┐
-│                 Room Database (SQLite)                 │
-│              table: `completed_items`                  │
-└───────────────────────────┬────────────────────────────┘
-                            │ Flow<List<String>>
-┌───────────────────────────▼────────────────────────────┐
-│            CompletedItemRepository & Flow              │
-│       • Exposes completedIdsState to UI Composables    │
-└───────────────────────────┬────────────────────────────┘
-                            │
-┌───────────────────────────▼────────────────────────────┐
-│       Course / Chapter / Lesson UI Composables        │
-│        • Displays "কমপ্লিট" badge if in DB State      │
-└────────────────────────────────────────────────────────┘
+[ Selected Course: e.g. HSC 2026 Batch ]
+                     │
+         ┌───────────┴───────────┐
+         ▼                       ▼
+[ FCM Topic Subscription ]   [ Class Schedule Sync ]
+  • LIVE_ShikhoNotification    • Reads next classes from API
+    Program_..._Phase_...      • Alarms set for T - 30 minutes
+         │                               │
+         ├───────────────────────────────┤
+         ▼                               ▼
+[ 30 Minutes Before Class ]      [ Class Starts (Live Now) ]
+  • Heads-up Notification         • Urgent Red "Live Now" banner
+  • Teacher / Subject Photo       • 1-Tap direct entry to Player
+  • Bengali time display          • Deep Link auto-navigation
 ```
 
 ---
+
+## 2. Implementation Steps
+
+1. **Teacher Photo & BigPictureStyle in `ClassAlarmReceiver` & `ShikhoFirebaseMessagingService`**:
+   - Enhance both receivers to download and render the teacher or course subject image as a rich preview banner in the notification tray.
+2. **Lead-Time Configuration**:
+   - Ensure the default alarm lead time is precisely 30 minutes before class start time (matching Shikho's official 30-minute reminder).
+3. **Course & Phase State Persistence**:
+   - Ensure the selected active course and phase in `CourseViewModel` instantly syncs with `ShikhoNotificationManager`, guaranteeing the FCM topic stays actively subscribed even when the app is completely closed.
+4. **FCM & Topic Status in Settings**:
+   - Add a clean, informative "নোটিফিকেশন স্ট্যাটাস" card in Settings showing:
+     - ফায়ারবেস কানেকশন: সক্রিয় (shikho-tech)
+     - বর্তমান কোর্স টপিক: সক্রিয়
+     - পরবর্তী লাইভ ক্লাস রিমাইন্ডার: ৩০ মিনিট আগে (ছবিসহ)

@@ -143,6 +143,16 @@ class SessionManager(context: Context) {
             .apply()
     }
 
+    fun getSubscribedFcmProgramId(): String? = sharedPreferences.getString("subscribed_fcm_program_id", null)
+    fun setSubscribedFcmProgramId(programId: String?) {
+        sharedPreferences.edit().putString("subscribed_fcm_program_id", programId).apply()
+    }
+
+    fun getSubscribedFcmPhaseId(): String? = sharedPreferences.getString("subscribed_fcm_phase_id", null)
+    fun setSubscribedFcmPhaseId(phaseId: String?) {
+        sharedPreferences.edit().putString("subscribed_fcm_phase_id", phaseId).apply()
+    }
+
     fun saveUserAcademicInfo(
         batchId: String?,
         className: String?,
@@ -281,11 +291,11 @@ class SessionManager(context: Context) {
     val classNotificationLeadTimeFlow: kotlinx.coroutines.flow.StateFlow<Int> = _classNotificationLeadTimeFlow
 
     fun getClassNotificationLeadTimeMinutes(): Int {
-        return sharedPreferences.getInt("class_notification_lead_time_minutes", 25)
+        return sharedPreferences.getInt("class_notification_lead_time_minutes", 30)
     }
 
     fun setClassNotificationLeadTimeMinutes(minutes: Int) {
-        val validMinutes = if (minutes in listOf(5, 10, 15, 20, 25, 30, 45, 60)) minutes else 25
+        val validMinutes = if (minutes in listOf(5, 10, 15, 20, 25, 30, 45, 60)) minutes else 30
         sharedPreferences.edit().putInt("class_notification_lead_time_minutes", validMinutes).apply()
         _classNotificationLeadTimeFlow.value = validMinutes
     }

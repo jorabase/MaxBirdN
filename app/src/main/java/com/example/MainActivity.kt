@@ -23,8 +23,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.launch
+import android.content.Intent
+import android.net.Uri
 import com.example.auth.SessionManager
 import com.example.notification.ClassAlarmScheduler
+import com.example.notification.NotificationDeepLinkDispatcher
+import com.example.notification.ShikhoFirebaseMessagingService
+import com.example.notification.ShikhoNotificationManager
 import com.example.security.AntiTamperSecurity
 import com.example.ui.theme.MyApplicationTheme
 
@@ -42,8 +47,9 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // 1. Immediately create notification channel on startup
+        // 1. Immediately create notification channels on startup
         ClassAlarmScheduler.createNotificationChannel(this)
+        ShikhoNotificationManager.createNotificationChannels(this)
 
         // 2. Verify Firebase is initialized correctly
         try {
@@ -63,6 +69,7 @@ class MainActivity : ComponentActivity() {
 
         requestNotificationPermissionOnStartup()
         fetchAndRegisterFcmToken()
+        handleNotificationIntent(intent)
 
         setContent {
             val sessionManager = remember { SessionManager(applicationContext) }
@@ -113,6 +120,9 @@ class MainActivity : ComponentActivity() {
                     android.util.Log.d("MainActivity", "Fetched FCM Token: $token")
                     val sessionManager = SessionManager(applicationContext)
                     sessionManager.setFcmToken(token)
+
+                    // Immediately sync topic subscriptions (SHIKHO_ALL, user, program, phase)
+                    ShikhoNotificationManager.syncAllTopicSubscriptions(applicationContext)
                 } else {
                     android.util.Log.w("MainActivity", "Fetching FCM registration token failed", task.exception)
                 }
@@ -122,8 +132,44 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        if (intent == null) return
+        val url = intent.getStringExtra(ShikhoFirebaseMessagingService.EXTRA_NOTIFICATION_URL)
+            ?: intent.getStringExtra(ShikhoFirebaseMessagingService.EXTRA_NOTIFICATION_DEEPLINK)
+            ?: intent.dataString
+
+        if (!url.isNullOrBlank()) {
+            android.util.Log.d("MainActivity", "Handling notification intent URL: $url")
+            if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+                // External website (e.g. admission form or registration) - open in browser
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(browserIntent)
+                } catch (e: Throwable) {
+                    android.util.Log.e("MainActivity", "Failed to open external URL: ${e.message}", e)
+                }
+            } else {
+                // In-app deep link
+                NotificationDeepLinkDispatcher.setPendingDeepLink(url)
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        // Resync topics on resume if logged in
+        val sessionManager = SessionManager(applicationContext)
+        if (!sessionManager.getAccessToken().isNullOrBlank()) {
+            ShikhoNotificationManager.syncAllTopicSubscriptions(applicationContext)
+        }
     }
 
     override fun onPictureInPictureModeChanged(

@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Palette
 import com.example.MainActivity
 import com.example.auth.SessionManager
+import com.example.ui.dialogs.FcmLiveTerminalDialog
 import com.example.utils.AvatarUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,6 +100,8 @@ fun SettingsScreen(
         }
     }
 
+    var showTerminalDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -108,6 +111,15 @@ fun SettingsScreen(
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
                     )
+                },
+                actions = {
+                    IconButton(onClick = { showTerminalDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Terminal,
+                            contentDescription = "FCM টার্মিনাল",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -388,6 +400,18 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
 
                 SettingsRowItem(
+                    icon = Icons.Default.Terminal,
+                    iconTint = Color(0xFF0284C7),
+                    iconBg = Color(0xFFE0F2FE),
+                    title = "FCM লাইভ টার্মিনাল (মনিটর)",
+                    subtitle = "ক্লাউড নোটিফিকেশন টপিক সাবস্ক্রিপশন ও লাইভ ইভেন্ট লগ",
+                    badge = "রিয়েলটাইম",
+                    onClick = { showTerminalDialog = true }
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                SettingsRowItem(
                     icon = Icons.Default.DarkMode,
                     iconTint = Color(0xFF6366F1),
                     iconBg = Color(0xFFEEF2FF),
@@ -508,6 +532,13 @@ fun SettingsScreen(
                     Text("ঠিক আছে")
                 }
             }
+        )
+    }
+
+    if (showTerminalDialog) {
+        FcmLiveTerminalDialog(
+            sessionManager = sessionManager,
+            onDismissRequest = { showTerminalDialog = false }
         )
     }
 }

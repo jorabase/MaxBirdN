@@ -13,6 +13,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -378,6 +379,8 @@ fun SlideViewerDialog(
     val isOfflineAvailable = (isDirectLocal && targetPdfFile != null) ||
             (effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED)
 
+    var showNotebookLMDialog by remember { mutableStateOf(false) }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -408,6 +411,7 @@ fun SlideViewerDialog(
                         readingTheme = readingTheme,
                         downloadedItem = effectiveDownloadedItem,
                         onDismiss = onDismiss,
+                        onNotebookLMClick = { showNotebookLMDialog = true },
                         onToggleViewMode = {
                             viewMode = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
                                 PdfViewMode.HORIZONTAL_SLIDES
@@ -511,8 +515,53 @@ fun SlideViewerDialog(
                             }
                         }
                     }
+
+                    // Floating NotebookLM & AI Study Pill
+                    if (rendererState != null && rendererState.isInitialized && rendererState.pageCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFF4F46E5),
+                            shadowElevation = 8.dp,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 24.dp, end = 16.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { showNotebookLMDialog = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoStories,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "নোটবুক এলএম",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        if (showNotebookLMDialog) {
+            NotebookLMStudyDialog(
+                title = title,
+                currentPage = 1,
+                totalPageCount = rendererState?.pageCount ?: 1,
+                targetFile = targetPdfFile,
+                remoteUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl,
+                onDismiss = { showNotebookLMDialog = false }
+            )
         }
     }
 }
@@ -526,6 +575,7 @@ private fun PdfViewerTopBar(
     readingTheme: ReadingTheme,
     downloadedItem: DownloadedItemEntity?,
     onDismiss: () -> Unit,
+    onNotebookLMClick: () -> Unit,
     onToggleViewMode: () -> Unit,
     onCycleTheme: () -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -610,6 +660,37 @@ private fun PdfViewerTopBar(
                     }
                 }
             }
+
+            // NotebookLM & AI Study Button
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF4F46E5).copy(alpha = 0.4f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.7f)),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onNotebookLMClick)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoStories,
+                        contentDescription = "NotebookLM",
+                        tint = Color(0xFFA5B4FC),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = "NotebookLM",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
 
             // Mode Switcher: Continuous Scroll vs Single Slide Presentation
             IconButton(

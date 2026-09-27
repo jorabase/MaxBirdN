@@ -202,6 +202,9 @@ class AuthViewModel(
                 )
                 
                 _authState.value = AuthState.LoginSuccess
+                try {
+                    com.example.notification.ShikhoNotificationManager.syncAllTopicSubscriptions(com.example.ShikhoApp.instance)
+                } catch (_: Throwable) {}
                 fetchProfile()
             } catch (e: HttpException) {
                 _authState.value = AuthState.Error("Incorrect PIN or OTP.")
@@ -279,6 +282,9 @@ class AuthViewModel(
 
     fun logout() {
         viewModelScope.launch {
+            try {
+                com.example.notification.ShikhoNotificationManager.unsubscribeAll(com.example.ShikhoApp.instance)
+            } catch (_: Throwable) {}
             try {
                 apiService.logout()
             } catch (_: Exception) { }
