@@ -1,6 +1,10 @@
 package com.example.ui.components
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
@@ -12,7 +16,6 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -35,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +78,15 @@ enum class ReadingTheme {
     DAY,     // Normal white paper
     SEPIA,   // Eye comfort warm paper
     NIGHT    // Inverted dark mode
+}
+
+private fun Context.findActivity(): Activity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is Activity) return currentContext
+        currentContext = currentContext.baseContext
+    }
+    return null
 }
 
 /**
@@ -115,7 +129,7 @@ class PdfPageRenderer(
                         val firstPage = renderer!!.openPage(0)
                         val w = firstPage.width.toFloat()
                         val h = firstPage.height.toFloat()
-                        pageAspectRatios[0] = if (h > 0) w / h else 0.707f
+                        pageAspectRatios[0] = if (h > 0) w / h else 1.414f // 16:9 or standard slide ratio default
                         firstPage.close()
                     } catch (_: Exception) {}
                 }
@@ -143,11 +157,11 @@ class PdfPageRenderer(
                 try {
                     val pWidth = page.width
                     val pHeight = page.height
-                    val aspect = if (pHeight > 0) pWidth.toFloat() / pHeight.toFloat() else 0.707f
+                    val aspect = if (pHeight > 0) pWidth.toFloat() / pHeight.toFloat() else 1.414f
                     pageAspectRatios[pageIndex] = aspect
 
-                    // Render at high resolution (1080px to 2400px) so text and equations stay razor sharp
-                    val renderWidth = targetWidthPx.coerceIn(1080, 2400)
+                    // Render at high resolution (1200px to 2600px) so slide texts, diagrams and equations are razor sharp
+                    val renderWidth = targetWidthPx.coerceIn(1200, 2600)
                     val renderHeight = (renderWidth / aspect).toInt().coerceAtLeast(100)
 
                     val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
@@ -185,6 +199,7 @@ class PdfPageRenderer(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SlideViewerDialog(
     slideUrl: String,
@@ -195,6 +210,19 @@ fun SlideViewerDialog(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
+    val activity = remember(context) { context.findActivity() }
+
+    // Screen orientation state
+    var isLandscapeMode by remember { mutableStateOf(false) }
+
+    // Restore original orientation when dialog closes
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            } catch (_: Exception) {}
+        }
+    }
 
     // Normalize inputs
     val isDirectLocal = remember(slideUrl) {
@@ -241,6 +269,7 @@ fun SlideViewerDialog(
     var viewMode by remember { mutableStateOf(PdfViewMode.VERTICAL_SCROLL) }
     var readingTheme by remember { mutableStateOf(ReadingTheme.DAY) }
     var isFullscreen by remember { mutableStateOf(false) }
+    var showShareBottomSheet by remember { mutableStateOf(false) }
 
     // Resolve target file strictly for in-app viewing
     val targetPdfFile = remember(
@@ -249,101 +278,82 @@ fun SlideViewerDialog(
         effectiveDownloadedItem,
         cachedFileState
     ) {
-        // Priority 1: Direct valid local file passed as slideUrl
-        if (isDirectLocal && directCleanPath.isNotBlank()) {
-            val f = File(directCleanPath)
-            if (f.exists() && f.length() > 0) return@remember f
-        }
-
-        // Priority 2: Offline Vault file from DownloadedItemEntity
-        if (effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED) {
-            val f = File(effectiveDownloadedItem.localFilePath)
-            if (f.exists() && f.length() > 0) return@remember f
-        }
-
-        // Priority 3: Cached downloaded remote file in cache dir
-        if (cachedFileState != null && cachedFileState!!.exists() && cachedFileState!!.length() > 0) {
-            return@remember cachedFileState
-        }
-
-        // Check if pre-cached file exists for remoteCandidateUrl
-        if (!remoteCandidateUrl.isNullOrBlank()) {
-            val safeHash = remoteCandidateUrl.hashCode().toString().replace("-", "n")
-            val cacheDir = File(context.cacheDir, "pdf_preview_cache").apply { if (!exists()) mkdirs() }
-            val existingCacheFile = File(cacheDir, "preview_${safeHash}.pdf")
-            if (existingCacheFile.exists() && existingCacheFile.length() > 0) {
-                return@remember existingCacheFile
+        when {
+            isDirectLocal && directCleanPath.isNotBlank() -> {
+                val f = File(directCleanPath)
+                if (f.exists() && f.length() > 0) f else null
             }
+            effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED &&
+                    !effectiveDownloadedItem.localFilePath.isNullOrBlank() -> {
+                val f = File(effectiveDownloadedItem.localFilePath!!)
+                if (f.exists() && f.length() > 0) f else null
+            }
+            cachedFileState != null && cachedFileState!!.exists() && cachedFileState!!.length() > 0 -> {
+                cachedFileState
+            }
+            else -> null
         }
-
-        null
     }
 
-    // Download remote URL into cache if not locally available
-    LaunchedEffect(slideUrl, targetPdfFile, remoteCandidateUrl) {
-        if (targetPdfFile == null && !remoteCandidateUrl.isNullOrBlank()) {
+    // Auto download remote PDF into cache if not available locally
+    LaunchedEffect(targetPdfFile, remoteCandidateUrl) {
+        if (targetPdfFile == null && !remoteCandidateUrl.isNullOrBlank() && !isFetchingRemote) {
             isFetchingRemote = true
-            remoteErrorMessage = null
             remoteDownloadProgress = 0f
-
-            val safeHash = remoteCandidateUrl.hashCode().toString().replace("-", "n")
-            val cacheDir = File(context.cacheDir, "pdf_preview_cache").apply { if (!exists()) mkdirs() }
-            val tempFile = File(cacheDir, "preview_${safeHash}.pdf")
+            remoteErrorMessage = null
 
             try {
-                withContext(Dispatchers.IO) {
-                    val client = OkHttpClient.Builder()
-                        .connectTimeout(25, TimeUnit.SECONDS)
-                        .readTimeout(60, TimeUnit.SECONDS)
-                        .followRedirects(true)
-                        .build()
+                val okHttpClient = OkHttpClient.Builder()
+                    .connectTimeout(30, TimeUnit.SECONDS)
+                    .readTimeout(60, TimeUnit.SECONDS)
+                    .build()
 
+                val cacheDir = File(context.cacheDir, "pdf_preview_cache").apply { mkdirs() }
+                val safeFileName = "slide_${Math.abs(remoteCandidateUrl.hashCode())}.pdf"
+                val tempFile = File(cacheDir, safeFileName)
+
+                // If already cached on disk, reuse immediately
+                if (tempFile.exists() && tempFile.length() > 0) {
+                    cachedFileState = tempFile
+                    isFetchingRemote = false
+                    return@LaunchedEffect
+                }
+
+                withContext(Dispatchers.IO) {
                     val request = Request.Builder()
                         .url(remoteCandidateUrl)
-                        .addHeader("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)")
-                        .addHeader("referer", "https://shikho.com/")
-                        .addHeader("Origin", "https://shikho.com")
+                        .header("User-Agent", "Mozilla/5.0 (Android) ShikhoApp/1.0")
                         .build()
 
-                    val response = client.newCall(request).execute()
-                    if (!response.isSuccessful || response.body == null) {
-                        throw Exception("সার্ভার থেকে ফাইল পাওয়া যায়নি (HTTP ${response.code})")
+                    val response = okHttpClient.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        throw Exception("সার্ভার থেকে ফাইলটি লোড করা যায়নি (HTTP ${response.code})")
                     }
 
-                    val body = response.body!!
-                    val totalLength = body.contentLength()
-                    var bytesCopied = 0L
+                    val body = response.body ?: throw Exception("সার্ভার থেকে খালি রেসপন্স এসেছে")
+                    val contentLength = body.contentLength()
+                    val inputStream: InputStream = body.byteStream()
+                    val outputStream = FileOutputStream(tempFile)
 
-                    var inputStream: InputStream? = null
-                    var outputStream: FileOutputStream? = null
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = 0L
 
-                    try {
-                        inputStream = body.byteStream()
-                        outputStream = FileOutputStream(tempFile)
-                        val buffer = ByteArray(16384)
-                        var read: Int
-                        var lastProgressUpdate = System.currentTimeMillis()
-
-                        while (inputStream.read(buffer).also { read = it } != -1) {
-                            ensureActive()
-                            outputStream.write(buffer, 0, read)
-                            bytesCopied += read
-
-                            val now = System.currentTimeMillis()
-                            if (now - lastProgressUpdate > 150L || bytesCopied == totalLength) {
-                                lastProgressUpdate = now
-                                if (totalLength > 0) {
-                                    val prog = (bytesCopied.toFloat() / totalLength.toFloat()).coerceIn(0f, 1f)
+                    inputStream.use { input ->
+                        outputStream.use { output ->
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                ensureActive()
+                                output.write(buffer, 0, bytesRead)
+                                totalRead += bytesRead
+                                if (contentLength > 0) {
+                                    val prog = totalRead.toFloat() / contentLength.toFloat()
                                     withContext(Dispatchers.Main) {
                                         remoteDownloadProgress = prog
                                     }
                                 }
                             }
+                            output.flush()
                         }
-                        outputStream.flush()
-                    } finally {
-                        try { inputStream?.close() } catch (_: Exception) {}
-                        try { outputStream?.close() } catch (_: Exception) {}
                     }
                 }
 
@@ -379,8 +389,6 @@ fun SlideViewerDialog(
     val isOfflineAvailable = (isDirectLocal && targetPdfFile != null) ||
             (effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED)
 
-    var showNotebookLMDialog by remember { mutableStateOf(false) }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -397,7 +405,7 @@ fun SlideViewerDialog(
             }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top Header Bar (Can be hidden in Fullscreen mode)
+                // Top Header Bar (Can be hidden in Fullscreen mode for immersive reading)
                 AnimatedVisibility(
                     visible = !isFullscreen,
                     enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -409,9 +417,21 @@ fun SlideViewerDialog(
                         pageCount = rendererState?.pageCount ?: 0,
                         viewMode = viewMode,
                         readingTheme = readingTheme,
+                        isLandscape = isLandscapeMode,
                         downloadedItem = effectiveDownloadedItem,
                         onDismiss = onDismiss,
-                        onNotebookLMClick = { showNotebookLMDialog = true },
+                        onToggleOrientation = {
+                            val newLandscape = !isLandscapeMode
+                            isLandscapeMode = newLandscape
+                            activity?.requestedOrientation = if (newLandscape) {
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            } else {
+                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            }
+                        },
+                        onShareClick = {
+                            showShareBottomSheet = true
+                        },
                         onToggleViewMode = {
                             viewMode = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
                                 PdfViewMode.HORIZONTAL_SLIDES
@@ -447,16 +467,16 @@ fun SlideViewerDialog(
                     )
                 }
 
-                // Main Viewer Body
+                // Main Viewer Body - Clean, Edge-to-Edge reading canvas
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                         .background(
                             when (readingTheme) {
-                                ReadingTheme.DAY -> Color(0xFF1E293B)
+                                ReadingTheme.DAY -> Color(0xFF0F172A)
                                 ReadingTheme.SEPIA -> Color(0xFF292524)
-                                ReadingTheme.NIGHT -> Color(0xFF0F0F10)
+                                ReadingTheme.NIGHT -> Color(0xFF000000)
                             }
                         ),
                     contentAlignment = Alignment.Center
@@ -515,52 +535,17 @@ fun SlideViewerDialog(
                             }
                         }
                     }
-
-                    // Floating NotebookLM & AI Study Pill
-                    if (rendererState != null && rendererState.isInitialized && rendererState.pageCount > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFF4F46E5),
-                            shadowElevation = 8.dp,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(bottom = 24.dp, end = 16.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                                .clickable { showNotebookLMDialog = true }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoStories,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = "নোটবুক এলএম",
-                                    color = Color.White,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
 
-        if (showNotebookLMDialog) {
-            NotebookLMStudyDialog(
+        // Share Bottom Sheet / Dialog with 2 clean options: File Share & Link Copy
+        if (showShareBottomSheet) {
+            PdfShareBottomSheet(
                 title = title,
-                currentPage = 1,
-                totalPageCount = rendererState?.pageCount ?: 1,
-                targetFile = targetPdfFile,
-                remoteUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl,
-                onDismiss = { showNotebookLMDialog = false }
+                pdfFile = targetPdfFile,
+                pdfUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl,
+                onDismiss = { showShareBottomSheet = false }
             )
         }
     }
@@ -573,16 +558,18 @@ private fun PdfViewerTopBar(
     pageCount: Int,
     viewMode: PdfViewMode,
     readingTheme: ReadingTheme,
+    isLandscape: Boolean,
     downloadedItem: DownloadedItemEntity?,
     onDismiss: () -> Unit,
-    onNotebookLMClick: () -> Unit,
+    onToggleOrientation: () -> Unit,
+    onShareClick: () -> Unit,
     onToggleViewMode: () -> Unit,
     onCycleTheme: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onDownloadClick: () -> Unit
 ) {
     Surface(
-        color = Color(0xFF0F172A),
+        color = Color(0xFF0B1120),
         shadowElevation = 4.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -590,9 +577,10 @@ private fun PdfViewerTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Close Button
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
@@ -602,16 +590,17 @@ private fun PdfViewerTopBar(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = "বন্ধ করুন",
                     tint = Color.White
                 )
             }
 
             Spacer(modifier = Modifier.width(4.dp))
 
+            // Title & Status
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = title.ifBlank { "ইন-অ্যাপ পিডিএফ নোট" },
+                    text = title.ifBlank { "ইন-অ্যাপ পিডিএফ স্লাইড" },
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -629,22 +618,9 @@ private fun PdfViewerTopBar(
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                text = "✓ অফলাইন সংরক্ষিত",
+                                text = "✓ অফলাইন",
                                 fontSize = 10.sp,
                                 color = Color(0xFF34D399),
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                    } else {
-                        Surface(
-                            color = Color(0xFF38BDF8).copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "অ্যাপ সুরক্ষিত ভিউ",
-                                fontSize = 10.sp,
-                                color = Color(0xFF7DD3FC),
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                             )
@@ -653,7 +629,7 @@ private fun PdfViewerTopBar(
 
                     if (pageCount > 0) {
                         Text(
-                            text = "${toBengaliDigits(pageCount)} টি পৃষ্ঠা",
+                            text = "${toBengaliDigits(pageCount)} টি স্লাইড",
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.7f)
                         )
@@ -661,41 +637,36 @@ private fun PdfViewerTopBar(
                 }
             }
 
-            // NotebookLM & AI Study Button
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFF4F46E5).copy(alpha = 0.4f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.7f)),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onNotebookLMClick)
+            // 1. Landscape / Orientation Toggle Button
+            IconButton(
+                onClick = onToggleOrientation,
+                modifier = Modifier.size(38.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoStories,
-                        contentDescription = "NotebookLM",
-                        tint = Color(0xFFA5B4FC),
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Text(
-                        text = "NotebookLM",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
+                Icon(
+                    imageVector = if (isLandscape) Icons.Default.ScreenLockLandscape else Icons.Default.ScreenRotation,
+                    contentDescription = if (isLandscape) "পোর্ট্রেট মোড" else "ল্যান্ডস্কেপ মোড",
+                    tint = if (isLandscape) Color(0xFF38BDF8) else Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            // 2. Share Button (File send & Copy link)
+            IconButton(
+                onClick = onShareClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "শেয়ার করুন",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
 
-            // Mode Switcher: Continuous Scroll vs Single Slide Presentation
+            // 3. Mode Switcher: Continuous Scroll vs Single Slide Presentation
             IconButton(
                 onClick = onToggleViewMode,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(38.dp)
             ) {
                 Icon(
                     imageVector = if (viewMode == PdfViewMode.VERTICAL_SCROLL) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel,
@@ -705,10 +676,10 @@ private fun PdfViewerTopBar(
                 )
             }
 
-            // Theme Switcher: Day -> Sepia -> Night
+            // 4. Theme Switcher: Day -> Sepia -> Night
             IconButton(
                 onClick = onCycleTheme,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(38.dp)
             ) {
                 Icon(
                     imageVector = when (readingTheme) {
@@ -726,26 +697,13 @@ private fun PdfViewerTopBar(
                 )
             }
 
-            // Fullscreen Toggle
-            IconButton(
-                onClick = onToggleFullscreen,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Fullscreen,
-                    contentDescription = "ফুলস্ক্রিন",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            // In-App Download Action
+            // 5. In-App Download Action
             when (downloadedItem?.status) {
                 DownloadedItemEntity.STATUS_DOWNLOADING -> {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .padding(4.dp),
+                            .size(38.dp)
+                            .padding(6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
@@ -759,7 +717,7 @@ private fun PdfViewerTopBar(
                 DownloadedItemEntity.STATUS_COMPLETED -> {
                     IconButton(
                         onClick = onDownloadClick,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.DownloadDone,
@@ -772,7 +730,7 @@ private fun PdfViewerTopBar(
                 else -> {
                     IconButton(
                         onClick = onDownloadClick,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Download,
@@ -818,7 +776,7 @@ private fun NativePdfViewerContent(
 
     val displayWidthPx = context.resources.displayMetrics.widthPixels
     val renderTargetWidth = remember(displayWidthPx) {
-        (displayWidthPx * 2.0f).toInt().coerceIn(1080, 2400)
+        (displayWidthPx * 2.5f).toInt().coerceIn(1200, 2600)
     }
 
     // ColorFilter for Night/Sepia Reading modes
@@ -872,7 +830,7 @@ private fun NativePdfViewerContent(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(1f, 3.5f)
+                    val newScale = (scale * zoom).coerceIn(1f, 4.0f)
                     scale = newScale
                     if (newScale > 1f) {
                         panOffset += pan
@@ -899,12 +857,12 @@ private fun NativePdfViewerContent(
                 )
             }
     ) {
-        // Mode 1: Continuous Vertical Scrolling
+        // Mode 1: Continuous Vertical Scrolling - EDGE-TO-EDGE FULL WIDTH (0dp side padding)
         if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
             LazyColumn(
                 state = verticalListState,
-                contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 16.dp, bottom = 90.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(start = 0.dp, end = 0.dp, top = 4.dp, bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -928,11 +886,11 @@ private fun NativePdfViewerContent(
                 }
             }
         } else {
-            // Mode 2: Horizontal Slide Presentation Mode
+            // Mode 2: Horizontal Slide Presentation Mode - FULL WIDTH
             HorizontalPager(
                 state = horizontalPagerState,
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 20.dp),
-                pageSpacing = 16.dp,
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                pageSpacing = 0.dp,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
@@ -957,7 +915,7 @@ private fun NativePdfViewerContent(
             }
         }
 
-        // Floating Bottom Controls
+        // Floating Bottom Controls Dock - Modern, sleek & comfortable
         AnimatedVisibility(
             visible = !isFullscreen,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -968,15 +926,15 @@ private fun NativePdfViewerContent(
                 .padding(bottom = 12.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = Color(0xFF0F172A).copy(alpha = 0.94f),
                 shadowElevation = 8.dp,
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     // Zoom Out Button
                     IconButton(
@@ -996,12 +954,12 @@ private fun NativePdfViewerContent(
                         )
                     }
 
-                    // Zoom Level Badge (Reset button)
+                    // Zoom Level Badge (Tap to reset to 100%)
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = if (scale > 1.05f) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else Color.Transparent,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .pointerInput(Unit) {
                                 detectTapGestures {
                                     scale = 1f
@@ -1012,7 +970,7 @@ private fun NativePdfViewerContent(
                         Text(
                             text = "${(scale * 100).toInt()}%",
                             color = if (scale > 1.05f) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                         )
@@ -1021,22 +979,22 @@ private fun NativePdfViewerContent(
                     // Zoom In Button
                     IconButton(
                         onClick = {
-                            scale = (scale + 0.25f).coerceAtMost(3.5f)
+                            scale = (scale + 0.25f).coerceAtMost(4.0f)
                         },
-                        enabled = scale < 3.5f,
+                        enabled = scale < 4.0f,
                         modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ZoomIn,
                             contentDescription = "Zoom In",
-                            tint = if (scale < 3.5f) Color.White else Color.White.copy(alpha = 0.3f),
+                            tint = if (scale < 4.0f) Color.White else Color.White.copy(alpha = 0.3f),
                             modifier = Modifier.size(18.dp)
                         )
                     }
 
                     VerticalDivider(
                         modifier = Modifier
-                            .height(20.dp)
+                            .height(18.dp)
                             .padding(horizontal = 4.dp),
                         color = Color.White.copy(alpha = 0.2f)
                     )
@@ -1066,10 +1024,10 @@ private fun NativePdfViewerContent(
 
                     // Page Indicator Pill (Tap to Jump)
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .pointerInput(Unit) {
                                 detectTapGestures {
                                     showJumpDialog = true
@@ -1081,7 +1039,7 @@ private fun NativePdfViewerContent(
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                         )
                     }
 
@@ -1113,6 +1071,9 @@ private fun NativePdfViewerContent(
     }
 }
 
+/**
+ * Clean edge-to-edge PDF slide card with maximum readability and zero wasted margin.
+ */
 @Composable
 private fun PdfPageCard(
     pageIndex: Int,
@@ -1125,7 +1086,7 @@ private fun PdfPageCard(
         mutableStateOf(renderer.getCachedBitmap(pageIndex))
     }
 
-    val aspectRatio = renderer.pageAspectRatios[pageIndex] ?: 0.707f
+    val aspectRatio = renderer.pageAspectRatios[pageIndex] ?: 1.414f
 
     LaunchedEffect(pageIndex, renderer) {
         if (pageBitmap == null) {
@@ -1135,24 +1096,14 @@ private fun PdfPageCard(
     }
 
     Surface(
-        shape = RoundedCornerShape(8.dp),
+        shape = RectangleShape,
         color = when (readingTheme) {
             ReadingTheme.DAY -> Color.White
             ReadingTheme.SEPIA -> Color(0xFFF7F3E9)
             ReadingTheme.NIGHT -> Color(0xFF1E1E20)
         },
-        shadowElevation = 4.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            when (readingTheme) {
-                ReadingTheme.DAY -> Color(0xFFE2E8F0)
-                ReadingTheme.SEPIA -> Color(0xFFE7E0D3)
-                ReadingTheme.NIGHT -> Color(0xFF333338)
-            }
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Box(
             modifier = Modifier
@@ -1163,7 +1114,7 @@ private fun PdfPageCard(
             if (pageBitmap != null) {
                 Image(
                     bitmap = pageBitmap!!.asImageBitmap(),
-                    contentDescription = "পৃষ্ঠা ${pageIndex + 1}",
+                    contentDescription = "স্লাইড ${pageIndex + 1}",
                     contentScale = ContentScale.FillWidth,
                     colorFilter = colorFilter,
                     modifier = Modifier.fillMaxSize()
@@ -1181,13 +1132,195 @@ private fun PdfPageCard(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "পৃষ্ঠা ${toBengaliDigits(pageIndex + 1)} লোড হচ্ছে...",
+                        text = "স্লাইড ${toBengaliDigits(pageIndex + 1)} লোড হচ্ছে...",
                         color = Color(0xFF94A3B8),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Modern Share Bottom Sheet with 2 clear options:
+ * 1. File Share (send via WhatsApp, Telegram, Drive, etc.)
+ * 2. Copy Link (copy URL to clipboard)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PdfShareBottomSheet(
+    title: String,
+    pdfFile: File?,
+    pdfUrl: String?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color(0xFF0F172A),
+        scrimColor = Color.Black.copy(alpha = 0.6f),
+        dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.4f)) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = "পিডিএফ শেয়ার করুন",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = title.ifBlank { "পিডিএফ লেকচার ফাইল" },
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Option 1: Share PDF File
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF1E293B),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable {
+                        onDismiss()
+                        if (pdfFile != null && pdfFile.exists() && pdfFile.length() > 0) {
+                            try {
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    pdfFile
+                                )
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_SUBJECT, title)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "পিডিএফ ফাইল পাঠান"))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "ফাইল শেয়ার করতে ব্যর্থ হয়েছে: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "ফাইলটি এখনো সম্পূর্ণ ডাউনলোড হয়নি, অনুগ্রহ করে অপেক্ষা করুন", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF38BDF8).copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "ফাইল পাঠান (Share File)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "হোয়াটসঅ্যাপ, টেলিগ্রাম বা অন্য কোনো অ্যাপে পিডিএফ ফাইলটি সরাসরি পাঠান",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Option 2: Copy Link
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF1E293B),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable {
+                        onDismiss()
+                        val linkToCopy = pdfUrl
+                        if (!linkToCopy.isNullOrBlank()) {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("PDF Link", linkToCopy)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "পিডিএফ লিংক ক্লিপবোর্ডে কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "এই ফাইলের অনলাইন লিংক পাওয়া যায়নি (লোকাল ফাইল)", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981).copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            tint = Color(0xFF34D399),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "লিংক কপি করুন (Copy Link)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "পিডিএফ ডাউনলোডের আসল লিংকটি কপি করুন",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }
@@ -1204,12 +1337,12 @@ private fun JumpToPageDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = "পৃষ্ঠা পরিবর্তন", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(text = "স্লাইড পরিবর্তন", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         },
         text = {
             Column {
                 Text(
-                    text = "১ থেকে ${toBengaliDigits(totalPages)} এর মধ্যে যে পৃষ্ঠায় যেতে চান তার নম্বর লিখুন:",
+                    text = "১ থেকে ${toBengaliDigits(totalPages)} এর মধ্যে যে স্লাইডে যেতে চান তার নম্বর লিখুন:",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1233,13 +1366,13 @@ private fun JumpToPageDialog(
                         onClick = { onPageSelected(1) },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("প্রথম পৃষ্ঠা", fontSize = 11.sp)
+                        Text("প্রথম স্লাইড", fontSize = 11.sp)
                     }
                     FilledTonalButton(
                         onClick = { onPageSelected(totalPages) },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("শেষ পৃষ্ঠা", fontSize = 11.sp)
+                        Text("শেষ স্লাইড", fontSize = 11.sp)
                     }
                 }
             }

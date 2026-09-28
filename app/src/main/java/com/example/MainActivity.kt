@@ -165,11 +165,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Resync topics on resume if logged in
-        val sessionManager = SessionManager(applicationContext)
-        if (!sessionManager.getAccessToken().isNullOrBlank()) {
-            ShikhoNotificationManager.syncAllTopicSubscriptions(applicationContext)
-        }
     }
 
     override fun onPictureInPictureModeChanged(

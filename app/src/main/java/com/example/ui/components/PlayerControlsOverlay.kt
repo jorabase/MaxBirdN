@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -19,12 +20,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,12 +32,13 @@ import com.example.database.DownloadedItemEntity
 import com.example.player.PlayerClassType
 import com.example.player.ShikhoPlayerManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @Composable
 fun PlayerControlsOverlay(
     title: String,
-    subjectName: String,
+    subjectName: String = "",
     isPlaying: Boolean,
     isBuffering: Boolean,
     currentPosition: Long,
@@ -46,6 +47,9 @@ fun PlayerControlsOverlay(
     areControlsVisible: Boolean,
     isFullscreen: Boolean,
     playbackSpeed: Float,
+    isTemporaryFastForwarding: Boolean = false,
+    onStartTemporaryFastForward: () -> Unit = {},
+    onStopTemporaryFastForward: () -> Unit = {},
     isLive: Boolean = false,
     viewerCount: Int? = null,
     classType: PlayerClassType? = null,
@@ -73,14 +77,16 @@ fun PlayerControlsOverlay(
     onToggleAudioOnlyMode: () -> Unit = {},
     resumeNotificationText: String? = null,
     onRestartFromBeginning: (() -> Unit)? = null,
+    manualZoomScale: Float = 1.0f,
+    onResetManualZoom: () -> Unit = {},
     onBack: () -> Unit
 ) {
-    val effectiveClassType = remember(classType, isLive) {
-        classType ?: if (isLive) PlayerClassType.LIVE else PlayerClassType.RECORDED_LECTURE
-    }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
-    // Screen Touch Lock State (specifically designed for landscape/fullscreen comfort)
+    // Screen Touch Lock State
     var isScreenLocked by remember { mutableStateOf(false) }
+    var showUnlockPill by remember { mutableStateOf(false) }
 
     // Double tap feedback state
     var doubleTapFeedbackSide by remember { mutableStateOf<String?>(null) }
@@ -90,6 +96,13 @@ fun PlayerControlsOverlay(
         if (doubleTapFeedbackSide != null) {
             delay(650)
             doubleTapFeedbackSide = null
+        }
+    }
+
+    LaunchedEffect(isScreenLocked, showUnlockPill) {
+        if (isScreenLocked && showUnlockPill) {
+            delay(3500)
+            showUnlockPill = false
         }
     }
 
@@ -103,11 +116,26 @@ fun PlayerControlsOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(isScreenLocked, isLive) {
+            .pointerInput(isScreenLocked, isLive, isPlaying, manualZoomScale) {
                 detectTapGestures(
+                    onPress = {
+                        var is2xActive = false
+                        val holdJob = coroutineScope.launch {
+                            delay(400) // Press & hold for 400ms to trigger 2X speed
+                            if (isPlaying && !isLive && !isScreenLocked) {
+                                is2xActive = true
+                                onStartTemporaryFastForward()
+                            }
+                        }
+                        tryAwaitRelease()
+                        holdJob.cancel()
+                        if (is2xActive) {
+                            onStopTemporaryFastForward()
+                        }
+                    },
                     onTap = {
                         if (isScreenLocked) {
-                            // If screen is locked, a tap just shows the unlock button
+                            showUnlockPill = true
                         } else {
                             onToggleControls()
                         }
@@ -126,8 +154,11 @@ fun PlayerControlsOverlay(
                                 doubleTapFeedbackSide = "RIGHT"
                                 doubleTapTriggerKey++
                             } else {
-                                // Center double tap -> Toggle play/pause
-                                onTogglePlayPause()
+                                if (manualZoomScale > 1.05f) {
+                                    onResetManualZoom()
+                                } else {
+                                    onTogglePlayPause()
+                                }
                             }
                         }
                     }
@@ -135,44 +166,95 @@ fun PlayerControlsOverlay(
             }
     ) {
         // -------------------------------------------------------------
-        // 1. SCREEN LOCK OVERLAY (Only visible when locked)
+        // 1. SCREEN LOCK OVERLAY (Unobtrusive & Elegant)
         // -------------------------------------------------------------
         if (isScreenLocked) {
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = Color.Black.copy(alpha = 0.78f),
-                border = BorderStroke(1.2.dp, Color(0xFFF59E0B)),
-                shadowElevation = 8.dp,
+            AnimatedVisibility(
+                visible = showUnlockPill,
+                enter = fadeIn() + scaleIn(initialScale = 0.85f),
+                exit = fadeOut() + scaleOut(targetScale = 0.85f),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .then(if (isFullscreen) Modifier.statusBarsPadding() else Modifier)
                     .padding(top = 16.dp)
-                    .clickable { isScreenLocked = false }
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = Color(0xFF0F172A).copy(alpha = 0.90f),
+                    border = BorderStroke(1.2.dp, Color(0xFFF59E0B)),
+                    shadowElevation = 10.dp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(22.dp))
+                        .clickable {
+                            isScreenLocked = false
+                            showUnlockPill = false
+                            Toast.makeText(context, "স্ক্রিন আনলক হয়েছে", Toast.LENGTH_SHORT).show()
+                        }
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "আনলক করুন",
-                        tint = Color(0xFFF59E0B),
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "স্ক্রিন লক রয়েছে • আনলক করতে ট্যাপ করুন",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LockOpen,
+                            contentDescription = "আনলক করুন",
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "আনলক করতে ট্যাপ করুন",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
             return@Box
         }
 
         // -------------------------------------------------------------
-        // 2. DOUBLE TAP RIPPLE VISUAL FEEDBACK
+        // 2. TEMPORARY 2X SPEED FLOATING BADGE (On Press & Hold)
+        // -------------------------------------------------------------
+        AnimatedVisibility(
+            visible = isTemporaryFastForwarding,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(if (isFullscreen) Modifier.statusBarsPadding() else Modifier)
+                .padding(top = 14.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.85f),
+                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.8f)),
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FastForward,
+                        contentDescription = null,
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "2X স্পিড",
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 3. DOUBLE TAP RIPPLE VISUAL FEEDBACK
         // -------------------------------------------------------------
         AnimatedVisibility(
             visible = doubleTapFeedbackSide == "LEFT",
@@ -245,7 +327,7 @@ fun PlayerControlsOverlay(
         }
 
         // -------------------------------------------------------------
-        // 3. OVERLAY CONTROLS (Fade in/out with smooth gradient background)
+        // 4. OVERLAY CONTROLS (Top Bar + Center Play + Bottom Seekbar)
         // -------------------------------------------------------------
         AnimatedVisibility(
             visible = areControlsVisible || isBuffering,
@@ -268,7 +350,7 @@ fun PlayerControlsOverlay(
                     .then(insetsModifier)
             ) {
                 // ---------------------------------------------------------
-                // TOP BAR (Back Button + Title info + Action Strip Pills)
+                // TOP BAR (Back Button + Lesson Title ONLY + Action Strip)
                 // ---------------------------------------------------------
                 Row(
                     modifier = Modifier
@@ -278,7 +360,7 @@ fun PlayerControlsOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Left: Back Button + Title
+                    // Left: Back Button + Lesson Title ONLY (Subject Name Removed)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f, fill = false)
@@ -304,97 +386,34 @@ fun PlayerControlsOverlay(
 
                         Spacer(modifier = Modifier.width(10.dp))
 
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                            if (subjectName.isNotBlank() && isFullscreen) {
-                                Text(
-                                    text = subjectName,
-                                    color = Color(0xFF38BDF8),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Text(
-                                text = title.ifBlank { "ক্লাস লেকচার" },
-                                color = Color.White,
-                                fontSize = if (isFullscreen) 14.sp else 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Text(
+                            text = title.ifBlank { "ক্লাস লেকচার" },
+                            color = Color.White,
+                            fontSize = if (isFullscreen) 14.5.sp else 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Right: Modern Action Pills Strip
+                    // Right: Modern Action Pills Strip (No duplicate sound/audio buttons!)
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // 1. One-Tap Mute / Unmute Pill
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isMuted) Color(0xFFEF4444).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.18f),
-                            border = BorderStroke(0.8.dp, if (isMuted) Color(0xFFF87171) else Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier.clickable { onToggleMute() }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                    contentDescription = "সাউন্ড অফ/অন",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isMuted) "মিউট" else "সাউন্ড",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // 2. Audio-Only Listening Mode Pill (শোনার বাটন / স্ক্রিন অফ অডিও)
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isAudioOnlyMode) Color(0xFF0284C7).copy(alpha = 0.90f) else Color.White.copy(alpha = 0.18f),
-                            border = BorderStroke(0.8.dp, if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier.clickable { onToggleAudioOnlyMode() }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Headphones,
-                                    contentDescription = "অডিও মোড",
-                                    tint = if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isAudioOnlyMode) "শুনুন (অন)" else "শুনুন",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // 3. Screen Touch Lock Button (In landscape mode to prevent accidental touches)
+                        // 1. Screen Touch Lock Button (In fullscreen to prevent accidental touches)
                         if (isFullscreen) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color.White.copy(alpha = 0.18f),
                                 border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.25f)),
-                                modifier = Modifier.clickable { isScreenLocked = true }
+                                modifier = Modifier.clickable {
+                                    isScreenLocked = true
+                                    showUnlockPill = true
+                                }
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -417,7 +436,7 @@ fun PlayerControlsOverlay(
                             }
                         }
 
-                        // 4. Aspect Ratio Resize Toggle
+                        // 2. Aspect Ratio Resize Toggle (Fit, Zoom, Fill)
                         val resizeModeLabel = when (resizeMode) {
                             androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ফিট"
                             androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "জুম"
@@ -450,7 +469,7 @@ fun PlayerControlsOverlay(
                             }
                         }
 
-                        // 5. Quality Selection Tag
+                        // 3. Quality Selection Tag
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color.White.copy(alpha = 0.18f),
@@ -477,7 +496,7 @@ fun PlayerControlsOverlay(
                             }
                         }
 
-                        // 6. Playback Speed Selector
+                        // 4. Playback Speed Selector
                         if (!isLive) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -496,7 +515,7 @@ fun PlayerControlsOverlay(
                             }
                         }
 
-                        // 7. Download Button with live status
+                        // 5. Download Button with live status
                         when (downloadedItem?.status) {
                             DownloadedItemEntity.STATUS_DOWNLOADING -> {
                                 val item = downloadedItem
@@ -582,7 +601,7 @@ fun PlayerControlsOverlay(
                             }
                         }
 
-                        // 8. Picture-in-Picture
+                        // 6. Picture-in-Picture
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color.White.copy(alpha = 0.18f),
@@ -612,12 +631,11 @@ fun PlayerControlsOverlay(
                 }
 
                 // ---------------------------------------------------------
-                // CENTER CONTROLS (-10s, Hero Play/Pause, +10s)
+                // CENTER CONTROLS (Only Hero Play/Pause Button - 10s buttons removed)
                 // ---------------------------------------------------------
-                Row(
+                Box(
                     modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(if (isFullscreen) 36.dp else 22.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    contentAlignment = Alignment.Center
                 ) {
                     if (isBuffering) {
                         Surface(
@@ -635,29 +653,7 @@ fun PlayerControlsOverlay(
                             }
                         }
                     } else {
-                        // Rewind 10s Button
-                        if (!isLive) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Black.copy(alpha = 0.55f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
-                                modifier = Modifier
-                                    .size(if (isFullscreen) 50.dp else 42.dp)
-                                    .clip(CircleShape)
-                                    .clickable { onSeekBack() }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Replay10,
-                                        contentDescription = "১০ সেকেন্ড পেছনে",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Hero Play / Pause Button
+                        // Clean Hero Play / Pause Button
                         Surface(
                             shape = CircleShape,
                             color = Color.White,
@@ -676,28 +672,6 @@ fun PlayerControlsOverlay(
                                 )
                             }
                         }
-
-                        // Forward 10s Button
-                        if (!isLive) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Black.copy(alpha = 0.55f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
-                                modifier = Modifier
-                                    .size(if (isFullscreen) 50.dp else 42.dp)
-                                    .clip(CircleShape)
-                                    .clickable { onSeekForward() }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Forward10,
-                                        contentDescription = "১০ সেকেন্ড সামনে",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -710,7 +684,7 @@ fun PlayerControlsOverlay(
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 14.dp, vertical = if (isFullscreen) 10.dp else 6.dp)
                 ) {
-                    // Resume Playback Banner (With direct "শুরু থেকে দেখুন" button)
+                    // Resume Playback Banner
                     AnimatedVisibility(
                         visible = !resumeNotificationText.isNullOrBlank(),
                         enter = fadeIn() + expandVertically(),
@@ -846,11 +820,29 @@ fun PlayerControlsOverlay(
                                 fontWeight = FontWeight.SemiBold
                             )
 
-                            // Quick Action Control Pills (Restart, Mute, Audio Mode, Fullscreen)
+                            // Quick Action Control Icons
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // Manual Zoom Reset Indicator (if user pinched to zoom)
+                                if (manualZoomScale > 1.05f) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF0284C7).copy(alpha = 0.4f),
+                                        border = BorderStroke(0.8.dp, Color(0xFF38BDF8)),
+                                        modifier = Modifier.clickable { onResetManualZoom() }
+                                    ) {
+                                        Text(
+                                            text = "জুম ${(manualZoomScale * 100).toInt()}% (রিসেট)",
+                                            color = Color(0xFF38BDF8),
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+
                                 // Restart from Beginning Quick Action (if watched past 15 seconds)
                                 if (currentPosition > 15_000L && onRestartFromBeginning != null) {
                                     Surface(
@@ -900,10 +892,10 @@ fun PlayerControlsOverlay(
                                     }
                                 }
 
-                                // Quick Audio Mode Button (শোনার বাটন)
+                                // Audio-Only Listening Mode Button
                                 Surface(
                                     shape = CircleShape,
-                                    color = if (isAudioOnlyMode) Color(0xFF0284C7).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.18f),
+                                    color = if (isAudioOnlyMode) Color(0xFF0284C7).copy(alpha = 0.90f) else Color.White.copy(alpha = 0.18f),
                                     border = BorderStroke(0.8.dp, if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.25f)),
                                     modifier = Modifier
                                         .size(34.dp)
@@ -913,7 +905,7 @@ fun PlayerControlsOverlay(
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = Icons.Default.Headphones,
-                                            contentDescription = "অডিও মোড (স্ক্রিন অফ করে শুনুন)",
+                                            contentDescription = if (isAudioOnlyMode) "ভিডিও মোডে ফিরুন" else "শুধুমাত্র অডিও শুনুন",
                                             tint = if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White,
                                             modifier = Modifier.size(17.dp)
                                         )
@@ -933,101 +925,9 @@ fun PlayerControlsOverlay(
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                            contentDescription = if (isFullscreen) "ছোট স্ক্রিন" else "ফুল স্ক্রিন",
+                                            contentDescription = if (isFullscreen) "ছোট স্ক্রিন" else "বড় স্ক্রিন",
                                             tint = Color.White,
-                                            modifier = Modifier.size(19.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // LIVE STATUS BAR
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFE11D48))
-                                )
-                                Text(
-                                    text = "🔴 সরাসরি সম্প্রচার চলছে (Live)",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // One-Tap Mute / Unmute Button for Live
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isMuted) Color(0xFFEF4444).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.18f),
-                                    border = BorderStroke(0.8.dp, if (isMuted) Color(0xFFF87171) else Color.White.copy(alpha = 0.25f)),
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .clickable { onToggleMute() }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                            contentDescription = if (isMuted) "সাউন্ড অন করুন" else "সাউন্ড অফ করুন",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                }
-
-                                // Audio Mode for Live
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isAudioOnlyMode) Color(0xFF0284C7).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.18f),
-                                    border = BorderStroke(0.8.dp, if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.25f)),
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .clickable { onToggleAudioOnlyMode() }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Headphones,
-                                            contentDescription = "অডিও মোড",
-                                            tint = if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                    }
-                                }
-
-                                // Fullscreen for Live
-                                Surface(
-                                    shape = CircleShape,
-                                    color = Color.White.copy(alpha = 0.18f),
-                                    border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.25f)),
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .clickable { onToggleFullscreen() }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                            contentDescription = if (isFullscreen) "ছোট স্ক্রিন" else "ফুল স্ক্রিন",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(19.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 }

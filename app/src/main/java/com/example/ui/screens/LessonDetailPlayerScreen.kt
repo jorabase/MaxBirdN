@@ -36,6 +36,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -267,11 +269,34 @@ fun LessonDetailPlayerScreen(
     // Audio-Only Listening Mode State ("শোনার বাটন" / Screen-off Audio)
     var isAudioOnlyMode by remember { mutableStateOf(false) }
 
+    // Manual Pinch-to-Zoom & Pan state
+    var videoScale by remember { mutableFloatStateOf(1.0f) }
+    var videoPan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+
     // ExoPlayer Instance with Shikho CDN headers & DefaultTrackSelector for HLS quality selection
     val trackSelector = remember { DefaultTrackSelector(context) }
     val exoPlayer = remember(classType) {
         ShikhoPlayerManager.buildExoPlayer(context, trackSelector, classType).apply {
             repeatMode = if (classType == PlayerClassType.ANIMATED) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        }
+    }
+
+    // Temporary 2X Fast Forward state (on Press & Hold)
+    var isTemporaryFastForwarding by remember { mutableStateOf(false) }
+    var speedBeforeFastForward by remember { mutableFloatStateOf(1.0f) }
+
+    val startTemporaryFastForward: () -> Unit = {
+        if (!isTemporaryFastForwarding && isPlaying) {
+            speedBeforeFastForward = playbackSpeed
+            isTemporaryFastForwarding = true
+            exoPlayer.playbackParameters = PlaybackParameters(2.0f)
+        }
+    }
+
+    val stopTemporaryFastForward: () -> Unit = {
+        if (isTemporaryFastForwarding) {
+            isTemporaryFastForwarding = false
+            exoPlayer.playbackParameters = PlaybackParameters(speedBeforeFastForward)
         }
     }
 
@@ -308,6 +333,8 @@ fun LessonDetailPlayerScreen(
     }
 
     val toggleResizeMode: () -> Unit = {
+        videoScale = 1.0f
+        videoPan = androidx.compose.ui.geometry.Offset.Zero
         resizeMode = when (resizeMode) {
             AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
@@ -790,24 +817,47 @@ fun LessonDetailPlayerScreen(
                 .background(Color.Black)
         ) {
             if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            player = exoPlayer
-                            useController = false
-                            this.resizeMode = resizeMode
-                            layoutParams = FrameLayout.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT
-                            )
+                // Video Surface with Manual Pinch-to-Zoom & Pan
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                val newScale = (videoScale * zoom).coerceIn(1.0f, 4.0f)
+                                videoScale = newScale
+                                if (newScale > 1.0f) {
+                                    videoPan += pan
+                                } else {
+                                    videoPan = androidx.compose.ui.geometry.Offset.Zero
+                                }
+                            }
                         }
-                    },
-                    update = { pv ->
-                        pv.player = exoPlayer
-                        pv.resizeMode = resizeMode
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                        .graphicsLayer {
+                            scaleX = videoScale
+                            scaleY = videoScale
+                            translationX = videoPan.x
+                            translationY = videoPan.y
+                        }
+                ) {
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                player = exoPlayer
+                                useController = false
+                                this.resizeMode = resizeMode
+                                layoutParams = FrameLayout.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            }
+                        },
+                        update = { pv ->
+                            pv.player = exoPlayer
+                            pv.resizeMode = resizeMode
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 // Ambient Audio Only Mode Screen
                 if (isAudioOnlyMode) {
@@ -838,6 +888,14 @@ fun LessonDetailPlayerScreen(
                     areControlsVisible = areControlsVisible,
                     isFullscreen = true,
                     playbackSpeed = playbackSpeed,
+                    isTemporaryFastForwarding = isTemporaryFastForwarding,
+                    onStartTemporaryFastForward = startTemporaryFastForward,
+                    onStopTemporaryFastForward = stopTemporaryFastForward,
+                    manualZoomScale = videoScale,
+                    onResetManualZoom = {
+                        videoScale = 1.0f
+                        videoPan = androidx.compose.ui.geometry.Offset.Zero
+                    },
                     classType = classType,
                     onTogglePlayPause = {
                         if (isPlaying) exoPlayer.pause() else exoPlayer.play()
@@ -946,24 +1004,47 @@ fun LessonDetailPlayerScreen(
                             )
                         }
                     } else if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) {
-                        AndroidView(
-                            factory = { ctx ->
-                                PlayerView(ctx).apply {
-                                    player = exoPlayer
-                                    useController = false
-                                    this.resizeMode = resizeMode
-                                    layoutParams = FrameLayout.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
+                        // Portrait Video Surface with Manual Pinch-to-Zoom & Pan
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val newScale = (videoScale * zoom).coerceIn(1.0f, 4.0f)
+                                        videoScale = newScale
+                                        if (newScale > 1.0f) {
+                                            videoPan += pan
+                                        } else {
+                                            videoPan = androidx.compose.ui.geometry.Offset.Zero
+                                        }
+                                    }
                                 }
-                            },
-                            update = { pv ->
-                                pv.player = exoPlayer
-                                pv.resizeMode = resizeMode
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                                .graphicsLayer {
+                                    scaleX = videoScale
+                                    scaleY = videoScale
+                                    translationX = videoPan.x
+                                    translationY = videoPan.y
+                                }
+                        ) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    PlayerView(ctx).apply {
+                                        player = exoPlayer
+                                        useController = false
+                                        this.resizeMode = resizeMode
+                                        layoutParams = FrameLayout.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                    }
+                                },
+                                update = { pv ->
+                                    pv.player = exoPlayer
+                                    pv.resizeMode = resizeMode
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
 
                         // Ambient Audio Mode Visualizer Screen in Portrait
                         if (isAudioOnlyMode) {
@@ -1016,6 +1097,14 @@ fun LessonDetailPlayerScreen(
                                 areControlsVisible = areControlsVisible,
                                 isFullscreen = false,
                                 playbackSpeed = playbackSpeed,
+                                isTemporaryFastForwarding = isTemporaryFastForwarding,
+                                onStartTemporaryFastForward = startTemporaryFastForward,
+                                onStopTemporaryFastForward = stopTemporaryFastForward,
+                                manualZoomScale = videoScale,
+                                onResetManualZoom = {
+                                    videoScale = 1.0f
+                                    videoPan = androidx.compose.ui.geometry.Offset.Zero
+                                },
                                 classType = classType,
                                 onTogglePlayPause = {
                                     if (isPlaying) exoPlayer.pause() else exoPlayer.play()

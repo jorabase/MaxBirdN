@@ -118,6 +118,14 @@ class HomeViewModel(
             batchId = program.enrollment_details?.batch_id,
             classCode = program.classes?.firstOrNull()
         )
+
+        // Update FCM topic subscriptions for the switched course cleanly
+        com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
+            context = getApplication(),
+            newProgramId = program.id,
+            newPhaseId = sessionManager.getActiveProgramPhaseId()
+        )
+
         // Load saved subject filter for this course if any
         val savedSubjects = sessionManager.getSelectedSubjectCodes(program.id) ?: emptySet()
         val initialSubjects = program.subjects?.map { 
