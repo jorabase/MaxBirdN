@@ -342,12 +342,10 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val title = lesson.title ?: "লাইভ ক্লাস"
             val subject = lesson.subject_name ?: "সাধারণ"
             navController.navigate(Routes.liveClassRoute(classId = classId, lessonId = lessonId, lessonTitle = title, subjectName = subject))
-        } else if (lesson.isUpcoming) {
-            val startCal = com.example.utils.RoutineDateUtils.parseIsoToDhakaCalendar(lesson.start_time ?: lesson.live_class?.start_time)
-            val startStr = com.example.utils.RoutineDateUtils.formatTimeRange(startCal, null).ifBlank { "নির্ধারিত সময়ে" }
-            android.widget.Toast.makeText(context, "ক্লাসটি আপকামিং — $startStr শুরু হবে।", android.widget.Toast.LENGTH_SHORT).show()
         } else {
-            // Recorded class (finished / past live class / recorded video lecture)
+            // Both UPCOMING and RECORDED classes open LESSON_DETAIL_PLAYER!
+            // When UPCOMING: it renders the live countdown timer in the top 16:9 header.
+            // When RECORDED: it renders the video player with notes/resources.
             courseViewModel.selectLesson(lesson)
             navController.navigate(Routes.LESSON_DETAIL_PLAYER)
         }
@@ -1002,6 +1000,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 subjectColorHex = courseUiState.selectedSubjectColor,
                 onRefreshLesson = {
                     courseViewModel.reloadSelectedLesson()
+                },
+                onNavigateToLiveClass = { classId, lessonId, title, subName ->
+                    navController.navigate(Routes.liveClassRoute(classId = classId, lessonId = lessonId, lessonTitle = title, subjectName = subName))
                 },
                 onNavigateToExam = { sessionId, lessonId, title, chapter ->
                     val encodedTitle = URLEncoder.encode(title, "UTF-8")

@@ -30,7 +30,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -120,6 +120,7 @@ fun LessonDetailPlayerScreen(
     subjectColorHex: String?,
     isLessonLoading: Boolean = false,
     onRefreshLesson: (() -> Unit)? = null,
+    onNavigateToLiveClass: ((classId: String, lessonId: String, title: String, subjectName: String) -> Unit)? = null,
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
     onPlayAnimatedLesson: ((videoUrl: String, title: String) -> Unit)? = null,
     onOpenChapterResources: (() -> Unit)? = null,
@@ -157,20 +158,9 @@ fun LessonDetailPlayerScreen(
         return
     }
 
-    if (lesson?.isUpcoming == true) {
-        UpcomingCountdownScreen(
-            lesson = lesson,
-            subjectName = subjectName,
-            subjectColorHex = subjectColorHex,
-            onBack = onBack
-        )
-        return
-    }
-
     val context = LocalContext.current
     val sessionManager = remember(context) { com.example.auth.SessionManager(context) }
     val courseRepository = remember(sessionManager) { CourseRepository(ShikhoApiService.create(sessionManager)) }
-
 
     val coroutineScope = rememberCoroutineScope()
     val activity = remember(context) { context.findActivity() }
@@ -202,6 +192,17 @@ fun LessonDetailPlayerScreen(
                 ?: candidateStreams.firstOrNull()
                 ?: lesson?.resolvedVideoUrl
                 ?: ""
+        )
+    }
+
+    // Determine if this is strictly an upcoming live class (countdown state)
+    val isUpcomingLesson = remember(lesson, lesson?.isUpcoming, lesson?.isLiveNow, lesson?.classStartMs, activeStreamUrl, candidateStreams) {
+        lesson?.isUpcoming == true || (
+            lesson?.isLiveNow == false &&
+            activeStreamUrl.isBlank() &&
+            candidateStreams.isEmpty() &&
+            (lesson?.classStartMs ?: Long.MAX_VALUE) != Long.MAX_VALUE &&
+            System.currentTimeMillis() < (lesson?.classStartMs ?: Long.MAX_VALUE)
         )
     }
 
@@ -418,10 +419,18 @@ fun LessonDetailPlayerScreen(
     }
 
     // Initialize media source when activeStreamUrl or mode changes
-    LaunchedEffect(activeStreamUrl, livePlayerMode) {
-        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl")
+    LaunchedEffect(activeStreamUrl, livePlayerMode, isUpcomingLesson) {
+        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl, isUpcoming: $isUpcomingLesson")
         playbackError = null
         playbackErrorDetails = null
+        if (isUpcomingLesson) {
+            try {
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
+            } catch (_: Exception) {}
+            isBuffering = false
+            return@LaunchedEffect
+        }
         if (livePlayerMode == "WEB_PLAYER") {
             // When in WebView mode, stop ExoPlayer to prevent background stream fetching
             try {
@@ -979,14 +988,29 @@ fun LessonDetailPlayerScreen(
                     .padding(innerPadding)
                     .verticalScroll(rememberScrollState())
             ) {
-                // 1. Top Video Player (16:9 Aspect Ratio)
+                // 1. Top Section: Video Player or Live Countdown Header (16:9 Aspect Ratio)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
                         .background(Color.Black)
                 ) {
-                    if (livePlayerMode == "WEB_PLAYER") {
+                    if (isUpcomingLesson) {
+                        UpcomingCountdownPlayerHeader(
+                            lesson = lesson,
+                            subjectName = subjectName,
+                            subjectColor = subjectThemeColor,
+                            onBack = onBack,
+                            onJoinLive = {
+                                val classId = lesson?.live_class?.id?.takeIf { it.isNotBlank() }
+                                    ?: lesson?.content_id?.takeIf { it.isNotBlank() }
+                                    ?: lesson?.id ?: ""
+                                val lessonId = lesson?.id ?: ""
+                                val title = lesson?.title ?: "লাইভ ক্লাস"
+                                onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
+                            }
+                        )
+                    } else if (livePlayerMode == "WEB_PLAYER") {
                         val webStreamUrl = activeStreamUrl
                         if (webStreamUrl.isNotBlank()) {
                             HlsWebPlayerView(
@@ -1586,6 +1610,231 @@ fun AnimatedLessonMiniCard(
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 10.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 16:9 Live Class Countdown Header that replaces the Video Player area
+ * for upcoming classes with live second-by-second countdown.
+ */
+@Composable
+fun UpcomingCountdownPlayerHeader(
+    lesson: StudentLessonItem?,
+    subjectName: String,
+    subjectColor: Color,
+    onBack: () -> Unit,
+    onJoinLive: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val startTimeStr = lesson?.live_class?.start_time ?: lesson?.start_time
+    val startMs = lesson?.classStartMs ?: Long.MAX_VALUE
+
+    var timeRemainingMs by remember(startTimeStr, startMs) {
+        mutableLongStateOf(
+            if (startMs != Long.MAX_VALUE) (startMs - System.currentTimeMillis()).coerceAtLeast(0L)
+            else calculateTimeDifference(startTimeStr)
+        )
+    }
+
+    LaunchedEffect(startTimeStr, startMs) {
+        while (true) {
+            delay(1000L)
+            val now = System.currentTimeMillis()
+            timeRemainingMs = if (startMs != Long.MAX_VALUE) (startMs - now).coerceAtLeast(0L)
+            else calculateTimeDifference(startTimeStr)
+        }
+    }
+
+    val totalSeconds = (timeRemainingMs / 1000).coerceAtLeast(0L)
+    val days = totalSeconds / (24 * 3600)
+    val hours = (totalSeconds % (24 * 3600)) / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    val isLiveReady = totalSeconds <= 0L || lesson?.isLiveNow == true
+
+    val formattedDate = remember(startTimeStr) {
+        formatLessonDateDetailed(startTimeStr)
+    }
+    val formattedTime = remember(startTimeStr, lesson?.end_time ?: lesson?.live_class?.end_time) {
+        formatLessonTimeRange(startTimeStr, lesson?.end_time ?: lesson?.live_class?.end_time)
+    }
+
+    val pulseAnim = rememberInfiniteTransition(label = "upcomingLivePulse")
+    val pulseScale by pulseAnim.animateFloat(
+        initialValue = 0.8f, targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "upcomingPulseScale"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFF070E1E),
+                        Color(0xFF0F172A),
+                        Color(0xFF091E3A)
+                    )
+                )
+            )
+    ) {
+        // Top control bar (Back button + Status Badge)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .align(Alignment.TopStart),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.15f))
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (isLiveReady) Color(0xFFEF4444).copy(alpha = 0.2f) else Color(0xFF0284C7).copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, if (isLiveReady) Color(0xFFEF4444) else Color(0xFF38BDF8).copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .graphicsLayer { scaleX = pulseScale; scaleY = pulseScale }
+                            .clip(CircleShape)
+                            .background(if (isLiveReady) Color(0xFFEF4444) else Color(0xFF38BDF8))
+                    )
+                    Text(
+                        text = if (isLiveReady) "লাইভ শুরু হয়েছে" else "আপকামিং লাইভ ক্লাস",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isLiveReady) Color(0xFFF87171) else Color(0xFF7DD3FC)
+                    )
+                }
+            }
+        }
+
+        // Center Countdown Display
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.Center)
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (isLiveReady) {
+                Text(
+                    text = "ক্লাসটি এখন লাইভ চলছে!",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = { onJoinLive?.invoke() },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    modifier = Modifier.height(42.dp)
+                ) {
+                    Icon(Icons.Default.LiveTv, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("লাইভে যোগ দিন", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.AccessTime, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(15.dp))
+                    Text(
+                        text = "লাইভ ক্লাস শুরু হতে বাকি",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE2E8F0)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Countdown Timer Digits Row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (days > 0) {
+                        CompactCountdownTile(value = days.toString(), label = "দিন")
+                        Text(":", color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    CompactCountdownTile(value = hours.toString().padStart(2, '0'), label = "ঘণ্টা")
+                    Text(":", color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    CompactCountdownTile(value = minutes.toString().padStart(2, '0'), label = "মিনিট")
+                    Text(":", color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    CompactCountdownTile(value = seconds.toString().padStart(2, '0'), label = "সেকেন্ড")
+                }
+
+                if (formattedDate.isNotBlank() || formattedTime.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "নির্ধারিত সময়: ${listOfNotNull(formattedDate.takeIf { it.isNotBlank() }, formattedTime.takeIf { it.isNotBlank() }).joinToString(" • ")}",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF94A3B8),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactCountdownTile(
+    value: String,
+    label: String
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF1E293B).copy(alpha = 0.9f),
+        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.35f)),
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .width(44.dp)
+                .padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = value.toBengaliDigits(),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White
+            )
+            Text(
+                text = label,
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF94A3B8)
             )
         }
     }
