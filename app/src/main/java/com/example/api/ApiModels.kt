@@ -612,8 +612,7 @@ data class StudentLessonItem(
                 user_activity_state.equals("ENDED", true) ||
                 user_activity_state.equals("RECORDED", true) ||
                 user_activity_state.equals("ATTENDED", true) ||
-                user_activity_state.equals("MISSED", true) ||
-                live_class?.is_on_going == false
+                user_activity_state.equals("MISSED", true)
             ) {
                 return false
             }
