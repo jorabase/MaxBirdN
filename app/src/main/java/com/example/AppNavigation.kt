@@ -334,8 +334,10 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
             navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
-        } else if (lesson.isLiveNow || lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true) || (lesson.content_type?.equals("LiveClass", ignoreCase = true) == true && !lesson.hasRecording && !lesson.isUpcoming)) {
-            val classId = lesson.live_class?.id?.takeIf { it.isNotBlank() } ?: lesson.id
+        } else if (lesson.isLiveNow || lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true)) {
+            val classId = lesson.live_class?.id?.takeIf { it.isNotBlank() }
+                ?: lesson.content_id?.takeIf { it.isNotBlank() }
+                ?: lesson.id
             val lessonId = lesson.id
             val title = lesson.title ?: "লাইভ ক্লাস"
             val subject = lesson.subject_name ?: "সাধারণ"
@@ -343,8 +345,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         } else if (lesson.isUpcoming) {
             val startCal = com.example.utils.RoutineDateUtils.parseIsoToDhakaCalendar(lesson.start_time ?: lesson.live_class?.start_time)
             val startStr = com.example.utils.RoutineDateUtils.formatTimeRange(startCal, null).ifBlank { "নির্ধারিত সময়ে" }
-            android.widget.Toast.makeText(context, "ক্লাসটি $startStr শুরু হবে।", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, "ক্লাসটি আপকামিং — $startStr শুরু হবে।", android.widget.Toast.LENGTH_SHORT).show()
         } else {
+            // Recorded class (finished / past live class / recorded video lecture)
             courseViewModel.selectLesson(lesson)
             navController.navigate(Routes.LESSON_DETAIL_PLAYER)
         }

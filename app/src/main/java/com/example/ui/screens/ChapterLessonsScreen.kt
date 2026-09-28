@@ -65,21 +65,25 @@ fun ChapterLessonsScreen(
         )
     }
 
-    // Explicitly Separate Live Classes, Recorded Classes, and Exams
+    // Explicitly Separate Live Classes (চলছে), Upcoming (আপকামিং), Recorded (রেকর্ড), and Exams (পরীক্ষা)
     val liveLessons = remember(uiState.lessons) {
-        uiState.lessons.filter { !it.isExam && (it.isLiveNow || it.isUpcoming || it.live_class?.is_on_going == true || (it.content_type?.equals("LiveClass", ignoreCase = true) == true && !it.hasRecording)) }
+        uiState.lessons.filter { !it.isExam && it.isLiveNow }
     }
-    val recordedLessons = remember(uiState.lessons, liveLessons) {
-        uiState.lessons.filter { !it.isExam && !liveLessons.contains(it) }
+    val upcomingLessons = remember(uiState.lessons) {
+        uiState.lessons.filter { !it.isExam && it.isUpcoming }
+    }
+    val recordedLessons = remember(uiState.lessons) {
+        uiState.lessons.filter { !it.isExam && it.isRecorded }
     }
     val examLessons = remember(uiState.lessons) {
         uiState.lessons.filter { it.isExam }
     }
 
-    val displayedLessons = remember(uiState.lessons, selectedFilter, liveLessons, recordedLessons, examLessons) {
+    val displayedLessons = remember(uiState.lessons, selectedFilter, liveLessons, upcomingLessons, recordedLessons, examLessons) {
         when (selectedFilter) {
             ChapterContentFilter.ALL -> uiState.lessons
             ChapterContentFilter.LIVE -> liveLessons
+            ChapterContentFilter.UPCOMING -> upcomingLessons
             ChapterContentFilter.RECORDED -> recordedLessons
             ChapterContentFilter.EXAM -> examLessons
         }
@@ -288,13 +292,14 @@ fun ChapterLessonsScreen(
                             )
                         }
 
-                        // 2. Distinct Filter Tabs: All, Live Classes, Recorded Classes, Live Exams
+                        // 2. Distinct Filter Tabs: All, Live (চলছে), Upcoming (আপকামিং), Recorded (রেকর্ড), Exams (পরীক্ষা)
                         item {
                             ChapterFilterTabs(
                                 selectedFilter = selectedFilter,
                                 onFilterSelected = { selectedFilter = it },
                                 totalCount = uiState.lessons.size,
                                 liveCount = liveLessons.size,
+                                upcomingCount = upcomingLessons.size,
                                 recordedCount = recordedLessons.size,
                                 examCount = examLessons.size,
                                 subjectColor = subjectColor
@@ -313,9 +318,10 @@ fun ChapterLessonsScreen(
                                 Text(
                                     text = when (selectedFilter) {
                                         ChapterContentFilter.ALL -> "সকল ক্লাস ও পরীক্ষা (${toBengaliDigits(displayedLessons.size)}টি)"
-                                        ChapterContentFilter.LIVE -> "লাইভ ক্লাসসমূহ (${toBengaliDigits(displayedLessons.size)}টি)"
+                                        ChapterContentFilter.LIVE -> "চলছে — লাইভ ক্লাস (${toBengaliDigits(displayedLessons.size)}টি)"
+                                        ChapterContentFilter.UPCOMING -> "আপকামিং ক্লাসসমূহ (${toBengaliDigits(displayedLessons.size)}টি)"
                                         ChapterContentFilter.RECORDED -> "রেকর্ড ভিডিও লেকচার (${toBengaliDigits(displayedLessons.size)}টি)"
-                                        ChapterContentFilter.EXAM -> "লাইভ পরীক্ষা ও মডেল টেস্ট (${toBengaliDigits(displayedLessons.size)}টি)"
+                                        ChapterContentFilter.EXAM -> "পরীক্ষা ও মডেল টেস্ট (${toBengaliDigits(displayedLessons.size)}টি)"
                                     },
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
@@ -340,7 +346,8 @@ fun ChapterLessonsScreen(
                                     ) {
                                         Text(
                                             text = when (selectedFilter) {
-                                                ChapterContentFilter.LIVE -> "এই অধ্যায়ে বর্তমানে কোনো লাইভ ক্লাস নেই"
+                                                ChapterContentFilter.LIVE -> "বর্তমানে কোনো লাইভ ক্লাস চলছে না"
+                                                ChapterContentFilter.UPCOMING -> "এই অধ্যায়ে কোনো আপকামিং ক্লাস নেই"
                                                 ChapterContentFilter.RECORDED -> "এই অধ্যায়ে কোনো রেকর্ড ক্লাস নেই"
                                                 ChapterContentFilter.EXAM -> "এই অধ্যায়ে কোনো পরীক্ষা নেই"
                                                 ChapterContentFilter.ALL -> "কোনো ক্লাস বা পরীক্ষা পাওয়া যায়নি"

@@ -87,15 +87,33 @@ fun ChapterLessonItemCard(
         label = "pulseAlpha"
     )
 
-    // Distinct Theme Colors based on Type
+    // Distinct Theme Colors based on Type & Position (চলছে, আপকামিং, রেকর্ড)
     val (typeTitle, typeTagBg, typeTagColor, cardBorderColor, cardIcon, actionButtonText, actionButtonColor) = when {
+        isLiveNow -> Tuple7(
+            "চলছে",
+            Color(0xFFEF4444).copy(alpha = 0.18f),
+            Color(0xFFDC2626),
+            Color(0xFFEF4444).copy(alpha = 0.6f),
+            Icons.Default.LiveTv,
+            "চলছে • যোগ দিন",
+            Color(0xFFDC2626)
+        )
+        isUpcoming -> Tuple7(
+            "আপকামিং",
+            Color(0xFF0284C7).copy(alpha = 0.15f),
+            Color(0xFF0284C7),
+            Color(0xFF0284C7).copy(alpha = 0.35f),
+            Icons.Default.AccessTime,
+            "আপকামিং",
+            Color(0xFF0284C7)
+        )
         isCompletedEffective -> Tuple7(
-            "সম্পন্ন ক্লাস",
+            "রেকর্ড • সম্পন্ন",
             Color(0xFF10B981).copy(alpha = 0.15f),
             Color(0xFF059669),
             Color(0xFF10B981).copy(alpha = 0.35f),
             Icons.Default.CheckCircle,
-            "পুনরায় দেখুন",
+            "রেকর্ড • দেখুন",
             Color(0xFF059669)
         )
         isModelTest -> Tuple7(
@@ -108,7 +126,7 @@ fun ChapterLessonItemCard(
             Color(0xFF7C3AED)
         )
         isLiveExam || isExam -> Tuple7(
-            "লাইভ চ্যাপ্টার পরীক্ষা",
+            "পরীক্ষা",
             Color(0xFFF59E0B).copy(alpha = 0.15f),
             Color(0xFFD97706),
             Color(0xFFF59E0B).copy(alpha = 0.45f),
@@ -116,31 +134,13 @@ fun ChapterLessonItemCard(
             "পরীক্ষা দিন",
             Color(0xFFD97706)
         )
-        isLiveNow -> Tuple7(
-            "🔴 লাইভ ক্লাস চলছে",
-            Color(0xFFEF4444).copy(alpha = 0.18f),
-            Color(0xFFDC2626),
-            Color(0xFFEF4444).copy(alpha = 0.6f),
-            Icons.Default.LiveTv,
-            "লাইভে যোগ দিন",
-            Color(0xFFDC2626)
-        )
-        isUpcoming -> Tuple7(
-            "আসন্ন লাইভ ক্লাস",
-            Color(0xFF0284C7).copy(alpha = 0.15f),
-            Color(0xFF0284C7),
-            Color(0xFF0284C7).copy(alpha = 0.35f),
-            Icons.Default.Schedule,
-            "ক্লাস রুটিন",
-            Color(0xFF0284C7)
-        )
         else -> Tuple7(
-            "রেকর্ড ক্লাস / ভিডিও লেকচার",
+            "রেকর্ড",
             Color(0xFF3B82F6).copy(alpha = 0.15f),
             Color(0xFF2563EB),
             Color(0xFF3B82F6).copy(alpha = 0.3f),
             Icons.Default.PlayCircleFilled,
-            "ভিডিও দেখুন",
+            "রেকর্ড • দেখুন",
             Color(0xFF2563EB)
         )
     }

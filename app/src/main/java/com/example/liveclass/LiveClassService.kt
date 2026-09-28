@@ -74,12 +74,48 @@ class LiveClassService(
                 }
             }
 
+            // Retry with swapped IDs if first attempt returned no room and classId != lessonId
+            if (roomId.isNullOrBlank() && classId != lessonId && lessonId.isNotBlank()) {
+                try {
+                    val swapBody = JSONObject().apply {
+                        put("query", "mutation JoinLiveClass(\$joinLiveCLassId: String!, \$lesson_id: String!) { joinLiveCLass(id: \$joinLiveCLassId, lesson_id: \$lesson_id) { join_link provider hms_room_id } }")
+                        put("variables", JSONObject().apply {
+                            put("joinLiveCLassId", lessonId)
+                            put("lesson_id", classId)
+                        })
+                    }
+                    val swapRequest = Request.Builder()
+                        .url(GRAPHQL_URL)
+                        .post(swapBody.toString().toRequestBody("application/json".toMediaType()))
+                        .addHeader("Authorization", "Bearer $userToken")
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Build-Version", BUILD_VERSION)
+                        .addHeader("X-User-Timezone", TIMEZONE)
+                        .build()
+                    val swapResp = client.newCall(swapRequest).execute()
+                    val swapJson = JSONObject(swapResp.body?.string() ?: "")
+                    val swapJoin = swapJson.optJSONObject("data")?.optJSONObject("joinLiveCLass")
+                    val altRoomId = swapJoin?.optString("hms_room_id")?.trim()
+                    if (!altRoomId.isNullOrBlank()) {
+                        roomId = altRoomId
+                        Log.d(TAG, "Extracted room ID from swapped ID query: $roomId")
+                    } else {
+                        val swapJoinLink = swapJoin?.optString("join_link")?.trim()
+                        if (!swapJoinLink.isNullOrBlank()) {
+                            roomId = Regex("""/meeting/([a-zA-Z0-9_\-]+)""").find(swapJoinLink)?.groupValues?.getOrNull(1)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Swapped ID query attempt failed: ${e.message}")
+                }
+            }
+
             if (!roomId.isNullOrBlank()) {
                 Log.d(TAG, "Successfully retrieved hms_room_id: $roomId")
                 Result.success(roomId)
             } else {
                 val errors = jsonResponse.optJSONArray("errors")
-                val errorMsg = errors?.optJSONObject(0)?.optString("message") ?: "Unable to get HMS room ID"
+                val errorMsg = errors?.optJSONObject(0)?.optString("message") ?: "লাইভ ক্লাসের রুম পাওয়া যায়নি বা ক্লাসটি এখনো লাইভ হয়নি"
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {

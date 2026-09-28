@@ -10,10 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,13 +28,14 @@ import androidx.compose.ui.unit.sp
 import com.example.utils.toBengaliDigits
 
 /**
- * Filter tab types to cleanly separate Live Classes, Recorded Classes, and Exams.
+ * Filter tab types to cleanly separate Live Classes (চলছে), Upcoming (আপকামিং), Recorded (রেকর্ড), and Exams (পরীক্ষা).
  */
 enum class ChapterContentFilter(val titleBn: String, val icon: ImageVector) {
     ALL("সব", Icons.Default.Dashboard),
-    LIVE("লাইভ ক্লাস", Icons.Default.LiveTv),
-    RECORDED("রেকর্ড ক্লাস", Icons.Default.PlayCircleFilled),
-    EXAM("লাইভ পরীক্ষা", Icons.Default.Assignment)
+    LIVE("চলছে", Icons.Default.LiveTv),
+    UPCOMING("আপকামিং", Icons.Default.AccessTime),
+    RECORDED("রেকর্ড", Icons.Default.PlayCircleFilled),
+    EXAM("পরীক্ষা", Icons.Default.Assignment)
 }
 
 @Composable
@@ -46,6 +44,7 @@ fun ChapterFilterTabs(
     onFilterSelected: (ChapterContentFilter) -> Unit,
     totalCount: Int,
     liveCount: Int,
+    upcomingCount: Int,
     recordedCount: Int,
     examCount: Int,
     subjectColor: Color,
@@ -73,6 +72,14 @@ fun ChapterFilterTabs(
             count = liveCount,
             accentColor = Color(0xFFEF4444),
             onClick = { onFilterSelected(ChapterContentFilter.LIVE) }
+        )
+
+        ChapterFilterTabItem(
+            filter = ChapterContentFilter.UPCOMING,
+            isSelected = selectedFilter == ChapterContentFilter.UPCOMING,
+            count = upcomingCount,
+            accentColor = Color(0xFF0284C7),
+            onClick = { onFilterSelected(ChapterContentFilter.UPCOMING) }
         )
 
         ChapterFilterTabItem(

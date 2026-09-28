@@ -468,29 +468,17 @@ data class StudentLessonItem(
     val hasRecording: Boolean
         get() {
             if (isExam) return false
-            // An ongoing live class or currently live session cannot be considered a finished recording
+            // An ongoing live class cannot be considered a finished recording
             if (live_class?.is_on_going == true || user_activity_state.equals("LIVE", ignoreCase = true)) {
                 return false
             }
-            // If explicit recording URL exists from teacher/server
             if (!recording_url.isNullOrBlank() || !live_class?.recording_url.isNullOrBlank()) {
                 return true
             }
-            // If class is completed or ended and has playback or video url
-            val isEndedOrCompleted = user_activity_state.equals("COMPLETED", true) ||
-                    user_activity_state.equals("ENDED", true) ||
-                    user_activity_state.equals("RECORDED", true) ||
-                    user_activity_state.equals("ATTENDED", true) ||
-                    user_activity_state.equals("MISSED", true) ||
-                    live_class?.is_on_going == false
-
-            if (isEndedOrCompleted) {
-                return !live_class?.playback_url.isNullOrBlank() ||
-                        !live_class?.video_url.isNullOrBlank() ||
-                        !video_url.isNullOrBlank()
+            if (!video_url.isNullOrBlank() || !live_class?.video_url.isNullOrBlank() || !live_class?.playback_url.isNullOrBlank()) {
+                return true
             }
-
-            return false
+            return isRecorded
         }
 
     val isModelTest: Boolean
@@ -563,12 +551,12 @@ data class StudentLessonItem(
         get() {
             if (isExam) return false
 
-            // 1. Explicit ongoing flag from live_class or user_activity_state LIVE always takes top priority
+            // 1. Explicit ongoing flag from server
             if (live_class?.is_on_going == true || user_activity_state.equals("LIVE", ignoreCase = true)) {
                 return true
             }
 
-            // 2. Explicitly not live if completed, ended, recorded, attended, or missed
+            // 2. Explicitly not live if marked completed, ended, recorded, attended, or missed
             if (user_activity_state.equals("COMPLETED", true) ||
                 user_activity_state.equals("ENDED", true) ||
                 user_activity_state.equals("RECORDED", true) ||
@@ -583,7 +571,7 @@ data class StudentLessonItem(
                 return false
             }
 
-            // 4. If content type is purely recorded class or video
+            // 4. Purely recorded class or video
             if (content_type?.equals("RecordedClass", ignoreCase = true) == true ||
                 content_type?.equals("Video", ignoreCase = true) == true ||
                 content_type?.equals("Record", ignoreCase = true) == true
@@ -591,19 +579,26 @@ data class StudentLessonItem(
                 return false
             }
 
-            // 5. If it has an explicit finished recording
-            if (hasRecording) {
+            // 5. If it has an explicit finished recording URL
+            if (!recording_url.isNullOrBlank() || !live_class?.recording_url.isNullOrBlank()) {
                 return false
             }
 
-            // 6. Time window check (starts 10 mins before start time until end time)
+            // 6. Strict time window check (between 5 mins before start time and end time)
             val startMs = classStartMs
             val endMs = classEndMs
-            if (startMs != Long.MAX_VALUE && endMs != Long.MAX_VALUE) {
-                val now = System.currentTimeMillis()
-                if (now in (startMs - 10 * 60 * 1000L)..endMs) {
-                    return live_class?.is_on_going != false
+            val now = System.currentTimeMillis()
+            if (startMs != Long.MAX_VALUE) {
+                // If in the future, it is UPCOMING, never live
+                if (now < (startMs - 5 * 60 * 1000L)) {
+                    return false
                 }
+                // If in the past, it has ended, never live
+                if (endMs != Long.MAX_VALUE && now > endMs) {
+                    return false
+                }
+                // Within live window
+                return live_class?.is_on_going != false
             }
 
             return false
@@ -622,35 +617,41 @@ data class StudentLessonItem(
             ) {
                 return false
             }
-            val startMs = classStartMs
-            if (startMs != Long.MAX_VALUE) {
-                return System.currentTimeMillis() < (startMs - 10 * 60 * 1000L)
+            if (content_type?.equals("RecordedClass", ignoreCase = true) == true ||
+                content_type?.equals("Video", ignoreCase = true) == true
+            ) {
+                return false
             }
-            return user_activity_state.equals("UPCOMING", ignoreCase = true)
+            val startMs = classStartMs
+            val now = System.currentTimeMillis()
+            if (startMs != Long.MAX_VALUE) {
+                return now < (startMs - 5 * 60 * 1000L)
+            }
+            return user_activity_state.equals("UPCOMING", ignoreCase = true) ||
+                   user_activity_state.equals("SCHEDULED", ignoreCase = true)
         }
 
     val isLive: Boolean
-        get() {
-            if (isExam) return false
-            if (live_class?.is_on_going == true || user_activity_state.equals("LIVE", ignoreCase = true)) {
-                return true
-            }
-            if (live_class?.is_on_going == false) return false
-            if (user_activity_state.equals("COMPLETED", true) ||
-                user_activity_state.equals("ENDED", true) ||
-                user_activity_state.equals("RECORDED", true) ||
-                user_activity_state.equals("ATTENDED", true) ||
-                user_activity_state.equals("MISSED", true)
-            ) return false
-            val endMs = classEndMs
-            if (endMs != Long.MAX_VALUE && System.currentTimeMillis() > endMs) {
-                return false
-            }
-            return isLiveNow
-        }
+        get() = isLiveNow
 
     val isRecorded: Boolean
-        get() = !isExam && !isLiveNow && !isUpcoming && hasRecording
+        get() {
+            if (isExam) return false
+            return !isLiveNow && !isUpcoming
+        }
+
+    /**
+     * Exact 3 position labels as requested:
+     * 1. "চলছে" (Live / Ongoing)
+     * 2. "আপকামিং" (Upcoming)
+     * 3. "রেকর্ড" (Recorded / Past)
+     */
+    val classPositionLabel: String
+        get() = when {
+            isLiveNow -> "চলছে"
+            isUpcoming -> "আপকামিং"
+            else -> "রেকর্ড"
+        }
     val candidateStreamUrls: List<String>
         get() {
             val list = mutableListOf<String>()

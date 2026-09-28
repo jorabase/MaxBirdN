@@ -538,6 +538,7 @@ fun ShikhoRoutineCard(
         isExamNow -> Color(0xFFF59E0B)
         isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.8f)
         isExam -> Color(0xFFFBBF24).copy(alpha = 0.8f)
+        lesson.isUpcoming -> Color(0xFF0284C7).copy(alpha = 0.4f)
         else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     }
 
@@ -546,6 +547,7 @@ fun ShikhoRoutineCard(
         isModelTestNow || isModelTest -> Brush.linearGradient(listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF).copy(alpha = 0.6f)))
         isExamNow -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7)))
         isExam -> Brush.linearGradient(listOf(Color(0xFFFFFDF5), Color(0xFFFEF9C3).copy(alpha = 0.45f)))
+        lesson.isUpcoming -> Brush.linearGradient(listOf(Color(0xFFF0F9FF), Color(0xFFE0F2FE).copy(alpha = 0.6f)))
         else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)))
     }
 
@@ -583,6 +585,7 @@ fun ShikhoRoutineCard(
                             isModelTestNow || isModelTest -> Brush.horizontalGradient(listOf(Color(0xFF7C3AED), Color(0xFFA855F7)))
                             isExamNow -> Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFD97706)))
                             isExam -> Brush.horizontalGradient(listOf(Color(0xFFF59E0B), Color(0xFFFCD34D)))
+                            lesson.isUpcoming -> Brush.horizontalGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8)))
                             else -> Brush.horizontalGradient(listOf(subjectColors.textColor, subjectColors.textColor.copy(alpha = 0.4f)))
                         }
                     )
@@ -621,7 +624,7 @@ fun ShikhoRoutineCard(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Status / Exam / Live Badge
+                    // Status / Exam / Live Badge (চলছে, আপকামিং, রেকর্ড)
                     Surface(
                         shape = RoundedCornerShape(7.dp),
                         color = when {
@@ -629,15 +632,17 @@ fun ShikhoRoutineCard(
                             isModelTestNow || isModelTest -> Color(0xFFEDE9FE)
                             isExamNow -> Color(0xFFFEF3C7)
                             isExam -> Color(0xFFFFF7ED)
-                            else -> classTypeBadge.backgroundColor.copy(alpha = 0.9f)
+                            lesson.isUpcoming -> Color(0xFFE0F2FE)
+                            else -> Color(0xFFF1F5F9)
                         },
                         border = BorderStroke(
                             0.8.dp,
                             when {
-                                isLiveNow -> Color(0xFFEF4444).copy(alpha = 0.3f)
+                                isLiveNow -> Color(0xFFEF4444).copy(alpha = 0.4f)
                                 isModelTestNow || isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.35f)
                                 isExamNow || isExam -> Color(0xFFF59E0B).copy(alpha = 0.3f)
-                                else -> classTypeBadge.textColor.copy(alpha = 0.2f)
+                                lesson.isUpcoming -> Color(0xFF0284C7).copy(alpha = 0.3f)
+                                else -> Color(0xFF94A3B8).copy(alpha = 0.3f)
                             }
                         )
                     ) {
@@ -656,7 +661,7 @@ fun ShikhoRoutineCard(
                                             .background(Color(0xFFEF4444))
                                     )
                                     Text(
-                                        "লাইভ",
+                                        "চলছে",
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFDC2626)
@@ -723,14 +728,21 @@ fun ShikhoRoutineCard(
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
-                            else -> {
+                            lesson.isUpcoming -> {
                                 Text(
-                                    text = classTypeBadge.label,
+                                    text = "আপকামিং",
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = classTypeBadge.textColor,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    color = Color(0xFF0284C7),
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = "রেকর্ড",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF475569),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }

@@ -192,7 +192,7 @@ fun TimelineRoutineCard(
                                         .clip(CircleShape)
                                         .background(Color.White)
                                 )
-                                Text("লাইভ চলছে", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("চলছে", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     } else if (isExamNow) {
@@ -227,15 +227,21 @@ fun TimelineRoutineCard(
                     }
 
                     if (!isLiveNow && !isExamNow) {
+                        val (posLabel, posBg, posColor) = when {
+                            lesson.isUpcoming -> Triple("আপকামিং", Color(0xFFE0F2FE), Color(0xFF0284C7))
+                            isModelTest -> Triple("মডেল টেস্ট", Color(0xFFEDE9FE), Color(0xFF7C3AED))
+                            isLiveExam || isExam -> Triple("পরীক্ষা", Color(0xFFFEF3C7), Color(0xFFD97706))
+                            else -> Triple("রেকর্ড", Color(0xFFF1F5F9), Color(0xFF475569))
+                        }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isExam) Color(0xFFFEF3C7) else classTypeBadge.backgroundColor
+                            color = posBg
                         ) {
                             Text(
-                                text = typeText,
+                                text = posLabel,
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isExam) Color(0xFFD97706) else classTypeBadge.textColor,
+                                fontWeight = FontWeight.Bold,
+                                color = posColor,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
