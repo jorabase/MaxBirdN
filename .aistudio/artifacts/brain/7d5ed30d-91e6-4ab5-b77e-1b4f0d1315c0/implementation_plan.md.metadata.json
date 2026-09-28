@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for authentic 2-stage live class notifications (30-minute advance with teacher photo + live now alert), course topic subscription strategy, and real-time verification.",
-  "updatedAt":  "2026-09-27T14:15:00.453574750Z",
+  "summary":  "Revised implementation plan addressing the user's concerns about live class codebase integrity, explaining the exact logic bug in live detection, and detailing the zero-loss fix to ensure live classes open directly in LiveClassPage alongside clean app restart on course switch.",
+  "updatedAt":  "2026-09-28T13:48:24.385858739Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

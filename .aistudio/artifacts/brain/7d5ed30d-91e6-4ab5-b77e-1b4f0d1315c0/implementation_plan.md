@@ -1,58 +1,90 @@
-# Real Shikho Live Class Notification Strategy & Plan
+# Live Class Access & Course Switch App Restart Plan
 
-## User Review & Critical Clarifications
+Clarify the status of the live class codebase, fix the live detection logic so that ongoing classes immediately open the dedicated `LiveClassPage` from routine and course screens, and ensure clean app restarts when switching courses.
+
+## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Based on your feedback and Shikho's official live class notification lifecycle:
-> 1. **Course Selection Requirement**:
->    - **Yes**, the target course/program (e.g., HSC 2026, SSC, or specific batch) **must be selected** in the app.
->    - *Reason*: Shikho's backend broadcasts live class alerts specifically to `LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}` and `LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}` topics. When you select a course, our app automatically subscribes your device to that course's live broadcast channel.
-> 2. **Two-Stage Live Class Notifications with Photo**:
->    - **Stage 1 (30 minutes before class)**:
->      - *"⏰ তোমার ক্লাস [সময়] এ শুরু হবে! শিক্ষক: [নাম], বিষয়: [বিষয়]"*
->      - Displays the teacher's profile photo or subject banner (`BigPictureStyle`).
->    - **Stage 2 (Class starts now)**:
->      - *"🔴 তোমার ক্লাস শুরু হয়েছে! এখনই জয়েন করো"*
->      - One-tap direct launch into the live class player.
-> 3. **Dual Delivery (FCM Cloud Push + Local Precise Scheduler)**:
->    - **Cloud Push**: Receives real-time broadcast from `shikho-tech` Firebase directly when Shikho teachers start the class.
->    - **Local Backup Alarm**: Fetches scheduled class times from the syllabus API and sets device alarms for 30 minutes in advance with teacher photos, ensuring no class is ever missed even if FCM is delayed by device battery savers.
-> 4. **100% Real Verification**:
->    - As you rightly suggested, waiting for the actual scheduled live class from Shikho is the most authentic test. We will also display a subtle connection indicator in Settings showing active course subscriptions (`shikho-tech` connected, topics active).
+> **কোনো কোড ডিলিট করা হয়নি (Zero Code Deleted)**:
+> আপনার অ্যাপে লাইভ ক্লাসের জন্য তৈরি করা সকল ফাইল—`LiveClassPage.kt` (লাইভ ভিডিও ও রিয়েল-টাইম চ্যাট পেজ), `LivePlayer.kt` (ভিডিও প্লেয়ার), `LiveClassWebSocketManager.kt` (লাইভ চ্যাট ও ভিউয়ার সকেট), এবং `LiveClassService.kt` (লাইভ ক্লাস API ও HMS টোকেন সার্ভিস)—সম্পূর্ণ অক্ষত এবং বিদ্যমান রয়েছে। কোনো ফাইল বা ফিচার মুছে ফেলা হয়নি।
+
+### আসল সমস্যাটি কী ছিল?
+1. **লাইভ স্ট্রিমিং ইউআরএলকে ভুলবশত রেকর্ডিং হিসেবে গণ্য করা হচ্ছিল**:
+   - `ApiModels.kt`-এ `hasRecording` প্রোপার্টির ভেতর ভুলবশত লাইভ স্ট্রিমিং লিংক (`stream_url`, `hls_url`) চেক করা হচ্ছিল।
+   - এর ফলে যখনই কোনো লাইভ ক্লাসের লাইভ স্ট্রিম সক্রিয় হতো, অ্যাপ ভাবত ক্লাসটির রেকর্ডিং শেষ হয়ে গেছে (`hasRecording = true`), যার ফলে `isLiveNow` এর মান `false` হয়ে যেত।
+2. **ভুল পেজে রিডাইরেক্ট হওয়া**:
+   - `isLiveNow` ফলস হয়ে যাওয়ায় রুটিন বা পাঠক্রম থেকে যখন কোনো শিক্ষার্থী লাইভ ক্লাসে ক্লিক করত, অ্যাপটি তাকে ডেডিকেটেড `LiveClassPage`-এ না পাঠিয়ে রেকর্ডেড ক্লাসের প্লেয়ার (`LESSON_DETAIL_PLAYER`)-এ রিডাইরেক্ট করছিল বা আটকে দিচ্ছিল।
+3. **অ্যাক্টিভিটি স্টেট ব্লকিং**:
+   - শিক্ষার্থী একবার ক্লাসে ঢুকলে তার স্টেট `ATTENDED` হয়ে যেত, যার ফলে কোড আবার তাকে লাইভ ক্লাস থেকে বাদ দিয়ে দিচ্ছিল।
 
 ---
 
-## 1. Technical Architecture & Flow
+## 1. Overview & Core Concept
 
-```
-[ Selected Course: e.g. HSC 2026 Batch ]
-                     │
-         ┌───────────┴───────────┐
-         ▼                       ▼
-[ FCM Topic Subscription ]   [ Class Schedule Sync ]
-  • LIVE_ShikhoNotification    • Reads next classes from API
-    Program_..._Phase_...      • Alarms set for T - 30 minutes
-         │                               │
-         ├───────────────────────────────┤
-         ▼                               ▼
-[ 30 Minutes Before Class ]      [ Class Starts (Live Now) ]
-  • Heads-up Notification         • Urgent Red "Live Now" banner
-  • Teacher / Subject Photo       • 1-Tap direct entry to Player
-  • Bengali time display          • Deep Link auto-navigation
-```
+- **What It Does**:
+  1. **নির্ভুল লাইভ ক্লাস শনাক্তকরণ**: চলমান বা শিডিউল করা লাইভ ক্লাসগুলোকে তাৎক্ষণিকভাবে `🔴 লাইভ চলছে` হিসেবে শনাক্ত করা হবে।
+  2. **সরাসরি লাইভ ক্লাসে প্রবেশ**: রুটিন কার্ড, চ্যাপ্টার লেসন তালিকা, বা নোটিফিকেশন থেকে ট্যাপ করলেই সরাসরি সম্পূর্ণ ফিচারযুক্ত `LiveClassPage`-এ লাইভ স্ট্রিমিং ও চ্যাট নিয়ে প্রবেশ করবে।
+  3. **কোর্স পরিবর্তনে মসৃণ রিস্টার্ট**: হোম স্ক্রিনের কোর্স সুইচার থেকে যেকোনো কোর্স সিলেক্ট করলে `restartApp` কল হবে, যাতে সিলেক্টেড কোর্সের রুটিন ও ডেটা ফ্রেশভাবে লোড হয়।
+- **Target Audience**: লাইভ ক্লাসে অংশ নেওয়া সকল শিক্ষার্থী।
+- **Key Value**: লাইভ ক্লাস কখনো মিস হবে না, প্লেয়ার আটকে থাকবে না এবং কোনো বিদ্যমান ফিচার ক্ষতিগ্রস্ত হবে না।
 
 ---
 
-## 2. Implementation Steps
+## 2. User Experience & Visual Design
 
-1. **Teacher Photo & BigPictureStyle in `ClassAlarmReceiver` & `ShikhoFirebaseMessagingService`**:
-   - Enhance both receivers to download and render the teacher or course subject image as a rich preview banner in the notification tray.
-2. **Lead-Time Configuration**:
-   - Ensure the default alarm lead time is precisely 30 minutes before class start time (matching Shikho's official 30-minute reminder).
-3. **Course & Phase State Persistence**:
-   - Ensure the selected active course and phase in `CourseViewModel` instantly syncs with `ShikhoNotificationManager`, guaranteeing the FCM topic stays actively subscribed even when the app is completely closed.
-4. **FCM & Topic Status in Settings**:
-   - Add a clean, informative "নোটিফিকেশন স্ট্যাটাস" card in Settings showing:
-     - ফায়ারবেস কানেকশন: সক্রিয় (shikho-tech)
-     - বর্তমান কোর্স টপিক: সক্রিয়
-     - পরবর্তী লাইভ ক্লাস রিমাইন্ডার: ৩০ মিনিট আগে (ছবিসহ)
+- **রুটিন থেকে লাইভ ক্লাস**:
+  - চলমান ক্লাসে লাল গ্লোয়িং বর্ডার এবং পালসিং `🔴 লাইভ চলছে` ট্যাগ দৃশ্যমান থাকবে।
+  - কার্ডে ট্যাপ করলে সরাসরি `LiveClassPage` স্ক্রিনে লাইভ ভিডিও ও লাইভ চ্যাট ওপেন হবে।
+- **পাঠক্রম (Courses) ও চ্যাপ্টার থেকে লাইভ ক্লাস**:
+  - `ChapterLessonsScreen`-এর শীর্ষে "🔴 লাইভ ও আসন্ন ক্লাস" সেকশনে স্পষ্ট "সরাসরি যুক্ত হোন" অ্যাকশন বাটন থাকবে।
+  - বাটনে চাপ দিলে সরাসরি `LiveClassPage` চালু হবে।
+- **কোর্স পরিবর্তন (Course Switch)**:
+  - কোর্স সিলেক্ট করার সাথে সাথে টোস্ট মেসেজ আসবে এবং অ্যাপটি স্বয়ংক্রিয়ভাবে ক্লিন রিস্টার্ট নিয়ে নির্বাচিত কোর্সের ড্যাশবোর্ডে নিয়ে যাবে।
+
+---
+
+## 3. Key Product Decisions & Trade-Offs
+
+- **Decision 1: লাইভ স্ট্রিম ও রেকর্ডিং আলাদা করা (`ApiModels.kt`)**:
+  - *পদ্ধতি*: `hasRecording`-এ শুধুমাত্র প্রকৃত রেকর্ডেড ভিডিও ইউআরএল (`recording_url` যখন ক্লাসটি শেষ হয়ে গেছে) রাখা হবে। লাইভ ব্রডকাস্টের `stream_url` বা `hls_url`-কে রেকর্ডিং হিসেবে বিবেচনা করা হবে না।
+  - *ফলাফল*: লাইভ ক্লাস চলমান অবস্থায় `isLiveNow` সবসময় `true` থাকবে।
+- **Decision 2: সরাসরি লাইভ রাউটিং (`AppNavigation.kt`)**:
+  - *পদ্ধতি*: `handleOpenLessonDetail`-এ যদি কোনো লেসনে `isLiveNow == true` হয় অথবা `live_class?.is_on_going == true` হয়, তবে সরাসরি `Routes.liveClassRoute(...)` এ নেভিগেট করা হবে।
+  - *ফলাফল*: রেকর্ডেড ভিডিও প্লেয়ারে ভুল করে চলে যাওয়ার কোনো সুযোগ থাকবে না।
+- **Decision 3: কোর্স সুইচ ও স্টেট ক্লিন রিস্টার্ট**:
+  - *পদ্ধতি*: `HomeViewModel` / `HomeScreen`-এ কোর্স পরিবর্তনের সময় সিলেক্টেড প্রোগ্রাম সেভ করে `MainActivity`-কে নতুন টাস্ক ফ্ল্যাগ দিয়ে রিস্টার্ট করা হবে (যা অলরেডি সিলেবাস পরিবর্তনে সফলভাবে কাজ করছে)।
+  - *ফলাফল*: নতুন কোর্সের সকল বিষয় ও রুটিন কোনো ক্যাশ জটিলতা ছাড়াই শতভাগ নির্ভুলভাবে প্রদর্শিত হবে।
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      HomeScreen / Routine                   │
+│  ┌───────────────────────┐      ┌────────────────────────┐  │
+│  │ 🔴 লাইভ ক্লাস কার্ড   │      │ কোর্স সুইচার বটমশিট    │  │
+│  └──────────┬────────────┘      └───────────┬────────────┘  │
+└─────────────┼───────────────────────────────┼───────────────┘
+              │ Click (ট্যাপ)                 │ কোর্স নির্বাচন
+              ▼                               ▼
+┌─────────────────────────────┐   ┌───────────────────────────┐
+│   handleOpenLessonDetail    │   │ switchActiveCourse        │
+│  • isLiveNow == true        │   │ • SessionManager আপডেট    │
+│  • live_class.is_on_going   │   │ • FCM টপিক সিঙ্ক          │
+│             │               │   │ • restartApp(context)     │
+│             ▼               │   └───────────┬───────────────┘
+│  Routes.liveClassRoute(...) │               ▼
+│  (ওপেন হবে LiveClassPage)   │   ┌───────────────────────────┐
+└─────────────────────────────┘   │ ফ্রেশ MainActivity রিলোড  │
+                                  └───────────────────────────┘
+```
+
+### কার্যপদ্ধতি (Execution Steps):
+1. **`ApiModels.kt` সংশোধন**:
+   - `hasRecording` থেকে লাইভ ব্রডকাস্টের URL (`stream_url`, `hls_url`) বাদ দিয়ে আলাদা করা।
+   - `isLiveNow`-কে এমনভাবে আপডেট করা যাতে লাইভ ক্লাস চলাকালীন এটি কখনোই ফলস না হয়।
+2. **`AppNavigation.kt` রাউটিং নিশ্চিতকরণ**:
+   - `handleOpenLessonDetail`-এ লাইভ ক্লাস ক্লিক হ্যান্ডেলিং জোরদার করা যাতে সোজা `LiveClassPage`-এ রিডাইরেক্ট হয়।
+3. **কোর্স সুইচ রিস্টার্ট সম্পাদন**:
+   - `HomeScreen`-এ কোর্স নির্বাচনে রিস্টার্ট ট্রিগার বজায় রাখা।

@@ -63,7 +63,16 @@ class LiveClassService(
             val jsonResponse = JSONObject(responseBody)
             val data = jsonResponse.optJSONObject("data")
             val joinLiveClass = data?.optJSONObject("joinLiveCLass")
-            val roomId = joinLiveClass?.optString("hms_room_id")
+            var roomId = joinLiveClass?.optString("hms_room_id")?.trim()
+            val joinLink = joinLiveClass?.optString("join_link")?.trim()
+
+            if (roomId.isNullOrBlank() && !joinLink.isNullOrBlank()) {
+                val extracted = Regex("""/meeting/([a-zA-Z0-9_\-]+)""").find(joinLink)?.groupValues?.getOrNull(1)
+                if (!extracted.isNullOrBlank()) {
+                    roomId = extracted
+                    Log.d(TAG, "Extracted room ID from join_link: $roomId")
+                }
+            }
 
             if (!roomId.isNullOrBlank()) {
                 Log.d(TAG, "Successfully retrieved hms_room_id: $roomId")
