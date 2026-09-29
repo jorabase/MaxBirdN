@@ -1,79 +1,71 @@
-# High-Speed Video Download Engine & Redesigned Downloads System
+# Dynamic HLS Stream Resolution & Real Size Calculation Fix
 
-A comprehensive upgrade to the video download infrastructure, enabling full network bandwidth utilization, background Android system notifications with live download percentage, robust HLS segment stitching for large lectures, and a redesigned modern Downloads screen with storage insights and offline playback controls.
+Fixes the root cause of large video download failures by replacing hardcoded URL string replacements with dynamic parsing of Shikho's `playlist.m3u8` master playlists (supporting `media.m3u8`, `video.m3u8`, and custom CDN paths from the HAR log), calculating exact real MB file sizes, and refining the Downloads screen layout to eliminate text clipping.
 
 > [!IMPORTANT]
-> **User Review & Confirmed Decisions**
-> - **Download Engine**: Advanced multi-threaded HLS segment downloader with automatic retry, segment concatenation, and full bandwidth speed utilization.
-> - **Live Status & System Notifications**: Foreground Download Service displaying percentage, downloaded bytes, current speed, and status in the Android Notification Shade and in-app UI.
-> - **Redesigned Downloads Tab**: Modernized UI with interactive storage usage meter, category filters (Videos / Notes), pause/resume/cancel/retry controls, and offline video playback.
+> **Root Cause & HAR Analysis Findings**
+> - **404 Not Found on `video.m3u8`**: Large lecture videos on Shikho CDN (`shikho-stream2.tenbytecdn.com`) use `media.m3u8` (e.g. `/720p/media.m3u8`), whereas smaller/animated videos use `video.m3u8` or `stream.m3u8`.
+> - **Old Hardcoded Replacement Failure**: The previous `resolveQualityUrl` hardcoded `replace("/playlist.m3u8", "/$quality/video.m3u8")`. When requesting large videos, HTTP 404 occurred, causing size calculations to fail and fall back to static estimations (`~১২০ - ২৫০ মেগাবাইট`), and download execution to fail.
+> - **Fix Strategy**: Dynamically parse `#EXT-X-STREAM-INF` from the master playlist to extract exact child URLs (`media.m3u8`), bandwidth values, and total segment durations, enabling 100% accurate MB rendering and successful downloads.
 
 ---
 
 ## 1. Overview & Core Concept
 
-### What It Does
-1. **Bandwidth-Optimized Multi-Segment HLS Downloader**: Resolves HLS master playlists and downloads segments in parallel chunks (`ConcurrentSegmentDownloader`) directly to local app storage (`.mp4`/`.ts` cache) with automatic stream merging, avoiding download stalls or timeouts on 1GB+ large lecture videos.
-2. **Foreground System Download Service & Notification**: Shows real-time progress (`XX% • X.X MB/s`), remaining time, and notification actions (Pause, Resume, Cancel) in the Android status bar and system tray.
-3. **Redesigned Downloads Screen**: A clean, modern Material 3 interface featuring a top Storage Gauge Card (Used by App vs Free Device Storage), active download progress cards, search & category filter pills, batch management, and offline playback launch.
-
-### Target Audience
-HSC & Admission students downloading long 1-2 hour live lecture recordings, solution sheets, and lecture slides for offline study without network interruptions.
+### What Will Be Fixed
+1. **Dynamic HLS Master Playlist Resolution (`AppFileDownloadManager.kt`)**:
+   - Parses `playlist.m3u8` dynamically.
+   - Extracts exact relative URLs (`720p/media.m3u8`, `480p/media.m3u8`, `360p/media.m3u8`) and bandwidths.
+   - Fetches the child playlist (`media.m3u8`), sums `#EXTINF` segment durations, and calculates exact real file size in MBs (e.g. `~৬৫৬.৪ মেগাবাইট` for 1 hr 25 min lecture).
+2. **Robust Multi-Segment Downloader**:
+   - Uses child playlist URL (`media.m3u8`) directly for segment extraction (`segment-0.ts`, `segment-1.ts`, ...).
+   - High-throughput parallel segment fetching with `Semaphore(6)` and live speed calculation in MB/s.
+3. **Downloads Screen Layout Refinement (`DownloadsScreen.kt`)**:
+   - Fixes vertical clipping on "মেমোরি ঠিক আছে" green pill.
+   - Clean responsive layout for Storage Gauge Card and Download Item Cards.
 
 ---
 
 ## 2. User Experience & Visual Design
 
 ### Key User Flows
-1. **Initiating Download**: User clicks "ডাউনলোড" on a video or selects quality (1080p / 720p / 480p / 360p) in `VideoDownloadQualityDialog`.
-2. **Notification & Progress**: Download starts immediately with maximum connection speed. System notification shows animated progress bar, downloaded MBs, and live transfer rate in MB/s.
-3. **Downloads Tab Experience**: User switches to Downloads tab:
-   - **Storage Card**: Shows total downloaded size (e.g. 1.2 GB downloaded), available phone storage, and storage progress bar.
-   - **Active Downloads Section**: Live animated download card with progress ring/bar, current transfer speed, pause/resume button, and cancel button.
-   - **Offline Media List**: Grouped by subject and date with high-resolution thumbnails, file size tags, single-tap offline video launch, and swipe-to-delete.
-
-### Visual Identity & Theme
-- **Theme**: Luxury Dark / Azure Cyber (Dominant dark slate `#0F172A`, azure cyan `#0284C7` / `#38BDF8` accents, glowing progress indicators).
-- **Typography**: Clear hierarchy with Bengali digit conversions (`toBengaliDigits()`).
-- **Motion**: Spring animations on download progress updates and soft transitions on completion.
+1. **Opening Download Modal**: User clicks "ডাউনলোড" on any video (e.g. `Adolescence-01` 1hr 25min lecture).
+2. **Quality Selection**: The dialog fetches the master playlist in real time and renders exact calculated file sizes:
+   - `720p (এইচডি) ~৬৫৬.৪ মেগাবাইট`
+   - `480p (মাঝারি - সেরা পছন্দ) ~৫১৯.১ মেগাবাইট`
+   - `360p (কম ডাটা) ~৩৭৮.৮ মেগাবাইট`
+3. **Downloading & Notification**: Progress bar in Android Notification Shade displays `XX% • X.X MB/s` and downloaded MBs.
+4. **Downloads Tab**: Storage gauge card displays exact total downloaded MBs without layout breaking.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
-
-### Decision 1: HLS Segment Download vs Single Stream Buffer
-- **Chosen Approach**: Parse `.m3u8` playlists and fetch `.ts` segments concurrently using Kotlin Coroutines `async` workers with bounded semaphore limits (4 parallel segment connections).
-- **Why**: Standard `HttpURLConnection` on long `.m3u8` playlist links often drops or times out on large 1GB+ files. Parallel segment downloads utilize full mobile data / Wi-Fi bandwidth without socket timeouts.
-
-### Decision 2: Local Database Persistence for Download Entities
-- **Chosen Approach**: Store download state (ID, title, subtitle, remote URL, local file path, file size, status, timestamp) in Room Database (`DownloadedItemDao`).
-- **Why**: Allows instant reactive UI updates using `Flow<List<DownloadedItemEntity>>` across all screens and survives app restarts.
-
----
-
-## 4. Technical Architecture & Data Strategy
+## 3. Technical Architecture & Data Strategy
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        Jetpack Compose UI                              │
-│   (DownloadsScreen, VideoPlayerScreen, DownloadQualityDialog)          │
-└───────────────────┬────────────────────────────────────┘
+│         (VideoDownloadQualityDialog & DownloadsScreen)                  │
+└───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                 AppFileDownloadManager / DownloadService               │
-│    (Foreground Service, Segment Worker Pool, System Notification)      │
-└───────────────────┬────────────────────────────────┬───────────────────┘
-                    │                                │
-                    ▼                                ▼
-┌───────────────────────────────┐   ┌────────────────────────────────────┐
-│      Room Local Database      │   │    App Internal Storage Cache      │
-│  (DownloadedItemEntity Flow)  │   │  (/files/downloads/xxx.mp4/ts)     │
-└───────────────────────────────┘   └────────────────────────────────────┘
+│                   AppFileDownloadManager                               │
+│  1. fetch Master Playlist -> parse #EXT-X-STREAM-INF                   │
+│  2. extract real child URI (720p/media.m3u8) & BANDWIDTH               │
+│  3. fetch child playlist -> sum #EXTINF -> calculate exact size MB     │
+│  4. stream segments (segment-X.ts) in parallel using Semaphore(6)      │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                 AppDownloadNotificationHelper & Room DB                │
+│    (Foreground Notification with speed MB/s, DownloadedItemEntity)     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Components to Update / Create
-1. **`AppFileDownloadManager.kt`**: Upgrade HLS parsing, multi-segment downloading, bandwidth speed calculator (`MB/s`), and background file merging.
-2. **`AppDownloadService.kt`**: Foreground Service managing Android system notification updates with progress actions.
-3. **`DownloadsScreen.kt`**: Complete redesign featuring Storage Meter, active downloads status panel, category filters, and offline playback launcher.
-4. **`VideoDownloadQualityDialog.kt`**: Enhanced quality selection dialog displaying estimated file size and resolution options.
+### Key Changes Needed
+1. **`AppFileDownloadManager.kt`**:
+   - Rewrite `resolveQualityUrl` and `getRealAvailableDownloadQualities` to extract child URIs from master playlist dynamically rather than replacing strings.
+   - Support `media.m3u8`, `video.m3u8`, and `stream.m3u8` seamlessly.
+2. **`DownloadsScreen.kt`**:
+   - Adjust `StorageGaugeCard` layout paddings, heights, and flex weights to eliminate clipping on small screens.

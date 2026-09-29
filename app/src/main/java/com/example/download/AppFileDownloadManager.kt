@@ -77,17 +77,14 @@ class AppFileDownloadManager private constructor(
         fun resolveQualityUrl(baseUrl: String, quality: String): String {
             if (baseUrl.isBlank()) return baseUrl
 
-            // If URL is like https://shikho-stream2.tenbytecdn.com/{id}/playlist.m3u8 or any domain /{id}/playlist.m3u8
             if (baseUrl.contains("/playlist.m3u8")) {
-                return baseUrl.replace("/playlist.m3u8", "/$quality/video.m3u8")
+                return baseUrl.replace("/playlist.m3u8", "/$quality/media.m3u8")
             }
 
-            // If URL is already like https://.../{id}/360p/video.m3u8 or 480p/video.m3u8 or 720p/video.m3u8 or 1080p/video.m3u8
-            if (baseUrl.contains(Regex("/(1080p|720p|480p|360p|240p|144p)/video\\.m3u8"))) {
-                return baseUrl.replace(Regex("/(1080p|720p|480p|360p|240p|144p)/video\\.m3u8"), "/$quality/video.m3u8")
+            if (baseUrl.contains(Regex("/(1080p|720p|480p|360p|240p|144p)/(video|media)\\.m3u8"))) {
+                return baseUrl.replace(Regex("/(1080p|720p|480p|360p|240p|144p)/(video|media)\\.m3u8"), "/$quality/media.m3u8")
             }
 
-            // If URL has stream_0, stream_1, stream_2, stream_3 pattern
             if (baseUrl.contains(Regex("/stream_\\d+/stream\\.m3u8"))) {
                 val streamIndex = when (quality) {
                     "1080p" -> "stream_0"
@@ -115,7 +112,6 @@ class AppFileDownloadManager private constructor(
             val url360 = resolveQualityUrl(inputUrl, "360p")
             val url240 = resolveQualityUrl(inputUrl, "240p")
 
-            // If all resolutions yield the exact same URL (e.g. direct mp4 or non-HLS variant), return single native option
             if (url1080 == url720 && url720 == url480 && url480 == url360 && url360 == inputUrl) {
                 return listOf(
                     DownloadQualityOption(
@@ -134,7 +130,7 @@ class AppFileDownloadManager private constructor(
                     id = "1080p",
                     labelBangla = "1080p (ফুল এইচডি)",
                     descriptionBangla = "সর্বোচ্চ মান ও সেরা স্পষ্টতা",
-                    estimatedSizeBangla = "~২০০ - ৪০০ মেগাবাইট",
+                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
                     targetM3u8Url = url1080,
                     isRecommended = false
                 ),
@@ -142,7 +138,7 @@ class AppFileDownloadManager private constructor(
                     id = "720p",
                     labelBangla = "720p (এইচডি)",
                     descriptionBangla = "উচ্চ মান ও সবচেয়ে স্পষ্ট ভিডিও",
-                    estimatedSizeBangla = "~১২০ - ২৫০ মেগাবাইট",
+                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
                     targetM3u8Url = url720,
                     isRecommended = false
                 ),
@@ -150,7 +146,7 @@ class AppFileDownloadManager private constructor(
                     id = "480p",
                     labelBangla = "480p (মাঝারি - সেরা পছন্দ)",
                     descriptionBangla = "সাশ্রয়ী ইন্টারনেট ও স্পষ্ট ভিডিও",
-                    estimatedSizeBangla = "~৬০ - ১২০ মেগাবাইট",
+                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
                     targetM3u8Url = url480,
                     isRecommended = true
                 ),
@@ -158,7 +154,7 @@ class AppFileDownloadManager private constructor(
                     id = "360p",
                     labelBangla = "360p (কম ডাটা)",
                     descriptionBangla = "দ্রুত ডাউনলোড ও কম ডাটা খরচ",
-                    estimatedSizeBangla = "~৩০ - ৬০ মেগাবাইট",
+                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
                     targetM3u8Url = url360,
                     isRecommended = false
                 ),
@@ -166,7 +162,7 @@ class AppFileDownloadManager private constructor(
                     id = "240p",
                     labelBangla = "240p (অতি কম ডাটা)",
                     descriptionBangla = "দুর্বল ইন্টারনেটে দ্রুত ডাউনলোড",
-                    estimatedSizeBangla = "~১৫ - ৩০ মেগাবাইট",
+                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
                     targetM3u8Url = url240,
                     isRecommended = false
                 )
@@ -175,7 +171,7 @@ class AppFileDownloadManager private constructor(
     }
 
     /**
-     * Fetches and parses the master playlist to get the actual available resolutions.
+     * Fetches and parses the master playlist to get the actual available resolutions and real target URIs.
      */
     suspend fun getRealAvailableDownloadQualities(inputUrl: String): List<DownloadQualityOption> = withContext(Dispatchers.IO) {
         if (inputUrl.isBlank()) return@withContext emptyList()
@@ -209,7 +205,7 @@ class AppFileDownloadManager private constructor(
             }
 
             val lines = playlistContent.lines()
-            val detectedQualities = mutableSetOf<String>()
+            val parsedOptions = mutableListOf<DownloadQualityOption>()
 
             for (i in lines.indices) {
                 val line = lines[i].trim()
@@ -217,58 +213,68 @@ class AppFileDownloadManager private constructor(
                     val resMatch = Regex("RESOLUTION=(\\d+)x(\\d+)").find(line)
                     val nextLine = lines.getOrNull(i + 1)?.trim() ?: ""
 
-                    if (resMatch != null) {
-                        val width = resMatch.groupValues[1].toInt()
-                        val height = resMatch.groupValues[2].toInt()
+                    if (nextLine.isNotBlank() && !nextLine.startsWith("#")) {
+                        val fullTargetUrl = resolveUrl(inputUrl, nextLine)
 
-                        val qualityId = when {
-                            height >= 1080 || width >= 1920 -> "1080p"
-                            height >= 720 || width >= 1280 -> "720p"
-                            height >= 480 || width >= 840 -> "480p"
-                            height >= 360 || width >= 600 -> "360p"
-                            else -> "240p"
+                        val qualityId = if (resMatch != null) {
+                            val width = resMatch.groupValues[1].toInt()
+                            val height = resMatch.groupValues[2].toInt()
+                            when {
+                                height >= 1080 || width >= 1920 -> "1080p"
+                                height >= 720 || width >= 1280 -> "720p"
+                                height >= 480 || width >= 840 -> "480p"
+                                height >= 360 || width >= 600 -> "360p"
+                                else -> "240p"
+                            }
+                        } else {
+                            val nextLineLower = nextLine.lowercase()
+                            when {
+                                nextLineLower.contains("1080p") || nextLineLower.contains("stream_0") -> "1080p"
+                                nextLineLower.contains("720p") || nextLineLower.contains("stream_1") -> "720p"
+                                nextLineLower.contains("480p") || nextLineLower.contains("stream_2") -> "480p"
+                                nextLineLower.contains("360p") || nextLineLower.contains("stream_3") -> "360p"
+                                nextLineLower.contains("240p") || nextLineLower.contains("stream_4") -> "240p"
+                                else -> "480p"
+                            }
                         }
 
-                        if (nextLine.isNotBlank() && !nextLine.startsWith("#")) {
-                            detectedQualities.add(qualityId)
+                        val (label, desc) = when (qualityId) {
+                            "1080p" -> "1080p (ফুল এইচডি)" to "সর্বোচ্চ মান ও সেরা স্পষ্টতা"
+                            "720p" -> "720p (এইচডি)" to "উচ্চ মান ও সবচেয়ে স্পষ্ট ভিডিও"
+                            "480p" -> "480p (মাঝারি - সেরা পছন্দ)" to "সাশ্রয়ী ইন্টারনেট ও স্পষ্ট ভিডিও"
+                            "360p" -> "360p (কম ডাটা)" to "দ্রুত ডাউনলোড ও কম ডাটা খরচ"
+                            else -> "240p (অতি কম ডাটা)" to "দুর্বল ইন্টারনেটে দ্রুত ডাউনলোড"
                         }
-                    } else {
-                        val nextLineLower = nextLine.lowercase()
-                        val qualityId = when {
-                            nextLineLower.contains("1080p") || nextLineLower.contains("stream_0") -> "1080p"
-                            nextLineLower.contains("720p") || nextLineLower.contains("stream_1") -> "720p"
-                            nextLineLower.contains("480p") || nextLineLower.contains("stream_2") -> "480p"
-                            nextLineLower.contains("360p") || nextLineLower.contains("stream_3") -> "360p"
-                            nextLineLower.contains("240p") || nextLineLower.contains("stream_4") -> "240p"
-                            else -> null
-                        }
-                        if (qualityId != null) {
-                            detectedQualities.add(qualityId)
-                        }
+
+                        parsedOptions.add(
+                            DownloadQualityOption(
+                                id = qualityId,
+                                labelBangla = label,
+                                descriptionBangla = desc,
+                                estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                                targetM3u8Url = fullTargetUrl,
+                                isRecommended = false
+                            )
+                        )
                     }
                 }
             }
 
-            if (detectedQualities.isEmpty()) {
+            if (parsedOptions.isEmpty()) {
                 return@withContext getAvailableDownloadQualities(inputUrl)
             }
 
-            val allStandardOptions = getAvailableDownloadQualities(inputUrl)
-            val filteredOptions = allStandardOptions.filter { it.id in detectedQualities }
+            val distinctOptions = parsedOptions.distinctBy { it.id }
 
-            if (filteredOptions.isEmpty()) {
-                return@withContext allStandardOptions
-            }
-
-            val has480p = filteredOptions.any { it.id == "480p" }
-            val has360p = filteredOptions.any { it.id == "360p" }
+            val has480p = distinctOptions.any { it.id == "480p" }
+            val has360p = distinctOptions.any { it.id == "360p" }
             val recommendedId = when {
                 has480p -> "480p"
                 has360p -> "360p"
-                else -> filteredOptions.first().id
+                else -> distinctOptions.first().id
             }
 
-            return@withContext filteredOptions.map { option ->
+            return@withContext distinctOptions.map { option ->
                 option.copy(isRecommended = option.id == recommendedId)
             }
 
@@ -293,53 +299,51 @@ class AppFileDownloadManager private constructor(
                 .build()
 
             val masterResponse = httpClient.newCall(masterRequest).execute()
-            if (!masterResponse.isSuccessful || masterResponse.body == null) {
-                return@withContext options
-            }
-
-            val masterContent = masterResponse.body!!.string()
-            val lines = masterContent.lines()
-
             val qualityBandwidths = mutableMapOf<String, Long>()
-            for (i in lines.indices) {
-                val line = lines[i].trim()
-                if (line.startsWith("#EXT-X-STREAM-INF")) {
-                    val bandwidthMatch = Regex("BANDWIDTH=(\\d+)").find(line)
-                    val resMatch = Regex("RESOLUTION=(\\d+)x(\\d+)").find(line)
-                    val nextLine = lines.getOrNull(i + 1)?.trim() ?: ""
 
-                    val bandwidth = bandwidthMatch?.groupValues?.get(1)?.toLongOrNull()
-                    if (bandwidth != null) {
-                        val qualityId = if (resMatch != null) {
-                            val width = resMatch.groupValues[1].toInt()
-                            val height = resMatch.groupValues[2].toInt()
-                            when {
-                                height >= 1080 || width >= 1920 -> "1080p"
-                                height >= 720 || width >= 1280 -> "720p"
-                                height >= 480 || width >= 840 -> "480p"
-                                height >= 360 || width >= 600 -> "360p"
-                                else -> "240p"
+            if (masterResponse.isSuccessful && masterResponse.body != null) {
+                val masterContent = masterResponse.body!!.string()
+                val lines = masterContent.lines()
+
+                for (i in lines.indices) {
+                    val line = lines[i].trim()
+                    if (line.startsWith("#EXT-X-STREAM-INF")) {
+                        val bandwidthMatch = Regex("(?:AVERAGE-BANDWIDTH|BANDWIDTH)=(\\d+)").find(line)
+                        val resMatch = Regex("RESOLUTION=(\\d+)x(\\d+)").find(line)
+                        val nextLine = lines.getOrNull(i + 1)?.trim() ?: ""
+
+                        val bandwidth = bandwidthMatch?.groupValues?.get(1)?.toLongOrNull()
+                        if (bandwidth != null) {
+                            val qualityId = if (resMatch != null) {
+                                val width = resMatch.groupValues[1].toInt()
+                                val height = resMatch.groupValues[2].toInt()
+                                when {
+                                    height >= 1080 || width >= 1920 -> "1080p"
+                                    height >= 720 || width >= 1280 -> "720p"
+                                    height >= 480 || width >= 840 -> "480p"
+                                    height >= 360 || width >= 600 -> "360p"
+                                    else -> "240p"
+                                }
+                            } else {
+                                val nextLineLower = nextLine.lowercase()
+                                when {
+                                    nextLineLower.contains("1080p") || nextLineLower.contains("stream_0") -> "1080p"
+                                    nextLineLower.contains("720p") || nextLineLower.contains("stream_1") -> "720p"
+                                    nextLineLower.contains("480p") || nextLineLower.contains("stream_2") -> "480p"
+                                    nextLineLower.contains("360p") || nextLineLower.contains("stream_3") -> "360p"
+                                    nextLineLower.contains("240p") || nextLineLower.contains("stream_4") -> "240p"
+                                    else -> null
+                                }
                             }
-                        } else {
-                            val nextLineLower = nextLine.lowercase()
-                            when {
-                                nextLineLower.contains("1080p") || nextLineLower.contains("stream_0") -> "1080p"
-                                nextLineLower.contains("720p") || nextLineLower.contains("stream_1") -> "720p"
-                                nextLineLower.contains("480p") || nextLineLower.contains("stream_2") -> "480p"
-                                nextLineLower.contains("360p") || nextLineLower.contains("stream_3") -> "360p"
-                                nextLineLower.contains("240p") || nextLineLower.contains("stream_4") -> "240p"
-                                else -> null
+                            if (qualityId != null) {
+                                qualityBandwidths[qualityId] = bandwidth
                             }
-                        }
-                        if (qualityId != null) {
-                            qualityBandwidths[qualityId] = bandwidth
                         }
                     }
                 }
             }
 
-            val representativeOption = options.firstOrNull { it.id == "360p" } ?: options.firstOrNull { it.id == "480p" } ?: options.firstOrNull()
-            if (representativeOption == null) return@withContext options
+            val representativeOption = options.firstOrNull() ?: return@withContext options
 
             val variantRequest = Request.Builder()
                 .url(representativeOption.targetM3u8Url)
@@ -369,10 +373,10 @@ class AppFileDownloadManager private constructor(
 
             return@withContext options.map { option ->
                 val bandwidth = qualityBandwidths[option.id] ?: when (option.id) {
-                    "1080p" -> 2500000L
-                    "720p" -> 1500000L
-                    "480p" -> 800000L
-                    "360p" -> 450000L
+                    "1080p" -> 2200000L
+                    "720p" -> 1025000L
+                    "480p" -> 811000L
+                    "360p" -> 591000L
                     "240p" -> 250000L
                     else -> 500000L
                 }
