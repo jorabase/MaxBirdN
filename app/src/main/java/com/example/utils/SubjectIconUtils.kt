@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -28,19 +31,19 @@ object SubjectIconUtils {
     fun getFallbackIcon(subjectName: String?, subjectCode: String?): ImageVector {
         val raw = "${subjectName ?: ""} ${subjectCode ?: ""}".lowercase()
         return when {
-            raw.contains("বাংলা") || raw.contains("bangla") || raw.contains("bng") -> Icons.Default.MenuBook
+            raw.contains("বাংলা") || raw.contains("bangla") || raw.contains("bng") -> Icons.AutoMirrored.Filled.MenuBook
             raw.contains("ইংরেজি") || raw.contains("english") || raw.contains("eng") -> Icons.Default.Translate
             raw.contains("তথ্য") || raw.contains("ict") || raw.contains("কম্পিউটার") -> Icons.Default.Computer
             raw.contains("পদার্থ") || raw.contains("physics") || raw.contains("phy") -> Icons.Default.Science
             raw.contains("রসায়ন") || raw.contains("রসায়ন") || raw.contains("chemistry") || raw.contains("chm") -> Icons.Default.Biotech
             raw.contains("জীব") || raw.contains("biology") || raw.contains("bio") -> Icons.Default.Eco
             raw.contains("গণিত") || raw.contains("math") || raw.contains("উচ্চতর") -> Icons.Default.Calculate
-            raw.contains("অর্থনীতি") || raw.contains("economics") || raw.contains("eco") -> Icons.Default.TrendingUp
+            raw.contains("অর্থনীতি") || raw.contains("economics") || raw.contains("eco") -> Icons.AutoMirrored.Filled.TrendingUp
             raw.contains("পৌরনীতি") || raw.contains("civics") || raw.contains("সুশাসন") -> Icons.Default.AccountBalance
             raw.contains("ভূগোল") || raw.contains("geography") || raw.contains("geo") -> Icons.Default.Public
             raw.contains("ইতিহাস") || raw.contains("history") -> Icons.Default.HistoryEdu
             raw.contains("যুক্তি") || raw.contains("logic") || raw.contains("মনোবিজ্ঞান") -> Icons.Default.Psychology
-            raw.contains("হিসাব") || raw.contains("accounting") || raw.contains("ফিন্যান্স") || raw.contains("ব্যবসায়") || raw.contains("ব্যবস্থাপনা") -> Icons.Default.ReceiptLong
+            raw.contains("হিসাব") || raw.contains("accounting") || raw.contains("ফিন্যান্স") || raw.contains("ব্যবসায়") || raw.contains("ব্যবস্থাপনা") -> Icons.AutoMirrored.Filled.ReceiptLong
             raw.contains("সমাজ") || raw.contains("social") -> Icons.Default.Groups
             raw.contains("ইসলাম") || raw.contains("islam") -> Icons.Default.AutoStories
             raw.contains("কৃষি") || raw.contains("agri") -> Icons.Default.Agriculture

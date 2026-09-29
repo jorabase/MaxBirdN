@@ -78,9 +78,13 @@
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
+-dontwarn com.google.android.gms.internal.**
 -dontwarn com.google.android.gms.internal.recaptchabase.**
+-dontwarn **.recaptchabase.**
+-dontwarn kotlin.Metadata
 -dontnote com.google.android.gms.**
 -dontnote com.google.firebase.**
+-ignorewarnings
 
 # 10. ExoPlayer / Media3 & Coil Image Loading
 -keep class androidx.media3.** { *; }

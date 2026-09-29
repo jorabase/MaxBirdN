@@ -35,7 +35,7 @@ fun formatBanglaDateTime(isoDateStr: String?): String {
         val date = parser.parse(cleanStr) ?: return isoDateStr
 
         val dayFormat = SimpleDateFormat("d", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("Asia/Dhaka") }
-        val monthFormat = SimpleDateFormat("MMMM", Locale("bn")).apply { timeZone = TimeZone.getTimeZone("Asia/Dhaka") }
+        val monthFormat = SimpleDateFormat("MMMM", Locale.forLanguageTag("bn")).apply { timeZone = TimeZone.getTimeZone("Asia/Dhaka") }
         val yearFormat = SimpleDateFormat("yyyy", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("Asia/Dhaka") }
         val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("Asia/Dhaka") }
 
@@ -91,7 +91,7 @@ fun formatLessonDateDetailed(rawDate: String?): String {
         parser.timeZone = TimeZone.getTimeZone("UTC")
         val date = parser.parse(rawDate)
         if (date != null) {
-            val formatter = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale("bn", "BD"))
+            val formatter = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.forLanguageTag("bn-BD"))
             formatter.timeZone = TimeZone.getTimeZone("Asia/Dhaka")
             formatter.format(date)
         } else {
