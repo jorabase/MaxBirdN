@@ -95,8 +95,22 @@ object ShikhoNotificationManager {
      * 3. LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}
      * 4. LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}
      */
+    fun isGooglePlayServicesAvailable(context: Context): Boolean {
+        return try {
+            val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+            availability.isGooglePlayServicesAvailable(context) == com.google.android.gms.common.ConnectionResult.SUCCESS
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun syncAllTopicSubscriptions(context: Context) {
         try {
+            if (!isGooglePlayServicesAvailable(context)) {
+                logTerminal("INFO", "ℹ️ Google Play Services unavailable. FCM registration deferred.")
+                return
+            }
+
             val sessionManager = SessionManager(context)
             val fcm = try { FirebaseMessaging.getInstance() } catch (_: Exception) { null }
 
@@ -107,59 +121,69 @@ object ShikhoNotificationManager {
                 return
             }
 
+            val userId = sessionManager.getUserId()
+
             // Fetch & Log real FCM Registration Token
             try {
                 fcm.token.addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
+                    if (task.isSuccessful && !task.result.isNullOrBlank()) {
                         val token = task.result
                         sessionManager.setFcmToken(token)
                         logTerminal("INFO", "🔑 Device FCM Token: ${token.take(20)}...${token.takeLast(10)}")
+
+                        // ONLY subscribe to topics after token is verified and acquired
+                        subscribeVerifiedTopics(fcm, sessionManager, userId)
                     } else {
-                        logTerminal("INFO", "ℹ️ FCM Token initialization deferred in sandbox.")
+                        logTerminal("INFO", "ℹ️ FCM Token registration skipped/deferred in current environment.")
                     }
                 }
             } catch (e: Exception) {
                 logTerminal("INFO", "ℹ️ FCM Token optional in sandbox: ${e.message}")
             }
-
-            // 1. Subscribe to Global Broadcast Topic
-            try {
-                fcm.subscribeToTopic(TOPIC_SHIKHO_ALL)
-                    .addOnSuccessListener {
-                        logTerminal("SUCCESS", "✅ Subscribed to Global Topic: $TOPIC_SHIKHO_ALL")
-                    }
-                    .addOnFailureListener { e ->
-                        logTerminal("INFO", "ℹ️ Topic subscription optional in sandbox: ${e.message}")
-                    }
-            } catch (_: Exception) {}
-
-            // 2. User-specific Direct Topic
-            val userId = sessionManager.getUserId()
-            if (!userId.isNullOrBlank()) {
-                try {
-                    fcm.subscribeToTopic(userId)
-                        .addOnSuccessListener {
-                            logTerminal("SUCCESS", "✅ Subscribed to User Topic: $userId")
-                        }
-                        .addOnFailureListener { e ->
-                            logTerminal("INFO", "ℹ️ User topic subscription optional: ${e.message}")
-                        }
-                } catch (_: Exception) {}
-            } else {
-                logTerminal("WARN", "⚠️ User ID পাওয়া যায়নি (লগইন প্রয়োজন)")
-            }
-
-            // 3. Program & Phase Specific Topics
-            val activeProgramId = sessionManager.getActiveProgramId()
-            val activePhaseId = sessionManager.getActiveProgramPhaseId()
-
-            if (!activeProgramId.isNullOrBlank()) {
-                subscribeProgramAndPhase(fcm, sessionManager, userId, activeProgramId, activePhaseId)
-            } else {
-                logTerminal("WARN", "⚠️ কোনো অ্যাক্টিভ প্রোগ্রাম/কোর্স নির্বাচিত নেই")
-            }
         } catch (e: Throwable) {
             logTerminal("ERROR", "🚨 Exception during FCM sync: ${e.message}")
+        }
+    }
+
+    private fun subscribeVerifiedTopics(
+        fcm: FirebaseMessaging,
+        sessionManager: SessionManager,
+        userId: String?
+    ) {
+        // 1. Subscribe to Global Broadcast Topic
+        try {
+            fcm.subscribeToTopic(TOPIC_SHIKHO_ALL)
+                .addOnSuccessListener {
+                    logTerminal("SUCCESS", "✅ Subscribed to Global Topic: $TOPIC_SHIKHO_ALL")
+                }
+                .addOnFailureListener { e ->
+                    logTerminal("INFO", "ℹ️ Topic subscription optional in sandbox: ${e.message}")
+                }
+        } catch (_: Exception) {}
+
+        // 2. User-specific Direct Topic
+        if (!userId.isNullOrBlank()) {
+            try {
+                fcm.subscribeToTopic(userId)
+                    .addOnSuccessListener {
+                        logTerminal("SUCCESS", "✅ Subscribed to User Topic: $userId")
+                    }
+                    .addOnFailureListener { e ->
+                        logTerminal("INFO", "ℹ️ User topic subscription optional: ${e.message}")
+                    }
+            } catch (_: Exception) {}
+        } else {
+            logTerminal("WARN", "⚠️ User ID পাওয়া যায়নি (লগইন প্রয়োজন)")
+        }
+
+        // 3. Program & Phase Specific Topics
+        val activeProgramId = sessionManager.getActiveProgramId()
+        val activePhaseId = sessionManager.getActiveProgramPhaseId()
+
+        if (!activeProgramId.isNullOrBlank()) {
+            subscribeProgramAndPhase(fcm, sessionManager, userId, activeProgramId, activePhaseId)
+        } else {
+            logTerminal("WARN", "⚠️ কোনো অ্যাক্টিভ প্রোগ্রাম/কোর্স নির্বাচিত নেই")
         }
     }
 
@@ -169,12 +193,17 @@ object ShikhoNotificationManager {
     fun updateProgramAndPhase(context: Context, newProgramId: String, newPhaseId: String?) {
         try {
             val sessionManager = SessionManager(context)
+            if (!isGooglePlayServicesAvailable(context) || sessionManager.getFcmToken().isNullOrBlank()) {
+                sessionManager.setSubscribedFcmProgramId(newProgramId)
+                sessionManager.setSubscribedFcmPhaseId(newPhaseId)
+                return
+            }
             val fcm = FirebaseMessaging.getInstance()
             val userId = sessionManager.getUserId()
 
             subscribeProgramAndPhase(fcm, sessionManager, userId, newProgramId, newPhaseId)
         } catch (e: Throwable) {
-            Log.e(TAG, "Error updating program & phase topics: ${e.message}", e)
+            Log.i(TAG, "Optional program topic update: ${e.message}")
         }
     }
 
@@ -193,45 +222,55 @@ object ShikhoNotificationManager {
             // Unsubscribe old user program topic
             if (!userId.isNullOrBlank()) {
                 val oldUserProgramTopic = "LIVE_ShikhoNotification_UserID_${userId}_Program_${oldProgramId}"
-                fcm.unsubscribeFromTopic(oldUserProgramTopic)
-                    .addOnSuccessListener { logTerminal("INFO", "🔄 Unsubscribed old topic: $oldUserProgramTopic") }
+                try {
+                    fcm.unsubscribeFromTopic(oldUserProgramTopic)
+                        .addOnSuccessListener { logTerminal("INFO", "🔄 Unsubscribed old topic: $oldUserProgramTopic") }
+                } catch (_: Throwable) {}
             }
 
             // Unsubscribe old program phase topic
             if (!oldPhaseId.isNullOrBlank()) {
                 val oldPhaseTopic = "LIVE_ShikhoNotification_Program_${oldProgramId}_Phase_${oldPhaseId}"
-                fcm.unsubscribeFromTopic(oldPhaseTopic)
-                    .addOnSuccessListener { logTerminal("INFO", "🔄 Unsubscribed old phase: $oldPhaseTopic") }
+                try {
+                    fcm.unsubscribeFromTopic(oldPhaseTopic)
+                        .addOnSuccessListener { logTerminal("INFO", "🔄 Unsubscribed old phase: $oldPhaseTopic") }
+                } catch (_: Throwable) {}
             }
         } else if (!oldPhaseId.isNullOrBlank() && oldPhaseId != newPhaseId) {
             // Only phase changed
             val oldPhaseTopic = "LIVE_ShikhoNotification_Program_${newProgramId}_Phase_${oldPhaseId}"
-            fcm.unsubscribeFromTopic(oldPhaseTopic)
-                .addOnSuccessListener { logTerminal("INFO", "🔄 Unsubscribed old phase: $oldPhaseTopic") }
+            try {
+                fcm.unsubscribeFromTopic(oldPhaseTopic)
+                    .addOnSuccessListener { logTerminal("INFO", "🔄 Unsubscribed old phase: $oldPhaseTopic") }
+            } catch (_: Throwable) {}
         }
 
         // Subscribe to New User + Program Topic: LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}
         if (!userId.isNullOrBlank()) {
             val userProgramTopic = "LIVE_ShikhoNotification_UserID_${userId}_Program_${newProgramId}"
-            fcm.subscribeToTopic(userProgramTopic)
-                .addOnSuccessListener {
-                    logTerminal("SUCCESS", "✅ Subscribed to Program: $userProgramTopic")
-                }
-                .addOnFailureListener { e ->
-                    logTerminal("ERROR", "❌ Failed subscribing to $userProgramTopic: ${e.message}")
-                }
+            try {
+                fcm.subscribeToTopic(userProgramTopic)
+                    .addOnSuccessListener {
+                        logTerminal("SUCCESS", "✅ Subscribed to Program: $userProgramTopic")
+                    }
+                    .addOnFailureListener { e ->
+                        logTerminal("INFO", "ℹ️ Topic subscription optional: ${e.message}")
+                    }
+            } catch (_: Throwable) {}
         }
 
         // Subscribe to New Program + Phase Topic: LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}
         if (!newPhaseId.isNullOrBlank()) {
             val programPhaseTopic = "LIVE_ShikhoNotification_Program_${newProgramId}_Phase_${newPhaseId}"
-            fcm.subscribeToTopic(programPhaseTopic)
-                .addOnSuccessListener {
-                    logTerminal("SUCCESS", "✅ Subscribed to Phase: $programPhaseTopic")
-                }
-                .addOnFailureListener { e ->
-                    logTerminal("ERROR", "❌ Failed subscribing to $programPhaseTopic: ${e.message}")
-                }
+            try {
+                fcm.subscribeToTopic(programPhaseTopic)
+                    .addOnSuccessListener {
+                        logTerminal("SUCCESS", "✅ Subscribed to Phase: $programPhaseTopic")
+                    }
+                    .addOnFailureListener { e ->
+                        logTerminal("INFO", "ℹ️ Topic subscription optional: ${e.message}")
+                    }
+            } catch (_: Throwable) {}
         }
 
         // Save current subscriptions in session
@@ -246,27 +285,32 @@ object ShikhoNotificationManager {
     fun unsubscribeAll(context: Context) {
         try {
             val sessionManager = SessionManager(context)
+            if (!isGooglePlayServicesAvailable(context) || sessionManager.getFcmToken().isNullOrBlank()) {
+                sessionManager.setSubscribedFcmProgramId(null)
+                sessionManager.setSubscribedFcmPhaseId(null)
+                return
+            }
             val fcm = FirebaseMessaging.getInstance()
             val userId = sessionManager.getUserId()
             val programId = sessionManager.getSubscribedFcmProgramId()
             val phaseId = sessionManager.getSubscribedFcmPhaseId()
 
             if (!userId.isNullOrBlank()) {
-                fcm.unsubscribeFromTopic(userId)
+                try { fcm.unsubscribeFromTopic(userId) } catch (_: Throwable) {}
                 if (!programId.isNullOrBlank()) {
-                    fcm.unsubscribeFromTopic("LIVE_ShikhoNotification_UserID_${userId}_Program_${programId}")
+                    try { fcm.unsubscribeFromTopic("LIVE_ShikhoNotification_UserID_${userId}_Program_${programId}") } catch (_: Throwable) {}
                 }
             }
 
             if (!programId.isNullOrBlank() && !phaseId.isNullOrBlank()) {
-                fcm.unsubscribeFromTopic("LIVE_ShikhoNotification_Program_${programId}_Phase_${phaseId}")
+                try { fcm.unsubscribeFromTopic("LIVE_ShikhoNotification_Program_${programId}_Phase_${phaseId}") } catch (_: Throwable) {}
             }
 
             sessionManager.setSubscribedFcmProgramId(null)
             sessionManager.setSubscribedFcmPhaseId(null)
             Log.d(TAG, "Unsubscribed from personalized topics on logout.")
         } catch (e: Throwable) {
-            Log.e(TAG, "Error unsubscribing from topics: ${e.message}", e)
+            Log.i(TAG, "Optional unsubscribeFromTopics: ${e.message}")
         }
     }
 }

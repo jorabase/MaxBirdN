@@ -60,11 +60,15 @@ fun FcmLiveTerminalDialog(
 
     // Refresh token on launch
     LaunchedEffect(Unit) {
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (task.isSuccessful && !task.result.isNullOrBlank()) {
-                fcmToken = task.result
-                sessionManager.setFcmToken(task.result)
-            }
+        if (com.example.notification.ShikhoNotificationManager.isGooglePlayServicesAvailable(context)) {
+            try {
+                FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                    if (task.isSuccessful && !task.result.isNullOrBlank()) {
+                        fcmToken = task.result
+                        sessionManager.setFcmToken(task.result)
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
 

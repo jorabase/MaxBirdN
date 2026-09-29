@@ -114,8 +114,13 @@ class MainActivity : ComponentActivity() {
 
     private fun fetchAndRegisterFcmToken() {
         try {
+            if (!com.example.notification.ShikhoNotificationManager.isGooglePlayServicesAvailable(this)) {
+                android.util.Log.i("MainActivity", "Google Play Services unavailable on this environment. Skipping FCM registration.")
+                return
+            }
+
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                if (task.isSuccessful) {
+                if (task.isSuccessful && !task.result.isNullOrBlank()) {
                     val token = task.result
                     android.util.Log.d("MainActivity", "Fetched FCM Token: $token")
                     val sessionManager = SessionManager(applicationContext)
@@ -124,11 +129,11 @@ class MainActivity : ComponentActivity() {
                     // Immediately sync topic subscriptions (SHIKHO_ALL, user, program, phase)
                     ShikhoNotificationManager.syncAllTopicSubscriptions(applicationContext)
                 } else {
-                    android.util.Log.w("MainActivity", "Fetching FCM registration token failed", task.exception)
+                    android.util.Log.i("MainActivity", "FCM registration token deferred/unavailable in current environment")
                 }
             }
         } catch (e: Throwable) {
-            android.util.Log.e("MainActivity", "Error fetching FCM token: ${e.message}", e)
+            android.util.Log.i("MainActivity", "FCM token registration deferred: ${e.message}")
         }
     }
 
