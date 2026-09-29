@@ -222,7 +222,11 @@ interface ShikhoApiService {
                 if (!response.isSuccessful) {
                     try {
                         val peek = response.peekBody(1024 * 64).string()
-                        android.util.Log.e("ShikhoApiService", "HTTP ${response.code} error on ${origRequest.url}: $peek")
+                        if (response.code == 401) {
+                            android.util.Log.d("ShikhoApiService", "HTTP 401 unauthorized on ${origRequest.url}: $peek")
+                        } else {
+                            android.util.Log.e("ShikhoApiService", "HTTP ${response.code} error on ${origRequest.url}: $peek")
+                        }
                     } catch (_: Exception) {}
                 }
                 try {
