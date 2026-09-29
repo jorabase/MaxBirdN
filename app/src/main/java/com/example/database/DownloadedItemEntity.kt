@@ -22,6 +22,7 @@ data class DownloadedItemEntity(
         const val FILE_TYPE_PDF = "PDF"
 
         const val STATUS_DOWNLOADING = "DOWNLOADING"
+        const val STATUS_PAUSED = "PAUSED"
         const val STATUS_COMPLETED = "COMPLETED"
         const val STATUS_FAILED = "FAILED"
     }

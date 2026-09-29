@@ -8,6 +8,8 @@ import com.example.database.DownloadedItemDao
 import com.example.database.DownloadedItemEntity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -444,6 +446,7 @@ class AppFileDownloadManager private constructor(
                 if (isHls) {
                     downloadHlsStreamInternal(
                         id = id,
+                        title = title,
                         initialEntity = initialEntity,
                         targetFile = targetFile,
                         variantUrl = remoteUrl
@@ -451,6 +454,7 @@ class AppFileDownloadManager private constructor(
                 } else {
                     downloadRegularFileInternal(
                         id = id,
+                        title = title,
                         initialEntity = initialEntity,
                         targetFile = targetFile,
                         remoteUrl = remoteUrl
@@ -491,6 +495,7 @@ class AppFileDownloadManager private constructor(
      */
     private suspend fun downloadHlsStreamInternal(
         id: String,
+        title: String,
         initialEntity: DownloadedItemEntity,
         targetFile: File,
         variantUrl: String
@@ -562,50 +567,62 @@ class AppFileDownloadManager private constructor(
         }
 
         val totalSegments = segmentUrls.size
-        Log.d(TAG, "Found $totalSegments TS segments for id: $id. Starting concurrent download...")
+        Log.d(TAG, "Found $totalSegments TS segments for id: $id. Starting concurrent download with max throughput...")
 
-        if (targetFile.exists()) {
+        if (targetFile.exists() && initialEntity.downloadedBytes == 0L) {
             targetFile.delete()
         }
 
         var downloadedBytes = 0L
         val outputStream = FileOutputStream(targetFile, true)
         var lastDbUpdateTime = 0L
+        var lastSpeedCheckTime = System.currentTimeMillis()
+        var bytesSinceLastCheck = 0L
+        var currentSpeedMBs = 0f
+
+        val semaphore = kotlinx.coroutines.sync.Semaphore(6)
+        val downloadedChunksMap = ConcurrentHashMap<Int, ByteArray>()
 
         try {
-            // Use controlled concurrency (up to 3 parallel chunk downloads) in batches of sliding window
-            val batchSize = 3
-            val downloadedChunksMap = ConcurrentHashMap<Int, ByteArray>()
-
-            var chunkFetchIndex = 0
-            while (chunkFetchIndex < totalSegments) {
-                ensureActive()
-
-                val windowEnd = (chunkFetchIndex + batchSize).coerceAtMost(totalSegments)
-                val chunkIndicesToFetch = (chunkFetchIndex until windowEnd).filter { !downloadedChunksMap.containsKey(it) }
-
-                coroutineScope {
-                    chunkIndicesToFetch.map { idx ->
-                        async(Dispatchers.IO) {
+            coroutineScope {
+                val downloadJobs = segmentUrls.mapIndexed { idx, segmentUrl ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
                             ensureActive()
-                            val chunkData = downloadSegmentWithRetry(segmentUrls[idx])
+                            val chunkData = downloadSegmentWithRetry(segmentUrl, maxRetries = 5)
                             downloadedChunksMap[idx] = chunkData
                         }
-                    }.awaitAll()
+                    }
                 }
 
-                // Write chunks in strict sequential order
-                while (downloadedChunksMap.containsKey(chunkFetchIndex)) {
+                var writeIndex = 0
+                while (writeIndex < totalSegments) {
                     ensureActive()
-                    val chunkData = downloadedChunksMap.remove(chunkFetchIndex) ?: break
+
+                    while (!downloadedChunksMap.containsKey(writeIndex)) {
+                        ensureActive()
+                        delay(15L)
+                    }
+
+                    val chunkData = downloadedChunksMap.remove(writeIndex) ?: break
                     outputStream.write(chunkData)
                     downloadedBytes += chunkData.size
-                    chunkFetchIndex++
+                    bytesSinceLastCheck += chunkData.size
+                    writeIndex++
 
                     val now = System.currentTimeMillis()
-                    if (now - lastDbUpdateTime > 400L || chunkFetchIndex == totalSegments) {
+                    val timeDiffMs = now - lastSpeedCheckTime
+                    if (timeDiffMs >= 500L) {
+                        currentSpeedMBs = (bytesSinceLastCheck.toFloat() / (1024f * 1024f)) / (timeDiffMs.toFloat() / 1000f)
+                        lastSpeedCheckTime = now
+                        bytesSinceLastCheck = 0L
+                    }
+
+                    if (now - lastDbUpdateTime > 400L || writeIndex == totalSegments) {
                         lastDbUpdateTime = now
-                        val estimatedTotal = ((downloadedBytes.toDouble() / chunkFetchIndex) * totalSegments).toLong()
+                        val estimatedTotal = ((downloadedBytes.toDouble() / writeIndex) * totalSegments).toLong()
+                        val progressPercent = (writeIndex * 100 / totalSegments).coerceIn(0, 100)
+
                         downloadedItemDao.insertOrUpdate(
                             initialEntity.copy(
                                 downloadedBytes = downloadedBytes,
@@ -613,13 +630,24 @@ class AppFileDownloadManager private constructor(
                                 status = DownloadedItemEntity.STATUS_DOWNLOADING
                             )
                         )
+
+                        AppDownloadNotificationHelper.showDownloadProgressNotification(
+                            context = context,
+                            id = id,
+                            title = title,
+                            progressPercent = progressPercent,
+                            downloadedBytes = downloadedBytes,
+                            totalBytes = if (estimatedTotal > 0) estimatedTotal else downloadedBytes,
+                            speedMBs = currentSpeedMBs
+                        )
                     }
                 }
+
+                downloadJobs.awaitAll()
             }
 
             outputStream.flush()
 
-            // Mark completed
             downloadedItemDao.insertOrUpdate(
                 initialEntity.copy(
                     downloadedBytes = downloadedBytes,
@@ -628,7 +656,20 @@ class AppFileDownloadManager private constructor(
                     localFilePath = targetFile.absolutePath
                 )
             )
+
+            AppDownloadNotificationHelper.showDownloadCompleteNotification(
+                context = context,
+                id = id,
+                title = title,
+                totalBytes = downloadedBytes
+            )
             Log.d(TAG, "HLS video download complete! Total size: $downloadedBytes bytes for id: $id")
+        } catch (e: CancellationException) {
+            AppDownloadNotificationHelper.cancelNotification(context, id)
+            throw e
+        } catch (e: Exception) {
+            AppDownloadNotificationHelper.showDownloadFailedNotification(context, id, title)
+            throw e
         } finally {
             try {
                 outputStream.close()
@@ -687,6 +728,7 @@ class AppFileDownloadManager private constructor(
      */
     private suspend fun downloadRegularFileInternal(
         id: String,
+        title: String,
         initialEntity: DownloadedItemEntity,
         targetFile: File,
         remoteUrl: String
@@ -759,6 +801,58 @@ class AppFileDownloadManager private constructor(
         } finally {
             try { inputStream?.close() } catch (_: Exception) {}
             try { outputStream?.close() } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Pause an active download.
+     */
+    fun pauseDownload(id: String) {
+        activeJobs[id]?.cancel()
+        activeJobs.remove(id)
+        coroutineScope.launch {
+            try {
+                val item = downloadedItemDao.getDownloadedItemByIdOnce(id)
+                if (item != null) {
+                    downloadedItemDao.insertOrUpdate(
+                        item.copy(status = DownloadedItemEntity.STATUS_PAUSED)
+                    )
+                    AppDownloadNotificationHelper.showDownloadProgressNotification(
+                        context = context,
+                        id = id,
+                        title = item.title,
+                        progressPercent = item.progressPercent,
+                        downloadedBytes = item.downloadedBytes,
+                        totalBytes = item.totalBytes,
+                        speedMBs = 0f,
+                        isPaused = true
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pausing download $id: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Resume a paused or failed download.
+     */
+    fun resumeDownload(id: String) {
+        coroutineScope.launch {
+            try {
+                val item = downloadedItemDao.getDownloadedItemByIdOnce(id)
+                if (item != null) {
+                    downloadFile(
+                        id = item.id,
+                        title = item.title,
+                        subtitle = item.subtitle,
+                        fileType = item.fileType,
+                        remoteUrl = item.remoteUrl
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error resuming download $id: ${e.message}")
+            }
         }
     }
 

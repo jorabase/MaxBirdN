@@ -30,5 +30,6 @@ class ShikhoApp : Application() {
         // 2. Ensure Notification Channels are created right when app launches
         ClassAlarmScheduler.createNotificationChannel(this)
         com.example.notification.ShikhoNotificationManager.createNotificationChannels(this)
+        com.example.download.AppDownloadNotificationHelper.createNotificationChannel(this)
     }
 }

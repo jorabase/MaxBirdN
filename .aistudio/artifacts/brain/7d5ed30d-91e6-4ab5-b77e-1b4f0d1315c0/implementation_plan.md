@@ -1,90 +1,79 @@
-# Live Class Access & Course Switch App Restart Plan
+# High-Speed Video Download Engine & Redesigned Downloads System
 
-Clarify the status of the live class codebase, fix the live detection logic so that ongoing classes immediately open the dedicated `LiveClassPage` from routine and course screens, and ensure clean app restarts when switching courses.
-
-## User Review & Critical Decisions
+A comprehensive upgrade to the video download infrastructure, enabling full network bandwidth utilization, background Android system notifications with live download percentage, robust HLS segment stitching for large lectures, and a redesigned modern Downloads screen with storage insights and offline playback controls.
 
 > [!IMPORTANT]
-> **কোনো কোড ডিলিট করা হয়নি (Zero Code Deleted)**:
-> আপনার অ্যাপে লাইভ ক্লাসের জন্য তৈরি করা সকল ফাইল—`LiveClassPage.kt` (লাইভ ভিডিও ও রিয়েল-টাইম চ্যাট পেজ), `LivePlayer.kt` (ভিডিও প্লেয়ার), `LiveClassWebSocketManager.kt` (লাইভ চ্যাট ও ভিউয়ার সকেট), এবং `LiveClassService.kt` (লাইভ ক্লাস API ও HMS টোকেন সার্ভিস)—সম্পূর্ণ অক্ষত এবং বিদ্যমান রয়েছে। কোনো ফাইল বা ফিচার মুছে ফেলা হয়নি।
-
-### আসল সমস্যাটি কী ছিল?
-1. **লাইভ স্ট্রিমিং ইউআরএলকে ভুলবশত রেকর্ডিং হিসেবে গণ্য করা হচ্ছিল**:
-   - `ApiModels.kt`-এ `hasRecording` প্রোপার্টির ভেতর ভুলবশত লাইভ স্ট্রিমিং লিংক (`stream_url`, `hls_url`) চেক করা হচ্ছিল।
-   - এর ফলে যখনই কোনো লাইভ ক্লাসের লাইভ স্ট্রিম সক্রিয় হতো, অ্যাপ ভাবত ক্লাসটির রেকর্ডিং শেষ হয়ে গেছে (`hasRecording = true`), যার ফলে `isLiveNow` এর মান `false` হয়ে যেত।
-2. **ভুল পেজে রিডাইরেক্ট হওয়া**:
-   - `isLiveNow` ফলস হয়ে যাওয়ায় রুটিন বা পাঠক্রম থেকে যখন কোনো শিক্ষার্থী লাইভ ক্লাসে ক্লিক করত, অ্যাপটি তাকে ডেডিকেটেড `LiveClassPage`-এ না পাঠিয়ে রেকর্ডেড ক্লাসের প্লেয়ার (`LESSON_DETAIL_PLAYER`)-এ রিডাইরেক্ট করছিল বা আটকে দিচ্ছিল।
-3. **অ্যাক্টিভিটি স্টেট ব্লকিং**:
-   - শিক্ষার্থী একবার ক্লাসে ঢুকলে তার স্টেট `ATTENDED` হয়ে যেত, যার ফলে কোড আবার তাকে লাইভ ক্লাস থেকে বাদ দিয়ে দিচ্ছিল।
+> **User Review & Confirmed Decisions**
+> - **Download Engine**: Advanced multi-threaded HLS segment downloader with automatic retry, segment concatenation, and full bandwidth speed utilization.
+> - **Live Status & System Notifications**: Foreground Download Service displaying percentage, downloaded bytes, current speed, and status in the Android Notification Shade and in-app UI.
+> - **Redesigned Downloads Tab**: Modernized UI with interactive storage usage meter, category filters (Videos / Notes), pause/resume/cancel/retry controls, and offline video playback.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**:
-  1. **নির্ভুল লাইভ ক্লাস শনাক্তকরণ**: চলমান বা শিডিউল করা লাইভ ক্লাসগুলোকে তাৎক্ষণিকভাবে `🔴 লাইভ চলছে` হিসেবে শনাক্ত করা হবে।
-  2. **সরাসরি লাইভ ক্লাসে প্রবেশ**: রুটিন কার্ড, চ্যাপ্টার লেসন তালিকা, বা নোটিফিকেশন থেকে ট্যাপ করলেই সরাসরি সম্পূর্ণ ফিচারযুক্ত `LiveClassPage`-এ লাইভ স্ট্রিমিং ও চ্যাট নিয়ে প্রবেশ করবে।
-  3. **কোর্স পরিবর্তনে মসৃণ রিস্টার্ট**: হোম স্ক্রিনের কোর্স সুইচার থেকে যেকোনো কোর্স সিলেক্ট করলে `restartApp` কল হবে, যাতে সিলেক্টেড কোর্সের রুটিন ও ডেটা ফ্রেশভাবে লোড হয়।
-- **Target Audience**: লাইভ ক্লাসে অংশ নেওয়া সকল শিক্ষার্থী।
-- **Key Value**: লাইভ ক্লাস কখনো মিস হবে না, প্লেয়ার আটকে থাকবে না এবং কোনো বিদ্যমান ফিচার ক্ষতিগ্রস্ত হবে না।
+### What It Does
+1. **Bandwidth-Optimized Multi-Segment HLS Downloader**: Resolves HLS master playlists and downloads segments in parallel chunks (`ConcurrentSegmentDownloader`) directly to local app storage (`.mp4`/`.ts` cache) with automatic stream merging, avoiding download stalls or timeouts on 1GB+ large lecture videos.
+2. **Foreground System Download Service & Notification**: Shows real-time progress (`XX% • X.X MB/s`), remaining time, and notification actions (Pause, Resume, Cancel) in the Android status bar and system tray.
+3. **Redesigned Downloads Screen**: A clean, modern Material 3 interface featuring a top Storage Gauge Card (Used by App vs Free Device Storage), active download progress cards, search & category filter pills, batch management, and offline playback launch.
+
+### Target Audience
+HSC & Admission students downloading long 1-2 hour live lecture recordings, solution sheets, and lecture slides for offline study without network interruptions.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-- **রুটিন থেকে লাইভ ক্লাস**:
-  - চলমান ক্লাসে লাল গ্লোয়িং বর্ডার এবং পালসিং `🔴 লাইভ চলছে` ট্যাগ দৃশ্যমান থাকবে।
-  - কার্ডে ট্যাপ করলে সরাসরি `LiveClassPage` স্ক্রিনে লাইভ ভিডিও ও লাইভ চ্যাট ওপেন হবে।
-- **পাঠক্রম (Courses) ও চ্যাপ্টার থেকে লাইভ ক্লাস**:
-  - `ChapterLessonsScreen`-এর শীর্ষে "🔴 লাইভ ও আসন্ন ক্লাস" সেকশনে স্পষ্ট "সরাসরি যুক্ত হোন" অ্যাকশন বাটন থাকবে।
-  - বাটনে চাপ দিলে সরাসরি `LiveClassPage` চালু হবে।
-- **কোর্স পরিবর্তন (Course Switch)**:
-  - কোর্স সিলেক্ট করার সাথে সাথে টোস্ট মেসেজ আসবে এবং অ্যাপটি স্বয়ংক্রিয়ভাবে ক্লিন রিস্টার্ট নিয়ে নির্বাচিত কোর্সের ড্যাশবোর্ডে নিয়ে যাবে।
+### Key User Flows
+1. **Initiating Download**: User clicks "ডাউনলোড" on a video or selects quality (1080p / 720p / 480p / 360p) in `VideoDownloadQualityDialog`.
+2. **Notification & Progress**: Download starts immediately with maximum connection speed. System notification shows animated progress bar, downloaded MBs, and live transfer rate in MB/s.
+3. **Downloads Tab Experience**: User switches to Downloads tab:
+   - **Storage Card**: Shows total downloaded size (e.g. 1.2 GB downloaded), available phone storage, and storage progress bar.
+   - **Active Downloads Section**: Live animated download card with progress ring/bar, current transfer speed, pause/resume button, and cancel button.
+   - **Offline Media List**: Grouped by subject and date with high-resolution thumbnails, file size tags, single-tap offline video launch, and swipe-to-delete.
+
+### Visual Identity & Theme
+- **Theme**: Luxury Dark / Azure Cyber (Dominant dark slate `#0F172A`, azure cyan `#0284C7` / `#38BDF8` accents, glowing progress indicators).
+- **Typography**: Clear hierarchy with Bengali digit conversions (`toBengaliDigits()`).
+- **Motion**: Spring animations on download progress updates and soft transitions on completion.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: লাইভ স্ট্রিম ও রেকর্ডিং আলাদা করা (`ApiModels.kt`)**:
-  - *পদ্ধতি*: `hasRecording`-এ শুধুমাত্র প্রকৃত রেকর্ডেড ভিডিও ইউআরএল (`recording_url` যখন ক্লাসটি শেষ হয়ে গেছে) রাখা হবে। লাইভ ব্রডকাস্টের `stream_url` বা `hls_url`-কে রেকর্ডিং হিসেবে বিবেচনা করা হবে না।
-  - *ফলাফল*: লাইভ ক্লাস চলমান অবস্থায় `isLiveNow` সবসময় `true` থাকবে।
-- **Decision 2: সরাসরি লাইভ রাউটিং (`AppNavigation.kt`)**:
-  - *পদ্ধতি*: `handleOpenLessonDetail`-এ যদি কোনো লেসনে `isLiveNow == true` হয় অথবা `live_class?.is_on_going == true` হয়, তবে সরাসরি `Routes.liveClassRoute(...)` এ নেভিগেট করা হবে।
-  - *ফলাফল*: রেকর্ডেড ভিডিও প্লেয়ারে ভুল করে চলে যাওয়ার কোনো সুযোগ থাকবে না।
-- **Decision 3: কোর্স সুইচ ও স্টেট ক্লিন রিস্টার্ট**:
-  - *পদ্ধতি*: `HomeViewModel` / `HomeScreen`-এ কোর্স পরিবর্তনের সময় সিলেক্টেড প্রোগ্রাম সেভ করে `MainActivity`-কে নতুন টাস্ক ফ্ল্যাগ দিয়ে রিস্টার্ট করা হবে (যা অলরেডি সিলেবাস পরিবর্তনে সফলভাবে কাজ করছে)।
-  - *ফলাফল*: নতুন কোর্সের সকল বিষয় ও রুটিন কোনো ক্যাশ জটিলতা ছাড়াই শতভাগ নির্ভুলভাবে প্রদর্শিত হবে।
+### Decision 1: HLS Segment Download vs Single Stream Buffer
+- **Chosen Approach**: Parse `.m3u8` playlists and fetch `.ts` segments concurrently using Kotlin Coroutines `async` workers with bounded semaphore limits (4 parallel segment connections).
+- **Why**: Standard `HttpURLConnection` on long `.m3u8` playlist links often drops or times out on large 1GB+ files. Parallel segment downloads utilize full mobile data / Wi-Fi bandwidth without socket timeouts.
+
+### Decision 2: Local Database Persistence for Download Entities
+- **Chosen Approach**: Store download state (ID, title, subtitle, remote URL, local file path, file size, status, timestamp) in Room Database (`DownloadedItemDao`).
+- **Why**: Allows instant reactive UI updates using `Flow<List<DownloadedItemEntity>>` across all screens and survives app restarts.
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      HomeScreen / Routine                   │
-│  ┌───────────────────────┐      ┌────────────────────────┐  │
-│  │ 🔴 লাইভ ক্লাস কার্ড   │      │ কোর্স সুইচার বটমশিট    │  │
-│  └──────────┬────────────┘      └───────────┬────────────┘  │
-└─────────────┼───────────────────────────────┼───────────────┘
-              │ Click (ট্যাপ)                 │ কোর্স নির্বাচন
-              ▼                               ▼
-┌─────────────────────────────┐   ┌───────────────────────────┐
-│   handleOpenLessonDetail    │   │ switchActiveCourse        │
-│  • isLiveNow == true        │   │ • SessionManager আপডেট    │
-│  • live_class.is_on_going   │   │ • FCM টপিক সিঙ্ক          │
-│             │               │   │ • restartApp(context)     │
-│             ▼               │   └───────────┬───────────────┘
-│  Routes.liveClassRoute(...) │               ▼
-│  (ওপেন হবে LiveClassPage)   │   ┌───────────────────────────┐
-└─────────────────────────────┘   │ ফ্রেশ MainActivity রিলোড  │
-                                  └───────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Jetpack Compose UI                              │
+│   (DownloadsScreen, VideoPlayerScreen, DownloadQualityDialog)          │
+└───────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                 AppFileDownloadManager / DownloadService               │
+│    (Foreground Service, Segment Worker Pool, System Notification)      │
+└───────────────────┬────────────────────────────────┬───────────────────┘
+                    │                                │
+                    ▼                                ▼
+┌───────────────────────────────┐   ┌────────────────────────────────────┐
+│      Room Local Database      │   │    App Internal Storage Cache      │
+│  (DownloadedItemEntity Flow)  │   │  (/files/downloads/xxx.mp4/ts)     │
+└───────────────────────────────┘   └────────────────────────────────────┘
 ```
 
-### কার্যপদ্ধতি (Execution Steps):
-1. **`ApiModels.kt` সংশোধন**:
-   - `hasRecording` থেকে লাইভ ব্রডকাস্টের URL (`stream_url`, `hls_url`) বাদ দিয়ে আলাদা করা।
-   - `isLiveNow`-কে এমনভাবে আপডেট করা যাতে লাইভ ক্লাস চলাকালীন এটি কখনোই ফলস না হয়।
-2. **`AppNavigation.kt` রাউটিং নিশ্চিতকরণ**:
-   - `handleOpenLessonDetail`-এ লাইভ ক্লাস ক্লিক হ্যান্ডেলিং জোরদার করা যাতে সোজা `LiveClassPage`-এ রিডাইরেক্ট হয়।
-3. **কোর্স সুইচ রিস্টার্ট সম্পাদন**:
-   - `HomeScreen`-এ কোর্স নির্বাচনে রিস্টার্ট ট্রিগার বজায় রাখা।
+### Key Components to Update / Create
+1. **`AppFileDownloadManager.kt`**: Upgrade HLS parsing, multi-segment downloading, bandwidth speed calculator (`MB/s`), and background file merging.
+2. **`AppDownloadService.kt`**: Foreground Service managing Android system notification updates with progress actions.
+3. **`DownloadsScreen.kt`**: Complete redesign featuring Storage Meter, active downloads status panel, category filters, and offline playback launcher.
+4. **`VideoDownloadQualityDialog.kt`**: Enhanced quality selection dialog displaying estimated file size and resolution options.
