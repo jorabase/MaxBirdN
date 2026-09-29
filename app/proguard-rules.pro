@@ -1,14 +1,13 @@
 # ============================================================================
-# MaxBird Anti-Decompilation & Maximum R8 Obfuscation Security Rules
+# MaxBird Anti-Decompilation & R8 Release Optimization Rules
 # Prevents reverse engineering, decompilation via MT Manager, JADX, Bytecode viewers, and APKTool
 # ============================================================================
 
-# 1. Aggressive Class & Package Flattening / Obfuscation
+# 1. Class & Package Obfuscation Rules (Fast & Secure)
+-dontoptimize
 -repackageclasses ''
 -allowaccessmodification
 -dontusemixedcaseclassnames
--overloadaggressively
--mergeinterfacesaggressively
 
 # 2. Strip Source File Names, Line Numbers, Variable Tables & Debug Information
 -renamesourcefileattribute ""
@@ -40,7 +39,7 @@
 # 4. Anti-Tamper & Security Engine Protection
 -keep class com.example.security.** { *; }
 
-# 5. Moshi & API DTO Models Protection (Prevent serialization breakdown)
+# 5. Moshi & API DTO Models Protection
 -keepclassmembers class * {
     @com.squareup.moshi.Json <fields>;
     @com.squareup.moshi.JsonClass <fields>;
@@ -74,11 +73,14 @@
 }
 -keep class androidx.compose.ui.** { *; }
 
-# 9. Firebase & Google Play Services Rules
+# 9. Firebase & Google Play Services Rules (Suppresses recaptchabase R8 warnings & speeds up build)
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
+-dontwarn com.google.android.gms.internal.recaptchabase.**
+-dontnote com.google.android.gms.**
+-dontnote com.google.firebase.**
 
 # 10. ExoPlayer / Media3 & Coil Image Loading
 -keep class androidx.media3.** { *; }

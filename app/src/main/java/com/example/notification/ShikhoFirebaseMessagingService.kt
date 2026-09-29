@@ -138,8 +138,14 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
 
         val defaultSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
+        val appLogoBitmap = try {
+            BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
+        } catch (_: Exception) {
+            null
+        }
+
         val builder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_shikho_notification_small)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
@@ -148,7 +154,11 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
             .setVibrate(longArrayOf(0, 300, 200, 300))
             .setContentIntent(pendingIntent)
 
-        // If an image was downloaded, use BigPictureStyle; otherwise, use BigTextStyle
+        if (appLogoBitmap != null) {
+            builder.setLargeIcon(appLogoBitmap)
+        }
+
+        // If a banner image was downloaded, use BigPictureStyle; otherwise, use BigTextStyle
         if (largeBitmap != null) {
             builder.setStyle(
                 NotificationCompat.BigPictureStyle()
@@ -156,7 +166,6 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
                     .setBigContentTitle(title)
                     .setSummaryText(body)
             )
-            builder.setLargeIcon(largeBitmap)
         } else {
             builder.setStyle(
                 NotificationCompat.BigTextStyle()

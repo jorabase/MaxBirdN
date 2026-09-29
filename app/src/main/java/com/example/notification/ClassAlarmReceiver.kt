@@ -96,8 +96,14 @@ class ClassAlarmReceiver : BroadcastReceiver() {
                     }
                 } else null
 
+                val appLogoBitmap = try {
+                    android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+                } catch (_: Exception) {
+                    null
+                }
+
                 val builder = NotificationCompat.Builder(context, ClassAlarmScheduler.CHANNEL_ID)
-                    .setSmallIcon(R.drawable.ic_notification)
+                    .setSmallIcon(R.drawable.ic_shikho_notification_small)
                     .setColor(0xFF0072EC.toInt())
                     .setContentTitle(title)
                     .setContentText(body)
@@ -107,8 +113,9 @@ class ClassAlarmReceiver : BroadcastReceiver() {
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setContentIntent(pendingIntent)
 
-                if (largeIconBitmap != null) {
-                    builder.setLargeIcon(largeIconBitmap)
+                val logoToUse = largeIconBitmap ?: appLogoBitmap
+                if (logoToUse != null) {
+                    builder.setLargeIcon(logoToUse)
                 }
 
                 if (sessionManager.isNotificationVibrateEnabled()) {

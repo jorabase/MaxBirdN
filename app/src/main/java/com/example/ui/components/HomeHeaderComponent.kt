@@ -200,7 +200,7 @@ fun HomeHeader(
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.maxbird_logo),
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                             contentDescription = "MaxBird Logo",
                             modifier = Modifier
                                 .fillMaxSize()

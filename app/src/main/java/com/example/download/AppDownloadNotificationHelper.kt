@@ -74,8 +74,14 @@ object AppDownloadNotificationHelper {
 
         val bnPercent = progressPercent.toString().toBengaliDigits()
 
+        val appLogoBitmap = try {
+            android.graphics.BitmapFactory.decodeResource(context.resources, com.example.R.mipmap.ic_launcher)
+        } catch (_: Exception) {
+            null
+        }
+
         val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(com.example.R.drawable.ic_shikho_notification_small)
             .setContentTitle("ডাউনলোড হচ্ছে: $title")
             .setContentText("$bnPercent% • $statusText")
             .setSubText("$bnPercent% সম্পন্ন")
@@ -85,6 +91,10 @@ object AppDownloadNotificationHelper {
             .setProgress(100, progressPercent.coerceIn(0, 100), totalBytes <= 0L)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+
+        if (appLogoBitmap != null) {
+            builder.setLargeIcon(appLogoBitmap)
+        }
 
         notificationManager.notify(getNotificationId(id), builder.build())
     }
@@ -111,14 +121,24 @@ object AppDownloadNotificationHelper {
 
         val totalFormatted = AppFileDownloadManager.getInstance(context).formatFileSize(totalBytes, inBengali = true)
 
+        val appLogoBitmap = try {
+            android.graphics.BitmapFactory.decodeResource(context.resources, com.example.R.mipmap.ic_launcher)
+        } catch (_: Exception) {
+            null
+        }
+
         val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(com.example.R.drawable.ic_shikho_notification_small)
             .setContentTitle("ডাউনলোড সম্পন্ন হয়েছে")
             .setContentText("\"$title\" সফলভাবে ডাউনলোড হয়েছে ($totalFormatted)")
             .setAutoCancel(true)
             .setOngoing(false)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+
+        if (appLogoBitmap != null) {
+            builder.setLargeIcon(appLogoBitmap)
+        }
 
         notificationManager.notify(getNotificationId(id), builder.build())
     }
@@ -142,14 +162,24 @@ object AppDownloadNotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
         )
 
+        val appLogoBitmap = try {
+            android.graphics.BitmapFactory.decodeResource(context.resources, com.example.R.mipmap.ic_launcher)
+        } catch (_: Exception) {
+            null
+        }
+
         val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setSmallIcon(com.example.R.drawable.ic_shikho_notification_small)
             .setContentTitle("ডাউনলোড ব্যর্থ হয়েছে")
             .setContentText("\"$title\" ডাউনলোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।")
             .setAutoCancel(true)
             .setOngoing(false)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+
+        if (appLogoBitmap != null) {
+            builder.setLargeIcon(appLogoBitmap)
+        }
 
         notificationManager.notify(getNotificationId(id), builder.build())
     }

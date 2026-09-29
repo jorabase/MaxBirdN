@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="42dp"
-        android:height="42dp"
-        android:drawable="@drawable/maxbird_logo"
-        android:gravity="center" />
-</layer-list>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground_asset"
+    android:insetTop="18%"
+    android:insetBottom="18%"
+    android:insetLeft="18%"
+    android:insetRight="18%" />
