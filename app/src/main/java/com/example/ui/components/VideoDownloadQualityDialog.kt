@@ -52,17 +52,12 @@ fun VideoDownloadQualityDialog(
 
     LaunchedEffect(videoUrl) {
         isLoading = true
-        // 1. Immediately show local/static options as responsive instant placeholder
-        val rawOptions = AppFileDownloadManager.getAvailableDownloadQualities(videoUrl)
-        qualityOptions = rawOptions
-
-        // 2. Load the real qualities and calculate actual file sizes asynchronously
         try {
             val realOptions = downloadManager.getRealAvailableDownloadQualities(videoUrl)
             val sizedOptions = downloadManager.calculateRealQualitySizes(videoUrl, realOptions)
-            qualityOptions = if (sizedOptions.isNotEmpty()) sizedOptions else rawOptions
+            qualityOptions = if (sizedOptions.isNotEmpty()) sizedOptions else AppFileDownloadManager.getAvailableDownloadQualities(videoUrl)
         } catch (_: Exception) {
-            qualityOptions = rawOptions
+            qualityOptions = AppFileDownloadManager.getAvailableDownloadQualities(videoUrl)
         }
         isLoading = false
     }
@@ -285,13 +280,7 @@ fun VideoDownloadQualityDialog(
                                                     }
                                                 }
 
-                                                Spacer(modifier = Modifier.height(3.dp))
 
-                                                Text(
-                                                    text = option.descriptionBangla,
-                                                    fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
                                             }
 
                                             Spacer(modifier = Modifier.width(8.dp))

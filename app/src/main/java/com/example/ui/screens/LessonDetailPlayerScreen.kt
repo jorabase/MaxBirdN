@@ -1344,6 +1344,12 @@ fun LessonDetailPlayerScreen(
     }
 
     // In-App Slide Viewer Dialog
+    LaunchedEffect(viewingSlideItem) {
+        if (viewingSlideItem != null && exoPlayer.isPlaying) {
+            exoPlayer.pause()
+        }
+    }
+
     if (viewingSlideItem != null) {
         val slide = viewingSlideItem!!
         val url = slide.downloadUrl ?: ""

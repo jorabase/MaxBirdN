@@ -37,8 +37,10 @@ class AppFileDownloadManager private constructor(
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(10, 10, TimeUnit.MINUTES))
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -54,7 +56,7 @@ class AppFileDownloadManager private constructor(
 
     companion object {
         private const val TAG = "AppFileDownloadManager"
-        private const val BUFFER_SIZE = 16384 // 16KB buffer
+        private const val BUFFER_SIZE = 32768 // 32KB high performance buffer
 
         @Volatile
         private var INSTANCE: AppFileDownloadManager? = null

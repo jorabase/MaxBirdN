@@ -347,7 +347,7 @@ fun PlayerControlsOverlay(
                             )
                         )
                     )
-                    .then(insetsModifier)
+                    .then(if (!isFullscreen) insetsModifier else Modifier)
             ) {
                 // ---------------------------------------------------------
                 // TOP BAR (Back Button + Lesson Title ONLY + Action Strip)

@@ -45,6 +45,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -53,7 +55,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.graphics.drawable.ColorDrawable
+import android.view.WindowManager
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import kotlinx.coroutines.Dispatchers
@@ -212,14 +220,21 @@ fun SlideViewerDialog(
     val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
     val activity = remember(context) { context.findActivity() }
 
-    // Screen orientation state
-    var isLandscapeMode by remember { mutableStateOf(false) }
+    // Screen orientation state with physical rotation detection
+    val configuration = LocalConfiguration.current
+    val isSystemLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    var isLandscapeRequested by remember { mutableStateOf(false) }
+    val isLandscapeMode = isLandscapeRequested || isSystemLandscape
 
-    // Restore original orientation when dialog closes
+    // Restore original orientation and system bars when dialog closes
     DisposableEffect(Unit) {
         onDispose {
             try {
                 activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                activity?.window?.let { actWin ->
+                    val controller = WindowCompat.getInsetsController(actWin, actWin.decorView)
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
             } catch (_: Exception) {}
         }
     }
@@ -393,9 +408,53 @@ fun SlideViewerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnBackPress = true
+            dismissOnBackPress = true,
+            decorFitsSystemWindows = false
         )
     ) {
+        val dialogView = LocalView.current
+        val dialogWindow = remember(dialogView) {
+            var parent = dialogView.parent
+            var win: android.view.Window? = null
+            while (parent != null) {
+                if (parent is DialogWindowProvider) {
+                    win = parent.window
+                    break
+                }
+                parent = parent.parent
+            }
+            win
+        }
+
+        SideEffect {
+            dialogWindow?.let { win ->
+                win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+                win.setBackgroundDrawable(ColorDrawable(android.graphics.Color.BLACK))
+                win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                WindowCompat.setDecorFitsSystemWindows(win, false)
+                val controller = WindowCompat.getInsetsController(win, win.decorView)
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (isLandscapeMode || isFullscreen) {
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+        }
+
+        LaunchedEffect(isLandscapeMode, isFullscreen) {
+            activity?.window?.let { actWin ->
+                WindowCompat.setDecorFitsSystemWindows(actWin, false)
+                val controller = WindowCompat.getInsetsController(actWin, actWin.decorView)
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (isLandscapeMode || isFullscreen) {
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+        }
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = when (readingTheme) {
@@ -422,7 +481,7 @@ fun SlideViewerDialog(
                         onDismiss = onDismiss,
                         onToggleOrientation = {
                             val newLandscape = !isLandscapeMode
-                            isLandscapeMode = newLandscape
+                            isLandscapeRequested = newLandscape
                             activity?.requestedOrientation = if (newLandscape) {
                                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                             } else {
@@ -576,8 +635,8 @@ private fun PdfViewerTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .then(if (!isLandscape) Modifier.statusBarsPadding() else Modifier)
+                .padding(horizontal = 6.dp, vertical = if (isLandscape) 3.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Close Button
@@ -881,18 +940,20 @@ private fun NativePdfViewerContent(
                         renderer = renderer,
                         colorFilter = colorFilter,
                         readingTheme = readingTheme,
-                        targetWidthPx = renderTargetWidth
+                        targetWidthPx = renderTargetWidth,
+                        isSlideMode = false
                     )
                 }
             }
         } else {
-            // Mode 2: Horizontal Slide Presentation Mode - FULL WIDTH
+            // Mode 2: Horizontal Slide Presentation Mode - CLEAN FIT BOTH WIDTH & HEIGHT
             HorizontalPager(
                 state = horizontalPagerState,
                 contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                 pageSpacing = 0.dp,
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(bottom = if (!isFullscreen) 46.dp else 0.dp)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
@@ -909,7 +970,8 @@ private fun NativePdfViewerContent(
                         renderer = renderer,
                         colorFilter = colorFilter,
                         readingTheme = readingTheme,
-                        targetWidthPx = renderTargetWidth
+                        targetWidthPx = renderTargetWidth,
+                        isSlideMode = true
                     )
                 }
             }
@@ -1080,7 +1142,8 @@ private fun PdfPageCard(
     renderer: PdfPageRenderer,
     colorFilter: ColorFilter?,
     readingTheme: ReadingTheme,
-    targetWidthPx: Int
+    targetWidthPx: Int,
+    isSlideMode: Boolean = false
 ) {
     var pageBitmap by remember(pageIndex) {
         mutableStateOf(renderer.getCachedBitmap(pageIndex))
@@ -1095,48 +1158,114 @@ private fun PdfPageCard(
         }
     }
 
-    Surface(
-        shape = RectangleShape,
-        color = when (readingTheme) {
-            ReadingTheme.DAY -> Color.White
-            ReadingTheme.SEPIA -> Color(0xFFF7F3E9)
-            ReadingTheme.NIGHT -> Color(0xFF1E1E20)
-        },
-        shadowElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(
+    val cardColor = when (readingTheme) {
+        ReadingTheme.DAY -> Color.White
+        ReadingTheme.SEPIA -> Color(0xFFF7F3E9)
+        ReadingTheme.NIGHT -> Color(0xFF1E1E20)
+    }
+
+    if (isSlideMode) {
+        // Slide Presentation Mode: Must fit inside both width and height without any clipping
+        BoxWithConstraints(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(aspectRatio),
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (pageBitmap != null) {
-                Image(
-                    bitmap = pageBitmap!!.asImageBitmap(),
-                    contentDescription = "স্লাইড ${pageIndex + 1}",
-                    contentScale = ContentScale.FillWidth,
-                    colorFilter = colorFilter,
-                    modifier = Modifier.fillMaxSize()
-                )
+            val containerRatio = if (maxHeight.value > 0f) maxWidth.value / maxHeight.value else 1.77f
+            val cardModifier = if (aspectRatio > containerRatio) {
+                // Page is wider than container ratio -> match width, calculate height
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(aspectRatio, matchHeightConstraintsFirst = false)
             } else {
-                // Rendering placeholder
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                // Page is taller than container ratio (e.g. landscape mode) -> match height, calculate width!
+                Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(aspectRatio, matchHeightConstraintsFirst = true)
+            }
+
+            Surface(
+                shape = RoundedCornerShape(3.dp),
+                color = cardColor,
+                shadowElevation = 3.dp,
+                modifier = cardModifier
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 2.5.dp,
-                        modifier = Modifier.size(28.dp)
+                    if (pageBitmap != null) {
+                        Image(
+                            bitmap = pageBitmap!!.asImageBitmap(),
+                            contentDescription = "স্লাইড ${pageIndex + 1}",
+                            contentScale = ContentScale.Fit,
+                            colorFilter = colorFilter,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        // Rendering placeholder
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.5.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "স্লাইড ${toBengaliDigits(pageIndex + 1)} লোড হচ্ছে...",
+                                color = Color(0xFF94A3B8),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        Surface(
+            shape = RectangleShape,
+            color = cardColor,
+            shadowElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(aspectRatio),
+                contentAlignment = Alignment.Center
+            ) {
+                if (pageBitmap != null) {
+                    Image(
+                        bitmap = pageBitmap!!.asImageBitmap(),
+                        contentDescription = "স্লাইড ${pageIndex + 1}",
+                        contentScale = ContentScale.FillWidth,
+                        colorFilter = colorFilter,
+                        modifier = Modifier.fillMaxSize()
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "স্লাইড ${toBengaliDigits(pageIndex + 1)} লোড হচ্ছে...",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                } else {
+                    // Rendering placeholder
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "স্লাইড ${toBengaliDigits(pageIndex + 1)} লোড হচ্ছে...",
+                            color = Color(0xFF94A3B8),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
