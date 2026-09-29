@@ -112,6 +112,15 @@ object Routes {
         val encSubject = try { URLEncoder.encode(subjectName, "UTF-8") } catch (_: Exception) { subjectName }
         return "live_class/$classId/$lessonId?lessonTitle=$encTitle&subjectName=$encSubject"
     }
+
+    const val PDF_VIEWER = "pdf_viewer?url={url}&title={title}&initialRemoteUrl={initialRemoteUrl}&subject={subject}"
+    fun pdfViewerRoute(url: String, title: String = "", initialRemoteUrl: String = "", subject: String = ""): String {
+        val encUrl = try { URLEncoder.encode(url, "UTF-8") } catch (_: Exception) { url }
+        val encTitle = try { URLEncoder.encode(title, "UTF-8") } catch (_: Exception) { title }
+        val encRemote = try { URLEncoder.encode(initialRemoteUrl, "UTF-8") } catch (_: Exception) { initialRemoteUrl }
+        val encSub = try { URLEncoder.encode(subject, "UTF-8") } catch (_: Exception) { subject }
+        return "pdf_viewer?url=$encUrl&title=$encTitle&initialRemoteUrl=$encRemote&subject=$encSub"
+    }
 }
 
 // ============================================================
@@ -522,6 +531,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val encodedSubject = URLEncoder.encode(subjectName, "UTF-8")
                     val encodedColor = URLEncoder.encode(subjectColor, "UTF-8")
                     navController.navigate("video_player?url=$encodedUrl&title=$encodedTitle&subject=$encodedSubject&color=$encodedColor&isLive=$isLive")
+                },
+                onOpenPdf = { filePath, title ->
+                    navController.navigate(Routes.pdfViewerRoute(url = filePath, title = title))
                 },
                 onNavigateToNotificationHistory = {
                     navController.navigate(Routes.NOTIFICATION_SETTINGS)
@@ -1032,6 +1044,15 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onOpenSubjectResources = {
                     navController.navigate(Routes.SMART_NOTES)
                 },
+                onNavigateToPdfViewer = { url, title ->
+                    navController.navigate(
+                        Routes.pdfViewerRoute(
+                            url = url,
+                            title = title,
+                            subject = courseUiState.selectedSubjectTitle
+                        )
+                    )
+                },
                 onBack = {
                     navController.popBackStack()
                 }
@@ -1142,6 +1163,32 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 subjectName = subject,
                 subjectColorHex = color,
                 isLive = isLive,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.PDF_VIEWER,
+            anim = NavAnim.immersive,
+            arguments = listOf(
+                navArgument("url") { type = NavType.StringType; defaultValue = "" },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("initialRemoteUrl") { type = NavType.StringType; defaultValue = "" },
+                navArgument("subject") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val url = backStackEntry.arguments?.getString("url")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val title = backStackEntry.arguments?.getString("title")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val initialRemote = backStackEntry.arguments?.getString("initialRemoteUrl")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val subject = backStackEntry.arguments?.getString("subject")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+
+            com.example.ui.screens.PdfViewerScreen(
+                slideUrl = url,
+                title = title,
+                initialRemoteUrl = initialRemote.takeIf { it.isNotBlank() },
+                subject = subject,
                 onBack = {
                     navController.popBackStack()
                 }
@@ -1327,6 +1374,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val encodedSubject = URLEncoder.encode(subjectName, "UTF-8")
                     val encodedColor = URLEncoder.encode(subjectColor, "UTF-8")
                     navController.navigate("video_player?url=$encodedUrl&title=$encodedTitle&subject=$encodedSubject&color=$encodedColor&isLive=$isLive")
+                },
+                onOpenPdf = { filePath, title ->
+                    navController.navigate(Routes.pdfViewerRoute(url = filePath, title = title))
                 }
             )
         }

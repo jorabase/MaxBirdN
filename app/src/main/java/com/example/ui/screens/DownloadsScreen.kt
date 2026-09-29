@@ -47,6 +47,7 @@ import java.util.Locale
 fun DownloadsScreen(
     onBack: () -> Unit,
     onPlayVideo: (videoUrl: String, title: String, subjectName: String, subjectColor: String, isLive: Boolean) -> Unit,
+    onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
     isOfflineOnly: Boolean = false,
     onNavigateOnline: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -430,7 +431,11 @@ fun DownloadsScreen(
                                         false
                                     )
                                 } else {
-                                    activePdfViewerItem = item
+                                    if (onOpenPdf != null) {
+                                        onOpenPdf(item.localFilePath, item.title)
+                                    } else {
+                                        activePdfViewerItem = item
+                                    }
                                 }
                             },
                             onDelete = { itemToDelete = item },

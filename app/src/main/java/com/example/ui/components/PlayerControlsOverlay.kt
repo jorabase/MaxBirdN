@@ -79,6 +79,7 @@ fun PlayerControlsOverlay(
     onRestartFromBeginning: (() -> Unit)? = null,
     manualZoomScale: Float = 1.0f,
     onResetManualZoom: () -> Unit = {},
+    standaloneFullScreen: Boolean = false,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -106,12 +107,7 @@ fun PlayerControlsOverlay(
         }
     }
 
-    // Safe Insets Modifier for Rotated (Fullscreen) & Portrait
-    val insetsModifier = if (isFullscreen) {
-        Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
-    } else {
-        Modifier
-    }
+    val shouldApplySystemInsets = standaloneFullScreen || isFullscreen
 
     Box(
         modifier = Modifier
@@ -223,7 +219,7 @@ fun PlayerControlsOverlay(
             exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .then(if (isFullscreen) Modifier.statusBarsPadding() else Modifier)
+                .then(if (shouldApplySystemInsets) Modifier.statusBarsPadding() else Modifier)
                 .padding(top = 14.dp)
         ) {
             Surface(
@@ -347,7 +343,6 @@ fun PlayerControlsOverlay(
                             )
                         )
                     )
-                    .then(if (!isFullscreen) insetsModifier else Modifier)
             ) {
                 // ---------------------------------------------------------
                 // TOP BAR (Back Button + Lesson Title ONLY + Action Strip)
@@ -356,6 +351,11 @@ fun PlayerControlsOverlay(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
+                        .then(
+                            if (shouldApplySystemInsets) {
+                                Modifier.statusBarsPadding().displayCutoutPadding()
+                            } else Modifier
+                        )
                         .padding(horizontal = 12.dp, vertical = if (isFullscreen) 10.dp else 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -682,6 +682,11 @@ fun PlayerControlsOverlay(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
+                        .then(
+                            if (shouldApplySystemInsets) {
+                                Modifier.navigationBarsPadding().displayCutoutPadding()
+                            } else Modifier
+                        )
                         .padding(horizontal = 14.dp, vertical = if (isFullscreen) 10.dp else 6.dp)
                 ) {
                     // Resume Playback Banner

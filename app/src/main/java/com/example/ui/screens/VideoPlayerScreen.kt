@@ -669,6 +669,7 @@ fun VideoPlayerScreen(
             onToggleAudioOnlyMode = onToggleAudioOnlyMode,
             resumeNotificationText = resumeNotificationText,
             onRestartFromBeginning = onRestartFromBeginning,
+            standaloneFullScreen = true,
             onBack = {
                 if (isFullscreen) {
                     isFullscreen = false

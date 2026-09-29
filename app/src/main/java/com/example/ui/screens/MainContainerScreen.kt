@@ -52,6 +52,7 @@ fun MainContainerScreen(
     onOpenLessonDetail: (com.example.api.StudentLessonItem) -> Unit = {},
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
     onPlayVideo: (videoUrl: String, title: String, subjectName: String, subjectColor: String, isLive: Boolean) -> Unit = { _, _, _, _, _ -> },
+    onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
     onNavigateToNotificationHistory: () -> Unit = {},
     onNavigateToNotification: () -> Unit = {},
     onNavigateToHeaderWallpaper: () -> Unit = {},
@@ -188,7 +189,8 @@ fun MainContainerScreen(
                 2 -> {
                     DownloadsScreen(
                         onBack = { selectedIndex = 0 },
-                        onPlayVideo = onPlayVideo
+                        onPlayVideo = onPlayVideo,
+                        onOpenPdf = onOpenPdf
                     )
                 }
                 3 -> {

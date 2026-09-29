@@ -125,6 +125,7 @@ fun LessonDetailPlayerScreen(
     onPlayAnimatedLesson: ((videoUrl: String, title: String) -> Unit)? = null,
     onOpenChapterResources: (() -> Unit)? = null,
     onOpenSubjectResources: (() -> Unit)? = null,
+    onNavigateToPdfViewer: ((url: String, title: String) -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val isExamLesson = lesson?.isExam == true ||
@@ -353,6 +354,17 @@ fun LessonDetailPlayerScreen(
     // Slide viewing state
     var viewingSlideItem by remember { mutableStateOf<LessonAttachmentItem?>(null) }
     var isRefreshingSlide by remember { mutableStateOf(false) }
+
+    val handleViewSlide: (LessonAttachmentItem) -> Unit = { item ->
+        val url = item.downloadUrl.orEmpty()
+        val slideTitle = item.displayTitle.ifBlank { lesson?.title ?: "লেকচার স্লাইড" }
+        if (onNavigateToPdfViewer != null && url.isNotBlank()) {
+            exoPlayer.pause()
+            onNavigateToPdfViewer(url, slideTitle)
+        } else {
+            viewingSlideItem = item
+        }
+    }
 
     // Expandable Accordion State for Topics
     var isTopicsExpanded by remember { mutableStateOf(true) }
@@ -1104,7 +1116,7 @@ fun LessonDetailPlayerScreen(
                                     }
                                 },
                                 onLaunchWebPlayer = { livePlayerMode = "WEB_PLAYER" },
-                                onViewSlide = { item -> viewingSlideItem = item },
+                                onViewSlide = handleViewSlide,
                                 onBack = onBack
                             )
                         } else {
@@ -1222,7 +1234,7 @@ fun LessonDetailPlayerScreen(
                             lesson = lesson,
                             slideUrl = slideUrlForEmpty,
                             onRefreshLesson = onRefreshLesson,
-                            onViewSlide = { item -> viewingSlideItem = item },
+                            onViewSlide = handleViewSlide,
                             onBack = onBack
                         )
                     }
@@ -1257,9 +1269,7 @@ fun LessonDetailPlayerScreen(
                     coroutineScope = coroutineScope,
                     isLoading = isLessonLoading,
                     onRefreshLesson = onRefreshLesson,
-                    onViewAttachment = { attachment ->
-                        viewingSlideItem = attachment
-                    },
+                    onViewAttachment = handleViewSlide,
                     onOpenChapterResources = onOpenChapterResources,
                     onOpenSubjectResources = onOpenSubjectResources
                 )

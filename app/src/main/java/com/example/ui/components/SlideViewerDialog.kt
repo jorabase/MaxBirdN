@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -209,12 +210,15 @@ class PdfPageRenderer(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SlideViewerDialog(
+fun PdfViewerContent(
     slideUrl: String,
     title: String,
     initialRemoteUrl: String? = null,
-    onDismiss: () -> Unit
+    onBack: () -> Unit
 ) {
+    BackHandler {
+        onBack()
+    }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
@@ -404,58 +408,20 @@ fun SlideViewerDialog(
     val isOfflineAvailable = (isDirectLocal && targetPdfFile != null) ||
             (effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED)
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        val dialogView = LocalView.current
-        val dialogWindow = remember(dialogView) {
-            var parent = dialogView.parent
-            var win: android.view.Window? = null
-            while (parent != null) {
-                if (parent is DialogWindowProvider) {
-                    win = parent.window
-                    break
-                }
-                parent = parent.parent
-            }
-            win
-        }
-
-        SideEffect {
-            dialogWindow?.let { win ->
-                win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
-                win.setBackgroundDrawable(ColorDrawable(android.graphics.Color.BLACK))
-                win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-                WindowCompat.setDecorFitsSystemWindows(win, false)
-                val controller = WindowCompat.getInsetsController(win, win.decorView)
-                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                if (isLandscapeMode || isFullscreen) {
-                    controller.hide(WindowInsetsCompat.Type.systemBars())
-                } else {
-                    controller.show(WindowInsetsCompat.Type.systemBars())
-                }
+    LaunchedEffect(isLandscapeMode, isFullscreen) {
+        activity?.window?.let { actWin ->
+            WindowCompat.setDecorFitsSystemWindows(actWin, false)
+            val controller = WindowCompat.getInsetsController(actWin, actWin.decorView)
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (isLandscapeMode || isFullscreen) {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
             }
         }
+    }
 
-        LaunchedEffect(isLandscapeMode, isFullscreen) {
-            activity?.window?.let { actWin ->
-                WindowCompat.setDecorFitsSystemWindows(actWin, false)
-                val controller = WindowCompat.getInsetsController(actWin, actWin.decorView)
-                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                if (isLandscapeMode || isFullscreen) {
-                    controller.hide(WindowInsetsCompat.Type.systemBars())
-                } else {
-                    controller.show(WindowInsetsCompat.Type.systemBars())
-                }
-            }
-        }
-
-        Surface(
+    Surface(
             modifier = Modifier.fillMaxSize(),
             color = when (readingTheme) {
                 ReadingTheme.DAY -> Color(0xFF0F172A)
@@ -478,7 +444,7 @@ fun SlideViewerDialog(
                         readingTheme = readingTheme,
                         isLandscape = isLandscapeMode,
                         downloadedItem = effectiveDownloadedItem,
-                        onDismiss = onDismiss,
+                        onDismiss = onBack,
                         onToggleOrientation = {
                             val newLandscape = !isLandscapeMode
                             isLandscapeRequested = newLandscape
@@ -607,6 +573,52 @@ fun SlideViewerDialog(
                 onDismiss = { showShareBottomSheet = false }
             )
         }
+    }
+
+@Composable
+fun SlideViewerDialog(
+    slideUrl: String,
+    title: String,
+    initialRemoteUrl: String? = null,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        val dialogView = LocalView.current
+        val dialogWindow = remember(dialogView) {
+            var parent = dialogView.parent
+            var win: android.view.Window? = null
+            while (parent != null) {
+                if (parent is DialogWindowProvider) {
+                    win = parent.window
+                    break
+                }
+                parent = parent.parent
+            }
+            win
+        }
+
+        SideEffect {
+            dialogWindow?.let { win ->
+                win.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
+                win.setBackgroundDrawable(ColorDrawable(android.graphics.Color.BLACK))
+                win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                WindowCompat.setDecorFitsSystemWindows(win, false)
+            }
+        }
+
+        PdfViewerContent(
+            slideUrl = slideUrl,
+            title = title,
+            initialRemoteUrl = initialRemoteUrl,
+            onBack = onDismiss
+        )
     }
 }
 
