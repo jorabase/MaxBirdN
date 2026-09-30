@@ -269,10 +269,35 @@ class ModelTestRepository(
             val mcqStage = raw.stages?.firstOrNull { s -> s.type.equals("MCQ", ignoreCase = true) }
             val cqStage = raw.stages?.firstOrNull { s -> s.type.equals("CQ", ignoreCase = true) }
 
+            val baseDate = raw.exam_date?.take(10)?.takeIf { it.length == 10 && it.contains("-") }
+            val slotStartTime = raw.exam_slots?.firstOrNull()?.start_time?.trim()
+            val rawEndTime = (raw.exam_end_time ?: raw.end_time)?.trim()
+
+            val resolvedStartTime = when {
+                !raw.start_time.isNullOrBlank() && raw.start_time.length > 10 -> raw.start_time
+                !baseDate.isNullOrBlank() && !slotStartTime.isNullOrBlank() && !slotStartTime.contains("-") -> {
+                    "${baseDate}T${slotStartTime}+06:00"
+                }
+                !slotStartTime.isNullOrBlank() && slotStartTime.length > 10 -> slotStartTime
+                !raw.start_time.isNullOrBlank() -> raw.start_time
+                !baseDate.isNullOrBlank() -> "${baseDate}T00:00:00+06:00"
+                else -> slotStartTime
+            }
+
+            val resolvedEndTime = when {
+                !raw.end_time.isNullOrBlank() && raw.end_time.length > 10 -> raw.end_time
+                !baseDate.isNullOrBlank() && !rawEndTime.isNullOrBlank() && !rawEndTime.contains("-") -> {
+                    "${baseDate}T${rawEndTime}+06:00"
+                }
+                !rawEndTime.isNullOrBlank() && rawEndTime.length > 10 -> rawEndTime
+                !baseDate.isNullOrBlank() -> "${baseDate}T23:59:59+06:00"
+                else -> rawEndTime
+            }
+
             raw.copy(
                 id = modelTestId,
-                start_time = raw.exam_slots?.firstOrNull()?.start_time ?: raw.exam_date ?: raw.start_time,
-                end_time = raw.exam_end_time ?: raw.end_time,
+                start_time = resolvedStartTime,
+                end_time = resolvedEndTime,
                 mcq_count = mcqStage?.no_of_questions ?: 30,
                 cq_count = cqStage?.no_of_questions ?: 2,
                 mcq_duration_minutes = mcqStage?.exam_duration ?: mcqStage?.allocated_exam_duration ?: 30,
@@ -312,7 +337,8 @@ class ModelTestRepository(
     // -------------------------------------------------------------
     suspend fun createModelTestSession(
         modelTestId: String,
-        isPractice: Boolean
+        isPractice: Boolean,
+        lessonId: String? = null
     ): Result<ModelTestSessionResult> {
         val query = """
             query GetModelTestSessions(${'$'}is_practice: Boolean!, ${'$'}model_test_id: String!, ${'$'}lesson_id: String, ${'$'}query_only: Boolean!) {
@@ -331,16 +357,52 @@ class ModelTestRepository(
             }
         """.trimIndent()
 
+        val variables = mutableMapOf<String, Any?>(
+            "is_practice" to isPractice,
+            "model_test_id" to modelTestId,
+            "query_only" to false
+        )
+        if (!lessonId.isNullOrBlank()) {
+            variables["lesson_id"] = lessonId
+        } else {
+            variables["lesson_id"] = null
+        }
+
         val result = executeApiQuery<ModelTestSessionsResponse>(
             operationName = "GetModelTestSessions",
             query = query,
-            variables = mapOf(
-                "is_practice" to isPractice,
-                "model_test_id" to modelTestId,
-                "lesson_id" to "",
-                "query_only" to false
-            )
+            variables = variables
         )
+
+        val session = result.getOrNull()?.let { resp ->
+            resp.data?.getModelTestSession ?: resp.data?.getModelTestSessions
+        }
+        if (session != null) {
+            return Result.success(session)
+        }
+
+        // If live session creation failed and we tried without lesson_id, try with empty or vice versa
+        if (!isPractice) {
+            Log.w("ModelTestRepo", "Live model test session creation failed, retrying with fallback parameters...")
+            val fallbackVars = mutableMapOf<String, Any?>(
+                "is_practice" to false,
+                "model_test_id" to modelTestId,
+                "query_only" to false,
+                "lesson_id" to (lessonId ?: "")
+            )
+            val fallbackResult = executeApiQuery<ModelTestSessionsResponse>(
+                operationName = "GetModelTestSessions",
+                query = query,
+                variables = fallbackVars
+            )
+            val fallbackSession = fallbackResult.getOrNull()?.let { resp ->
+                resp.data?.getModelTestSession ?: resp.data?.getModelTestSessions
+            }
+            if (fallbackSession != null) {
+                return Result.success(fallbackSession)
+            }
+        }
+
         return result.mapCatching {
             it.data?.getModelTestSession
                 ?: it.data?.getModelTestSessions
@@ -500,8 +562,8 @@ class ModelTestRepository(
     // -------------------------------------------------------------
     suspend fun submitMcqAnswer(
         sessionId: String,
-        questionId: String,
-        selectedOptionIndex: Int,
+        questionId: String? = null,
+        selectedOptionIndex: Int? = null,
         isTimeout: Boolean = false,
         isFinalSubmitted: Boolean = false
     ): Result<SubmitMcqResult> {
@@ -515,26 +577,28 @@ class ModelTestRepository(
             }
         """.trimIndent()
 
-        val letter = when (selectedOptionIndex) {
-            0 -> "A"
-            1 -> "B"
-            2 -> "C"
-            3 -> "D"
-            else -> "A"
-        }
+        val answersList = if (!questionId.isNullOrBlank() && selectedOptionIndex != null && selectedOptionIndex >= 0) {
+            val letter = when (selectedOptionIndex) {
+                0 -> "A"
+                1 -> "B"
+                2 -> "C"
+                3 -> "D"
+                else -> "A"
+            }
 
-        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-        val currentTimeStr = sdf.format(Date())
-
-        val answersList = listOf(
-            mapOf(
-                "id" to questionId,
-                "given_ans" to letter,
-                "submit_time" to currentTimeStr
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            listOf(
+                mapOf(
+                    "id" to questionId,
+                    "given_ans" to letter,
+                    "submit_time" to sdf.format(Date())
+                )
             )
-        )
+        } else {
+            emptyList()
+        }
 
         val variables = mapOf(
             "id" to sessionId,
@@ -553,15 +617,17 @@ class ModelTestRepository(
             SubmitMcqResult(success = true, is_final_submitted = isFinalSubmitted)
         }.recoverCatching { error ->
             Log.w("ModelTestRepo", "Network error during submitMcqAnswer. Queuing locally: ${error.message}")
-            modelTestDao?.insertAnswer(
-                OfflineMcqAnswerEntity(
-                    sessionId = sessionId,
-                    questionId = questionId,
-                    selectedOptionIndex = selectedOptionIndex,
-                    isTimeout = isTimeout,
-                    isFinalSubmitted = isFinalSubmitted
+            if (!questionId.isNullOrBlank() && selectedOptionIndex != null && selectedOptionIndex >= 0) {
+                modelTestDao?.insertAnswer(
+                    OfflineMcqAnswerEntity(
+                        sessionId = sessionId,
+                        questionId = questionId,
+                        selectedOptionIndex = selectedOptionIndex,
+                        isTimeout = isTimeout,
+                        isFinalSubmitted = isFinalSubmitted
+                    )
                 )
-            )
+            }
             SubmitMcqResult(success = true, message = "Saved locally", is_final_submitted = isFinalSubmitted)
         }
     }

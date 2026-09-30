@@ -42,6 +42,8 @@ fun MCQExamScreen(
     viewModel: ModelTestViewModel,
     onNavigateToCqReadOnly: (sessionId: String) -> Unit,
     onNavigateToCqUpload: (sessionId: String) -> Unit,
+    onNavigateToResult: (sessionId: String) -> Unit = {},
+    onNavigateToFeedback: (sessionId: String) -> Unit = {},
     onExitExam: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -89,10 +91,22 @@ fun MCQExamScreen(
             isPractice = uiState.isPracticeSession,
             onProceed = {
                 viewModel.dismissScorePopup()
-                if (uiState.isPracticeSession) {
-                    onNavigateToCqReadOnly(sessionId)
+                val hasCq = uiState.modelTestInfo?.stages?.any { it.type.equals("CQ", ignoreCase = true) } == true
+                    || (uiState.modelTestInfo?.cq_count ?: 0) > 0
+                val cqSessionId = uiState.currentCqSessionId.ifBlank { sessionId }
+
+                if (hasCq) {
+                    if (uiState.isPracticeSession) {
+                        onNavigateToCqReadOnly(cqSessionId)
+                    } else {
+                        onNavigateToCqUpload(cqSessionId)
+                    }
                 } else {
-                    onNavigateToCqUpload(sessionId)
+                    if (uiState.isPracticeSession) {
+                        onNavigateToFeedback(sessionId)
+                    } else {
+                        onNavigateToResult(sessionId)
+                    }
                 }
             }
         )

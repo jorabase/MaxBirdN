@@ -36,7 +36,7 @@ fun TimelineRoutineCard(
     val et = lesson.end_time ?: lesson.live_class?.end_time
 
     val startCal = remember(st) { RoutineDateUtils.parseIsoToDhakaCalendar(st) }
-    val endCal = remember(et) { RoutineDateUtils.parseIsoToDhakaCalendar(et) }
+    val endCal = remember(et) { RoutineDateUtils.parseIsoToDhakaCalendar(et, isEndOfDay = true) }
 
     val formattedTime = remember(startCal, endCal) {
         val timeRange = RoutineDateUtils.formatTimeRange(startCal, endCal)

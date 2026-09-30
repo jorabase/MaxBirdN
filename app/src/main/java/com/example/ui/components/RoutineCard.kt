@@ -490,8 +490,8 @@ fun ShikhoRoutineCard(
 ) {
     val startTime = lesson.start_time ?: lesson.live_class?.start_time
     val endTime = lesson.end_time ?: lesson.live_class?.end_time
-    val startCal = parseIsoToDhakaCalendar(startTime)
-    val endCal = parseIsoToDhakaCalendar(endTime)
+    val startCal = parseIsoToDhakaCalendar(startTime, isEndOfDay = false)
+    val endCal = parseIsoToDhakaCalendar(endTime, isEndOfDay = true)
     val timeString = formatTimeRange(startCal, endCal)
     val durationString = calculateDurationText(startCal, endCal)
 
@@ -828,8 +828,8 @@ fun RoutineCard(
 
 // ==================== ROUTINE UTILITIES DELEGATION ====================
 
-fun parseIsoToDhakaCalendar(isoString: String?): Calendar? =
-    com.example.utils.RoutineDateUtils.parseIsoToDhakaCalendar(isoString)
+fun parseIsoToDhakaCalendar(isoString: String?, isEndOfDay: Boolean = false): Calendar? =
+    com.example.utils.RoutineDateUtils.parseIsoToDhakaCalendar(isoString, isEndOfDay)
 
 fun formatTimeRange(startCal: Calendar?, endCal: Calendar?): String =
     com.example.utils.RoutineDateUtils.formatTimeRange(startCal, endCal)

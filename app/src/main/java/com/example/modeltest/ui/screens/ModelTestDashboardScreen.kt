@@ -341,12 +341,25 @@ private fun ModelTestCard(
     val title = item.title ?: "মডেল টেস্ট"
     val dateStr = formatModelTestDate(item.start_time)
     val state = item.user_activity_state?.uppercase() ?: ""
+    val now = System.currentTimeMillis()
+    val startMs = com.example.modeltest.ui.components.parseIsoDateToMillis(item.start_time, isEndOfDay = false)
+    val endMs = com.example.modeltest.ui.components.parseIsoDateToMillis(item.end_time, isEndOfDay = true)
 
-    // Missed, Completed, Upcoming detection
+    val isCompleted = state == "COMPLETED" || state == "ATTENDED"
+    val isLive = !isCompleted && (
+        state == "LIVE" ||
+        item.isLiveNow ||
+        (startMs != null && now >= (startMs - 5 * 60 * 1000L) && (endMs == null || now <= endMs))
+    )
+    val isMissed = !isLive && !isCompleted && (
+        (endMs != null && now > endMs) || state == "MISSED"
+    )
+
+    // Live, Completed, Ended, Upcoming detection
     val (statusLabel, statusBg, statusText) = when {
-        state == "COMPLETED" -> Triple("সম্পন্ন", Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
-        state == "MISSED" || (item.end_time != null && System.currentTimeMillis() > (com.example.modeltest.ui.components.parseIsoDateToMillis(item.end_time) ?: Long.MAX_VALUE)) ->
-            Triple("মিসড", Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
+        isLive -> Triple("🔴 লাইভ চলছে", Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
+        isCompleted -> Triple("সম্পন্ন", Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
+        isMissed -> Triple("লাইভ শেষ", Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
         else -> Triple("আসন্ন", Color(0xFF3B82F6).copy(alpha = 0.12f), Color(0xFF1D4ED8))
     }
 

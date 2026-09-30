@@ -11,19 +11,42 @@ import java.util.TimeZone
  */
 object RoutineDateUtils {
 
-    fun parseIsoToDhakaCalendar(isoString: String?): Calendar? {
+    fun parseIsoToDhakaCalendar(isoString: String?, isEndOfDay: Boolean = false): Calendar? {
         if (isoString.isNullOrBlank()) return null
         val clean = isoString.trim()
         val dhakaZone = TimeZone.getTimeZone("Asia/Dhaka")
 
         if (clean.startsWith("0000-00-00") || clean.startsWith("1970-01-01")) return null
 
+        val isDateOnly = (clean.length == 10 && clean.matches(Regex("""\d{4}-\d{2}-\d{2}""")))
+        val isZeroTime = clean.contains("T00:00:00") || clean.contains(" 00:00:00")
+
+        if (isDateOnly || (isZeroTime && isEndOfDay)) {
+            try {
+                val datePart = clean.take(10)
+                val parts = datePart.split("-")
+                val cal = Calendar.getInstance(dhakaZone)
+                cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), if (isEndOfDay) 23 else 0, if (isEndOfDay) 59 else 0, if (isEndOfDay) 59 else 0)
+                cal.set(Calendar.MILLISECOND, if (isEndOfDay) 999 else 0)
+                return cal
+            } catch (_: Exception) {}
+        }
+
         if (clean.endsWith("Z", ignoreCase = true)) {
             try {
                 val formatStr = if (clean.contains(".")) "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" else "yyyy-MM-dd'T'HH:mm:ss'Z'"
                 val sdfUtc = SimpleDateFormat(formatStr, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
                 val date = sdfUtc.parse(clean.replace(" ", "T"))
-                if (date != null) return Calendar.getInstance(dhakaZone).apply { time = date }
+                if (date != null) {
+                    val cal = Calendar.getInstance(dhakaZone).apply { time = date }
+                    if (isEndOfDay && cal.get(Calendar.HOUR_OF_DAY) == 0 && cal.get(Calendar.MINUTE) == 0) {
+                        cal.set(Calendar.HOUR_OF_DAY, 23)
+                        cal.set(Calendar.MINUTE, 59)
+                        cal.set(Calendar.SECOND, 59)
+                        cal.set(Calendar.MILLISECOND, 999)
+                    }
+                    return cal
+                }
             } catch (_: Exception) {}
 
             try {
@@ -52,7 +75,16 @@ object RoutineDateUtils {
         try {
             val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }
             val date = sdfDate.parse(clean.take(10))
-            if (date != null) return Calendar.getInstance(dhakaZone).apply { time = date }
+            if (date != null) {
+                val cal = Calendar.getInstance(dhakaZone).apply { time = date }
+                if (isEndOfDay) {
+                    cal.set(Calendar.HOUR_OF_DAY, 23)
+                    cal.set(Calendar.MINUTE, 59)
+                    cal.set(Calendar.SECOND, 59)
+                    cal.set(Calendar.MILLISECOND, 999)
+                }
+                return cal
+            }
         } catch (_: Exception) {}
 
         try {
@@ -107,7 +139,7 @@ object RoutineDateUtils {
             val endTimeStr = lesson.end_time ?: lesson.live_class?.end_time
             val startMs = getStartMs(lesson)
             if (!endTimeStr.isNullOrBlank()) {
-                val endCal = parseIsoToDhakaCalendar(endTimeStr)
+                val endCal = parseIsoToDhakaCalendar(endTimeStr, isEndOfDay = true)
                 if (endCal != null) return endCal.timeInMillis
             }
             return if (startMs != Long.MAX_VALUE) startMs + (90 * 60 * 1000L) else Long.MAX_VALUE

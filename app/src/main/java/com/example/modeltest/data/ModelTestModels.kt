@@ -44,7 +44,8 @@ data class ModelTestInfoDetails(
     val stage_grouping: StageGroupingRaw? = null,
     val exam_slots: List<ExamSlotRaw>? = null,
     val subjects: List<ModelTestSubjectRaw>? = null,
-    val hierarchy: List<ModelTestHierarchyRaw>? = null
+    val hierarchy: List<ModelTestHierarchyRaw>? = null,
+    val user_activity_state: String? = null
 )
 
 @JsonClass(generateAdapter = true)

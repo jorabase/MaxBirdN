@@ -84,7 +84,22 @@ object Routes {
     const val CHAPTER_RESOURCES = "chapter_resources/{chapterId}?name={name}&subjectCode={subjectCode}&phaseId={phaseId}"
     const val SUBJECT_CHAPTERS = "subject_chapters/{subjectCode}?title={title}&color={color}"
     const val MODEL_TEST_SUBJECT = "model_test_subject/{subjectCode}?title={title}&color={color}&programId={programId}&phaseId={phaseId}"
-    const val MODEL_TEST_DETAIL = "model_test_detail/{modelTestId}?title={title}&startTime={startTime}&endTime={endTime}"
+    const val MODEL_TEST_DETAIL = "model_test_detail/{modelTestId}?lessonId={lessonId}&userActivityState={userActivityState}&title={title}&startTime={startTime}&endTime={endTime}"
+    fun modelTestDetailRoute(
+        modelTestId: String,
+        lessonId: String = "",
+        userActivityState: String = "",
+        title: String = "",
+        startTime: String = "",
+        endTime: String = ""
+    ): String {
+        val encLessonId = try { URLEncoder.encode(lessonId, "UTF-8") } catch (_: Exception) { lessonId }
+        val encState = try { URLEncoder.encode(userActivityState, "UTF-8") } catch (_: Exception) { userActivityState }
+        val encT = try { URLEncoder.encode(title, "UTF-8") } catch (_: Exception) { title }
+        val encStart = try { URLEncoder.encode(startTime, "UTF-8") } catch (_: Exception) { startTime }
+        val encEnd = try { URLEncoder.encode(endTime, "UTF-8") } catch (_: Exception) { endTime }
+        return "model_test_detail/$modelTestId?lessonId=$encLessonId&userActivityState=$encState&title=$encT&startTime=$encStart&endTime=$encEnd"
+    }
     const val MODEL_TEST_MCQ_EXAM = "model_test_mcq_exam/{sessionId}"
     const val MODEL_TEST_CQ_READONLY = "model_test_cq_readonly/{sessionId}"
     const val MODEL_TEST_CQ_UPLOAD = "model_test_cq_upload/{sessionId}"
@@ -105,7 +120,14 @@ object Routes {
     const val HEADER_WALLPAPER_SETTINGS = "header_wallpaper_settings"
     const val ANIMATED_LESSON_CHAPTERS = "animated_lesson_chapters/{subjectId}?title={title}&color={color}&programId={programId}&phaseId={phaseId}"
     const val ANIMATED_LESSON_LIST = "animated_lesson_list/{chapterId}?chapterName={chapterName}&subjectColor={subjectColor}&fromChapterPage={fromChapterPage}"
-    const val ANIMATED_LESSON_PLAYER = "animated_lesson_player?url={url}&title={title}"
+    const val ANIMATED_LESSON_PLAYER = "animated_lesson_player?url={url}&title={title}&subject={subject}&chapter={chapter}"
+    fun animatedLessonPlayerRoute(url: String, title: String, subject: String = "", chapter: String = ""): String {
+        val encUrl = try { URLEncoder.encode(url, "UTF-8") } catch (_: Exception) { url }
+        val encTitle = try { URLEncoder.encode(title, "UTF-8") } catch (_: Exception) { title }
+        val encSub = try { URLEncoder.encode(subject, "UTF-8") } catch (_: Exception) { subject }
+        val encChap = try { URLEncoder.encode(chapter, "UTF-8") } catch (_: Exception) { chapter }
+        return "animated_lesson_player?url=$encUrl&title=$encTitle&subject=$encSub&chapter=$encChap"
+    }
     const val LIVE_CLASS = "live_class/{classId}/{lessonId}?lessonTitle={lessonTitle}&subjectName={subjectName}"
     fun liveClassRoute(classId: String, lessonId: String, lessonTitle: String = "", subjectName: String = ""): String {
         val encTitle = try { URLEncoder.encode(lessonTitle, "UTF-8") } catch (_: Exception) { lessonTitle }
@@ -329,10 +351,16 @@ fun AppNavigation(modifier: Modifier = Modifier) {
     val handleOpenLessonDetail: (com.example.api.StudentLessonItem) -> Unit = { lesson ->
         if (lesson.isModelTest || lesson.content_type?.equals("ModelTest", ignoreCase = true) == true || lesson.model_test != null) {
             val mTestId = lesson.content_id?.takeIf { it.isNotBlank() } ?: lesson.id
-            val encT = URLEncoder.encode(lesson.title ?: "মডেল টেস্ট", "UTF-8")
-            val encStart = URLEncoder.encode(lesson.start_time ?: "", "UTF-8")
-            val encEnd = URLEncoder.encode(lesson.end_time ?: "", "UTF-8")
-            navController.navigate("model_test_detail/$mTestId?title=$encT&startTime=$encStart&endTime=$encEnd")
+            navController.navigate(
+                Routes.modelTestDetailRoute(
+                    modelTestId = mTestId,
+                    lessonId = lesson.id,
+                    userActivityState = lesson.user_activity_state ?: "",
+                    title = lesson.title ?: "মডেল টেস্ট",
+                    startTime = lesson.start_time ?: "",
+                    endTime = lesson.end_time ?: ""
+                )
+            )
         } else if (lesson.isLiveExam || lesson.isExam || lesson.content_type?.equals("LiveExam", ignoreCase = true) == true) {
             val sessionId = lesson.session_id?.takeIf { it.isNotBlank() }
                 ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
@@ -718,11 +746,17 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     navController.popBackStack()
                 },
                 onOpenModelTest = { lesson: com.example.api.StudentLessonItem ->
-                    val mTestId = lesson.content_id ?: lesson.id ?: ""
-                    val encT = URLEncoder.encode(lesson.title ?: "মডেল টেস্ট", "UTF-8")
-                    val encStart = URLEncoder.encode(lesson.start_time ?: "", "UTF-8")
-                    val encEnd = URLEncoder.encode(lesson.end_time ?: "", "UTF-8")
-                    navController.navigate("model_test_detail/$mTestId?title=$encT&startTime=$encStart&endTime=$encEnd")
+                    val mTestId = lesson.content_id?.takeIf { it.isNotBlank() } ?: lesson.id ?: ""
+                    navController.navigate(
+                        Routes.modelTestDetailRoute(
+                            modelTestId = mTestId,
+                            lessonId = lesson.id ?: "",
+                            userActivityState = lesson.user_activity_state ?: "",
+                            title = lesson.title ?: "মডেল টেস্ট",
+                            startTime = lesson.start_time ?: "",
+                            endTime = lesson.end_time ?: ""
+                        )
+                    )
                 },
                 onOpenClass = { lesson: com.example.api.StudentLessonItem ->
                     handleOpenLessonDetail(lesson)
@@ -740,18 +774,24 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             anim = NavAnim.forward,
             arguments = listOf(
                 navArgument("modelTestId") { type = NavType.StringType },
+                navArgument("lessonId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("userActivityState") { type = NavType.StringType; defaultValue = "" },
                 navArgument("title") { type = NavType.StringType; defaultValue = "" },
                 navArgument("startTime") { type = NavType.StringType; defaultValue = "" },
                 navArgument("endTime") { type = NavType.StringType; defaultValue = "" }
             )
         ) { backStackEntry ->
             val modelTestId = backStackEntry.arguments?.getString("modelTestId") ?: ""
+            val lessonId = backStackEntry.arguments?.getString("lessonId")?.let { URLDecoder.decode(it, "UTF-8") }
+            val userActivityState = backStackEntry.arguments?.getString("userActivityState")?.let { URLDecoder.decode(it, "UTF-8") }
             val title = backStackEntry.arguments?.getString("title")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
             val startTime = backStackEntry.arguments?.getString("startTime")?.let { URLDecoder.decode(it, "UTF-8") }
             val endTime = backStackEntry.arguments?.getString("endTime")?.let { URLDecoder.decode(it, "UTF-8") }
 
             ModelTestDetailScreen(
                 modelTestId = modelTestId,
+                lessonId = lessonId,
+                userActivityState = userActivityState,
                 lessonTitle = title,
                 lessonStartTime = startTime,
                 lessonEndTime = endTime,
@@ -783,12 +823,22 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 viewModel = modelTestViewModel,
                 onNavigateToCqReadOnly = { sId ->
                     navController.navigate("model_test_cq_readonly/$sId") {
-                        popUpTo("model_test_mcq_exam/$sId") { inclusive = true }
+                        popUpTo("model_test_mcq_exam/$sessionId") { inclusive = true }
                     }
                 },
                 onNavigateToCqUpload = { sId ->
                     navController.navigate("model_test_cq_upload/$sId") {
-                        popUpTo("model_test_mcq_exam/$sId") { inclusive = true }
+                        popUpTo("model_test_mcq_exam/$sessionId") { inclusive = true }
+                    }
+                },
+                onNavigateToResult = { sId ->
+                    navController.navigate("model_test_result/$sId") {
+                        popUpTo("model_test_mcq_exam/$sessionId") { inclusive = true }
+                    }
+                },
+                onNavigateToFeedback = { sId ->
+                    navController.navigate("model_test_feedback/$sId") {
+                        popUpTo("model_test_mcq_exam/$sessionId") { inclusive = true }
                     }
                 },
                 onExitExam = {
@@ -1024,9 +1074,13 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     }
                 },
                 onPlayAnimatedLesson = { videoUrl, title ->
-                    val encodedUrl = URLEncoder.encode(videoUrl, "UTF-8")
-                    val encodedTitle = URLEncoder.encode(title, "UTF-8")
-                    navController.navigate("animated_lesson_player?url=$encodedUrl&title=$encodedTitle")
+                    navController.navigate(
+                        Routes.animatedLessonPlayerRoute(
+                            url = videoUrl,
+                            title = title,
+                            subject = courseUiState.selectedSubjectTitle
+                        )
+                    )
                 },
                 onOpenChapterResources = {
                     val chapterId = courseUiState.selectedLesson?.chapter_id?.takeIf { it.isNotBlank() }
@@ -1115,9 +1169,15 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 viewModel = courseViewModel,
                 onBack = { navController.popBackStack() },
                 onPlayVideo = { videoUrl, videoTitle ->
-                    val encodedUrl = URLEncoder.encode(videoUrl, "UTF-8")
-                    val encodedTitle = URLEncoder.encode(videoTitle, "UTF-8")
-                    navController.navigate("animated_lesson_player?url=$encodedUrl&title=$encodedTitle")
+                    val encodedSubject = courseViewModel.uiState.value.selectedSubjectTitle
+                    navController.navigate(
+                        Routes.animatedLessonPlayerRoute(
+                            url = videoUrl,
+                            title = videoTitle,
+                            subject = encodedSubject,
+                            chapter = chapterName
+                        )
+                    )
                 }
             )
         }
@@ -1127,15 +1187,21 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             anim = NavAnim.immersive,
             arguments = listOf(
                 navArgument("url") { type = NavType.StringType; defaultValue = "" },
-                navArgument("title") { type = NavType.StringType; defaultValue = "" }
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("subject") { type = NavType.StringType; defaultValue = "" },
+                navArgument("chapter") { type = NavType.StringType; defaultValue = "" }
             )
         ) { backStackEntry ->
             val url = backStackEntry.arguments?.getString("url")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
             val title = backStackEntry.arguments?.getString("title")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val subject = backStackEntry.arguments?.getString("subject")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
+            val chapter = backStackEntry.arguments?.getString("chapter")?.let { URLDecoder.decode(it, "UTF-8") } ?: ""
 
             AnimatedLessonPlayerScreen(
                 videoUrl = url,
                 title = title,
+                subjectName = subject,
+                chapterName = chapter,
                 onBack = { navController.popBackStack() }
             )
         }

@@ -259,7 +259,12 @@ class ModelTestViewModel(
     // -------------------------------------------------------------
     // Unified Detail & Rules Screen Data Loading
     // -------------------------------------------------------------
-    fun loadModelTestDetails(modelTestId: String, lessonStartTime: String? = null, lessonEndTime: String? = null) {
+    fun loadModelTestDetails(
+        modelTestId: String,
+        lessonStartTime: String? = null,
+        lessonEndTime: String? = null,
+        userActivityState: String? = null
+    ) {
         _uiState.update {
             it.copy(
                 activeModelTestId = modelTestId,
@@ -272,9 +277,26 @@ class ModelTestViewModel(
         viewModelScope.launch {
             val infoResult = repository.getModelTestInfo(modelTestId)
             infoResult.onSuccess { details ->
+                val finalStart = when {
+                    !details.start_time.isNullOrBlank() && details.start_time.length > 10 -> details.start_time
+                    !lessonStartTime.isNullOrBlank() -> lessonStartTime
+                    else -> details.start_time
+                }
+                val finalEnd = when {
+                    !details.end_time.isNullOrBlank() && details.end_time.length > 10 -> details.end_time
+                    !lessonEndTime.isNullOrBlank() -> lessonEndTime
+                    else -> details.end_time
+                }
+                val finalState = details.user_activity_state?.takeIf { it.isNotBlank() } ?: userActivityState
+                val finalDetails = details.copy(
+                    start_time = finalStart,
+                    end_time = finalEnd,
+                    user_activity_state = finalState
+                )
+
                 _uiState.update {
                     it.copy(
-                        modelTestInfo = details,
+                        modelTestInfo = finalDetails,
                         isInfoLoading = false,
                         infoError = null
                     )
@@ -312,6 +334,7 @@ class ModelTestViewModel(
                             title = "মডেল টেস্ট",
                             start_time = lessonStartTime,
                             end_time = lessonEndTime,
+                            user_activity_state = userActivityState,
                             duration_in_minutes = 30,
                             mcq_count = 30
                         ),
@@ -346,6 +369,7 @@ class ModelTestViewModel(
     fun startExamSession(
         modelTestId: String,
         isPractice: Boolean,
+        lessonId: String? = null,
         onSessionReady: (sessionId: String) -> Unit
     ) {
         _uiState.update {
@@ -357,7 +381,7 @@ class ModelTestViewModel(
         }
 
         viewModelScope.launch {
-            val result = repository.createModelTestSession(modelTestId, isPractice)
+            val result = repository.createModelTestSession(modelTestId, isPractice, lessonId)
             val sessionObj = result.getOrNull()
             val sessionId = sessionObj?.getEffectiveMcqSessionId()
                 ?: sessionObj?.id
@@ -496,15 +520,15 @@ class ModelTestViewModel(
         _uiState.update { it.copy(isSubmittingMcq = true) }
 
         viewModelScope.launch {
-            if (currQ != null && selectedOpt >= 0) {
-                repository.submitMcqAnswer(
-                    sessionId = sessionId,
-                    questionId = currQ.id,
-                    selectedOptionIndex = selectedOpt,
-                    isTimeout = isTimeout,
-                    isFinalSubmitted = true
-                )
-            }
+            val qId = if (currQ != null && selectedOpt >= 0) currQ.id else null
+            val optIdx = if (currQ != null && selectedOpt >= 0) selectedOpt else null
+            repository.submitMcqAnswer(
+                sessionId = sessionId,
+                questionId = qId,
+                selectedOptionIndex = optIdx,
+                isTimeout = isTimeout,
+                isFinalSubmitted = true
+            )
 
             // Clear local cached state
             repository.clearActiveExamState(sessionId)

@@ -39,6 +39,8 @@ import com.example.utils.toBengaliDigits
 @Composable
 fun ModelTestDetailScreen(
     modelTestId: String,
+    lessonId: String? = null,
+    userActivityState: String? = null,
     lessonTitle: String?,
     lessonStartTime: String?,
     lessonEndTime: String?,
@@ -57,26 +59,64 @@ fun ModelTestDetailScreen(
     var isSyllabusExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(modelTestId) {
-        viewModel.loadModelTestDetails(modelTestId, lessonStartTime, lessonEndTime)
+        viewModel.loadModelTestDetails(modelTestId, lessonStartTime, lessonEndTime, userActivityState)
     }
 
     val info = uiState.modelTestInfo
     val startTimeMillis = remember(info?.start_time, lessonStartTime) {
-        parseIsoDateToMillis(info?.start_time ?: lessonStartTime)
+        parseIsoDateToMillis(info?.start_time ?: lessonStartTime, isEndOfDay = false)
     }
     val endTimeMillis = remember(info?.end_time, lessonEndTime) {
-        parseIsoDateToMillis(info?.end_time ?: lessonEndTime)
+        parseIsoDateToMillis(info?.end_time ?: lessonEndTime, isEndOfDay = true)
     }
 
-    val isMissed = remember(info?.is_missed, endTimeMillis) {
-        info?.is_missed == true || (endTimeMillis != null && System.currentTimeMillis() > endTimeMillis)
+    val state = remember(userActivityState, info?.user_activity_state) {
+        (userActivityState?.takeIf { it.isNotBlank() } ?: info?.user_activity_state)?.uppercase() ?: ""
     }
 
-    val isUpcoming = remember(startTimeMillis) {
-        startTimeMillis != null && System.currentTimeMillis() < startTimeMillis
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            now = System.currentTimeMillis()
+        }
     }
 
-    val canStartMainExam = !isMissed && (!isUpcoming || uiState.isMainExamCountdownFinished)
+    // 1. Explicit Completed
+    val isCompleted = remember(state, info?.is_completed) {
+        state == "COMPLETED" || state == "ATTENDED" || info?.is_completed == true
+    }
+
+    // 2. Live State Detection:
+    val isLive = remember(state, startTimeMillis, endTimeMillis, isCompleted, uiState.isMainExamCountdownFinished, now) {
+        if (isCompleted) return@remember false
+        if (state == "LIVE") return@remember true
+
+        val hasEnded = (endTimeMillis != null && now > endTimeMillis)
+        if (hasEnded) return@remember false
+
+        val hasStarted = (startTimeMillis != null && now >= (startTimeMillis - 5 * 60 * 1000L)) ||
+                         uiState.isMainExamCountdownFinished ||
+                         (startTimeMillis == null && state != "UPCOMING")
+
+        hasStarted
+    }
+
+    // 3. Upcoming State Detection
+    val isUpcoming = remember(isLive, isCompleted, state, startTimeMillis, uiState.isMainExamCountdownFinished, now) {
+        if (isLive || isCompleted) return@remember false
+        if (state == "MISSED") return@remember false
+        if (startTimeMillis != null && now < (startTimeMillis - 5 * 60 * 1000L) && !uiState.isMainExamCountdownFinished) {
+            return@remember true
+        }
+        state == "UPCOMING" && (startTimeMillis == null || now < startTimeMillis)
+    }
+
+    // 4. Missed / Live Ended State Detection
+    val isMissed = remember(isLive, isUpcoming, isCompleted, state, info?.is_missed, endTimeMillis, now) {
+        if (isLive || isUpcoming || isCompleted) return@remember false
+        (endTimeMillis != null && now > endTimeMillis) || state == "MISSED" || info?.is_missed == true
+    }
 
     Scaffold(
         topBar = {
@@ -141,15 +181,25 @@ fun ModelTestDetailScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 1. Live Countdown or Missed Banner
+                // 1. Live Countdown or Missed/Completed Banner
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isMissed) Color(0xFFFEF2F2) else Color(0xFFEFF6FF)
+                        containerColor = when {
+                            isLive -> Color(0xFFFEF2F2)
+                            isCompleted -> Color(0xFFF0FDF4)
+                            isMissed -> Color(0xFFF8FAFC)
+                            else -> Color(0xFFEFF6FF)
+                        }
                     ),
                     border = BorderStroke(
-                        1.dp,
-                        if (isMissed) Color(0xFFFCA5A5) else Color(0xFFBFDBFE)
+                        1.2.dp,
+                        when {
+                            isLive -> Color(0xFFFCA5A5)
+                            isCompleted -> Color(0xFF86EFAC)
+                            isMissed -> Color(0xFFCBD5E1)
+                            else -> Color(0xFFBFDBFE)
+                        }
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -159,73 +209,145 @@ fun ModelTestDetailScreen(
                             .padding(18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        if (isMissed) {
-                            Text(
-                                text = "দুঃখিত!",
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFDC2626)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "তুমি টেস্টটি মিস করেছো",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF991B1B),
-                                textAlign = TextAlign.Center
-                            )
-                        } else {
-                            Text(
-                                text = "MCQ এক্সাম শুরু হতে বাকি সময়",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1E40AF)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            if (startTimeMillis != null) {
-                                ModelTestCountdownTimer(
-                                    targetEpochMillis = startTimeMillis,
-                                    onTimerFinished = { viewModel.onMainExamCountdownFinished() }
-                                )
-                            } else {
+                        when {
+                            isLive -> {
+                                // 🔴 LIVE EXAM IN PROGRESS
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFFDC2626),
+                                        modifier = Modifier.size(10.dp)
+                                    ) {}
+                                    Text(
+                                        text = "🔴 লাইভ পরীক্ষা চলছে!",
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFDC2626)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "পরীক্ষার সময়সূচি শীঘ্রই জানানো হবে",
-                                    fontSize = 13.sp,
-                                    color = Color(0xFF64748B)
+                                    text = "নির্ধারিত সময়ে লাইভ টেস্টটি সম্পন্ন করো। সময় শেষ হলে CQ উত্তরপত্র স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।",
+                                    fontSize = 13.5.sp,
+                                    color = Color(0xFF7F1D1D),
+                                    textAlign = TextAlign.Center
+                                )
+
+                                if (endTimeMillis != null && endTimeMillis > now) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "লাইভ পরীক্ষা শেষ হতে বাকি সময়",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF991B1B)
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    ModelTestCountdownTimer(
+                                        targetEpochMillis = endTimeMillis,
+                                        onTimerFinished = { /* Live window ends */ }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Button(
+                                    onClick = {
+                                        viewModel.startExamSession(
+                                            modelTestId = modelTestId,
+                                            isPractice = false,
+                                            lessonId = lessonId,
+                                            onSessionReady = onStartExam
+                                        )
+                                    },
+                                    enabled = !uiState.isCreatingSession,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                ) {
+                                    if (uiState.isCreatingSession && !uiState.isPracticeSession) {
+                                        CircularProgressIndicator(
+                                            color = Color.White,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("লাইভ সেশন প্রস্তুত হচ্ছে...")
+                                    } else {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("🔴 লাইভ টেস্ট শুরু করো", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    }
+                                }
+                            }
+                            isCompleted -> {
+                                Text(
+                                    text = "✅ পরীক্ষা সম্পন্ন হয়েছে",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF16A34A)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "তুমি ইতিমধ্যে এই লাইভ পরীক্ষায় অংশগ্রহণ করেছো। ফলাফল প্রকাশের পর বিস্তারিত ফলাফল দেখতে পারবে। নিচে থেকে যেকোনো সময় প্র্যাকটিস টেস্ট দিতে পারো।",
+                                    fontSize = 13.5.sp,
+                                    color = Color(0xFF14532D),
+                                    textAlign = TextAlign.Center
                                 )
                             }
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            Button(
-                                onClick = {
-                                    viewModel.startExamSession(
-                                        modelTestId = modelTestId,
-                                        isPractice = false,
-                                        onSessionReady = onStartExam
+                            isMissed -> {
+                                Text(
+                                    text = "লাইভ পরীক্ষার সময় সমাপ্ত হয়েছে",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF334155)
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "লাইভ টেস্টটি মিস করলেও চিন্তা নেই! নিচে থেকে তুমি আনলিমিটেড প্র্যাকটিস টেস্ট দিয়ে নিজেকে ঝালাই করে নিতে পারো।",
+                                    fontSize = 13.5.sp,
+                                    color = Color(0xFF475569),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = "MCQ এক্সাম শুরু হতে বাকি সময়",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF1E40AF)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                if (startTimeMillis != null) {
+                                    ModelTestCountdownTimer(
+                                        targetEpochMillis = startTimeMillis,
+                                        onTimerFinished = { viewModel.onMainExamCountdownFinished() }
                                     )
-                                },
-                                enabled = canStartMainExam && !uiState.isCreatingSession,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(46.dp)
-                            ) {
-                                if (uiState.isCreatingSession && !uiState.isPracticeSession) {
-                                    CircularProgressIndicator(
-                                        color = Color.White,
-                                        strokeWidth = 2.dp,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("সেশন প্রস্তুত হচ্ছে...")
                                 } else {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (canStartMainExam) "টেস্ট শুরু করো" else "পরীক্ষা শুরুর জন্য অপেক্ষা করো",
-                                        fontWeight = FontWeight.Bold
+                                        text = "পরীক্ষার সময়সূচি শীঘ্রই জানানো হবে",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFF64748B)
                                     )
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(46.dp)
+                                ) {
+                                    Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("পরীক্ষা শুরুর জন্য অপেক্ষা করো", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -512,6 +634,7 @@ fun ModelTestDetailScreen(
                                 viewModel.startExamSession(
                                     modelTestId = modelTestId,
                                     isPractice = true,
+                                    lessonId = lessonId,
                                     onSessionReady = onStartExam
                                 )
                             },

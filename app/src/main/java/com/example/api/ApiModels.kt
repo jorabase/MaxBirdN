@@ -3,11 +3,46 @@ package com.example.api
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-fun parseIsoToDhakaMillis(isoString: String?): Long? {
+fun parseIsoToDhakaMillis(isoString: String?, isEndOfDay: Boolean = false): Long? {
     if (isoString.isNullOrBlank()) return null
     val clean = isoString.trim()
     if (clean.startsWith("0000-00-00") || clean.startsWith("1970-01-01")) return null
     val dhakaZone = java.util.TimeZone.getTimeZone("Asia/Dhaka")
+
+    // Case 1: Time-only format like "10:00:00" or "23:59:59"
+    if (!clean.contains("-") && clean.contains(":")) {
+        try {
+            val dhakaCal = java.util.Calendar.getInstance(dhakaZone)
+            val parts = clean.split(":")
+            val hour = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: 0
+            val min = parts.getOrNull(1)?.trim()?.toIntOrNull() ?: 0
+            val sec = parts.getOrNull(2)?.trim()?.take(2)?.toIntOrNull() ?: 0
+            dhakaCal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+            dhakaCal.set(java.util.Calendar.MINUTE, min)
+            dhakaCal.set(java.util.Calendar.SECOND, sec)
+            dhakaCal.set(java.util.Calendar.MILLISECOND, if (isEndOfDay && hour == 23 && min == 59) 999 else 0)
+            return dhakaCal.timeInMillis
+        } catch (_: Exception) {}
+    }
+
+    // Case 2: Date-only format like "2026-09-30" or ends with "00:00:00"
+    val isDateOnly = (clean.length == 10 && clean.matches(Regex("""\d{4}-\d{2}-\d{2}""")))
+    val isZeroTime = clean.contains("T00:00:00") || clean.contains(" 00:00:00")
+
+    if (isDateOnly || (isZeroTime && isEndOfDay)) {
+        try {
+            val datePart = clean.take(10)
+            val parts = datePart.split("-")
+            val year = parts[0].toInt()
+            val month = parts[1].toInt() - 1
+            val day = parts[2].toInt()
+
+            val dhakaCal = java.util.Calendar.getInstance(dhakaZone)
+            dhakaCal.set(year, month, day, if (isEndOfDay) 23 else 0, if (isEndOfDay) 59 else 0, if (isEndOfDay) 59 else 0)
+            dhakaCal.set(java.util.Calendar.MILLISECOND, if (isEndOfDay) 999 else 0)
+            return dhakaCal.timeInMillis
+        } catch (_: Exception) {}
+    }
 
     if (clean.endsWith("Z", ignoreCase = true)) {
         try {
@@ -16,7 +51,19 @@ fun parseIsoToDhakaMillis(isoString: String?): Long? {
                 timeZone = java.util.TimeZone.getTimeZone("UTC")
             }
             val date = sdfUtc.parse(clean.replace(" ", "T"))
-            if (date != null) return date.time
+            if (date != null) {
+                if (isEndOfDay) {
+                    val cal = java.util.Calendar.getInstance(dhakaZone).apply { timeInMillis = date.time }
+                    if (cal.get(java.util.Calendar.HOUR_OF_DAY) == 0 && cal.get(java.util.Calendar.MINUTE) == 0) {
+                        cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
+                        cal.set(java.util.Calendar.MINUTE, 59)
+                        cal.set(java.util.Calendar.SECOND, 59)
+                        cal.set(java.util.Calendar.MILLISECOND, 999)
+                        return cal.timeInMillis
+                    }
+                }
+                return date.time
+            }
         } catch (_: Exception) {}
 
         try {
@@ -51,7 +98,17 @@ fun parseIsoToDhakaMillis(isoString: String?): Long? {
             timeZone = dhakaZone
         }
         val date = sdfDate.parse(clean.take(10))
-        if (date != null) return date.time
+        if (date != null) {
+            if (isEndOfDay) {
+                val cal = java.util.Calendar.getInstance(dhakaZone).apply { timeInMillis = date.time }
+                cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
+                cal.set(java.util.Calendar.MINUTE, 59)
+                cal.set(java.util.Calendar.SECOND, 59)
+                cal.set(java.util.Calendar.MILLISECOND, 999)
+                return cal.timeInMillis
+            }
+            return date.time
+        }
     } catch (_: Exception) {}
 
     try {
@@ -539,7 +596,7 @@ data class StudentLessonItem(
             val endTimeStr = end_time ?: live_class?.end_time
             val startMs = classStartMs
             if (!endTimeStr.isNullOrBlank()) {
-                val endParsed = parseIsoToDhakaMillis(endTimeStr)
+                val endParsed = parseIsoToDhakaMillis(endTimeStr, isEndOfDay = true)
                 if (endParsed != null && endParsed > 0L) {
                     return endParsed
                 }
@@ -549,8 +606,6 @@ data class StudentLessonItem(
 
     val isLiveNow: Boolean
         get() {
-            if (isExam) return false
-
             // 1. Explicit ongoing flag from server
             if (live_class?.is_on_going == true || user_activity_state.equals("LIVE", ignoreCase = true)) {
                 return true
@@ -597,7 +652,11 @@ data class StudentLessonItem(
                 if (endMs != Long.MAX_VALUE && now > endMs) {
                     return false
                 }
-                // Within live window
+                // Within live window for model tests and exams
+                if (isModelTest || isExam || isLiveExam) {
+                    return true
+                }
+                // Within live window for live classes
                 return live_class?.is_on_going != false
             }
 
