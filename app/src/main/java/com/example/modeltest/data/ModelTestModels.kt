@@ -382,29 +382,59 @@ data class CqSessionWrapper(
 @JsonClass(generateAdapter = true)
 data class CqSessionData(
     val title: String? = null,
-    val u_code: String? = null,
+    val u_code: Any? = null,
     val exam_id: String? = null,
     val submission_end_time: String? = null,
     val expiry_time: String? = null,
     val stage: String? = null,
+    val question_answer: List<CqQuestionAnswerItemRaw>? = null,
     val questions: List<ShikhoCqQuestionRaw>? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class ShikhoCqQuestionRaw(
-    val id: String,
-    val question_no: String? = null,
-    val title: String? = null, // Stimulus
-    val markdown_version: Int? = null,
-    val total_marks: Double? = null,
+    val id: String? = null,
+    val question_no: Any? = null,
+    val title: String? = null, // Stimulus / Title
+    val description: String? = null,
+    val markdown_version: Any? = null,
+    val total_marks: Any? = null,
+    val allocated_time: Any? = null,
+    val difficulty_level: String? = null,
+    val has_math_equation: Boolean? = null,
+    val question_type: String? = null,
+    val source: String? = null,
+    val u_code: Any? = null,
     val sub_questions: List<ShikhoCqSubQuestionRaw>? = null
-)
+) {
+    fun getFormattedQuestionNo(): String {
+        return question_no?.toString() ?: ""
+    }
+
+    fun getEffectiveTotalMarks(): Double {
+        return (total_marks as? Number)?.toDouble()
+            ?: total_marks?.toString()?.toDoubleOrNull()
+            ?: 10.0
+    }
+
+    fun getEffectiveStimulus(): String {
+        return title?.takeIf { it.isNotBlank() }
+            ?: description?.takeIf { it.isNotBlank() }
+            ?: "উদ্দীপক"
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class ShikhoCqSubQuestionRaw(
     val question: String? = null,
-    val marks: Double? = null
-)
+    val marks: Any? = null
+) {
+    fun getEffectiveMarks(): Double {
+        return (marks as? Number)?.toDouble()
+            ?: marks?.toString()?.toDoubleOrNull()
+            ?: 1.0
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class CqContainer(
@@ -415,7 +445,7 @@ data class CqContainer(
 
 @JsonClass(generateAdapter = true)
 data class ModelTestCqQuestion(
-    val id: String,
+    val id: String? = null,
     val stimulus: String? = null,
     val stimulus_image: String? = null,
     val sub_questions: List<ModelTestCqSubQuestion>? = null
@@ -586,11 +616,23 @@ data class GetCqUploadRelatedInfoData(
 @JsonClass(generateAdapter = true)
 data class CqUploadRelatedInfo(
     val id: String? = null,
-    val number_of_question: Int? = null,
-    val number_of_question_to_answer: Int? = null,
-    val submission_duration: Int? = null,
-    val exam_duration: Int? = null
-)
+    val number_of_question: Any? = null,
+    val number_of_question_to_answer: Any? = null,
+    val submission_duration: Any? = null,
+    val exam_duration: Any? = null
+) {
+    fun getNumberOfQuestions(): Int = (number_of_question as? Number)?.toInt()
+        ?: number_of_question?.toString()?.toIntOrNull() ?: 2
+
+    fun getQuestionsToAnswer(): Int = (number_of_question_to_answer as? Number)?.toInt()
+        ?: number_of_question_to_answer?.toString()?.toIntOrNull() ?: 2
+
+    fun getSubmissionDurationMinutes(): Int = (submission_duration as? Number)?.toInt()
+        ?: submission_duration?.toString()?.toIntOrNull() ?: 40
+
+    fun getExamDurationMinutes(): Int = (exam_duration as? Number)?.toInt()
+        ?: exam_duration?.toString()?.toIntOrNull() ?: 60
+}
 
 // 13. GetPreSignedUrlList (AWS S3)
 @JsonClass(generateAdapter = true)
@@ -665,7 +707,7 @@ data class CqSessionDetailedInfo(
     val id: String? = null,
     val exam_id: String? = null,
     val title: String? = null,
-    val u_code: String? = null,
+    val u_code: Any? = null,
     val user_id: String? = null,
     val is_started: Boolean? = null,
     val is_final_submitted: Boolean? = null,
@@ -676,14 +718,19 @@ data class CqSessionDetailedInfo(
     val set_identifier: String? = null,
     val question_answer: List<CqQuestionAnswerItemRaw>? = null,
     val questions: List<ShikhoCqQuestionRaw>? = null
-)
+) {
+    fun getFormattedUCode(): String {
+        return u_code?.toString()?.trim() ?: ""
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class CqQuestionAnswerItemRaw(
-    val id: String,
+    val id: String? = null,
     val is_submitted: Boolean? = null,
-    val marks: Double? = null,
+    val marks: Any? = null,
     val submit_time: String? = null,
+    val sub_questions: List<ShikhoCqSubQuestionRaw>? = null,
     val given_answers: List<CqGivenAnswerItemRaw>? = null
 )
 

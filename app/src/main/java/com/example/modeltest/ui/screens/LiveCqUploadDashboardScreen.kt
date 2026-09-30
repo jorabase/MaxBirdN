@@ -42,11 +42,7 @@ fun LiveCqUploadDashboardScreen(
     val sec = totalSec % 60
     val timerTextBn = formatBengaliTime(min, sec)
 
-    val questions = if (uiState.liveCqQuestions.isNotEmpty()) {
-        uiState.liveCqQuestions
-    } else {
-        getFallbackLiveCqQuestions()
-    }
+    val questions = uiState.liveCqQuestions
 
     val totalQuestions = questions.size
     val uploadedCount = questions.count { q ->
@@ -329,8 +325,9 @@ fun LiveCqUploadDashboardScreen(
                         if (isUploaded) {
                             OutlinedButton(
                                 onClick = {
-                                    viewModel.selectQuestionForUpload(q.id)
-                                    onNavigateToPageUpload(q.id)
+                                    val qId = q.id ?: ""
+                                    viewModel.selectQuestionForUpload(qId)
+                                    onNavigateToPageUpload(qId)
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, Color(0xFF4F46E5)),
@@ -354,8 +351,9 @@ fun LiveCqUploadDashboardScreen(
                         } else {
                             Button(
                                 onClick = {
-                                    viewModel.selectQuestionForUpload(q.id)
-                                    onNavigateToPageUpload(q.id)
+                                    val qId = q.id ?: ""
+                                    viewModel.selectQuestionForUpload(qId)
+                                    onNavigateToPageUpload(qId)
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
@@ -447,7 +445,7 @@ fun LiveCqUploadDashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = formatToBengaliNumber((sq.marks ?: 1.0).toInt()),
+                                text = formatToBengaliNumber(sq.getEffectiveMarks().toInt()),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF64748B)

@@ -51,8 +51,8 @@ fun LiveCqPageUploadScreen(
     val timerTextBn = formatBengaliTime(min, sec)
 
     val question = uiState.liveCqQuestions.firstOrNull { it.id == questionId }
-        ?: getFallbackLiveCqQuestions().firstOrNull { it.id == questionId }
-        ?: getFallbackLiveCqQuestions().first()
+        ?: uiState.liveCqQuestions.firstOrNull()
+        ?: com.example.modeltest.data.ShikhoCqQuestionRaw(id = questionId, title = "প্রশ্ন")
 
     val qIndex = uiState.liveCqQuestions.indexOfFirst { it.id == questionId }.let { if (it >= 0) it + 1 else 1 }
 

@@ -15,17 +15,25 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.RandomAccessFile
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 data class DownloadQualityOption(
-    val id: String, // "720p", "480p", "360p"
+    val id: String, // "1080p", "720p", "480p", "360p", "240p", "original"
     val labelBangla: String,
     val descriptionBangla: String,
     val estimatedSizeBangla: String,
     val targetM3u8Url: String,
     val isRecommended: Boolean = false
+)
+
+data class DownloadChunkTask(
+    val url: String,
+    val destinationFile: File
 )
 
 class AppFileDownloadManager private constructor(
@@ -35,12 +43,19 @@ class AppFileDownloadManager private constructor(
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeJobs = ConcurrentHashMap<String, Job>()
 
+    // Ultra-optimized high-throughput HTTP client for maximum mobile network saturation
     private val httpClient: OkHttpClient by lazy {
+        val dispatcher = okhttp3.Dispatcher().apply {
+            maxRequests = 128
+            maxRequestsPerHost = 64
+        }
         OkHttpClient.Builder()
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
-            .connectionPool(okhttp3.ConnectionPool(10, 10, TimeUnit.MINUTES))
+            .dispatcher(dispatcher)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .writeTimeout(25, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(64, 5, TimeUnit.MINUTES))
+            .retryOnConnectionFailure(true)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -56,7 +71,8 @@ class AppFileDownloadManager private constructor(
 
     companion object {
         private const val TAG = "AppFileDownloadManager"
-        private const val BUFFER_SIZE = 32768 // 32KB high performance buffer
+        private const val BUFFER_SIZE = 131072 // 128KB ultra high performance buffer
+        private const val PARALLEL_WORKERS = 32 // 32 concurrent workers for maximum 4G/5G mobile speed
 
         @Volatile
         private var INSTANCE: AppFileDownloadManager? = null
@@ -416,10 +432,18 @@ class AppFileDownloadManager private constructor(
                 return@launch
             }
 
-            // Sanitize filename
-            val extension = if (fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true)) "pdf" else "mp4"
+            val isHls = fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true) &&
+                    (remoteUrl.contains(".m3u8", ignoreCase = true) || remoteUrl.contains("shikho", ignoreCase = true) || remoteUrl.contains("playlist", ignoreCase = true))
+
             val sanitizedId = id.replace("[^a-zA-Z0-9_\\-]".toRegex(), "_")
-            val targetFile = File(downloadVaultDir, "${fileType.lowercase()}_${sanitizedId}.$extension")
+
+            val targetFile = if (isHls) {
+                val streamDir = File(downloadVaultDir, "hls_$sanitizedId")
+                File(streamDir, "playlist.m3u8")
+            } else {
+                val extension = if (fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true)) "pdf" else "mp4"
+                File(downloadVaultDir, "${fileType.lowercase()}_${sanitizedId}.$extension")
+            }
 
             // Check if already completed and file exists
             val existingItem = downloadedItemDao.getDownloadedItemByIdOnce(id)
@@ -431,7 +455,7 @@ class AppFileDownloadManager private constructor(
                 return@launch
             }
 
-            var initialEntity = DownloadedItemEntity(
+            val initialEntity = DownloadedItemEntity(
                 id = id,
                 title = title,
                 subtitle = subtitle,
@@ -445,17 +469,15 @@ class AppFileDownloadManager private constructor(
             )
             downloadedItemDao.insertOrUpdate(initialEntity)
 
-            val isHls = fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true) &&
-                    (remoteUrl.contains(".m3u8", ignoreCase = true) || remoteUrl.contains("shikho", ignoreCase = true) || remoteUrl.contains("playlist", ignoreCase = true))
-
             try {
                 if (isHls) {
+                    val streamDir = targetFile.parentFile ?: File(downloadVaultDir, "hls_$sanitizedId")
                     downloadHlsStreamInternal(
                         id = id,
                         title = title,
                         initialEntity = initialEntity,
-                        targetFile = targetFile,
-                        variantUrl = remoteUrl
+                        streamDir = streamDir,
+                        remoteUrl = remoteUrl
                     )
                 } else {
                     downloadRegularFileInternal(
@@ -469,7 +491,9 @@ class AppFileDownloadManager private constructor(
             } catch (e: CancellationException) {
                 Log.w(TAG, "Download cancelled for id: $id")
                 try {
-                    if (targetFile.exists()) targetFile.delete()
+                    if (targetFile.exists()) {
+                        if (isHls) targetFile.parentFile?.deleteRecursively() else targetFile.delete()
+                    }
                     downloadedItemDao.deleteDownloadedItem(id)
                 } catch (_: Exception) {}
                 throw e
@@ -477,7 +501,7 @@ class AppFileDownloadManager private constructor(
                 Log.e(TAG, "Download failed for id: $id: ${e.message}", e)
                 try {
                     if (targetFile.exists()) {
-                        targetFile.delete()
+                        if (isHls) targetFile.parentFile?.deleteRecursively() else targetFile.delete()
                     }
                 } catch (_: Exception) {}
 
@@ -497,169 +521,251 @@ class AppFileDownloadManager private constructor(
     }
 
     /**
-     * Downloads an HLS stream (.m3u8) by downloading all its TS chunks and saving them into a single playable MP4/TS file.
+     * Downloads an HLS stream (.m3u8) with full Video AND Audio tracks at maximum mobile network speed.
+     * Uses 32 concurrent worker threads, handles init fMP4 segments, encryption keys, and audio tracks.
      */
     private suspend fun downloadHlsStreamInternal(
         id: String,
         title: String,
         initialEntity: DownloadedItemEntity,
-        targetFile: File,
-        variantUrl: String
+        streamDir: File,
+        remoteUrl: String
     ) = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Fetching HLS playlist from: $variantUrl")
+        Log.d(TAG, "Starting ultra-fast HLS download for: $remoteUrl")
 
-        val request = Request.Builder()
-            .url(variantUrl)
-            .addHeader("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)")
-            .addHeader("referer", "https://shikho.com/")
-            .addHeader("Referer", "https://shikho.com/")
-            .addHeader("Origin", "https://shikho.com")
-            .build()
+        if (streamDir.exists()) {
+            streamDir.deleteRecursively()
+        }
+        streamDir.mkdirs()
 
-        val response = httpClient.newCall(request).execute()
-        if (!response.isSuccessful || response.body == null) {
-            throw Exception("Failed to fetch playlist: HTTP ${response.code}")
+        // 1. Comprehensive Master Playlist & Audio Detection
+        var masterPlaylistUrl: String? = null
+        var masterPlaylistContent: String? = null
+
+        var videoStreamUrl: String = remoteUrl
+        var audioStreamUrl: String? = null
+
+        // Fetch initial remoteUrl content
+        val initialContent = fetchTextWithRetry(remoteUrl) ?: throw Exception("Failed to connect to video stream: $remoteUrl")
+
+        if (initialContent.contains("#EXT-X-STREAM-INF") || initialContent.contains("#EXT-X-MEDIA:TYPE=AUDIO")) {
+            // remoteUrl is already the master playlist
+            masterPlaylistUrl = remoteUrl
+            masterPlaylistContent = initialContent
+        } else {
+            // remoteUrl is a variant stream, probe potential master playlist URLs to locate audio tracks
+            val candidateMasterUrls = mutableListOf<String>()
+
+            if (remoteUrl.contains(Regex("""/(1080p|720p|480p|360p|240p|144p)/(video|media)\.m3u8""", RegexOption.IGNORE_CASE))) {
+                candidateMasterUrls.add(remoteUrl.replace(Regex("""/(1080p|720p|480p|360p|240p|144p)/(video|media)\.m3u8""", RegexOption.IGNORE_CASE), "/playlist.m3u8"))
+                candidateMasterUrls.add(remoteUrl.replace(Regex("""/(1080p|720p|480p|360p|240p|144p)/(video|media)\.m3u8""", RegexOption.IGNORE_CASE), "/master.m3u8"))
+            }
+
+            if (remoteUrl.contains(Regex("""/stream_\d+/stream\.m3u8""", RegexOption.IGNORE_CASE))) {
+                candidateMasterUrls.add(remoteUrl.replace(Regex("""/stream_\d+/stream\.m3u8""", RegexOption.IGNORE_CASE), "/stream.m3u8"))
+                candidateMasterUrls.add(remoteUrl.replace(Regex("""/stream_\d+/stream\.m3u8""", RegexOption.IGNORE_CASE), "/playlist.m3u8"))
+                candidateMasterUrls.add(remoteUrl.replace(Regex("""/stream_\d+/stream\.m3u8""", RegexOption.IGNORE_CASE), "/master.m3u8"))
+            }
+
+            val parentBase = remoteUrl.substringBeforeLast('/')
+            val grandparentBase = parentBase.substringBeforeLast('/')
+            candidateMasterUrls.add("$parentBase/playlist.m3u8")
+            candidateMasterUrls.add("$parentBase/master.m3u8")
+            candidateMasterUrls.add("$grandparentBase/playlist.m3u8")
+            candidateMasterUrls.add("$grandparentBase/master.m3u8")
+
+            for (cUrl in candidateMasterUrls.distinct()) {
+                if (cUrl == remoteUrl) continue
+                val cContent = fetchTextWithRetry(cUrl)
+                if (cContent != null && (cContent.contains("#EXT-X-STREAM-INF") || cContent.contains("#EXT-X-MEDIA:TYPE=AUDIO"))) {
+                    masterPlaylistUrl = cUrl
+                    masterPlaylistContent = cContent
+                    Log.d(TAG, "Located parent HLS master playlist: $masterPlaylistUrl")
+                    break
+                }
+            }
         }
 
-        val playlistContent = response.body!!.string()
-        var effectivePlaylistContent = playlistContent
-        var effectiveBaseUrl = variantUrl
+        // Parse Audio and Video from Master Playlist if available
+        if (masterPlaylistContent != null && masterPlaylistUrl != null) {
+            // Extract Audio stream URI (supporting single quotes, double quotes, or unquoted)
+            val audioRegex = Regex("""#EXT-X-MEDIA:TYPE=AUDIO[^\\n]*?URI=["']?([^"'\s,]+)["']?""", RegexOption.IGNORE_CASE)
+            val audioMatch = audioRegex.find(masterPlaylistContent)
+            if (audioMatch != null) {
+                val relAudio = audioMatch.groupValues[1]
+                audioStreamUrl = resolveUrl(masterPlaylistUrl, relAudio)
+                Log.d(TAG, "Discovered separate HLS Audio stream URL: $audioStreamUrl")
+            }
 
-        // If it's a master playlist, parse the child stream
-        if (playlistContent.contains("#EXT-X-STREAM-INF")) {
-            val lines = playlistContent.lines()
-            val subUrls = mutableListOf<String>()
-            for (i in lines.indices) {
-                val line = lines[i].trim()
-                if (line.startsWith("#EXT-X-STREAM-INF") && i + 1 < lines.size) {
-                    val nextLine = lines[i + 1].trim()
-                    if (!nextLine.startsWith("#") && nextLine.isNotBlank()) {
-                        subUrls.add(nextLine)
+            // If remoteUrl was the master playlist, pick the best video variant
+            if (remoteUrl == masterPlaylistUrl) {
+                val lines = masterPlaylistContent.lines()
+                val variants = mutableListOf<String>()
+                for (i in lines.indices) {
+                    val line = lines[i].trim()
+                    if (line.startsWith("#EXT-X-STREAM-INF") && i + 1 < lines.size) {
+                        val nextLine = lines[i + 1].trim()
+                        if (nextLine.isNotBlank() && !nextLine.startsWith("#")) {
+                            variants.add(nextLine)
+                        }
                     }
                 }
-            }
-            if (subUrls.isNotEmpty()) {
-                val chosenSubUrl = subUrls.first()
-                val fullSubUrl = resolveUrl(variantUrl, chosenSubUrl)
-                effectiveBaseUrl = fullSubUrl
-
-                val subRequest = Request.Builder()
-                    .url(fullSubUrl)
-                    .addHeader("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)")
-                    .addHeader("referer", "https://shikho.com/")
-                    .addHeader("Referer", "https://shikho.com/")
-                    .addHeader("Origin", "https://shikho.com")
-                    .build()
-
-                val subResponse = httpClient.newCall(subRequest).execute()
-                if (subResponse.isSuccessful && subResponse.body != null) {
-                    effectivePlaylistContent = subResponse.body!!.string()
+                if (variants.isNotEmpty()) {
+                    // Default to 720p/480p or first available
+                    val preferred = variants.firstOrNull { it.contains("720p") || it.contains("480p") || it.contains("stream_1") || it.contains("stream_2") }
+                        ?: variants.first()
+                    videoStreamUrl = resolveUrl(masterPlaylistUrl, preferred)
+                    Log.d(TAG, "Selected Video stream variant: $videoStreamUrl")
                 }
             }
         }
 
-        // Parse all TS segments
-        val segmentUrls = mutableListOf<String>()
-        for (line in effectivePlaylistContent.lines()) {
-            val trimmed = line.trim()
-            if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
-                val resolved = resolveUrl(effectiveBaseUrl, trimmed)
-                segmentUrls.add(resolved)
+        // 2. Fetch Video Playlist Content
+        val videoPlaylistContent = if (videoStreamUrl == remoteUrl && !initialContent.contains("#EXT-X-STREAM-INF")) {
+            initialContent
+        } else {
+            fetchTextWithRetry(videoStreamUrl) ?: throw Exception("Failed to fetch video playlist from $videoStreamUrl")
+        }
+
+        // Also check if videoPlaylistContent itself has audio media tag
+        if (audioStreamUrl == null) {
+            val audioRegex = Regex("""#EXT-X-MEDIA:TYPE=AUDIO[^\\n]*?URI=["']?([^"'\s,]+)["']?""", RegexOption.IGNORE_CASE)
+            val audioMatch = audioRegex.find(videoPlaylistContent)
+            if (audioMatch != null) {
+                val relAudio = audioMatch.groupValues[1]
+                audioStreamUrl = resolveUrl(videoStreamUrl, relAudio)
+                Log.d(TAG, "Discovered Audio stream inside video playlist: $audioStreamUrl")
             }
         }
 
-        if (segmentUrls.isEmpty()) {
-            throw Exception("No video segments found in playlist")
+        val downloadTasks = mutableListOf<DownloadChunkTask>()
+
+        // 3. Process Video Playlist & init/key chunks
+        val rewrittenVideoContent = processAndRewritePlaylist(
+            baseUrl = videoStreamUrl,
+            playlistContent = videoPlaylistContent,
+            prefix = "video_seg",
+            streamDir = streamDir,
+            tasks = downloadTasks
+        )
+        File(streamDir, "video.m3u8").writeText(rewrittenVideoContent)
+
+        // 4. Process Audio Playlist & init/key chunks (if present)
+        var hasSeparateAudio = false
+        if (audioStreamUrl != null) {
+            val audioPlaylistContent = fetchTextWithRetry(audioStreamUrl)
+            if (audioPlaylistContent != null) {
+                val rewrittenAudioContent = processAndRewritePlaylist(
+                    baseUrl = audioStreamUrl,
+                    playlistContent = audioPlaylistContent,
+                    prefix = "audio_seg",
+                    streamDir = streamDir,
+                    tasks = downloadTasks
+                )
+                File(streamDir, "audio.m3u8").writeText(rewrittenAudioContent)
+                hasSeparateAudio = true
+                Log.d(TAG, "Successfully prepared separate Audio track for offline playback.")
+            }
         }
 
-        val totalSegments = segmentUrls.size
-        Log.d(TAG, "Found $totalSegments TS segments for id: $id. Starting concurrent download with max throughput...")
-
-        if (targetFile.exists() && initialEntity.downloadedBytes == 0L) {
-            targetFile.delete()
+        // 5. Create Master playlist.m3u8
+        val masterFile = File(streamDir, "playlist.m3u8")
+        if (hasSeparateAudio) {
+            val masterM3u8 = """
+                #EXTM3U
+                #EXT-X-VERSION:6
+                #EXT-X-INDEPENDENT-SEGMENTS
+                #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Audio",DEFAULT=YES,AUTOSELECT=YES,URI="audio.m3u8"
+                #EXT-X-STREAM-INF:BANDWIDTH=3500000,AUDIO="audio"
+                video.m3u8
+            """.trimIndent()
+            masterFile.writeText(masterM3u8)
+        } else {
+            // Muxed stream where audio is interleaved inside video TS segments
+            masterFile.writeText(rewrittenVideoContent)
         }
 
-        var downloadedBytes = 0L
-        val outputStream = FileOutputStream(targetFile, true)
+        val totalTasks = downloadTasks.size
+        if (totalTasks == 0) {
+            throw Exception("No downloadable media segments found in stream!")
+        }
+
+        Log.d(TAG, "Starting ultra-fast parallel download of $totalTasks chunks with $PARALLEL_WORKERS workers")
+
+        // 6. Execute downloads with 32 parallel workers for maximum mobile network saturation
+        val semaphore = Semaphore(PARALLEL_WORKERS)
+        val downloadedBytesCounter = AtomicLong(0L)
+        val completedCount = AtomicInteger(0)
+
         var lastDbUpdateTime = 0L
         var lastSpeedCheckTime = System.currentTimeMillis()
         var bytesSinceLastCheck = 0L
         var currentSpeedMBs = 0f
 
-        val semaphore = kotlinx.coroutines.sync.Semaphore(6)
-        val downloadedChunksMap = ConcurrentHashMap<Int, ByteArray>()
-
         try {
             coroutineScope {
-                val downloadJobs = segmentUrls.mapIndexed { idx, segmentUrl ->
+                val jobs = downloadTasks.map { task ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             ensureActive()
-                            val chunkData = downloadSegmentWithRetry(segmentUrl, maxRetries = 5)
-                            downloadedChunksMap[idx] = chunkData
+                            downloadSegmentToFileWithRetry(
+                                url = task.url,
+                                targetFile = task.destinationFile,
+                                onBytesDownloaded = { bytesRead ->
+                                    downloadedBytesCounter.addAndGet(bytesRead.toLong())
+                                    synchronized(this@AppFileDownloadManager) {
+                                        bytesSinceLastCheck += bytesRead
+                                    }
+                                }
+                            )
+
+                            val done = completedCount.incrementAndGet()
+                            val now = System.currentTimeMillis()
+                            val timeDiffMs = now - lastSpeedCheckTime
+                            if (timeDiffMs >= 300L) {
+                                currentSpeedMBs = (bytesSinceLastCheck.toFloat() / (1024f * 1024f)) / (timeDiffMs.toFloat() / 1000f)
+                                lastSpeedCheckTime = now
+                                bytesSinceLastCheck = 0L
+                            }
+
+                            if (now - lastDbUpdateTime > 250L || done == totalTasks) {
+                                lastDbUpdateTime = now
+                                val currentBytes = downloadedBytesCounter.get()
+                                val progressPercent = (done * 100 / totalTasks).coerceIn(0, 100)
+                                val estimatedTotal = if (done > 0) ((currentBytes.toDouble() / done) * totalTasks).toLong() else currentBytes
+
+                                downloadedItemDao.insertOrUpdate(
+                                    initialEntity.copy(
+                                        downloadedBytes = currentBytes,
+                                        totalBytes = if (estimatedTotal > 0) estimatedTotal else currentBytes,
+                                        status = DownloadedItemEntity.STATUS_DOWNLOADING,
+                                        localFilePath = masterFile.absolutePath
+                                    )
+                                )
+
+                                AppDownloadNotificationHelper.showDownloadProgressNotification(
+                                    context = context,
+                                    id = id,
+                                    title = title,
+                                    progressPercent = progressPercent,
+                                    downloadedBytes = currentBytes,
+                                    totalBytes = if (estimatedTotal > 0) estimatedTotal else currentBytes,
+                                    speedMBs = currentSpeedMBs
+                                )
+                            }
                         }
                     }
                 }
-
-                var writeIndex = 0
-                while (writeIndex < totalSegments) {
-                    ensureActive()
-
-                    while (!downloadedChunksMap.containsKey(writeIndex)) {
-                        ensureActive()
-                        delay(15L)
-                    }
-
-                    val chunkData = downloadedChunksMap.remove(writeIndex) ?: break
-                    outputStream.write(chunkData)
-                    downloadedBytes += chunkData.size
-                    bytesSinceLastCheck += chunkData.size
-                    writeIndex++
-
-                    val now = System.currentTimeMillis()
-                    val timeDiffMs = now - lastSpeedCheckTime
-                    if (timeDiffMs >= 500L) {
-                        currentSpeedMBs = (bytesSinceLastCheck.toFloat() / (1024f * 1024f)) / (timeDiffMs.toFloat() / 1000f)
-                        lastSpeedCheckTime = now
-                        bytesSinceLastCheck = 0L
-                    }
-
-                    if (now - lastDbUpdateTime > 400L || writeIndex == totalSegments) {
-                        lastDbUpdateTime = now
-                        val estimatedTotal = ((downloadedBytes.toDouble() / writeIndex) * totalSegments).toLong()
-                        val progressPercent = (writeIndex * 100 / totalSegments).coerceIn(0, 100)
-
-                        downloadedItemDao.insertOrUpdate(
-                            initialEntity.copy(
-                                downloadedBytes = downloadedBytes,
-                                totalBytes = if (estimatedTotal > 0) estimatedTotal else downloadedBytes,
-                                status = DownloadedItemEntity.STATUS_DOWNLOADING
-                            )
-                        )
-
-                        AppDownloadNotificationHelper.showDownloadProgressNotification(
-                            context = context,
-                            id = id,
-                            title = title,
-                            progressPercent = progressPercent,
-                            downloadedBytes = downloadedBytes,
-                            totalBytes = if (estimatedTotal > 0) estimatedTotal else downloadedBytes,
-                            speedMBs = currentSpeedMBs
-                        )
-                    }
-                }
-
-                downloadJobs.awaitAll()
+                jobs.awaitAll()
             }
 
-            outputStream.flush()
-
+            val finalBytes = downloadedBytesCounter.get()
             downloadedItemDao.insertOrUpdate(
                 initialEntity.copy(
-                    downloadedBytes = downloadedBytes,
-                    totalBytes = downloadedBytes,
+                    downloadedBytes = finalBytes,
+                    totalBytes = finalBytes,
                     status = DownloadedItemEntity.STATUS_COMPLETED,
-                    localFilePath = targetFile.absolutePath
+                    localFilePath = masterFile.absolutePath
                 )
             )
 
@@ -667,23 +773,123 @@ class AppFileDownloadManager private constructor(
                 context = context,
                 id = id,
                 title = title,
-                totalBytes = downloadedBytes
+                totalBytes = finalBytes
             )
-            Log.d(TAG, "HLS video download complete! Total size: $downloadedBytes bytes for id: $id")
+            Log.d(TAG, "Ultra-fast HLS download complete! Total size: $finalBytes bytes ($totalTasks chunks) for id: $id")
         } catch (e: CancellationException) {
             AppDownloadNotificationHelper.cancelNotification(context, id)
+            streamDir.deleteRecursively()
             throw e
         } catch (e: Exception) {
             AppDownloadNotificationHelper.showDownloadFailedNotification(context, id, title)
+            streamDir.deleteRecursively()
             throw e
-        } finally {
-            try {
-                outputStream.close()
-            } catch (_: Exception) {}
         }
     }
 
-    private suspend fun downloadSegmentWithRetry(url: String, maxRetries: Int = 3): ByteArray {
+    private fun processAndRewritePlaylist(
+        baseUrl: String,
+        playlistContent: String,
+        prefix: String,
+        streamDir: File,
+        tasks: MutableList<DownloadChunkTask>
+    ): String {
+        val sb = StringBuilder()
+        var segmentIndex = 0
+        val isAudio = prefix.startsWith("audio")
+
+        for (line in playlistContent.lines()) {
+            val trimmed = line.trim()
+            when {
+                trimmed.isEmpty() -> {
+                    sb.append("\n")
+                }
+                trimmed.startsWith("#EXT-X-MAP:", ignoreCase = true) -> {
+                    // Extract fMP4/CMAF init segment: #EXT-X-MAP:URI="init.mp4"
+                    val mapRegex = Regex("""#EXT-X-MAP:URI=["']?([^"'\s,]+)["']?""", RegexOption.IGNORE_CASE)
+                    val match = mapRegex.find(trimmed)
+                    if (match != null) {
+                        val initUrl = resolveUrl(baseUrl, match.groupValues[1])
+                        val initFileName = "${prefix}_init.mp4"
+                        tasks.add(DownloadChunkTask(initUrl, File(streamDir, initFileName)))
+                        sb.append("#EXT-X-MAP:URI=\"$initFileName\"\n")
+                    } else {
+                        sb.append(line).append("\n")
+                    }
+                }
+                trimmed.startsWith("#EXT-X-KEY:", ignoreCase = true) -> {
+                    // Extract AES-128 key: #EXT-X-KEY:METHOD=AES-128,URI="key.bin"
+                    val keyUriRegex = Regex("""URI=["']?([^"'\s,]+)["']?""", RegexOption.IGNORE_CASE)
+                    val match = keyUriRegex.find(trimmed)
+                    if (match != null) {
+                        val keyUrl = resolveUrl(baseUrl, match.groupValues[1])
+                        val keyFileName = "${prefix}_key.bin"
+                        tasks.add(DownloadChunkTask(keyUrl, File(streamDir, keyFileName)))
+                        val rewrittenKeyLine = trimmed.replace(match.value, "URI=\"$keyFileName\"")
+                        sb.append(rewrittenKeyLine).append("\n")
+                    } else {
+                        sb.append(line).append("\n")
+                    }
+                }
+                !trimmed.startsWith("#") -> {
+                    val resolvedUrl = resolveUrl(baseUrl, trimmed)
+                    val ext = when {
+                        trimmed.contains(".m4s", ignoreCase = true) -> "m4s"
+                        trimmed.contains(".aac", ignoreCase = true) -> "aac"
+                        trimmed.contains(".mp4", ignoreCase = true) -> "mp4"
+                        isAudio -> "aac"
+                        else -> "ts"
+                    }
+                    val localFileName = "${prefix}_${segmentIndex}.${ext}"
+                    tasks.add(DownloadChunkTask(resolvedUrl, File(streamDir, localFileName)))
+                    sb.append(localFileName).append("\n")
+                    segmentIndex++
+                }
+                else -> {
+                    sb.append(line).append("\n")
+                }
+            }
+        }
+
+        val result = sb.toString()
+        return if (!result.contains("#EXT-X-ENDLIST")) {
+            result.trimEnd() + "\n#EXT-X-ENDLIST\n"
+        } else {
+            result
+        }
+    }
+
+    private suspend fun fetchTextWithRetry(url: String, maxRetries: Int = 3): String? {
+        for (attempt in 1..maxRetries) {
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .addHeader("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)")
+                    .addHeader("referer", "https://shikho.com/")
+                    .addHeader("Referer", "https://shikho.com/")
+                    .addHeader("Origin", "https://shikho.com")
+                    .addHeader("Connection", "Keep-Alive")
+                    .build()
+
+                val response = httpClient.newCall(request).execute()
+                if (response.isSuccessful && response.body != null) {
+                    return response.body!!.string()
+                }
+            } catch (e: Exception) {
+                if (attempt < maxRetries) {
+                    delay(120L * attempt)
+                }
+            }
+        }
+        return null
+    }
+
+    private suspend fun downloadSegmentToFileWithRetry(
+        url: String,
+        targetFile: File,
+        onBytesDownloaded: (Int) -> Unit,
+        maxRetries: Int = 4
+    ) {
         var lastException: Exception? = null
         for (attempt in 1..maxRetries) {
             try {
@@ -693,22 +899,36 @@ class AppFileDownloadManager private constructor(
                     .addHeader("referer", "https://shikho.com/")
                     .addHeader("Referer", "https://shikho.com/")
                     .addHeader("Origin", "https://shikho.com")
+                    .addHeader("Accept-Encoding", "identity")
+                    .addHeader("Connection", "Keep-Alive")
                     .build()
 
                 val response = httpClient.newCall(request).execute()
-                if (response.isSuccessful && response.body != null) {
-                    return response.body!!.bytes()
-                } else {
+                if (!response.isSuccessful || response.body == null) {
                     throw Exception("HTTP chunk error ${response.code}")
                 }
+                val body = response.body!!
+                val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+                tempFile.outputStream().buffered(BUFFER_SIZE).use { out ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    val input = body.byteStream().buffered(BUFFER_SIZE)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        out.write(buffer, 0, bytesRead)
+                        onBytesDownloaded(bytesRead)
+                    }
+                    out.flush()
+                }
+                tempFile.renameTo(targetFile)
+                return
             } catch (e: Exception) {
                 lastException = e
                 if (attempt < maxRetries) {
-                    delay(350L * attempt)
+                    delay(100L * attempt)
                 }
             }
         }
-        throw lastException ?: Exception("Failed to download segment chunk after $maxRetries retries")
+        throw lastException ?: Exception("Failed to download segment after $maxRetries retries: $url")
     }
 
     private fun resolveUrl(baseUrl: String, relativeOrAbsolute: String): String {
@@ -730,7 +950,7 @@ class AppFileDownloadManager private constructor(
     }
 
     /**
-     * Downloads a standard regular file (e.g. PDF).
+     * Downloads a standard regular file (e.g. PDF or MP4) using parallel Range chunks for maximum speed.
      */
     private suspend fun downloadRegularFileInternal(
         id: String,
@@ -743,71 +963,201 @@ class AppFileDownloadManager private constructor(
             targetFile.delete()
         }
 
-        val request = Request.Builder()
+        val headRequest = Request.Builder()
             .url(remoteUrl)
             .addHeader("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)")
             .addHeader("referer", "https://shikho.com/")
             .addHeader("Referer", "https://shikho.com/")
             .addHeader("Origin", "https://shikho.com")
+            .addHeader("Connection", "Keep-Alive")
             .build()
 
-        val response = httpClient.newCall(request).execute()
-        if (!response.isSuccessful || response.body == null) {
-            throw Exception("HTTP download failed with code: ${response.code}")
+        val headResponse = httpClient.newCall(headRequest).execute()
+        if (!headResponse.isSuccessful) {
+            throw Exception("HTTP download failed with code: ${headResponse.code}")
         }
 
-        val body = response.body!!
-        val contentLength = body.contentLength()
-        val totalBytes = if (contentLength > 0) contentLength else 0L
+        val contentLength = headResponse.body?.contentLength() ?: 0L
+        val acceptRanges = headResponse.header("Accept-Ranges")?.contains("bytes", ignoreCase = true) == true || contentLength > 2 * 1024 * 1024
 
+        val totalBytes = if (contentLength > 0) contentLength else 0L
         downloadedItemDao.insertOrUpdate(initialEntity.copy(totalBytes = totalBytes))
 
-        var inputStream: InputStream? = null
-        var outputStream: FileOutputStream? = null
-
-        try {
-            inputStream = body.byteStream()
-            outputStream = FileOutputStream(targetFile)
-
-            val buffer = ByteArray(BUFFER_SIZE)
-            var bytesRead: Int
-            var downloadedBytes = 0L
-            var lastDbUpdateTime = System.currentTimeMillis()
-
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                ensureActive()
-                outputStream.write(buffer, 0, bytesRead)
-                downloadedBytes += bytesRead
-
-                val now = System.currentTimeMillis()
-                if (now - lastDbUpdateTime > 350L || (totalBytes > 0 && downloadedBytes >= totalBytes)) {
-                    lastDbUpdateTime = now
-                    val currentTotal = if (totalBytes > 0) totalBytes else downloadedBytes
-                    downloadedItemDao.insertOrUpdate(
-                        initialEntity.copy(
-                            downloadedBytes = downloadedBytes,
-                            totalBytes = currentTotal,
-                            status = DownloadedItemEntity.STATUS_DOWNLOADING
-                        )
-                    )
-                }
+        // If file is > 2MB and server supports Range, perform 8-way parallel multithreaded download
+        if (contentLength > 2 * 1024 * 1024 && acceptRanges) {
+            val numChunks = 8
+            val chunkSize = contentLength / numChunks
+            val tempParts = Array(numChunks) { index ->
+                File(targetFile.parentFile, "${targetFile.name}.part$index")
             }
 
-            outputStream.flush()
+            val downloadedBytesCounter = AtomicLong(0L)
+            var lastDbUpdateTime = 0L
+            var lastSpeedCheckTime = System.currentTimeMillis()
+            var bytesSinceLastCheck = 0L
+            var currentSpeedMBs = 0f
 
-            val finalTotal = if (totalBytes > 0) totalBytes else downloadedBytes
-            downloadedItemDao.insertOrUpdate(
-                initialEntity.copy(
-                    downloadedBytes = downloadedBytes,
-                    totalBytes = finalTotal,
-                    status = DownloadedItemEntity.STATUS_COMPLETED,
-                    localFilePath = targetFile.absolutePath
-                )
-            )
-        } finally {
-            try { inputStream?.close() } catch (_: Exception) {}
-            try { outputStream?.close() } catch (_: Exception) {}
+            try {
+                coroutineScope {
+                    val jobs = (0 until numChunks).map { index ->
+                        val startByte = index * chunkSize
+                        val endByte = if (index == numChunks - 1) contentLength - 1 else (index + 1) * chunkSize - 1
+
+                        async(Dispatchers.IO) {
+                            val rangeRequest = Request.Builder()
+                                .url(remoteUrl)
+                                .addHeader("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)")
+                                .addHeader("referer", "https://shikho.com/")
+                                .addHeader("Referer", "https://shikho.com/")
+                                .addHeader("Origin", "https://shikho.com")
+                                .addHeader("Range", "bytes=$startByte-$endByte")
+                                .build()
+
+                            val response = httpClient.newCall(rangeRequest).execute()
+                            if (!response.isSuccessful || response.body == null) {
+                                throw Exception("Chunk download error ${response.code}")
+                            }
+
+                            val partFile = tempParts[index]
+                            partFile.outputStream().buffered(BUFFER_SIZE).use { out ->
+                                val buffer = ByteArray(BUFFER_SIZE)
+                                val inStream = response.body!!.byteStream().buffered(BUFFER_SIZE)
+                                var bytesRead: Int
+                                while (inStream.read(buffer).also { bytesRead = it } != -1) {
+                                    ensureActive()
+                                    out.write(buffer, 0, bytesRead)
+                                    val current = downloadedBytesCounter.addAndGet(bytesRead.toLong())
+                                    synchronized(this@AppFileDownloadManager) {
+                                        bytesSinceLastCheck += bytesRead
+                                    }
+
+                                    val now = System.currentTimeMillis()
+                                    val timeDiffMs = now - lastSpeedCheckTime
+                                    if (timeDiffMs >= 300L) {
+                                        currentSpeedMBs = (bytesSinceLastCheck.toFloat() / (1024f * 1024f)) / (timeDiffMs.toFloat() / 1000f)
+                                        lastSpeedCheckTime = now
+                                        bytesSinceLastCheck = 0L
+                                    }
+
+                                    if (now - lastDbUpdateTime > 250L || current >= totalBytes) {
+                                        lastDbUpdateTime = now
+                                        val progressPercent = if (totalBytes > 0) (current * 100 / totalBytes).toInt().coerceIn(0, 100) else 0
+
+                                        downloadedItemDao.insertOrUpdate(
+                                            initialEntity.copy(
+                                                downloadedBytes = current,
+                                                totalBytes = totalBytes,
+                                                status = DownloadedItemEntity.STATUS_DOWNLOADING
+                                            )
+                                        )
+
+                                        AppDownloadNotificationHelper.showDownloadProgressNotification(
+                                            context = context,
+                                            id = id,
+                                            title = title,
+                                            progressPercent = progressPercent,
+                                            downloadedBytes = current,
+                                            totalBytes = totalBytes,
+                                            speedMBs = currentSpeedMBs
+                                        )
+                                    }
+                                }
+                                out.flush()
+                            }
+                        }
+                    }
+                    jobs.awaitAll()
+                }
+
+                // Merge all parts into the target file
+                targetFile.outputStream().buffered(BUFFER_SIZE * 2).use { outStream ->
+                    for (part in tempParts) {
+                        part.inputStream().buffered(BUFFER_SIZE * 2).use { inStream ->
+                            inStream.copyTo(outStream, BUFFER_SIZE * 2)
+                        }
+                        part.delete()
+                    }
+                    outStream.flush()
+                }
+            } catch (e: Exception) {
+                for (part in tempParts) {
+                    try { part.delete() } catch (_: Exception) {}
+                }
+                throw e
+            }
+        } else {
+            // Single connection stream with high speed buffer
+            val body = headResponse.body!!
+            val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+            tempFile.outputStream().buffered(BUFFER_SIZE).use { outputStream ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                var bytesRead: Int
+                var downloadedBytes = 0L
+                var lastDbUpdateTime = System.currentTimeMillis()
+                var lastSpeedCheckTime = System.currentTimeMillis()
+                var bytesSinceLastCheck = 0L
+                var currentSpeedMBs = 0f
+
+                val inputStream = body.byteStream().buffered(BUFFER_SIZE)
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    ensureActive()
+                    outputStream.write(buffer, 0, bytesRead)
+                    downloadedBytes += bytesRead
+                    bytesSinceLastCheck += bytesRead
+
+                    val now = System.currentTimeMillis()
+                    val timeDiffMs = now - lastSpeedCheckTime
+                    if (timeDiffMs >= 300L) {
+                        currentSpeedMBs = (bytesSinceLastCheck.toFloat() / (1024f * 1024f)) / (timeDiffMs.toFloat() / 1000f)
+                        lastSpeedCheckTime = now
+                        bytesSinceLastCheck = 0L
+                    }
+
+                    if (now - lastDbUpdateTime > 250L || (totalBytes > 0 && downloadedBytes >= totalBytes)) {
+                        lastDbUpdateTime = now
+                        val currentTotal = if (totalBytes > 0) totalBytes else downloadedBytes
+                        val progressPercent = if (totalBytes > 0) (downloadedBytes * 100 / totalBytes).toInt().coerceIn(0, 100) else 0
+
+                        downloadedItemDao.insertOrUpdate(
+                            initialEntity.copy(
+                                downloadedBytes = downloadedBytes,
+                                totalBytes = currentTotal,
+                                status = DownloadedItemEntity.STATUS_DOWNLOADING
+                            )
+                        )
+
+                        AppDownloadNotificationHelper.showDownloadProgressNotification(
+                            context = context,
+                            id = id,
+                            title = title,
+                            progressPercent = progressPercent,
+                            downloadedBytes = downloadedBytes,
+                            totalBytes = currentTotal,
+                            speedMBs = currentSpeedMBs
+                        )
+                    }
+                }
+                outputStream.flush()
+            }
+            tempFile.renameTo(targetFile)
         }
+
+        val finalTotal = if (totalBytes > 0) totalBytes else targetFile.length()
+        downloadedItemDao.insertOrUpdate(
+            initialEntity.copy(
+                downloadedBytes = finalTotal,
+                totalBytes = finalTotal,
+                status = DownloadedItemEntity.STATUS_COMPLETED,
+                localFilePath = targetFile.absolutePath
+            )
+        )
+
+        AppDownloadNotificationHelper.showDownloadCompleteNotification(
+            context = context,
+            id = id,
+            title = title,
+            totalBytes = finalTotal
+        )
     }
 
     /**
@@ -874,7 +1224,11 @@ class AppFileDownloadManager private constructor(
                 if (item != null && item.status == DownloadedItemEntity.STATUS_DOWNLOADING) {
                     val file = File(item.localFilePath)
                     if (file.exists()) {
-                        file.delete()
+                        if (file.name.endsWith(".m3u8")) {
+                            file.parentFile?.deleteRecursively()
+                        } else {
+                            file.delete()
+                        }
                     }
                     downloadedItemDao.deleteDownloadedItem(id)
                 }
@@ -897,7 +1251,13 @@ class AppFileDownloadManager private constructor(
                 if (item != null) {
                     val file = File(item.localFilePath)
                     if (file.exists()) {
-                        file.delete()
+                        if (file.isDirectory) {
+                            file.deleteRecursively()
+                        } else if (file.name.endsWith(".m3u8")) {
+                            file.parentFile?.deleteRecursively()
+                        } else {
+                            file.delete()
+                        }
                     }
                 }
                 downloadedItemDao.deleteDownloadedItem(id)

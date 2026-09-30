@@ -108,17 +108,6 @@ object ShikhoPlayerManager {
             Uri.parse(url)
         }
 
-        if (isLocalFile) {
-            val mediaItem = MediaItem.fromUri(uri)
-            return if (context != null) {
-                DefaultMediaSourceFactory(DefaultDataSource.Factory(context))
-                    .createMediaSource(mediaItem)
-            } else {
-                DefaultMediaSourceFactory(dataSourceFactory)
-                    .createMediaSource(mediaItem)
-            }
-        }
-
         val isHls = url.contains(".m3u8", ignoreCase = true) || url.contains("hls", ignoreCase = true) || isLive || classType == PlayerClassType.LIVE
 
         val mediaItem = MediaItem.Builder()
@@ -138,12 +127,18 @@ object ShikhoPlayerManager {
             }
             .build()
 
+        val effectiveDataSourceFactory = if (isLocalFile && context != null) {
+            DefaultDataSource.Factory(context)
+        } else {
+            dataSourceFactory
+        }
+
         return if (isHls) {
-            HlsMediaSource.Factory(dataSourceFactory)
+            HlsMediaSource.Factory(effectiveDataSourceFactory)
                 .setAllowChunklessPreparation(false)
                 .createMediaSource(mediaItem)
         } else {
-            DefaultMediaSourceFactory(dataSourceFactory)
+            DefaultMediaSourceFactory(effectiveDataSourceFactory)
                 .createMediaSource(mediaItem)
         }
     }

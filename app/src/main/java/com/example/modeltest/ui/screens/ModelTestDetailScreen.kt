@@ -48,6 +48,7 @@ fun ModelTestDetailScreen(
     onBack: () -> Unit,
     onStartExam: (sessionId: String) -> Unit,
     onViewFeedback: (sessionId: String) -> Unit,
+    onViewResult: (modelTestId: String) -> Unit = {},
     onNavigateHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -70,8 +71,21 @@ fun ModelTestDetailScreen(
         parseIsoDateToMillis(info?.end_time ?: lessonEndTime, isEndOfDay = true)
     }
 
-    val state = remember(userActivityState, info?.user_activity_state) {
-        (userActivityState?.takeIf { it.isNotBlank() } ?: info?.user_activity_state)?.uppercase() ?: ""
+    // 1. Explicit Completed
+    val isCompleted = remember(info?.is_completed, info?.user_activity_state, userActivityState) {
+        info?.is_completed == true ||
+        info?.user_activity_state.equals("COMPLETED", ignoreCase = true) ||
+        info?.user_activity_state.equals("ATTENDED", ignoreCase = true) ||
+        userActivityState.equals("COMPLETED", ignoreCase = true) ||
+        userActivityState.equals("ATTENDED", ignoreCase = true)
+    }
+
+    val state = remember(userActivityState, info?.user_activity_state, isCompleted) {
+        if (isCompleted) {
+            "COMPLETED"
+        } else {
+            (info?.user_activity_state?.takeIf { it.isNotBlank() } ?: userActivityState)?.uppercase() ?: ""
+        }
     }
 
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -80,11 +94,6 @@ fun ModelTestDetailScreen(
             kotlinx.coroutines.delay(1000)
             now = System.currentTimeMillis()
         }
-    }
-
-    // 1. Explicit Completed
-    val isCompleted = remember(state, info?.is_completed) {
-        state == "COMPLETED" || state == "ATTENDED" || info?.is_completed == true
     }
 
     // 2. Live State Detection:
@@ -293,11 +302,49 @@ fun ModelTestDetailScreen(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "তুমি ইতিমধ্যে এই লাইভ পরীক্ষায় অংশগ্রহণ করেছো। ফলাফল প্রকাশের পর বিস্তারিত ফলাফল দেখতে পারবে। নিচে থেকে যেকোনো সময় প্র্যাকটিস টেস্ট দিতে পারো।",
+                                    text = "তুমি ইতিমধ্যে এই লাইভ পরীক্ষায় অংশগ্রহণ করেছো। নিচের বাটনগুলো থেকে তোমার ফলাফল ও MCQ উত্তরপত্র দেখে নাও অথবা যেকোনো সময় প্র্যাকটিস টেস্ট দিতে পারো।",
                                     fontSize = 13.5.sp,
                                     color = Color(0xFF14532D),
                                     textAlign = TextAlign.Center
                                 )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // View Overall Result Button
+                                Button(
+                                    onClick = { onViewResult(modelTestId) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                ) {
+                                    Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("📊 সার্বিক ফলাফল দেখো", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // View Feedback / Solution Button
+                                OutlinedButton(
+                                    onClick = {
+                                        val fid = uiState.currentSessionId.ifBlank { modelTestId }
+                                        onViewFeedback(fid)
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = Color(0xFF15803D)
+                                    ),
+                                    border = BorderStroke(1.2.dp, Color(0xFF86EFAC)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(46.dp)
+                                ) {
+                                    Icon(Icons.Default.FactCheck, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("📝 MCQ উত্তর ও ব্যাখ্যা দেখো", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                }
                             }
                             isMissed -> {
                                 Text(

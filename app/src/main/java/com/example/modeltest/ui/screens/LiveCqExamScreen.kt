@@ -200,7 +200,7 @@ fun LiveCqExamScreen(
                 }
             }
 
-            // 2. Test Rules Card (Screenshot 3)
+            // 2. Test Rules Card (Dynamic from API)
             item {
                 Card(
                     shape = RoundedCornerShape(14.dp),
@@ -218,28 +218,74 @@ fun LiveCqExamScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        val qCount = uiState.liveCqQuestions.size.let { if (it == 0) 2 else it }
-                        RuleBulletItem(text = "তোমাকে ${formatToBengaliNumber(qCount)} টার মধ্যে ${formatToBengaliNumber(qCount)} টা আনসার করতে হবে।")
+                        val qCount = if (uiState.liveCqQuestions.isNotEmpty()) {
+                            uiState.liveCqQuestions.size
+                        } else {
+                            uiState.liveCqUploadInfo?.getNumberOfQuestions() ?: 2
+                        }
+                        val ansCount = uiState.liveCqUploadInfo?.getQuestionsToAnswer() ?: qCount
+                        val writingMins = uiState.liveCqUploadInfo?.getExamDurationMinutes() ?: 60
+                        val uploadMins = uiState.liveCqUploadInfo?.getSubmissionDurationMinutes() ?: 40
+
+                        val writingTimeText = if (writingMins >= 60 && writingMins % 60 == 0) {
+                            "${formatToBengaliNumber(writingMins / 60)} ঘণ্টা"
+                        } else if (writingMins >= 60) {
+                            "${formatToBengaliNumber(writingMins / 60)} ঘণ্টা ${formatToBengaliNumber(writingMins % 60)} মিনিট"
+                        } else {
+                            "${formatToBengaliNumber(writingMins)} মিনিট"
+                        }
+
+                        RuleBulletItem(text = "তোমাকে ${formatToBengaliNumber(qCount)} টার মধ্যে ${formatToBengaliNumber(ansCount)} টা আনসার করতে হবে।")
                         Spacer(modifier = Modifier.height(8.dp))
-                        RuleBulletItem(text = "প্রশ্নের উত্তর লেখার সময় ১ ঘণ্টা")
+                        RuleBulletItem(text = "প্রশ্নের উত্তর লেখার সময় $writingTimeText")
                         Spacer(modifier = Modifier.height(8.dp))
-                        RuleBulletItem(text = "উত্তরপত্র আপলোড করার সময় ৪০ মিনিট")
+                        RuleBulletItem(text = "উত্তরপত্র আপলোড করার সময় ${formatToBengaliNumber(uploadMins)} মিনিট")
                     }
                 }
             }
 
             // 3. Question Cards
-            val questions = if (uiState.liveCqQuestions.isNotEmpty()) {
-                uiState.liveCqQuestions
+            val questions = uiState.liveCqQuestions
+            if (uiState.isCqLoading && questions.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF4F46E5))
+                    }
+                }
+            } else if (questions.isEmpty()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "CQ প্রশ্নপত্র লোড করা হচ্ছে...",
+                                fontSize = 14.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
             } else {
-                getFallbackLiveCqQuestions()
-            }
-
-            itemsIndexed(questions) { index, q ->
-                LiveCqQuestionCard(
-                    questionNumber = index + 1,
-                    question = q
-                )
+                itemsIndexed(questions) { index, q ->
+                    LiveCqQuestionCard(
+                        questionNumber = index + 1,
+                        question = q
+                    )
+                }
             }
         }
     }
@@ -277,61 +323,67 @@ fun LiveCqQuestionCard(
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             // Header: Question No & Total Marks
+            val stimulusText = question.getEffectiveStimulus().replace("$", "").trim()
+            val totalMarksInt = question.getEffectiveTotalMarks().toInt()
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${formatToBengaliNumber(questionNumber)}.  ${question.title?.replace("$", "") ?: ""}",
-                    fontSize = 16.sp,
+                    text = "${formatToBengaliNumber(questionNumber)}.  $stimulusText",
+                    fontSize = 15.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A),
                     modifier = Modifier.weight(1f)
                 )
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Text(
-                    text = formatToBengaliNumber((question.total_marks ?: 10.0).toInt()),
+                    text = formatToBengaliNumber(totalMarksInt),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1E293B)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-            HorizontalDivider(color = Color(0xFFF1F5F9))
-            Spacer(modifier = Modifier.height(12.dp))
+            val subQuestions = question.sub_questions
+            if (!subQuestions.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = Color(0xFFF1F5F9))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // Sub Questions
-            val subQuestions = question.sub_questions ?: listOf(
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("ক) অ্যারে কী?", 1.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("খ) \"scanf(\"%f\", &a)\" —ব্যাখ্যা করো।", 2.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("গ) উদ্দীপকের ধারাটির যোগফল নির্ণয়ের জন্য অ্যালগরিদম তৈরি করো।", 3.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("ঘ) উদ্দীপকের ধারাটির ফলাফল প্রদর্শনের জন্য সি ভাষার একটি প্রোগ্রাম লেখো।", 4.0)
-            )
+                val defaultKeys = listOf("ক", "খ", "গ", "ঘ")
+                subQuestions.forEachIndexed { sIdx, sub ->
+                    val rawQ = sub.question?.replace("$", "")?.trim() ?: ""
+                    val hasPrefix = defaultKeys.any { rawQ.startsWith("$it)") || rawQ.startsWith("$it.") || rawQ.startsWith("($it)") }
+                    val displayQ = if (hasPrefix) rawQ else "${defaultKeys.getOrElse(sIdx) { "${sIdx + 1}" }}) $rawQ"
+                    val marksInt = sub.getEffectiveMarks().toInt()
 
-            subQuestions.forEach { sub ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text(
-                        text = sub.question?.replace("$", "") ?: "",
-                        fontSize = 14.sp,
-                        color = Color(0xFF334155),
-                        lineHeight = 20.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = formatToBengaliNumber((sub.marks ?: 1.0).toInt()),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF475569)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = displayQ,
+                            fontSize = 14.sp,
+                            color = Color(0xFF334155),
+                            lineHeight = 20.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatToBengaliNumber(marksInt),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF475569)
+                        )
+                    }
                 }
             }
         }
@@ -354,33 +406,4 @@ fun toBengaliDigits(input: String): String {
         '5' to '৫', '6' to '৬', '7' to '৭', '8' to '৮', '9' to '৯'
     )
     return input.map { bnDigits[it] ?: it }.joinToString("")
-}
-
-fun getFallbackLiveCqQuestions(): List<ShikhoCqQuestionRaw> {
-    return listOf(
-        ShikhoCqQuestionRaw(
-            id = "6ab5009a6a5f4a905b733653",
-            question_no = "1",
-            title = "5 + 10 + 15 +.......+ 200",
-            total_marks = 10.0,
-            sub_questions = listOf(
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("ক) অ্যারে কী?", 1.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("খ) \"scanf(\"%f\", &a)\" —ব্যাখ্যা করো।", 2.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("গ) উদ্দীপকের ধারাটির যোগফল নির্ণয়ের জন্য অ্যালগরিদম তৈরি করো।", 3.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("ঘ) উদ্দীপকের ধারাটির ফলাফল প্রদর্শনের জন্য সি ভাষার একটি প্রোগ্রাম লেখো।", 4.0)
-            )
-        ),
-        ShikhoCqQuestionRaw(
-            id = "6ab5009b70a9cc77f7f40691",
-            question_no = "2",
-            title = "#include<stdio.h>\nint main ( )\n{\nint K,S = 0;\nfor (K = 10; K <= 100; K = K + 10)\nS = S+K ;\nprintf(\"summation: % d\",S);\n}",
-            total_marks = 10.0,
-            sub_questions = listOf(
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("ক) অ্যাসেম্বলার কী?", 1.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("খ) C ভাষায় কেন Header file ব্যবহার করা হয়?", 2.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("গ) উদ্দীপকের প্রোগ্রামটির ফ্লোচার্ট অংকন করো।", 3.0),
-                com.example.modeltest.data.ShikhoCqSubQuestionRaw("ঘ) উদ্দীপকের প্রোগ্রামটি do-while ব্যবহার করে লেখো।", 4.0)
-            )
-        )
-    )
 }

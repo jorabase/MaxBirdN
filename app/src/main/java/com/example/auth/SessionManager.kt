@@ -96,6 +96,21 @@ class SessionManager(context: Context) {
         return null
     }
 
+    fun markModelTestCompleted(modelTestId: String) {
+        val completed = getCompletedModelTests().toMutableSet()
+        completed.add(modelTestId)
+        sharedPreferences.edit().putStringSet("completed_model_tests", completed).apply()
+    }
+
+    fun isModelTestCompleted(modelTestId: String): Boolean {
+        return getCompletedModelTests().contains(modelTestId)
+    }
+
+    fun getCompletedModelTests(): Set<String> {
+        return sharedPreferences.getStringSet("completed_model_tests", emptySet()) ?: emptySet()
+    }
+
+
     fun setFcmToken(token: String) {
         sharedPreferences.edit()
             .putString("fcm_token", token)

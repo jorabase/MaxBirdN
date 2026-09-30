@@ -803,6 +803,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onViewFeedback = { sessionId ->
                     navController.navigate("model_test_feedback/$sessionId")
                 },
+                onViewResult = { id ->
+                    navController.navigate("model_test_result/$id")
+                },
                 onNavigateHome = {
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }

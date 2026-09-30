@@ -299,9 +299,9 @@ class ModelTestRepository(
                 start_time = resolvedStartTime,
                 end_time = resolvedEndTime,
                 mcq_count = mcqStage?.no_of_questions ?: 30,
-                cq_count = cqStage?.no_of_questions ?: 2,
+                cq_count = cqStage?.no_of_questions ?: 0,
                 mcq_duration_minutes = mcqStage?.exam_duration ?: mcqStage?.allocated_exam_duration ?: 30,
-                cq_duration_minutes = cqStage?.exam_duration ?: cqStage?.allocated_exam_duration ?: 100
+                cq_duration_minutes = cqStage?.exam_duration ?: cqStage?.allocated_exam_duration ?: 0
             )
         }
     }
@@ -709,17 +709,17 @@ class ModelTestRepository(
             if (session != null && !session.questions.isNullOrEmpty()) {
                 val questions = session.questions.map { q ->
                     ModelTestCqQuestion(
-                        id = q.id,
-                        stimulus = q.title,
+                        id = q.id ?: "",
+                        stimulus = q.title ?: q.description ?: "",
                         stimulus_image = null,
                         sub_questions = q.sub_questions?.mapIndexed { sIdx, sub ->
                             val keys = listOf("ক", "খ", "গ", "ঘ")
                             ModelTestCqSubQuestion(
                                 key = keys.getOrElse(sIdx) { "${sIdx + 1}" },
                                 question = sub.question ?: "",
-                                marks = sub.marks ?: (sIdx + 1.0)
+                                marks = sub.getEffectiveMarks()
                             )
-                        }
+                        } ?: emptyList()
                     )
                 }
                 CqContainer(
@@ -728,41 +728,19 @@ class ModelTestRepository(
                     questions = questions
                 )
             } else {
-                getFallbackCqContainer(sessionId)
+                CqContainer(
+                    session_id = sessionId,
+                    duration_in_seconds = 0L,
+                    questions = emptyList()
+                )
             }
         }.recoverCatching {
-            getFallbackCqContainer(sessionId)
+            CqContainer(
+                session_id = sessionId,
+                duration_in_seconds = 0L,
+                questions = emptyList()
+            )
         }
-    }
-
-    private fun getFallbackCqContainer(sessionId: String): CqContainer {
-        val q1 = ModelTestCqQuestion(
-            id = "cq_1",
-            stimulus = "উদ্দীপকটি পড়ে সংশ্লিষ্ট প্রশ্নগুলোর উত্তর দাও:\nমিস্টার জামান একটি বহুজাতিক কোম্পানিতে কর্মরত। তিনি লক্ষ্য করলেন যে তাদের পণ্যগুলো বিশ্ববাজারে ব্যাপকভাবে জনপ্রিয় হওয়ার মূল কারণ দক্ষ মানবসম্পদ ও সময়োপযোগী বাণিজ্যিক পরিকল্পনা। তবে জলবায়ু পরিবর্তনজনিত কারণে কাঁচামাল সরবরাহে ব্যাঘাত ঘটছে।",
-            stimulus_image = null,
-            sub_questions = listOf(
-                ModelTestCqSubQuestion("ক", "মানব ভূগোল কাকে বলে?", 1.0),
-                ModelTestCqSubQuestion("খ", "ভৌগোলিক পরিবেশ মানবজীবনকে কীভাবে প্রভাবিত করে?", 2.0),
-                ModelTestCqSubQuestion("গ", "উদ্দীপকে বর্ণিত প্রতিষ্ঠানের সাফল্যের পেছনে মানবসম্পদের ভূমিকা ব্যাখ্যা করো।", 3.0),
-                ModelTestCqSubQuestion("ঘ", "উদ্দীপকে উল্লেখিত ঝুঁকি মোকাবিলায় টেকসই উন্নয়নের গুরুত্ব বিশ্লেষণ করো।", 4.0)
-            )
-        )
-        val q2 = ModelTestCqQuestion(
-            id = "cq_2",
-            stimulus = "উদ্দীপকটি পড়ে সংশ্লিষ্ট প্রশ্নগুলোর উত্তর দাও:\nবাংলাদেশের উপকূলীয় অঞ্চলের ভূ-প্রকৃতি নদীবিধৌত সমভূমি দ্বারা গঠিত। সাম্প্রতিক বছরগুলোতে সমুদ্রপৃষ্ঠের উচ্চতা বৃদ্ধি ও ঘূর্ণিঝড়ের কারণে উপকূলীয় কৃষি ও জীববৈচিত্র্য মারাত্মকভাবে ক্ষতিগ্রস্ত হচ্ছে।",
-            stimulus_image = null,
-            sub_questions = listOf(
-                ModelTestCqSubQuestion("ক", "গ্রিনহাউস গ্যাস কী?", 1.0),
-                ModelTestCqSubQuestion("খ", "জলবায়ু পরিবর্তন ও বৈশ্বিক উষ্ণায়নের সম্পর্ক বুঝিয়ে লেখো।", 2.0),
-                ModelTestCqSubQuestion("গ", "উদ্দীপকে নির্দেশিত অঞ্চলের প্রাকৃতিক পরিবেশের প্রধান বৈশিষ্ট্যগুলো আলোচনা করো।", 3.0),
-                ModelTestCqSubQuestion("ঘ", "উপকূলীয় অঞ্চলের ঝুঁকি হ্রাসে গৃহীত পদক্ষেপসমূহের কার্যকারিতা মূল্যায়ন করো।", 4.0)
-            )
-        )
-        return CqContainer(
-            session_id = sessionId,
-            duration_in_seconds = 100 * 60L,
-            questions = listOf(q1, q2)
-        )
     }
 
     // -------------------------------------------------------------
@@ -1101,6 +1079,7 @@ class ModelTestRepository(
                   id
                   is_final_submitted
                   is_started
+                  u_code
                   question_answer {
                     given_answers {
                       original_file_info {
@@ -1372,6 +1351,67 @@ class ModelTestRepository(
         )
         return result.mapCatching {
             it.data?.modelTest?.result_publish_time ?: "2026-09-30T05:00:00Z"
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Completion Status Check & Persistence
+    // -------------------------------------------------------------
+    fun markModelTestCompletedLocally(modelTestId: String) {
+        if (modelTestId.isNotBlank()) {
+            sessionManager?.markModelTestCompleted(modelTestId)
+        }
+    }
+
+    fun isModelTestCompletedLocally(modelTestId: String): Boolean {
+        if (modelTestId.isBlank()) return false
+        return sessionManager?.isModelTestCompleted(modelTestId) == true
+    }
+
+    suspend fun checkModelTestCompletionStatus(
+        modelTestId: String,
+        lessonId: String? = null
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (isModelTestCompletedLocally(modelTestId)) return@withContext true
+        try {
+            val query = """
+                query GetModelTestSessions(${'$'}is_practice: Boolean!, ${'$'}model_test_id: String!, ${'$'}lesson_id: String, ${'$'}query_only: Boolean!) {
+                  getModelTestSession(is_practice: ${'$'}is_practice, model_test_id: ${'$'}model_test_id, lesson_id: ${'$'}lesson_id, query_only: ${'$'}query_only) {
+                    id
+                    is_final_submitted
+                    stages {
+                      type
+                      is_running
+                      is_completed
+                    }
+                  }
+                }
+            """.trimIndent()
+
+            val variables = mutableMapOf<String, Any?>(
+                "is_practice" to false,
+                "model_test_id" to modelTestId,
+                "query_only" to true,
+                "lesson_id" to (lessonId?.takeIf { it.isNotBlank() })
+            )
+
+            val result = executeApiQuery<ModelTestSessionsResponse>(
+                operationName = "GetModelTestSessions",
+                query = query,
+                variables = variables
+            )
+
+            val session = result.getOrNull()?.let { resp ->
+                resp.data?.getModelTestSession ?: resp.data?.getModelTestSessions
+            }
+
+            val isDone = session?.is_final_submitted == true || session?.stages?.any { it.is_completed == true } == true
+            if (isDone) {
+                markModelTestCompletedLocally(modelTestId)
+            }
+            isDone
+        } catch (e: Exception) {
+            isModelTestCompletedLocally(modelTestId)
         }
     }
 

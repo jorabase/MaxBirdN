@@ -3,7 +3,9 @@ package com.example.modeltest.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.api.StudentLessonItem
+import com.example.course.LessonCacheManager
 import com.example.modeltest.data.*
+import com.example.utils.toBengaliDigits
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -275,6 +277,7 @@ class ModelTestViewModel(
         }
 
         viewModelScope.launch {
+            val isCompletedCheck = repository.checkModelTestCompletionStatus(modelTestId)
             val infoResult = repository.getModelTestInfo(modelTestId)
             infoResult.onSuccess { details ->
                 val finalStart = when {
@@ -287,10 +290,12 @@ class ModelTestViewModel(
                     !lessonEndTime.isNullOrBlank() -> lessonEndTime
                     else -> details.end_time
                 }
-                val finalState = details.user_activity_state?.takeIf { it.isNotBlank() } ?: userActivityState
+                val isEffectivelyCompleted = isCompletedCheck || details.is_completed == true || userActivityState.equals("COMPLETED", ignoreCase = true) || userActivityState.equals("ATTENDED", ignoreCase = true)
+                val finalState = if (isEffectivelyCompleted) "COMPLETED" else (details.user_activity_state?.takeIf { it.isNotBlank() } ?: userActivityState)
                 val finalDetails = details.copy(
                     start_time = finalStart,
                     end_time = finalEnd,
+                    is_completed = isEffectivelyCompleted,
                     user_activity_state = finalState
                 )
 
@@ -325,6 +330,7 @@ class ModelTestViewModel(
                     _uiState.update { it.copy(cqMasterSolutionUrl = null) }
                 }
             }.onFailure { err ->
+                val isEffectivelyCompleted = isCompletedCheck || userActivityState.equals("COMPLETED", ignoreCase = true) || userActivityState.equals("ATTENDED", ignoreCase = true)
                 _uiState.update {
                     it.copy(
                         isInfoLoading = false,
@@ -334,7 +340,8 @@ class ModelTestViewModel(
                             title = "মডেল টেস্ট",
                             start_time = lessonStartTime,
                             end_time = lessonEndTime,
-                            user_activity_state = userActivityState,
+                            is_completed = isEffectivelyCompleted,
+                            user_activity_state = if (isEffectivelyCompleted) "COMPLETED" else userActivityState,
                             duration_in_minutes = 30,
                             mcq_count = 30
                         ),
@@ -532,6 +539,10 @@ class ModelTestViewModel(
 
             // Clear local cached state
             repository.clearActiveExamState(sessionId)
+            if (_uiState.value.activeModelTestId.isNotBlank()) {
+                repository.markModelTestCompletedLocally(_uiState.value.activeModelTestId)
+                LessonCacheManager.markLessonCompletedInCache(_uiState.value.activeModelTestId)
+            }
 
             // Fetch minimal score result
             val minimalResult = repository.getMcqResultMinimal(sessionId).getOrNull()
@@ -539,7 +550,8 @@ class ModelTestViewModel(
                 it.copy(
                     isSubmittingMcq = false,
                     showScorePopup = true,
-                    minimalScoreResult = minimalResult
+                    minimalScoreResult = minimalResult,
+                    modelTestInfo = it.modelTestInfo?.copy(is_completed = true, user_activity_state = "COMPLETED")
                 )
             }
             onSubmitted?.invoke()
@@ -719,13 +731,11 @@ class ModelTestViewModel(
 
         viewModelScope.launch {
             val result = repository.startCqSessionSubmission(effectiveCqId).recoverCatching {
-                // If already started, get CQ session details
                 val rawInfo = repository.getCqInfoOfModelTest(effectiveCqId).getOrNull()
                 CqSessionDetailedInfo(
                     id = effectiveCqId,
-                    exam_id = _uiState.value.modelTestInfo?.stages?.firstOrNull { it.type == "CQ" }?.id ?: "6ab5009970a9cc77f7f40690",
+                    exam_id = _uiState.value.modelTestInfo?.stages?.firstOrNull { it.type == "CQ" }?.id,
                     title = "CQ",
-                    u_code = "৪২৮৭",
                     questions = rawInfo?.questions?.map { q ->
                         ShikhoCqQuestionRaw(
                             id = q.id,
@@ -739,18 +749,22 @@ class ModelTestViewModel(
                 )
             }
 
-            val cqExamId = result.getOrNull()?.exam_id 
+            val sessionDetails = result.getOrNull()
+            val cqExamId = sessionDetails?.exam_id 
                 ?: _uiState.value.modelTestInfo?.stages?.firstOrNull { it.type == "CQ" }?.id 
                 ?: "6ab5009970a9cc77f7f40690"
 
             val uploadInfo = repository.getCqUploadRelatedInfo(cqExamId).getOrNull()
-            val sessionDetails = result.getOrNull()
 
-            val uCode = sessionDetails?.u_code ?: "৪২৮৭"
-            val questions = sessionDetails?.questions ?: emptyList()
+            val rawUCode = sessionDetails?.getFormattedUCode()?.ifBlank { null }
+                ?: sessionDetails?.questions?.firstOrNull { !it.u_code?.toString().isNullOrBlank() }?.u_code?.toString()
+                ?: effectiveCqId.filter { it.isDigit() }.takeLast(4).let { if (it.length == 4) it else "৮২৯৪" }
+            val uCode = if (rawUCode.any { it in '0'..'9' }) toBengaliDigits(rawUCode) else rawUCode
 
-            val writingDurationSec = (uploadInfo?.exam_duration ?: 60) * 60L
-            val submissionDurationSec = (uploadInfo?.submission_duration ?: 40) * 60L
+            val questions = sessionDetails?.questions?.takeIf { it.isNotEmpty() } ?: emptyList()
+
+            val writingDurationSec = (uploadInfo?.getExamDurationMinutes() ?: 60) * 60L
+            val submissionDurationSec = (uploadInfo?.getSubmissionDurationMinutes() ?: 40) * 60L
             val totalLiveSec = writingDurationSec + submissionDurationSec
 
             _uiState.update {
@@ -934,6 +948,10 @@ class ModelTestViewModel(
 
         viewModelScope.launch {
             repository.finalSubmitCqSession(cqSessionId)
+            if (modelTestId.isNotBlank()) {
+                repository.markModelTestCompletedLocally(modelTestId)
+                LessonCacheManager.markLessonCompletedInCache(modelTestId)
+            }
             val publishTime = repository.getModelTestResultPublishTime(modelTestId).getOrNull()
                 ?: "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়"
             val preResult = repository.getModelTestPreResult(modelTestId).getOrNull()
@@ -942,7 +960,8 @@ class ModelTestViewModel(
                 it.copy(
                     isLiveCqSubmittingFinal = false,
                     liveExamPublishTime = publishTime,
-                    liveExamFinalResult = preResult
+                    liveExamFinalResult = preResult,
+                    modelTestInfo = it.modelTestInfo?.copy(is_completed = true, user_activity_state = "COMPLETED")
                 )
             }
             onCompleted()

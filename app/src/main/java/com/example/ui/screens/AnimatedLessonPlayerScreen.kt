@@ -62,6 +62,8 @@ import com.example.LocalPictureInPictureMode
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.download.DownloadQualityOption
+import com.example.player.PlayerClassType
+import com.example.player.ShikhoPlayerManager
 import com.example.player.VideoProgressManager
 import com.example.ui.components.VideoDownloadQualityDialog
 import com.example.util.PipHelper
@@ -196,16 +198,26 @@ fun AnimatedLessonPlayerScreen(
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
-        ExoPlayer.Builder(context).build().apply {
-            setAudioAttributes(audioAttributes, true)
-            setHandleAudioBecomingNoisy(true)
-            if (effectivePlaybackUrl.isNotBlank()) {
-                val mediaItem = MediaItem.fromUri(effectivePlaybackUrl)
-                setMediaItem(mediaItem)
-                prepare()
-                playWhenReady = true
+        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context)
+        ExoPlayer.Builder(context)
+            .setTrackSelector(trackSelector)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build().apply {
+                volume = 1.0f
+                if (effectivePlaybackUrl.isNotBlank()) {
+                    val mediaSource = ShikhoPlayerManager.createMediaSource(
+                        url = effectivePlaybackUrl,
+                        isLive = false,
+                        classType = PlayerClassType.ANIMATED,
+                        context = context
+                    )
+                    setMediaSource(mediaSource)
+                    prepare()
+                    playWhenReady = true
+                }
             }
-        }
     }
 
     // Connect PiP Controller
@@ -707,7 +719,13 @@ fun AnimatedLessonPlayerScreen(
                     Button(
                         onClick = {
                             playbackError = null
-                            exoPlayer.setMediaItem(MediaItem.fromUri(effectivePlaybackUrl))
+                            val mediaSource = ShikhoPlayerManager.createMediaSource(
+                                url = effectivePlaybackUrl,
+                                isLive = false,
+                                classType = PlayerClassType.ANIMATED,
+                                context = context
+                            )
+                            exoPlayer.setMediaSource(mediaSource)
                             exoPlayer.prepare()
                             exoPlayer.playWhenReady = true
                         },
