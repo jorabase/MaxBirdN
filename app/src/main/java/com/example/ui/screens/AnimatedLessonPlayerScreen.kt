@@ -193,31 +193,22 @@ fun AnimatedLessonPlayerScreen(
     // ExoPlayer Instance
     // -------------------------------------------------------------
     val exoPlayer = remember(context, effectivePlaybackUrl) {
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(C.USAGE_MEDIA)
-            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-            .build()
-
-        val trackSelector = androidx.media3.exoplayer.trackselection.DefaultTrackSelector(context)
-        ExoPlayer.Builder(context)
-            .setTrackSelector(trackSelector)
-            .setAudioAttributes(audioAttributes, true)
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build().apply {
-                volume = 1.0f
-                if (effectivePlaybackUrl.isNotBlank()) {
-                    val mediaSource = ShikhoPlayerManager.createMediaSource(
-                        url = effectivePlaybackUrl,
-                        isLive = false,
-                        classType = PlayerClassType.ANIMATED,
-                        context = context
-                    )
-                    setMediaSource(mediaSource)
-                    prepare()
-                    playWhenReady = true
-                }
+        ShikhoPlayerManager.buildExoPlayer(
+            context = context,
+            classType = PlayerClassType.ANIMATED
+        ).apply {
+            if (effectivePlaybackUrl.isNotBlank()) {
+                val mediaSource = ShikhoPlayerManager.createMediaSource(
+                    url = effectivePlaybackUrl,
+                    isLive = false,
+                    classType = PlayerClassType.ANIMATED,
+                    context = context
+                )
+                setMediaSource(mediaSource)
+                prepare()
+                playWhenReady = true
             }
+        }
     }
 
     // Connect PiP Controller

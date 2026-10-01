@@ -27,11 +27,19 @@ fun LivePlayer(
 ) {
     val context = LocalContext.current
 
-    // Initialize ExoPlayer for HLS Live Streaming
+    // Initialize ExoPlayer for HLS Live Streaming with zero-buffering engine
     val exoPlayer = remember(masterUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(masterUrl)
-            setMediaItem(mediaItem)
+        com.example.player.ShikhoPlayerManager.buildExoPlayer(
+            context = context,
+            classType = com.example.player.PlayerClassType.LIVE
+        ).apply {
+            val mediaSource = com.example.player.ShikhoPlayerManager.createMediaSource(
+                url = masterUrl,
+                isLive = true,
+                classType = com.example.player.PlayerClassType.LIVE,
+                context = context
+            )
+            setMediaSource(mediaSource)
             prepare()
             playWhenReady = true
 

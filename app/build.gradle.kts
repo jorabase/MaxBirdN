@@ -168,6 +168,7 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.hls)
   implementation(libs.androidx.media3.common)
   implementation(libs.androidx.media3.session)
+  implementation(libs.androidx.media3.datasource.okhttp)
   implementation(libs.coil.compose)
   implementation(libs.coil.svg)
   implementation(libs.converter.moshi)
