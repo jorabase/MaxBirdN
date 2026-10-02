@@ -132,6 +132,10 @@ fun VideoPlayerScreen(
         )
     }
 
+    var pendingResumeSeekMs by remember(videoKey) {
+        val cached = videoProgressManager.getCachedProgress(videoKey)
+        mutableLongStateOf(if (cached != null && cached.isEligibleForResume) cached.positionMs else 0L)
+    }
     var hasAutoResumed by remember(videoKey) { mutableStateOf(false) }
     var resumeNotificationText by remember { mutableStateOf<String?>(null) }
     var lastPlaybackPositionMs by remember { mutableLongStateOf(0L) }
@@ -173,9 +177,16 @@ fun VideoPlayerScreen(
                 isLive = isLive && !isPlayingOffline,
                 context = context
             )
-            setMediaSource(mediaSource)
-            if (lastPlaybackPositionMs > 1000L) {
-                seekTo(lastPlaybackPositionMs)
+            val targetResumeMs = if (lastPlaybackPositionMs > 1000L) {
+                lastPlaybackPositionMs
+            } else if (pendingResumeSeekMs > 1000L) {
+                pendingResumeSeekMs
+            } else 0L
+
+            if (targetResumeMs > 1000L) {
+                setMediaSource(mediaSource, targetResumeMs)
+            } else {
+                setMediaSource(mediaSource)
             }
             prepare()
             playWhenReady = true
@@ -320,7 +331,23 @@ fun VideoPlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
-                    totalDuration = exoPlayer.duration.coerceAtLeast(0L)
+                    val dur = exoPlayer.duration.coerceAtLeast(0L)
+                    totalDuration = dur
+                    if (pendingResumeSeekMs > 1000L && !hasAutoResumed) {
+                        val target = pendingResumeSeekMs
+                        pendingResumeSeekMs = 0L
+                        hasAutoResumed = true
+                        if (target > 0L && (dur <= 0L || target < dur - 5000L)) {
+                            exoPlayer.seekTo(target)
+                            currentPosition = target
+                            val timeFormatted = ShikhoPlayerManager.formatTime(target, true)
+                            resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                            coroutineScope.launch {
+                                delay(6000)
+                                resumeNotificationText = null
+                            }
+                        }
+                    }
                 }
             }
 
@@ -370,18 +397,22 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Auto-Resume from Last Saved Playback Position (Even after days or app restarts)
-    LaunchedEffect(exoPlayer, videoKey, isBuffering) {
-        if (!isBuffering && !hasAutoResumed) {
-            val savedProgress = videoProgressManager.getProgress(videoKey)
-            if (savedProgress != null && savedProgress.isEligibleForResume) {
-                hasAutoResumed = true
-                exoPlayer.seekTo(savedProgress.positionMs)
-                val timeFormatted = ShikhoPlayerManager.formatTime(savedProgress.positionMs, true)
-                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
-                coroutineScope.launch {
-                    delay(8000)
-                    resumeNotificationText = null
+    // Secondary safety check for cold start from Room database
+    LaunchedEffect(videoKey) {
+        if (!hasAutoResumed && pendingResumeSeekMs <= 0L) {
+            val dbProgress = videoProgressManager.getProgress(videoKey)
+            if (dbProgress != null && dbProgress.isEligibleForResume && !hasAutoResumed) {
+                pendingResumeSeekMs = dbProgress.positionMs
+                if (exoPlayer.playbackState == Player.STATE_READY) {
+                    hasAutoResumed = true
+                    exoPlayer.seekTo(dbProgress.positionMs)
+                    currentPosition = dbProgress.positionMs
+                    val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
+                    resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                    coroutineScope.launch {
+                        delay(6000)
+                        resumeNotificationText = null
+                    }
                 }
             }
         }

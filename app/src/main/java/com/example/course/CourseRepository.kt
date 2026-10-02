@@ -468,6 +468,11 @@ class CourseRepository(
         phaseId: String? = null,
         batchId: String? = null
     ): List<StudentLessonItem> {
+        val cacheKey = "${programId}_${phaseId.orEmpty()}_${batchId.orEmpty()}"
+        lessonsCache[cacheKey]?.let { cached ->
+            if (cached.isNotEmpty()) return cached
+        }
+
         val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Dhaka"))
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
@@ -568,6 +573,8 @@ class CourseRepository(
                 variables = mapOf("program_id" to programId, "phase_id" to phaseId)
             )
             if (listPhase.isNotEmpty()) {
+                lessonsCache[cacheKey] = listPhase
+                lessonsCache[programId] = listPhase
                 LessonCacheManager.saveLessons(listPhase, programId = programId)
                 return listPhase
             }
@@ -589,6 +596,8 @@ class CourseRepository(
                 variables = mapOf("program_id" to programId, "batch_id" to batchId)
             )
             if (listBatch.isNotEmpty()) {
+                lessonsCache[cacheKey] = listBatch
+                lessonsCache[programId] = listBatch
                 LessonCacheManager.saveLessons(listBatch, programId = programId)
                 return listBatch
             }
@@ -609,6 +618,8 @@ class CourseRepository(
             variables = mapOf("program_id" to programId)
         )
         if (listAll.isNotEmpty()) {
+            lessonsCache[cacheKey] = listAll
+            lessonsCache[programId] = listAll
             LessonCacheManager.saveLessons(listAll, programId = programId)
             return listAll
         }
@@ -634,6 +645,8 @@ class CourseRepository(
                 )
             )
             if (listPhaseDate.isNotEmpty()) {
+                lessonsCache[cacheKey] = listPhaseDate
+                lessonsCache[programId] = listPhaseDate
                 LessonCacheManager.saveLessons(listPhaseDate, programId = programId)
                 return listPhaseDate
             }
@@ -657,6 +670,8 @@ class CourseRepository(
             )
         )
         if (listDateOnly.isNotEmpty()) {
+            lessonsCache[cacheKey] = listDateOnly
+            lessonsCache[programId] = listDateOnly
             LessonCacheManager.saveLessons(listDateOnly, programId = programId)
             return listDateOnly
         }

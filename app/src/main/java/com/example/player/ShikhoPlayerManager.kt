@@ -117,37 +117,36 @@ object ShikhoPlayerManager {
     }
 
     /**
-     * Aggressive YouTube/Facebook style LoadControl:
-     * - 500ms initial buffer for instant 0-second video playback start.
-     * - 30,000ms (30s) min buffer to ensure zero stuttering during temporary network dips.
-     * - 120,000ms (2 minutes) max buffer ahead to aggressively utilize full available mobile/wifi bandwidth.
-     * - 30,000ms (30s) back buffer cache in RAM for instant 0ms seeking backward.
-     * - 32MB target buffer pool allocation.
+     * Optimized Smooth LoadControl:
+     * - 1,000ms initial buffer for instant video playback start.
+     * - 15,000ms (15s) min buffer to ensure zero stuttering during temporary network dips.
+     * - 60,000ms (1 minute) max buffer ahead to smoothly stream without memory starvation.
+     * - 2,000ms buffer after rebuffer for lightning-fast recovery from network dips.
+     * - Dynamic target buffer allocation (no fixed 32MB cap that starves long lectures).
      */
     fun createAggressiveLoadControl(): DefaultLoadControl {
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 30_000,
-                /* maxBufferMs = */ 120_000,
-                /* bufferForPlaybackMs = */ 500,
-                /* bufferForPlaybackAfterRebufferMs = */ 1_500
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 60_000,
+                /* bufferForPlaybackMs = */ 1_000,
+                /* bufferForPlaybackAfterRebufferMs = */ 2_000
             )
             .setBackBuffer(
-                /* backBufferDurationMs = */ 30_000,
+                /* backBufferDurationMs = */ 15_000,
                 /* retainBackBufferFromKeyframe = */ true
             )
-            .setTargetBufferBytes(32 * 1024 * 1024)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
     }
 
     /**
-     * High-speed initial bandwidth meter (defaults to 12 Mbps estimate) so video immediately
-     * opens wide network pipelines instead of starting at throttled bitrates.
+     * Initial bandwidth meter (defaults to 2.5 Mbps estimate for reliable 720p HD start)
+     * so video opens smoothly and dynamically scales without choking mobile networks.
      */
     fun createBandwidthMeter(context: Context): DefaultBandwidthMeter {
         return DefaultBandwidthMeter.Builder(context)
-            .setInitialBitrateEstimate(12_000_000L)
+            .setInitialBitrateEstimate(2_500_000L)
             .build()
     }
 

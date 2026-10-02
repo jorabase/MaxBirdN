@@ -631,18 +631,41 @@ fun PlayerControlsOverlay(
                 }
 
                 // ---------------------------------------------------------
-                // CENTER CONTROLS (Only Hero Play/Pause Button - 10s buttons removed)
+                // CENTER CONTROLS (Hero Play/Pause + Fast 10s Rewind/Forward)
                 // ---------------------------------------------------------
-                Box(
+                Row(
                     modifier = Modifier.align(Alignment.Center),
-                    contentAlignment = Alignment.Center
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(if (isFullscreen) 36.dp else 22.dp)
                 ) {
+                    if (!isLive) {
+                        // Quick 10s Rewind
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.55f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .size(if (isFullscreen) 52.dp else 42.dp)
+                                .clip(CircleShape)
+                                .clickable { onSeekBack() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Replay10,
+                                    contentDescription = "১০ সেকেন্ড পেছনে",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
+                                )
+                            }
+                        }
+                    }
+
                     if (isBuffering) {
                         Surface(
                             shape = CircleShape,
                             color = Color.Black.copy(alpha = 0.65f),
                             border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.35f)),
-                            modifier = Modifier.size(if (isFullscreen) 64.dp else 52.dp)
+                            modifier = Modifier.size(if (isFullscreen) 68.dp else 56.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
@@ -669,6 +692,28 @@ fun PlayerControlsOverlay(
                                     contentDescription = if (isPlaying) "পজ" else "প্লে",
                                     tint = Color(0xFF0F172A),
                                     modifier = Modifier.size(if (isFullscreen) 38.dp else 32.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    if (!isLive) {
+                        // Quick 10s Forward
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.55f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .size(if (isFullscreen) 52.dp else 42.dp)
+                                .clip(CircleShape)
+                                .clickable { onSeekForward() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Forward10,
+                                    contentDescription = "১০ সেকেন্ড সামনে",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
                                 )
                             }
                         }
@@ -761,11 +806,45 @@ fun PlayerControlsOverlay(
                             (bufferedPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
                         } else 0f
 
-                        // Interactive Progress Slider with secondary buffered track
+                        // Floating Seek Preview Tooltip when dragging
+                        if (isDraggingSlider) {
+                            val currentFormatted = ShikhoPlayerManager.formatTime(displayPosition, true)
+                            val totalFormatted = ShikhoPlayerManager.formatTime(totalDuration, true)
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFF0F172A).copy(alpha = 0.95f),
+                                border = BorderStroke(1.2.dp, Color(0xFF38BDF8)),
+                                shadowElevation = 10.dp,
+                                modifier = Modifier
+                                    .padding(bottom = 6.dp)
+                                    .align(Alignment.CenterHorizontally)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = Color(0xFF38BDF8),
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "$currentFormatted / $totalFormatted",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
+                        // Interactive Progress Slider with generous 44dp touch area
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(26.dp),
+                                .height(44.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             // Secondary Track for Buffering visualization
@@ -785,15 +864,16 @@ fun PlayerControlsOverlay(
                                 )
                             }
 
-                            // Interactive M3 Slider
+                            // Interactive M3 Slider with smooth thumb
                             Slider(
                                 value = sliderValue,
                                 onValueChange = { fraction ->
+                                    if (!isDraggingSlider) {
+                                        val target = (fraction * totalDuration).toLong().coerceIn(0L, totalDuration)
+                                        onSeekStarted(target)
+                                    }
                                     isDraggingSlider = true
                                     dragProgressFraction = fraction
-                                    val target = (fraction * totalDuration).toLong().coerceIn(0L, totalDuration)
-                                    onSeekStarted(target)
-                                    onSeekChanged(target)
                                 },
                                 onValueChangeFinished = {
                                     val target = (dragProgressFraction * totalDuration).toLong().coerceIn(0L, totalDuration)
