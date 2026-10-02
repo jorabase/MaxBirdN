@@ -35,6 +35,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerControlsOverlay(
     title: String,
@@ -840,31 +842,31 @@ fun PlayerControlsOverlay(
                             }
                         }
 
-                        // Interactive Progress Slider with generous 44dp touch area
+                        // Interactive Progress Slider with generous 56dp touch area & smooth dragging
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(44.dp),
+                                .height(56.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Secondary Track for Buffering visualization
+                            // Secondary Track for 2-3 minutes pre-buffer visualization
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 6.dp)
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(Color.White.copy(alpha = 0.22f))
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color.White.copy(alpha = 0.20f))
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth(bufferedFraction)
                                         .fillMaxHeight()
-                                        .background(Color.White.copy(alpha = 0.48f))
+                                        .background(Color(0xFF38BDF8).copy(alpha = 0.55f))
                                 )
                             }
 
-                            // Interactive M3 Slider with smooth thumb
+                            // Interactive M3 Slider with smooth thumb & responsive seeking
                             Slider(
                                 value = sliderValue,
                                 onValueChange = { fraction ->
@@ -885,6 +887,15 @@ fun PlayerControlsOverlay(
                                     activeTrackColor = Color(0xFFE11D48),
                                     inactiveTrackColor = Color.Transparent
                                 ),
+                                thumb = {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color.White,
+                                        shadowElevation = 8.dp,
+                                        border = BorderStroke(2.dp, Color(0xFFE11D48)),
+                                        modifier = Modifier.size(if (isDraggingSlider) 22.dp else 16.dp)
+                                    ) {}
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

@@ -47,6 +47,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -169,9 +170,13 @@ fun VideoPlayerScreen(
         effectivePlaybackUrl.startsWith("/") || effectivePlaybackUrl.startsWith("file://")
     }
 
+    // TrackSelector with AdaptiveTrackSelection for dynamic bitrate adaptation
+    val trackSelector = remember { DefaultTrackSelector(context, ShikhoPlayerManager.createAdaptiveTrackSelectionFactory()) }
+
     // ExoPlayer instance configured with Shikho CDN headers or Local Offline source
     val exoPlayer = remember(context, effectivePlaybackUrl) {
-        ShikhoPlayerManager.buildExoPlayer(context).apply {
+        ShikhoPlayerManager.buildExoPlayer(context, trackSelector).apply {
+            val dbProg = videoProgressManager.getCachedProgress(videoKey)
             val mediaSource = ShikhoPlayerManager.createMediaSource(
                 url = effectivePlaybackUrl,
                 isLive = isLive && !isPlayingOffline,
@@ -181,6 +186,9 @@ fun VideoPlayerScreen(
                 lastPlaybackPositionMs
             } else if (pendingResumeSeekMs > 1000L) {
                 pendingResumeSeekMs
+            } else if (dbProg != null && dbProg.isEligibleForResume) {
+                pendingResumeSeekMs = dbProg.positionMs
+                dbProg.positionMs
             } else 0L
 
             if (targetResumeMs > 1000L) {
@@ -333,12 +341,13 @@ fun VideoPlayerScreen(
                 if (state == Player.STATE_READY) {
                     val dur = exoPlayer.duration.coerceAtLeast(0L)
                     totalDuration = dur
-                    if (pendingResumeSeekMs > 1000L && !hasAutoResumed) {
-                        val target = pendingResumeSeekMs
-                        pendingResumeSeekMs = 0L
+                    val target = if (pendingResumeSeekMs > 1000L) pendingResumeSeekMs else lastPlaybackPositionMs
+                    if (target > 1000L && !hasAutoResumed) {
                         hasAutoResumed = true
-                        if (target > 0L && (dur <= 0L || target < dur - 5000L)) {
-                            exoPlayer.seekTo(target)
+                        if (dur <= 0L || target < dur - 3000L) {
+                            if (Math.abs(exoPlayer.currentPosition - target) > 1500L) {
+                                exoPlayer.seekTo(target)
+                            }
                             currentPosition = target
                             val timeFormatted = ShikhoPlayerManager.formatTime(target, true)
                             resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"

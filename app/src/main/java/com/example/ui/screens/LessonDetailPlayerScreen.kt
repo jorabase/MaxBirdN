@@ -281,7 +281,7 @@ fun LessonDetailPlayerScreen(
     var videoPan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
     // ExoPlayer Instance with Shikho CDN headers & DefaultTrackSelector for HLS quality selection
-    val trackSelector = remember { DefaultTrackSelector(context) }
+    val trackSelector = remember { DefaultTrackSelector(context, ShikhoPlayerManager.createAdaptiveTrackSelectionFactory()) }
     val exoPlayer = remember(classType) {
         ShikhoPlayerManager.buildExoPlayer(context, trackSelector, classType).apply {
             repeatMode = if (classType == PlayerClassType.ANIMATED) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
@@ -480,14 +480,25 @@ fun LessonDetailPlayerScreen(
 
             isBuffering = true
             try {
-                val mediaSource = ShikhoPlayerManager.createMediaSource(urlToPlay, isLive = false)
+                val dbProg = videoProgressManager.getCachedProgress(videoKey)
+                    ?: videoProgressManager.getProgress(videoKey)
                 val targetResumeMs = if (lastPlaybackPositionMs > 1000L) {
                     lastPlaybackPositionMs
                 } else if (pendingResumeSeekMs > 1000L) {
                     pendingResumeSeekMs
+                } else if (dbProg != null && dbProg.isEligibleForResume) {
+                    pendingResumeSeekMs = dbProg.positionMs
+                    dbProg.positionMs
                 } else {
                     0L
                 }
+
+                val mediaSource = ShikhoPlayerManager.createMediaSource(
+                    url = urlToPlay,
+                    isLive = false,
+                    classType = classType,
+                    context = context
+                )
                 if (targetResumeMs > 1000L) {
                     exoPlayer.setMediaSource(mediaSource, targetResumeMs)
                 } else {
@@ -552,12 +563,13 @@ fun LessonDetailPlayerScreen(
                         totalDuration = dur
 
                         // Guaranteed seek when media is fully prepared
-                        if (pendingResumeSeekMs > 1000L && !hasAutoResumed) {
-                            val target = pendingResumeSeekMs
-                            pendingResumeSeekMs = 0L
+                        val target = if (pendingResumeSeekMs > 1000L) pendingResumeSeekMs else lastPlaybackPositionMs
+                        if (target > 1000L && !hasAutoResumed) {
                             hasAutoResumed = true
-                            if (target > 0L && (dur <= 0L || target < dur - 5000L)) {
-                                exoPlayer.seekTo(target)
+                            if (dur <= 0L || target < dur - 3000L) {
+                                if (Math.abs(exoPlayer.currentPosition - target) > 1500L) {
+                                    exoPlayer.seekTo(target)
+                                }
                                 currentPosition = target
                                 val timeFormatted = ShikhoPlayerManager.formatTime(target, true)
                                 resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"

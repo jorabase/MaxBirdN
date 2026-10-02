@@ -472,6 +472,15 @@ class CourseRepository(
         lessonsCache[cacheKey]?.let { cached ->
             if (cached.isNotEmpty()) return cached
         }
+        lessonsCache[programId]?.let { cached ->
+            if (cached.isNotEmpty()) return cached
+        }
+        val cachedFromManager = LessonCacheManager.getAllLessons().filter { it.program_id == programId || it.program_id.isNullOrBlank() }
+        if (cachedFromManager.isNotEmpty()) {
+            lessonsCache[cacheKey] = cachedFromManager
+            lessonsCache[programId] = cachedFromManager
+            return cachedFromManager
+        }
 
         val cal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Dhaka"))
         val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {

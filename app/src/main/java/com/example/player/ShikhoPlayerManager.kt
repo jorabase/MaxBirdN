@@ -9,8 +9,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -77,6 +81,27 @@ object ShikhoPlayerManager {
     const val DEFAULT_REFERER = "https://shikho.com/"
     const val DEFAULT_USER_AGENT = "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)"
 
+    // Singleton Persistent LRU Disk Cache (512MB) for YouTube-style pre-buffering
+    @Volatile
+    private var simpleCache: SimpleCache? = null
+    private val cacheLock = Any()
+
+    fun getMediaCache(context: Context): SimpleCache {
+        return simpleCache ?: synchronized(cacheLock) {
+            simpleCache ?: run {
+                val cacheDir = File(context.applicationContext.cacheDir, "media_stream_cache")
+                if (!cacheDir.exists()) {
+                    cacheDir.mkdirs()
+                }
+                val evictor = LeastRecentlyUsedCacheEvictor(512L * 1024L * 1024L) // 512MB LRU Disk Cache
+                val databaseProvider = StandaloneDatabaseProvider(context.applicationContext)
+                SimpleCache(cacheDir, evictor, databaseProvider).also {
+                    simpleCache = it
+                }
+            }
+        }
+    }
+
     // High-performance streaming HTTP client with large connection pool and keep-alive
     val streamingHttpClient: OkHttpClient by lazy {
         val dispatcher = Dispatcher().apply {
@@ -117,23 +142,38 @@ object ShikhoPlayerManager {
     }
 
     /**
-     * Optimized Smooth LoadControl:
-     * - 1,000ms initial buffer for instant video playback start.
-     * - 15,000ms (15s) min buffer to ensure zero stuttering during temporary network dips.
-     * - 60,000ms (1 minute) max buffer ahead to smoothly stream without memory starvation.
-     * - 2,000ms buffer after rebuffer for lightning-fast recovery from network dips.
-     * - Dynamic target buffer allocation (no fixed 32MB cap that starves long lectures).
+     * Creates a CacheDataSource.Factory that transparently writes stream chunks to disk cache
+     * as they arrive from OkHttp, giving instant playback on seek-back and offline continuity.
+     */
+    fun createCacheDataSourceFactory(
+        context: Context,
+        upstreamFactory: DataSource.Factory = createHttpDataSourceFactory()
+    ): DataSource.Factory {
+        val cache = getMediaCache(context)
+        return CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(upstreamFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    /**
+     * YouTube-Style Aggressive Continuous Pre-Buffer LoadControl:
+     * - 800ms initial buffer for lightning-fast playback startup.
+     * - 45,000ms (45s) min buffer to absorb long network drops.
+     * - 180,000ms (3 minutes) continuous buffer ahead so video never stalls every few seconds.
+     * - 1,800ms buffer after rebuffer for quick recovery.
+     * - 30,000ms (30s) rewind cushion retained in RAM from keyframe.
      */
     fun createAggressiveLoadControl(): DefaultLoadControl {
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 15_000,
-                /* maxBufferMs = */ 60_000,
-                /* bufferForPlaybackMs = */ 1_000,
-                /* bufferForPlaybackAfterRebufferMs = */ 2_000
+                /* minBufferMs = */ 45_000,
+                /* maxBufferMs = */ 180_000,
+                /* bufferForPlaybackMs = */ 800,
+                /* bufferForPlaybackAfterRebufferMs = */ 1_800
             )
             .setBackBuffer(
-                /* backBufferDurationMs = */ 15_000,
+                /* backBufferDurationMs = */ 30_000,
                 /* retainBackBufferFromKeyframe = */ true
             )
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -141,24 +181,39 @@ object ShikhoPlayerManager {
     }
 
     /**
-     * Initial bandwidth meter (defaults to 2.5 Mbps estimate for reliable 720p HD start)
-     * so video opens smoothly and dynamically scales without choking mobile networks.
+     * Dynamic Adaptive Bitrate (ABR) BandwidthMeter seeded with 1.5 Mbps estimate (~480p default seed)
+     * so video opens instantly without cellular choking, then dynamically steps up to 720p/1080p
+     * or down to 360p as real-time network throughput is continuously measured.
      */
     fun createBandwidthMeter(context: Context): DefaultBandwidthMeter {
         return DefaultBandwidthMeter.Builder(context)
-            .setInitialBitrateEstimate(2_500_000L)
+            .setInitialBitrateEstimate(1_500_000L) // 1.5 Mbps seed (~480p)
             .build()
     }
 
     /**
+     * Adaptive Track Selection Factory configured for smooth, continuous bitrate scaling:
+     * - 8s requirement before stepping up quality (prevents premature quality spikes).
+     * - 2s rapid response to step down quality on network drops (prevents buffering stalls).
+     */
+    fun createAdaptiveTrackSelectionFactory(): AdaptiveTrackSelection.Factory {
+        return AdaptiveTrackSelection.Factory(
+            /* minDurationForQualityIncreaseMs = */ 8_000,
+            /* maxDurationForQualityDecreaseMs = */ 2_000,
+            /* minDurationToRetainAfterDiscardMs = */ 15_000,
+            /* bandwidthFraction = */ 0.75f
+        )
+    }
+
+    /**
      * Resilient LoadErrorHandlingPolicy: Automatically retries up to 12 times with progressive
-     * backoff during temporary network dips, Wi-Fi glitches, or cellular cell-handshakes so
+     * backoff during temporary network dips, Wi-Fi glitches, or cellular handshakes so
      * 2-3 hour long lecture classes run smoothly without fatal buffering aborts.
      */
     fun createResilientLoadErrorHandlingPolicy(): androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy {
         return object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(12) {
             override fun getRetryDelayMsFor(loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                return (loadErrorInfo.errorCount * 600L).coerceIn(400L, 3000L)
+                return (loadErrorInfo.errorCount * 500L).coerceIn(300L, 2500L)
             }
             override fun getMinimumLoadableRetryCount(dataType: Int): Int = 12
         }
@@ -166,13 +221,13 @@ object ShikhoPlayerManager {
 
     /**
      * Creates a MediaSource properly configured for HLS (.m3u8), standard MP4 streams,
-     * offline local files, and Live streaming with chunkless preparation for lightning-fast start.
+     * offline local files, and disk cache backed streaming with chunkless preparation for instant start.
      */
     fun createMediaSource(
         url: String,
         isLive: Boolean = false,
         classType: PlayerClassType = if (isLive) PlayerClassType.LIVE else PlayerClassType.RECORDED_LECTURE,
-        dataSourceFactory: DataSource.Factory = createHttpDataSourceFactory(),
+        dataSourceFactory: DataSource.Factory? = null,
         context: Context? = null
     ): MediaSource {
         val isLocalFile = url.startsWith("/") || url.startsWith("file://")
@@ -203,8 +258,12 @@ object ShikhoPlayerManager {
 
         val effectiveDataSourceFactory: DataSource.Factory = if (isLocalFile && context != null) {
             DefaultDataSource.Factory(context)
-        } else {
+        } else if (dataSourceFactory != null) {
             dataSourceFactory
+        } else if (context != null) {
+            createCacheDataSourceFactory(context)
+        } else {
+            createHttpDataSourceFactory()
         }
 
         val retryPolicy = createResilientLoadErrorHandlingPolicy()
@@ -223,16 +282,18 @@ object ShikhoPlayerManager {
 
     /**
      * Builds and configures an ExoPlayer instance with YouTube-level zero-buffering LoadControl,
-     * BandwidthMeter, OkHttp connection pooling, DefaultTrackSelector, and full AudioAttributes.
+     * 512MB SimpleCache disk backing, BandwidthMeter, AdaptiveTrackSelector (480p seed),
+     * OkHttp connection pooling, and full AudioAttributes.
      */
     fun buildExoPlayer(
         context: Context,
         trackSelector: DefaultTrackSelector? = null,
         classType: PlayerClassType = PlayerClassType.RECORDED_LECTURE,
-        dataSourceFactory: DataSource.Factory = createHttpDataSourceFactory()
+        dataSourceFactory: DataSource.Factory? = null
     ): ExoPlayer {
         val retryPolicy = createResilientLoadErrorHandlingPolicy()
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        val effectiveDataSourceFactory = dataSourceFactory ?: createCacheDataSourceFactory(context)
+        val mediaSourceFactory = DefaultMediaSourceFactory(effectiveDataSourceFactory)
             .setLoadErrorHandlingPolicy(retryPolicy)
         val seekIncrement = if (classType == PlayerClassType.ANIMATED) 5000L else 10000L
         val audioAttributes = AudioAttributes.Builder()
@@ -242,7 +303,7 @@ object ShikhoPlayerManager {
 
         val bandwidthMeter = createBandwidthMeter(context)
         val loadControl = createAggressiveLoadControl()
-        val effectiveTrackSelector = trackSelector ?: DefaultTrackSelector(context, AdaptiveTrackSelection.Factory())
+        val effectiveTrackSelector = trackSelector ?: DefaultTrackSelector(context, createAdaptiveTrackSelectionFactory())
 
         val builder = ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
