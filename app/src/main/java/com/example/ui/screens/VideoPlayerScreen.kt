@@ -134,6 +134,7 @@ fun VideoPlayerScreen(
 
     var hasAutoResumed by remember(videoKey) { mutableStateOf(false) }
     var resumeNotificationText by remember { mutableStateOf<String?>(null) }
+    var lastPlaybackPositionMs by remember { mutableLongStateOf(0L) }
 
     // Quick One-Tap Mute / Unmute State
     var isMuted by remember { mutableStateOf(false) }
@@ -173,6 +174,9 @@ fun VideoPlayerScreen(
                 context = context
             )
             setMediaSource(mediaSource)
+            if (lastPlaybackPositionMs > 1000L) {
+                seekTo(lastPlaybackPositionMs)
+            }
             prepare()
             playWhenReady = true
         }
@@ -389,7 +393,11 @@ fun VideoPlayerScreen(
         while (true) {
             if (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.playbackState == Player.STATE_BUFFERING) {
                 if (!isSeeking) {
-                    currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
+                    val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                    currentPosition = pos
+                    if (pos > 1000L) {
+                        lastPlaybackPositionMs = pos
+                    }
                 }
                 bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
                 totalDuration = exoPlayer.duration.coerceAtLeast(0L)
@@ -400,6 +408,48 @@ fun VideoPlayerScreen(
                 }
             }
             delay(500)
+        }
+    }
+
+    // Auto-reconnect & resume on network restoration
+    DisposableEffect(context, effectivePlaybackUrl) {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                coroutineScope.launch {
+                    if (exoPlayer.playerError != null || (!exoPlayer.isPlaying && isBuffering)) {
+                        isBuffering = true
+                        try {
+                            if (effectivePlaybackUrl.isNotBlank()) {
+                                val mediaSource = ShikhoPlayerManager.createMediaSource(
+                                    url = effectivePlaybackUrl,
+                                    isLive = isLive && !isPlayingOffline,
+                                    context = context
+                                )
+                                exoPlayer.setMediaSource(mediaSource)
+                                if (lastPlaybackPositionMs > 1000L) {
+                                    exoPlayer.seekTo(lastPlaybackPositionMs)
+                                }
+                                exoPlayer.prepare()
+                                exoPlayer.playWhenReady = true
+                                Toast.makeText(context, "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            connectivityManager?.registerNetworkCallback(request, networkCallback)
+        } catch (_: Throwable) {}
+
+        onDispose {
+            try {
+                connectivityManager?.unregisterNetworkCallback(networkCallback)
+            } catch (_: Throwable) {}
         }
     }
 
@@ -483,28 +533,12 @@ fun VideoPlayerScreen(
         PipHelper.enterPipMode(act, isPlaying, Rational(16, 9))
     }
 
-    // Picture In Picture View Mode (Compact floating window with gestures)
+    // Picture In Picture View Mode (Compact floating window)
     if (isPipMode) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .pointerInput(totalDuration) {
-                    val componentWidth = size.width
-                    detectTapGestures(
-                        onDoubleTap = { offset ->
-                            if (offset.x < componentWidth * 0.4f) {
-                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                exoPlayer.seekTo(target)
-                            } else if (offset.x > componentWidth * 0.6f) {
-                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(totalDuration)
-                                exoPlayer.seekTo(target)
-                            } else {
-                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                            }
-                        }
-                    )
-                }
         ) {
             AndroidView(
                 factory = { ctx ->

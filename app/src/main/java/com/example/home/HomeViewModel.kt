@@ -307,13 +307,12 @@ class HomeViewModel(
             }
 
             try {
-                // 1. Fetch Profile if possible
-                fetchUserProfile()
+                val j1 = viewModelScope.launch { fetchUserProfile() }
+                val j2 = viewModelScope.launch { fetchAcademicPrograms() }
+                j1.join()
+                j2.join()
 
-                // 2. Fetch Academic Programs
-                fetchAcademicPrograms()
-                
-                // 3. Fetch Weekly Routine
+                // 3. Fetch Weekly Routine for active program
                 val active = _uiState.value.activeProgram
                 if (active != null) {
                     fetchWeeklyRoutine(active)

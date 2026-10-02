@@ -195,131 +195,147 @@ interface ShikhoApiService {
     companion object {
         private const val BASE_URL = "https://api.shikho.com"
 
+        @Volatile
+        private var cachedInstance: ShikhoApiService? = null
+
         fun create(sessionManager: SessionManager): ShikhoApiService {
-            val logging = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
-            }
+            cachedInstance?.let { return it }
 
-            val headerInterceptor = Interceptor { chain ->
-                val token = sessionManager.getAccessToken()
-                val reqBuilder = chain.request().newBuilder()
-                    .header("Accept", "application/json")
-                    .header("Content-Type", "application/json")
-                    .header("X-User-Timezone", "Asia/Dhaka")
-                    .header("Build-Version", "(607) 6.0.7")
-                    .header("User-Agent", "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)")
-                
-                if (!token.isNullOrBlank()) {
-                    reqBuilder.header("Authorization", "Bearer $token")
+            return synchronized(this) {
+                cachedInstance?.let { return it }
+
+                val headerInterceptor = Interceptor { chain ->
+                    val token = sessionManager.getAccessToken()
+                    val reqBuilder = chain.request().newBuilder()
+                        .header("Accept", "application/json")
+                        .header("Content-Type", "application/json")
+                        .header("X-User-Timezone", "Asia/Dhaka")
+                        .header("Build-Version", "(607) 6.0.7")
+                        .header("User-Agent", "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)")
+
+                    if (!token.isNullOrBlank()) {
+                        reqBuilder.header("Authorization", "Bearer $token")
+                    }
+
+                    chain.proceed(reqBuilder.build())
                 }
-                
-                chain.proceed(reqBuilder.build())
-            }
 
-            val enrolmentMockInterceptor = Interceptor { chain ->
-                val origRequest = chain.request()
-                val response = chain.proceed(origRequest)
-                if (!response.isSuccessful) {
+                val enrolmentMockInterceptor = Interceptor { chain ->
+                    val origRequest = chain.request()
+                    val response = chain.proceed(origRequest)
+                    if (!response.isSuccessful) {
+                        try {
+                            val peek = response.peekBody(1024 * 32).string()
+                            if (response.code == 401) {
+                                android.util.Log.d("ShikhoApiService", "HTTP 401 unauthorized on ${origRequest.url}: $peek")
+                            } else {
+                                android.util.Log.e("ShikhoApiService", "HTTP ${response.code} error on ${origRequest.url}: $peek")
+                            }
+                        } catch (_: Exception) {}
+                    }
                     try {
-                        val peek = response.peekBody(1024 * 64).string()
-                        if (response.code == 401) {
-                            android.util.Log.d("ShikhoApiService", "HTTP 401 unauthorized on ${origRequest.url}: $peek")
-                        } else {
-                            android.util.Log.e("ShikhoApiService", "HTTP ${response.code} error on ${origRequest.url}: $peek")
+                        val body = response.body
+                        if (response.isSuccessful && body != null) {
+                            val contentType = body.contentType()
+                            val jsonString = body.string()
+
+                            val modifiedString = if (jsonString.contains("has_enrolment") || jsonString.contains("is_active") || 
+                                jsonString.contains("is_locked") || jsonString.contains("is_enrolled") || jsonString.contains("is_purchased") ||
+                                jsonString.contains("access_level") || jsonString.contains("is_expired") || jsonString.contains("show_trial") ||
+                                jsonString.contains("is_free")) {
+                                jsonString
+                                    .replace(Regex("\"has_enrolment\"\\s*:\\s*false"), "\"has_enrolment\": true")
+                                    .replace(Regex("\"has_free_trial_enrolment\"\\s*:\\s*false"), "\"has_free_trial_enrolment\": true")
+                                    .replace(Regex("\"is_active\"\\s*:\\s*false"), "\"is_active\": true")
+                                    .replace(Regex("\"is_enrolled\"\\s*:\\s*false"), "\"is_enrolled\": true")
+                                    .replace(Regex("\"is_purchased\"\\s*:\\s*false"), "\"is_purchased\": true")
+                                    .replace(Regex("\"is_locked\"\\s*:\\s*true"), "\"is_locked\": false")
+                                    .replace(Regex("\"is_free\"\\s*:\\s*false"), "\"is_free\": true")
+                                    .replace(Regex("\"is_expired\"\\s*:\\s*true"), "\"is_expired\": false")
+                                    .replace(Regex("\"show_trial\"\\s*:\\s*true"), "\"show_trial\": false")
+                                    .replace(Regex("\"access_level\"\\s*:\\s*\"[^\"]+\""), "\"access_level\": \"Full\"")
+                                    .replace(Regex("\"type\"\\s*:\\s*\"FullApTrial\""), "\"type\": \"Paid\"")
+                                    .replace(Regex("\"enroled_subscription_division\"\\s*:\\s*\"[^\"]+\""), "\"enroled_subscription_division\": \"full\"")
+                            } else {
+                                jsonString
+                            }
+
+                            val newBody = modifiedString.toResponseBody(contentType)
+                            return@Interceptor response.newBuilder().body(newBody).build()
                         }
                     } catch (_: Exception) {}
+                    response
                 }
-                try {
-                    val body = response.body
-                    if (response.isSuccessful && body != null) {
-                        val contentType = body.contentType()
-                        val jsonString = body.string()
-                        
-                        val modifiedString = if (jsonString.contains("has_enrolment") || jsonString.contains("is_active") || 
-                            jsonString.contains("is_locked") || jsonString.contains("is_enrolled") || jsonString.contains("is_purchased") ||
-                            jsonString.contains("access_level") || jsonString.contains("is_expired") || jsonString.contains("show_trial") ||
-                            jsonString.contains("is_free")) {
-                            jsonString
-                                .replace(Regex("\"has_enrolment\"\\s*:\\s*false"), "\"has_enrolment\": true")
-                                .replace(Regex("\"has_free_trial_enrolment\"\\s*:\\s*false"), "\"has_free_trial_enrolment\": true")
-                                .replace(Regex("\"is_active\"\\s*:\\s*false"), "\"is_active\": true")
-                                .replace(Regex("\"is_enrolled\"\\s*:\\s*false"), "\"is_enrolled\": true")
-                                .replace(Regex("\"is_purchased\"\\s*:\\s*false"), "\"is_purchased\": true")
-                                .replace(Regex("\"is_locked\"\\s*:\\s*true"), "\"is_locked\": false")
-                                .replace(Regex("\"is_free\"\\s*:\\s*false"), "\"is_free\": true")
-                                .replace(Regex("\"is_expired\"\\s*:\\s*true"), "\"is_expired\": false")
-                                .replace(Regex("\"show_trial\"\\s*:\\s*true"), "\"show_trial\": false")
-                                .replace(Regex("\"access_level\"\\s*:\\s*\"[^\"]+\""), "\"access_level\": \"Full\"")
-                                .replace(Regex("\"type\"\\s*:\\s*\"FullApTrial\""), "\"type\": \"Paid\"")
-                                .replace(Regex("\"enroled_subscription_division\"\\s*:\\s*\"[^\"]+\""), "\"enroled_subscription_division\": \"full\"")
-                        } else {
-                            jsonString
-                        }
-                        
-                        val newBody = modifiedString.toResponseBody(contentType)
-                        return@Interceptor response.newBuilder().body(newBody).build()
-                    }
-                } catch (_: Exception) {}
-                response
-            }
 
-            val auth401Interceptor = Interceptor { chain ->
-                val request = chain.request()
-                val response = chain.proceed(request)
-                if (response.code == 401 || response.code == 403) {
-                    val activeToken = sessionManager.getAccessToken()
-                    if (!activeToken.isNullOrBlank()) {
-                        val url = request.url.toString()
-                        if (!url.contains("/check-user") && !url.contains("/send-sms") && !url.contains("/verify-otp") && !url.contains("/verify-pin") && !url.contains("/login")) {
-                            android.util.Log.w("ShikhoApiService", "HTTP ${response.code} Unauthorized detected for active session. Triggering auto-logout.")
-                            sessionManager.notifyUnauthorized()
-                        }
-                    }
-                }
-                response
-            }
-
-            val client = OkHttpClient.Builder()
-                .addInterceptor(headerInterceptor)
-                .addInterceptor(enrolmentMockInterceptor)
-                .addInterceptor(auth401Interceptor)
-                .addInterceptor(logging)
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .build()
-
-            val moshi = Moshi.Builder()
-                .add(FlexibleIntAdapter())
-                .add(FlexibleLongAdapter())
-                .add(object {
-                    @FromJson
-                    fun fromJson(reader: JsonReader): String? {
-                        return when (reader.peek()) {
-                            JsonReader.Token.NULL -> reader.nextNull()
-                            JsonReader.Token.STRING,
-                            JsonReader.Token.NUMBER -> reader.nextString()
-                            JsonReader.Token.BOOLEAN -> reader.nextBoolean().toString()
-                            else -> {
-                                reader.skipValue()
-                                null
+                val auth401Interceptor = Interceptor { chain ->
+                    val request = chain.request()
+                    val response = chain.proceed(request)
+                    if (response.code == 401 || response.code == 403) {
+                        val activeToken = sessionManager.getAccessToken()
+                        if (!activeToken.isNullOrBlank()) {
+                            val url = request.url.toString()
+                            if (!url.contains("/check-user") && !url.contains("/send-sms") && !url.contains("/verify-otp") && !url.contains("/verify-pin") && !url.contains("/login")) {
+                                android.util.Log.w("ShikhoApiService", "HTTP ${response.code} Unauthorized detected for active session. Triggering auto-logout.")
+                                sessionManager.notifyUnauthorized()
                             }
                         }
                     }
+                    response
+                }
 
-                    @ToJson
-                    fun toJson(writer: JsonWriter, value: String?) {
-                        writer.value(value)
-                    }
-                })
-                .addLast(KotlinJsonAdapterFactory())
-                .build()
+                val dispatcher = okhttp3.Dispatcher().apply {
+                    maxRequests = 128
+                    maxRequestsPerHost = 64
+                }
 
-            return Retrofit.Builder()
-                .baseUrl(BASE_URL)
-                .client(client)
-                .addConverterFactory(MoshiConverterFactory.create(moshi))
-                .build()
-                .create(ShikhoApiService::class.java)
+                val client = OkHttpClient.Builder()
+                    .dispatcher(dispatcher)
+                    .connectionPool(okhttp3.ConnectionPool(64, 5, TimeUnit.MINUTES))
+                    .addInterceptor(headerInterceptor)
+                    .addInterceptor(enrolmentMockInterceptor)
+                    .addInterceptor(auth401Interceptor)
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(20, TimeUnit.SECONDS)
+                    .writeTimeout(20, TimeUnit.SECONDS)
+                    .retryOnConnectionFailure(true)
+                    .build()
+
+                val moshi = Moshi.Builder()
+                    .add(FlexibleIntAdapter())
+                    .add(FlexibleLongAdapter())
+                    .add(object {
+                        @FromJson
+                        fun fromJson(reader: JsonReader): String? {
+                            return when (reader.peek()) {
+                                JsonReader.Token.NULL -> reader.nextNull()
+                                JsonReader.Token.STRING,
+                                JsonReader.Token.NUMBER -> reader.nextString()
+                                JsonReader.Token.BOOLEAN -> reader.nextBoolean().toString()
+                                else -> {
+                                    reader.skipValue()
+                                    null
+                                }
+                            }
+                        }
+
+                        @ToJson
+                        fun toJson(writer: JsonWriter, value: String?) {
+                            writer.value(value)
+                        }
+                    })
+                    .addLast(KotlinJsonAdapterFactory())
+                    .build()
+
+                val instance = Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .client(client)
+                    .addConverterFactory(MoshiConverterFactory.create(moshi))
+                    .build()
+                    .create(ShikhoApiService::class.java)
+
+                cachedInstance = instance
+                instance
+            }
         }
     }
 }

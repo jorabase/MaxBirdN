@@ -141,6 +141,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleNotificationIntent(intent)
+
+        // Seamless PiP to Fullscreen Transition:
+        // If the user clicks the app icon or re-enters the app from launcher / recents while PiP is active,
+        // bring the Activity back out of PiP mode to the foreground immediately!
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
+            val restoreIntent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            startActivity(restoreIntent)
+        }
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
@@ -170,6 +180,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            isPipModeState.value = isInPictureInPictureMode
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        @Suppress("DEPRECATION")
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        isPipModeState.value = isInPictureInPictureMode
     }
 
     override fun onPictureInPictureModeChanged(

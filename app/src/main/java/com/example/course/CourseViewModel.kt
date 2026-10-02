@@ -254,16 +254,17 @@ class CourseViewModel(
             lesson.id.takeIf { it.isNotBlank() },
             lesson.session_id?.takeIf { it.isNotBlank() }
         ).distinct()
-        val needsFetch = candidateIds.isNotEmpty() && (!hasDirectStream || lesson.attachments.isNullOrEmpty())
+        // If the lesson already has a playable URL, start playing immediately (0ms delay!)
+        val needsBlockingWait = !hasDirectStream && candidateIds.isNotEmpty()
 
         _uiState.update {
             it.copy(
                 selectedLesson = lesson,
-                isLessonDetailLoading = needsFetch
+                isLessonDetailLoading = needsBlockingWait
             )
         }
 
-        android.util.Log.d("LectureDebug", "selectLesson: ${lesson.title}, candidateIds: $candidateIds, hasDirectStream: $hasDirectStream, needsFetch: $needsFetch")
+        android.util.Log.d("LectureDebug", "selectLesson: ${lesson.title}, candidateIds: $candidateIds, hasDirectStream: $hasDirectStream, needsBlockingWait: $needsBlockingWait")
 
         if (candidateIds.isNotEmpty()) {
             viewModelScope.launch {
@@ -271,15 +272,17 @@ class CourseViewModel(
                     var liveClassData: AcademicProgramLiveClassItem? = null
                     var foundWorkingId: String? = null
 
-                    // Try candidate IDs until we find one that returns valid live class details
-                    for (cid in candidateIds) {
-                        val details = repository.getLiveClassDetails(cid)
+                    // Query candidate IDs concurrently in parallel for blazing-fast response
+                    val deferredList = candidateIds.map { cid ->
+                        async { cid to repository.getLiveClassDetails(cid) }
+                    }
+                    val results = deferredList.awaitAll()
+                    for ((cid, details) in results) {
                         if (details != null) {
                             if (liveClassData == null) {
                                 liveClassData = details
                                 foundWorkingId = cid
                             }
-                            // If this candidate ID gave us playback_url, prioritize it!
                             if (!details.playback_url.isNullOrBlank()) {
                                 liveClassData = details
                                 foundWorkingId = cid

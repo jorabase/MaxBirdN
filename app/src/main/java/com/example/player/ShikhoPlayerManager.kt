@@ -142,13 +142,27 @@ object ShikhoPlayerManager {
     }
 
     /**
-     * High-speed initial bandwidth meter (defaults to 8 Mbps estimate) so video immediately
+     * High-speed initial bandwidth meter (defaults to 12 Mbps estimate) so video immediately
      * opens wide network pipelines instead of starting at throttled bitrates.
      */
     fun createBandwidthMeter(context: Context): DefaultBandwidthMeter {
         return DefaultBandwidthMeter.Builder(context)
-            .setInitialBitrateEstimate(8_000_000L)
+            .setInitialBitrateEstimate(12_000_000L)
             .build()
+    }
+
+    /**
+     * Resilient LoadErrorHandlingPolicy: Automatically retries up to 12 times with progressive
+     * backoff during temporary network dips, Wi-Fi glitches, or cellular cell-handshakes so
+     * 2-3 hour long lecture classes run smoothly without fatal buffering aborts.
+     */
+    fun createResilientLoadErrorHandlingPolicy(): androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy {
+        return object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(12) {
+            override fun getRetryDelayMsFor(loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                return (loadErrorInfo.errorCount * 600L).coerceIn(400L, 3000L)
+            }
+            override fun getMinimumLoadableRetryCount(dataType: Int): Int = 12
+        }
     }
 
     /**
@@ -194,12 +208,16 @@ object ShikhoPlayerManager {
             dataSourceFactory
         }
 
+        val retryPolicy = createResilientLoadErrorHandlingPolicy()
+
         return if (isHls) {
             HlsMediaSource.Factory(effectiveDataSourceFactory)
                 .setAllowChunklessPreparation(true) // Immediate playback start without waiting
+                .setLoadErrorHandlingPolicy(retryPolicy)
                 .createMediaSource(mediaItem)
         } else {
             DefaultMediaSourceFactory(effectiveDataSourceFactory)
+                .setLoadErrorHandlingPolicy(retryPolicy)
                 .createMediaSource(mediaItem)
         }
     }
@@ -214,7 +232,9 @@ object ShikhoPlayerManager {
         classType: PlayerClassType = PlayerClassType.RECORDED_LECTURE,
         dataSourceFactory: DataSource.Factory = createHttpDataSourceFactory()
     ): ExoPlayer {
+        val retryPolicy = createResilientLoadErrorHandlingPolicy()
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            .setLoadErrorHandlingPolicy(retryPolicy)
         val seekIncrement = if (classType == PlayerClassType.ANIMATED) 5000L else 10000L
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)

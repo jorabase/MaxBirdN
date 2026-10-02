@@ -13,13 +13,36 @@ class CourseRepository(
     private val apiService: ShikhoApiService
 ) {
 
+    companion object {
+        private val programCache = java.util.concurrent.ConcurrentHashMap<String, AcademicProgramResponse>()
+        private val phasesCache = java.util.concurrent.ConcurrentHashMap<String, List<PhaseItem>>()
+        private val subjectsCache = java.util.concurrent.ConcurrentHashMap<String, AcademicProgramDetail>()
+        private val chaptersCache = java.util.concurrent.ConcurrentHashMap<String, List<AcademicChapterItem>>()
+        private val fallbackChaptersCache = java.util.concurrent.ConcurrentHashMap<String, List<AcademicChapterItem>>()
+        private val topicsCache = java.util.concurrent.ConcurrentHashMap<String, List<TopicFullItem>>()
+        private val lessonsCache = java.util.concurrent.ConcurrentHashMap<String, List<StudentLessonItem>>()
+        private val liveClassDetailsCache = java.util.concurrent.ConcurrentHashMap<String, AcademicProgramLiveClassItem>()
+        private val teacherCache = java.util.concurrent.ConcurrentHashMap<String, TeacherItem>()
+
+        fun clearCache() {
+            programCache.clear()
+            phasesCache.clear()
+            subjectsCache.clear()
+            chaptersCache.clear()
+            fallbackChaptersCache.clear()
+            topicsCache.clear()
+            lessonsCache.clear()
+            liveClassDetailsCache.clear()
+            teacherCache.clear()
+        }
+    }
+
     suspend fun getAcademicProgramByEnrollment(
         batchId: String? = null,
         className: String,
         group: String? = null,
         vendor: String = "BD"
     ): AcademicProgramResponse {
-        // C5-C8 এর ক্ষেত্রে group সবসময় "None" হতে হবে, C9-C12 এর জন্য Humanities/Science/Business_Studies
         val classUpper = className.uppercase()
         val formattedGroup = if (classUpper in listOf("C5", "C6", "C7", "C8", "C05", "C06", "C07", "C08")) {
             "None"
@@ -31,6 +54,9 @@ class CourseRepository(
                 else -> "None"
             }
         }
+
+        val cacheKey = "$batchId-$className-$formattedGroup-$vendor"
+        programCache[cacheKey]?.let { return it }
 
         val query = GraphQlQuery(
             operationName = "GetAcademicProgram",
@@ -100,7 +126,11 @@ class CourseRepository(
                 "vendor" to vendor
             )
         )
-        return apiService.getAcademicProgram(query)
+        val response = apiService.getAcademicProgram(query)
+        if (response.data?.listAcademicProgramByEnrollment?.enrolled_programs?.isNotEmpty() == true) {
+            programCache[cacheKey] = response
+        }
+        return response
     }
 
     suspend fun getAcademicProgramByEnrollment(className: String): AcademicProgramResponse {
@@ -191,6 +221,7 @@ class CourseRepository(
     }
 
     suspend fun getProgramPhases(programId: String): List<PhaseItem> {
+        phasesCache[programId]?.let { return it }
         val phaseQuery = GraphQlQuery(
             operationName = "ProgramPhasesByStudent",
             query = """
@@ -215,10 +246,17 @@ class CourseRepository(
             variables = mapOf("program_id" to programId)
         )
         val phaseRes = apiService.getProgramPhases(phaseQuery)
-        return phaseRes.data?.programPhasesByStudent?.data ?: emptyList()
+        val list = phaseRes.data?.programPhasesByStudent?.data ?: emptyList()
+        if (list.isNotEmpty()) {
+            phasesCache[programId] = list
+        }
+        return list
     }
 
     suspend fun getAcademicSubjects(programId: String, phaseId: String? = null): AcademicProgramDetail? {
+        val cacheKey = "${programId}_${phaseId ?: "default"}"
+        subjectsCache[cacheKey]?.let { return it }
+
         val query = if (!phaseId.isNullOrBlank()) {
             GraphQlQuery(
                 operationName = "GetAcademicSubjects",
@@ -272,7 +310,11 @@ class CourseRepository(
             )
         }
         val response = apiService.getAcademicSubjects(query)
-        return response.data?.academicProgram
+        val detail = response.data?.academicProgram
+        if (detail != null) {
+            subjectsCache[cacheKey] = detail
+        }
+        return detail
     }
 
     suspend fun getPhaseWiseChapters(programId: String, phaseId: String, subjectCode: String): List<AcademicChapterItem> {
@@ -308,6 +350,8 @@ class CourseRepository(
     }
 
     suspend fun getChaptersBySubjectCode(subjectCode: String): List<AcademicChapterItem> {
+        chaptersCache[subjectCode]?.let { if (it.isNotEmpty()) return it }
+
         val getChaptersQuery = GraphQlQuery(
             operationName = "GetChapters",
             query = """
@@ -330,10 +374,17 @@ class CourseRepository(
             variables = mapOf("subject_code" to subjectCode)
         )
         val res = apiService.getPhaseWiseChapters(getChaptersQuery)
-        return res.data?.chapters?.data ?: emptyList()
+        val list = res.data?.chapters?.data ?: emptyList()
+        if (list.isNotEmpty()) {
+            chaptersCache[subjectCode] = list
+        }
+        return list
     }
 
     suspend fun getAcademicProgramChaptersFallback(programId: String, subjectCode: String): List<AcademicChapterItem> {
+        val cacheKey = "$programId-$subjectCode"
+        fallbackChaptersCache[cacheKey]?.let { if (it.isNotEmpty()) return it }
+
         val fallbackQuery = GraphQlQuery(
             operationName = "AcademicProgramChapters",
             query = """
@@ -358,7 +409,11 @@ class CourseRepository(
             )
         )
         val fallbackRes = apiService.getPhaseWiseChapters(fallbackQuery)
-        return fallbackRes.data?.listAcademicProgramChapters?.data ?: emptyList()
+        val list = fallbackRes.data?.listAcademicProgramChapters?.data ?: emptyList()
+        if (list.isNotEmpty()) {
+            fallbackChaptersCache[cacheKey] = list
+        }
+        return list
     }
 
     suspend fun fetchFallbackHierarchyChapters(subjectCode: String, selectedSubjectTitle: String?): List<AcademicChapterItem> {
@@ -681,6 +736,7 @@ class CourseRepository(
 
     suspend fun getLiveClassDetails(liveClassId: String): AcademicProgramLiveClassItem? {
         if (liveClassId.isBlank()) return null
+        liveClassDetailsCache[liveClassId]?.let { return it }
 
         // 1. Standard GetAcademicLiveClassDetails (exact schema from Shikho API)
         val standardQueryStr = """
@@ -741,7 +797,9 @@ class CourseRepository(
                 android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails errors: ${res.errors}")
             }
             if (res.data?.academicProgramLiveClass != null) {
-                return res.data.academicProgramLiveClass
+                val item = res.data.academicProgramLiveClass
+                liveClassDetailsCache[liveClassId] = item
+                return item
             }
         } catch (e: Exception) {
             android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails standard failed: ${e.message}")
@@ -776,7 +834,9 @@ class CourseRepository(
             val res = apiService.getAcademicLiveClassDetails(query)
             android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails minimal response: $res")
             if (res.data?.academicProgramLiveClass != null) {
-                return res.data.academicProgramLiveClass
+                val item = res.data.academicProgramLiveClass
+                liveClassDetailsCache[liveClassId] = item
+                return item
             }
         } catch (e: Exception) {
             android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails minimal failed: ${e.message}")
@@ -801,7 +861,9 @@ class CourseRepository(
             val res = apiService.getAcademicLiveClassDetails(query)
             android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal response: $res")
             if (res.data?.academicProgramLiveClass != null) {
-                return res.data.academicProgramLiveClass
+                val item = res.data.academicProgramLiveClass
+                liveClassDetailsCache[liveClassId] = item
+                return item
             }
         } catch (e: Exception) {
             android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal failed: ${e.message}")
@@ -841,6 +903,9 @@ class CourseRepository(
     }
 
     suspend fun getTeacherDetails(teacherId: String): TeacherItem? {
+        if (teacherId.isBlank()) return null
+        teacherCache[teacherId]?.let { return it }
+
         val tQuery = GraphQlQuery(
             operationName = "GetTeacherDetails",
             query = """
@@ -870,7 +935,11 @@ class CourseRepository(
             variables = mapOf("teacher_id" to teacherId)
         )
         val tRes = apiService.getTeacherDetails(tQuery)
-        return tRes.data?.teacher
+        val teacher = tRes.data?.teacher
+        if (teacher != null) {
+            teacherCache[teacherId] = teacher
+        }
+        return teacher
     }
 
     suspend fun getTopics(chapterId: String, topicIds: List<String>? = null): List<TopicFullItem> {

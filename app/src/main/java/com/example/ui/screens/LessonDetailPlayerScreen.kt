@@ -236,6 +236,7 @@ fun LessonDetailPlayerScreen(
     // Player States
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
+    var lastPlaybackPositionMs by remember { mutableLongStateOf(0L) }
     var totalDuration by remember { mutableLongStateOf(0L) }
     var bufferedPosition by remember { mutableLongStateOf(0L) }
     var isBuffering by remember { mutableStateOf(true) }
@@ -477,6 +478,15 @@ fun LessonDetailPlayerScreen(
             try {
                 val mediaSource = ShikhoPlayerManager.createMediaSource(urlToPlay, isLive = false)
                 exoPlayer.setMediaSource(mediaSource)
+                val targetResumeMs = if (lastPlaybackPositionMs > 1000L) {
+                    lastPlaybackPositionMs
+                } else {
+                    val saved = videoProgressManager.getProgress(videoKey)
+                    if (saved != null && saved.isEligibleForResume) saved.positionMs else 0L
+                }
+                if (targetResumeMs > 1000L) {
+                    exoPlayer.seekTo(targetResumeMs)
+                }
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
             } catch (e: Exception) {
@@ -626,7 +636,11 @@ fun LessonDetailPlayerScreen(
         while (true) {
             if (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.playbackState == Player.STATE_BUFFERING) {
                 if (!isSeeking) {
-                    currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
+                    val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                    currentPosition = pos
+                    if (pos > 1000L) {
+                        lastPlaybackPositionMs = pos
+                    }
                 }
                 bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
                 totalDuration = exoPlayer.duration.coerceAtLeast(0L)
@@ -638,6 +652,51 @@ fun LessonDetailPlayerScreen(
                 }
             }
             delay(500)
+        }
+    }
+
+    // Automatic Network Reconnection & Resume Handler:
+    // If connection drops (e.g. WiFi or mobile data cuts out and returns),
+    // automatically re-prepare and resume from lastPlaybackPositionMs without user intervention!
+    DisposableEffect(context, activeStreamUrl) {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                coroutineScope.launch {
+                    if (playbackError != null || (!exoPlayer.isPlaying && isBuffering)) {
+                        android.util.Log.d("LectureDebug", "Network recovered! Auto-reconnecting and resuming from $lastPlaybackPositionMs ms")
+                        playbackError = null
+                        playbackErrorDetails = null
+                        isBuffering = true
+                        try {
+                            if (activeStreamUrl.isNotBlank()) {
+                                val mediaSource = ShikhoPlayerManager.createMediaSource(activeStreamUrl, isLive = false)
+                                exoPlayer.setMediaSource(mediaSource)
+                                if (lastPlaybackPositionMs > 1000L) {
+                                    exoPlayer.seekTo(lastPlaybackPositionMs)
+                                }
+                                exoPlayer.prepare()
+                                exoPlayer.playWhenReady = true
+                                Toast.makeText(context, "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("LectureDebug", "Auto-resume error: ${e.message}")
+                        }
+                    }
+                }
+            }
+        }
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            connectivityManager?.registerNetworkCallback(request, networkCallback)
+        } catch (_: Throwable) {}
+
+        onDispose {
+            try {
+                connectivityManager?.unregisterNetworkCallback(networkCallback)
+            } catch (_: Throwable) {}
         }
     }
 
@@ -791,22 +850,6 @@ fun LessonDetailPlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .pointerInput(totalDuration) {
-                    val componentWidth = size.width
-                    detectTapGestures(
-                        onDoubleTap = { offset ->
-                            if (offset.x < componentWidth * 0.4f) {
-                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                exoPlayer.seekTo(target)
-                            } else if (offset.x > componentWidth * 0.6f) {
-                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(totalDuration)
-                                exoPlayer.seekTo(target)
-                            } else {
-                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                            }
-                        }
-                    )
-                }
         ) {
             AndroidView(
                 factory = { ctx ->

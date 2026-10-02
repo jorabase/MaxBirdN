@@ -39,6 +39,10 @@ fun PlaybackSpeedDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .widthIn(max = 460.dp),
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -64,7 +68,10 @@ fun PlaybackSpeedDialog(
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp)
             ) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),

@@ -188,6 +188,7 @@ fun AnimatedLessonPlayerScreen(
     // Resume video playback notification
     var resumeNotificationText by remember { mutableStateOf<String?>(null) }
     var hasAutoResumed by remember { mutableStateOf(false) }
+    var lastPlaybackPositionMs by remember { mutableLongStateOf(0L) }
 
     // -------------------------------------------------------------
     // ExoPlayer Instance
@@ -205,6 +206,9 @@ fun AnimatedLessonPlayerScreen(
                     context = context
                 )
                 setMediaSource(mediaSource)
+                if (lastPlaybackPositionMs > 1000L) {
+                    seekTo(lastPlaybackPositionMs)
+                }
                 prepare()
                 playWhenReady = true
             }
@@ -299,14 +303,72 @@ fun AnimatedLessonPlayerScreen(
         }
     }
 
+    // Keep screen awake during playback
+    LaunchedEffect(isPlaying) {
+        val act = activity ?: (context as? Activity)
+        if (isPlaying) {
+            act?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    // Auto-reconnect & resume on network restoration
+    DisposableEffect(context, effectivePlaybackUrl) {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                coroutineScope.launch {
+                    if (playbackError != null || (!exoPlayer.isPlaying && isBuffering)) {
+                        playbackError = null
+                        isBuffering = true
+                        try {
+                            if (effectivePlaybackUrl.isNotBlank()) {
+                                val mediaSource = ShikhoPlayerManager.createMediaSource(
+                                    url = effectivePlaybackUrl,
+                                    isLive = false,
+                                    classType = PlayerClassType.ANIMATED,
+                                    context = context
+                                )
+                                exoPlayer.setMediaSource(mediaSource)
+                                if (lastPlaybackPositionMs > 1000L) {
+                                    exoPlayer.seekTo(lastPlaybackPositionMs)
+                                }
+                                exoPlayer.prepare()
+                                exoPlayer.playWhenReady = true
+                                Toast.makeText(context, "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        }
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            connectivityManager?.registerNetworkCallback(request, networkCallback)
+        } catch (_: Throwable) {}
+
+        onDispose {
+            try {
+                connectivityManager?.unregisterNetworkCallback(networkCallback)
+            } catch (_: Throwable) {}
+        }
+    }
+
     // Save Video Progress periodically
     LaunchedEffect(exoPlayer, isPlaying) {
         val progressMgr = VideoProgressManager.getInstance(context)
         val key = progressMgr.generateVideoKey(null, videoUrl, title)
 
         while (true) {
-            if (exoPlayer.playbackState == Player.STATE_READY) {
-                currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
+            if (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.playbackState == Player.STATE_BUFFERING) {
+                val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                currentPosition = pos
+                if (pos > 1000L) {
+                    lastPlaybackPositionMs = pos
+                }
                 totalDuration = exoPlayer.duration.coerceAtLeast(0L)
                 bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0L)
 
@@ -1153,6 +1215,24 @@ fun AnimatedLessonPlayerScreen(
                                 )
                             }
 
+                            // Quick Speed Selector Chip in bottom controls
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.White.copy(alpha = 0.22f),
+                                border = BorderStroke(0.7.dp, Color.White.copy(alpha = 0.45f)),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { showSpeedDialog = true }
+                            ) {
+                                Text(
+                                    text = "${playbackSpeed}x",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+
                             // Fullscreen Toggle
                             IconButton(
                                 onClick = {
@@ -1313,44 +1393,13 @@ fun AnimatedLessonPlayerScreen(
 
         // ==================== 12. SPEED SELECTION DIALOG ====================
         if (showSpeedDialog) {
-            AlertDialog(
-                onDismissRequest = { showSpeedDialog = false },
-                title = { Text("প্লেব্যাক স্পিড নির্বাচন করুন", fontWeight = FontWeight.Bold) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f).forEach { speed ->
-                            val isSelected = (playbackSpeed == speed)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        playbackSpeed = speed
-                                        exoPlayer.playbackParameters = PlaybackParameters(speed)
-                                        showSpeedDialog = false
-                                    }
-                                    .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = if (speed == 1.0f) "স্বাভাবিক (1.0x)" else "${speed}x",
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-                    }
+            com.example.ui.components.PlaybackSpeedDialog(
+                playbackSpeed = playbackSpeed,
+                onSpeedChange = { speed ->
+                    playbackSpeed = speed
+                    exoPlayer.playbackParameters = PlaybackParameters(speed)
                 },
-                confirmButton = {
-                    TextButton(onClick = { showSpeedDialog = false }) {
-                        Text("বন্ধ করুন")
-                    }
-                }
+                onDismiss = { showSpeedDialog = false }
             )
         }
     }
