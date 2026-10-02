@@ -202,9 +202,10 @@ fun HomeHeader(
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                             contentDescription = "MaxBird Logo",
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(4.dp)
+                                .padding(7.dp)
                         )
                     }
 

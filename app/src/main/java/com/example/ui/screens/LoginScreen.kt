@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -220,9 +221,9 @@ fun LoginScreen(
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                             contentDescription = "MaxBird Logo",
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .size(58.dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .size(50.dp)
                         )
                     }
 

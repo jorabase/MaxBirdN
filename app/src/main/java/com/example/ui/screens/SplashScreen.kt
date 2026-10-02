@@ -226,8 +226,7 @@ fun SplashScreen(
                             contentDescription = "MaxBird Logo",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .size(92.dp)
-                                .clip(CircleShape)
+                                .size(68.dp)
                         )
                     }
                 }
