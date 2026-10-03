@@ -113,7 +113,8 @@ data class LeaderboardRankingRequest(
     val scope: String = "national",
     val subject_id: String,
     val metric: String = "total_score",
-    val pagination: RankingPagination = RankingPagination(10, 0)
+    val pagination: RankingPagination = RankingPagination(10, 0),
+    val search: String? = null
 )
 
 @JsonClass(generateAdapter = true)

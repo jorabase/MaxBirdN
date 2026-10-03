@@ -5,6 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.api.*
 import com.example.auth.SessionManager
+import com.example.database.LeaderboardStudentDao
+import com.example.database.LeaderboardStudentEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +38,9 @@ data class ReportCardUiState(
     val isPaginationLoading: Boolean = false,
     val hasMoreLeaderboardPages: Boolean = true,
     val searchQuery: String = "",
+    val dbSearchResults: List<LeaderboardUserItem> = emptyList(),
+    val isSearchingDb: Boolean = false,
+    val dbTotalStudentCount: Int = 0,
     val currentUserFullProfile: UserProfile? = null,
     val selectedStudentFullProfile: UserProfile? = null,
     val isFetchingStudentProfile: Boolean = false,
@@ -47,7 +55,8 @@ data class ReportCardUiState(
 
 class ReportCardViewModel(
     private val apiService: ShikhoApiService,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val leaderboardDao: LeaderboardStudentDao? = null
 ) : ViewModel() {
 
     val currentUserId: String
@@ -324,6 +333,67 @@ class ReportCardViewModel(
         }
     }
 
+    private var searchJob: Job? = null
+
+    private fun saveLeaderboardToDb(
+        items: List<LeaderboardUserItem>,
+        programId: String,
+        phaseId: String,
+        subjectId: String
+    ) {
+        if (leaderboardDao == null || items.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val entities = items.map {
+                    LeaderboardStudentEntity.fromUserItem(it, programId, phaseId, subjectId)
+                }
+                leaderboardDao.insertAll(entities)
+                val count = leaderboardDao.getTotalCount()
+                _uiState.update { it.copy(dbTotalStudentCount = count) }
+            } catch (_: Exception) { }
+        }
+    }
+
+    private fun backgroundPrefetchLeaderboard(
+        programId: String,
+        phaseId: String,
+        subjectId: String
+    ) {
+        if (leaderboardDao == null || programId.isBlank() || phaseId.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var offset = 20
+                for (page in 1..8) {
+                    val req = LeaderboardRankingRequest(
+                        program_id = programId,
+                        result_type = "phase",
+                        identifier = phaseId,
+                        scope = "national",
+                        subject_id = if (subjectId == "ALL") "all" else subjectId,
+                        metric = "total_score",
+                        pagination = RankingPagination(limit = 20, offset = offset)
+                    )
+                    val resp = try {
+                        apiService.getLeaderboardRankings(req)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val fetched = resp?.data ?: emptyList()
+                    if (fetched.isEmpty()) break
+                    val entities = fetched.map {
+                        LeaderboardStudentEntity.fromUserItem(it, programId, phaseId, subjectId)
+                    }
+                    leaderboardDao.insertAll(entities)
+                    offset += fetched.size
+                    if (fetched.size < 20) break
+                    delay(200)
+                }
+                val count = leaderboardDao.getTotalCount()
+                _uiState.update { it.copy(dbTotalStudentCount = count) }
+            } catch (_: Exception) { }
+        }
+    }
+
     fun loadLeaderboard(programId: String, phaseId: String, subjectId: String, reset: Boolean = true) {
         viewModelScope.launch {
             if (reset) {
@@ -358,6 +428,12 @@ class ReportCardViewModel(
                         isLeaderboardLoading = false,
                         hasMoreLeaderboardPages = hasMore
                     )
+                }
+
+                if (items.isNotEmpty()) {
+                    saveLeaderboardToDb(items, programId, phaseId, subjectId)
+                    // Background prefetch extra pages into Room DB
+                    backgroundPrefetchLeaderboard(programId, phaseId, subjectId)
                 }
             } catch (_: Exception) {
                 _uiState.update {
@@ -415,6 +491,10 @@ class ReportCardViewModel(
                         hasMoreLeaderboardPages = hasMore
                     )
                 }
+
+                if (newItems.isNotEmpty()) {
+                    saveLeaderboardToDb(newItems, progId, phaseId, subjectId)
+                }
             } catch (_: Exception) {
                 _uiState.update { it.copy(isPaginationLoading = false, hasMoreLeaderboardPages = false) }
             }
@@ -423,6 +503,74 @@ class ReportCardViewModel(
 
     fun setSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+        searchJob?.cancel()
+
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    dbSearchResults = emptyList(),
+                    isSearchingDb = false
+                )
+            }
+            return
+        }
+
+        _uiState.update { it.copy(isSearchingDb = true) }
+        searchJob = viewModelScope.launch(Dispatchers.IO) {
+            delay(120) // Fast debounce
+            val progId = _uiState.value.programId
+            val phaseId = _uiState.value.selectedPhase?.id ?: ""
+
+            // 1. Query Room Database directly
+            val dbEntities = try {
+                if (leaderboardDao != null) {
+                    val phaseMatches = leaderboardDao.searchStudents(progId, phaseId, trimmed)
+                    val progMatches = if (progId.isNotBlank()) leaderboardDao.searchProgramStudents(progId, trimmed) else emptyList()
+                    val globalMatches = if (phaseMatches.size < 5) leaderboardDao.searchGlobalStudents(trimmed) else emptyList()
+                    (phaseMatches + progMatches + globalMatches).distinctBy { it.id.ifBlank { it.userId } }
+                } else {
+                    emptyList()
+                }
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val dbItems = dbEntities.map { it.toUserItem() }
+
+            // 2. Also search across current loaded in-memory items to make sure all newly loaded items are matched
+            val q = trimmed.lowercase()
+            val memoryMatches = _uiState.value.leaderboardData?.data?.filter { item ->
+                val u = item.user
+                val nameMatch = u?.name?.lowercase()?.contains(q) == true || item.name?.lowercase()?.contains(q) == true
+                val phoneMatch = u?.phone?.replace("-", "")?.contains(q) == true || item.phone?.replace("-", "")?.contains(q) == true
+                val collegeMatch = u?.effectiveCollege?.lowercase()?.contains(q) == true ||
+                        u?.school?.lowercase()?.contains(q) == true ||
+                        item.effectiveCollege?.lowercase()?.contains(q) == true
+                val rollMatch = u?.roll?.lowercase()?.contains(q) == true || item.roll_no?.lowercase()?.contains(q) == true
+                nameMatch || phoneMatch || collegeMatch || rollMatch
+            } ?: emptyList()
+
+            // 3. Merge database + memory, ensuring distinct entries
+            val mergedResults = (dbItems + memoryMatches).distinctBy { item ->
+                val uId = item.effectiveUserId?.takeIf { it.isNotBlank() }
+                uId ?: "${item.rank}_${item.effectiveName}"
+            }.sortedWith(compareBy({ it.rank ?: 999999 }, { it.effectiveScore * -1 }))
+
+            val totalCount = try {
+                leaderboardDao?.getTotalCount() ?: 0
+            } catch (_: Exception) {
+                0
+            }
+
+            _uiState.update {
+                it.copy(
+                    dbSearchResults = mergedResults,
+                    isSearchingDb = false,
+                    dbTotalStudentCount = totalCount
+                )
+            }
+        }
     }
 
     fun fetchCurrentUserFullProfile() {
@@ -1023,13 +1171,15 @@ class ReportCardViewModel(
 
 class ReportCardViewModelFactory(
     private val apiService: ShikhoApiService,
-    private val sessionManager: SessionManager
+    private val sessionManager: SessionManager,
+    private val leaderboardDao: LeaderboardStudentDao? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ReportCardViewModel::class.java)) {
-            return ReportCardViewModel(apiService, sessionManager) as T
+            return ReportCardViewModel(apiService, sessionManager, leaderboardDao) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }
+

@@ -270,7 +270,7 @@ fun ReportCardScreen(
                         )
                     }
 
-                    // Mobile Number & Name Search Bar
+                    // Mobile Number, Name, College Database Search Bar
                     item {
                         OutlinedTextField(
                             value = uiState.searchQuery,
@@ -280,7 +280,7 @@ fun ReportCardScreen(
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
                             placeholder = {
                                 Text(
-                                    text = "মোবাইল নম্বর বা নাম দিয়ে খুঁজুন...",
+                                    text = "নাম, মোবাইল বা কলেজ দিয়ে ডাটাবেজে খুঁজুন...",
                                     fontSize = 13.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -289,7 +289,7 @@ fun ReportCardScreen(
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search",
-                                    tint = Color(0xFF64748B)
+                                    tint = if (uiState.searchQuery.isNotEmpty()) Color(0xFF2563EB) else Color(0xFF64748B)
                                 )
                             },
                             trailingIcon = {
@@ -332,23 +332,124 @@ fun ReportCardScreen(
                         val leaderboard = uiState.leaderboardData
                         val rawUsers = leaderboard?.data ?: emptyList()
 
-                        // Filter by Mobile Number, Name, or College
-                        val filteredUsers = if (uiState.searchQuery.isBlank()) {
+                        // If searching, prioritize direct database search results (with fallback to filtered raw users)
+                        val isSearching = uiState.searchQuery.isNotBlank()
+                        val filteredUsers = if (!isSearching) {
                             rawUsers
                         } else {
-                            val q = uiState.searchQuery.trim().lowercase()
-                            rawUsers.filter { item ->
-                                val u = item.user
-                                val nameMatch = u?.name?.lowercase()?.contains(q) == true
-                                val phoneMatch = u?.phone?.replace("-", "")?.contains(q) == true
-                                val collegeMatch = u?.effectiveCollege?.lowercase()?.contains(q) == true ||
-                                        u?.school?.lowercase()?.contains(q) == true
-                                nameMatch || phoneMatch || collegeMatch
+                            if (uiState.dbSearchResults.isNotEmpty()) {
+                                uiState.dbSearchResults
+                            } else {
+                                val q = uiState.searchQuery.trim().lowercase()
+                                rawUsers.filter { item ->
+                                    val u = item.user
+                                    val nameMatch = u?.name?.lowercase()?.contains(q) == true || item.name?.lowercase()?.contains(q) == true
+                                    val phoneMatch = u?.phone?.replace("-", "")?.contains(q) == true || item.phone?.replace("-", "")?.contains(q) == true
+                                    val collegeMatch = u?.effectiveCollege?.lowercase()?.contains(q) == true ||
+                                            u?.school?.lowercase()?.contains(q) == true ||
+                                            item.effectiveCollege?.lowercase()?.contains(q) == true
+                                    val rollMatch = u?.roll?.lowercase()?.contains(q) == true || item.roll_no?.lowercase()?.contains(q) == true
+                                    nameMatch || phoneMatch || collegeMatch || rollMatch
+                                }
                             }
                         }
 
-                        if (filteredUsers.isNotEmpty()) {
-                            if (uiState.searchQuery.isBlank()) {
+                        if (isSearching) {
+                            // Direct Database Search Header
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            color = Color(0xFFEFF6FF),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                                        ) {
+                                            Text(
+                                                text = "সরাসরি ডাটাবেজ সার্চ",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF1D4ED8),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "ফলাফল (${filteredUsers.size.toBn()} জন)",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF334155)
+                                        )
+                                    }
+
+                                    if (uiState.isSearchingDb) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Color(0xFF2563EB),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (filteredUsers.isNotEmpty()) {
+                                itemsIndexed(filteredUsers) { _, userItem ->
+                                    LeaderboardUserRowItem(
+                                        userItem = userItem,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                        onClick = {
+                                            selectedStudentForProfile = userItem
+                                            val effectiveId = userItem.effectiveUserId ?: ""
+                                            val myUserId = viewModel.currentUserId
+                                            val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
+                                                    (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
+                                            val targetId = if (isSelf) myUserId else effectiveId
+                                            viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                        }
+                                    )
+                                }
+                            } else if (!uiState.isSearchingDb) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Default.SearchOff,
+                                                contentDescription = null,
+                                                tint = Color(0xFF94A3B8),
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                text = "\"${uiState.searchQuery}\" দিয়ে ডাটাবেজে কোনো অ্যাকাউন্ট পাওয়া যায়নি",
+                                                color = Color(0xFF475569),
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "নামের বানান সঠিক কিনা যাচাই করুন অথবা মোবাইল নম্বর দিয়ে চেষ্টা করুন",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 12.sp,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Normal Leaderboard view (Podium + 4th+ list)
+                            if (filteredUsers.isNotEmpty()) {
                                 // Top 3 Podium
                                 item {
                                     LeaderboardPodiumView(
@@ -394,85 +495,55 @@ fun ReportCardScreen(
                                         )
                                     }
                                 }
-                            } else {
-                                // Direct search results list
-                                item {
-                                    Text(
-                                        text = "অনুসন্ধানের ফলাফল (${filteredUsers.size.toBn()} জন)",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF2563EB),
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                    )
-                                }
 
-                                itemsIndexed(filteredUsers) { _, userItem ->
-                                    LeaderboardUserRowItem(
-                                        userItem = userItem,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                        onClick = {
-                                            selectedStudentForProfile = userItem
-                                            val effectiveId = userItem.effectiveUserId ?: ""
-                                            val myUserId = viewModel.currentUserId
-                                            val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
-                                                    (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
-                                            val targetId = if (isSelf) myUserId else effectiveId
-                                            viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                // Pagination Loading Footer Indicator
+                                if (uiState.isPaginationLoading) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(20.dp),
+                                                    color = Color(0xFF2563EB),
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = "আরও অ্যাকাউন্ট লোড করা হচ্ছে...",
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFF64748B)
+                                                )
+                                            }
                                         }
-                                    )
+                                    }
                                 }
-                            }
-
-                            // Pagination Loading Footer Indicator
-                            if (uiState.isPaginationLoading && uiState.searchQuery.isBlank()) {
+                            } else {
                                 item {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(16.dp),
+                                            .padding(32.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
-                                                color = Color(0xFF2563EB),
-                                                strokeWidth = 2.dp
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Default.SearchOff,
+                                                contentDescription = null,
+                                                tint = Color(0xFF94A3B8),
+                                                modifier = Modifier.size(48.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Spacer(modifier = Modifier.height(12.dp))
                                             Text(
-                                                text = "আরও অ্যাকাউন্ট লোড করা হচ্ছে...",
-                                                fontSize = 13.sp,
-                                                color = Color(0xFF64748B)
+                                                text = "এই বিষয়ের জন্য এখনো লিডারবোর্ড ডেটা পাওয়া যায়নি",
+                                                color = Color(0xFF64748B),
+                                                fontSize = 14.sp,
+                                                textAlign = TextAlign.Center
                                             )
                                         }
-                                    }
-                                }
-                            }
-                        } else {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(
-                                            imageVector = Icons.Default.SearchOff,
-                                            contentDescription = null,
-                                            tint = Color(0xFF94A3B8),
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        Text(
-                                            text = if (uiState.searchQuery.isNotBlank())
-                                                "\"${uiState.searchQuery}\" দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি"
-                                            else
-                                                "এই বিষয়ের জন্য এখনো লিডারবোর্ড ডেটা পাওয়া যায়নি",
-                                            color = Color(0xFF64748B),
-                                            fontSize = 14.sp,
-                                            textAlign = TextAlign.Center
-                                        )
                                     }
                                 }
                             }

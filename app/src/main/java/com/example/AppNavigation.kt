@@ -1578,7 +1578,11 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val phaseId = backStackEntry.arguments?.getString("phaseId")?.ifBlank { null }
 
             val reportCardViewModel: ReportCardViewModel = viewModel(
-                factory = ReportCardViewModelFactory(apiService, sessionManager)
+                factory = ReportCardViewModelFactory(
+                    apiService = apiService,
+                    sessionManager = sessionManager,
+                    leaderboardDao = appDatabase.leaderboardStudentDao()
+                )
             )
 
             androidx.compose.runtime.LaunchedEffect(programId, phaseId) {

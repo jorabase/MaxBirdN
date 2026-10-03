@@ -12,9 +12,10 @@ import androidx.room.RoomDatabase
         CompletedItemEntity::class,
         VideoPlaybackProgressEntity::class,
         com.example.modeltest.data.local.OfflineMcqAnswerEntity::class,
-        com.example.modeltest.data.local.ActiveModelTestSessionEntity::class
+        com.example.modeltest.data.local.ActiveModelTestSessionEntity::class,
+        LeaderboardStudentEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun completedItemDao(): CompletedItemDao
     abstract fun videoPlaybackProgressDao(): VideoPlaybackProgressDao
     abstract fun modelTestDao(): com.example.modeltest.data.local.ModelTestDao
+    abstract fun leaderboardStudentDao(): LeaderboardStudentDao
 
     companion object {
         @Volatile
