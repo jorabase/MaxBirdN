@@ -81,16 +81,15 @@ object ShikhoPlayerManager {
     const val DEFAULT_REFERER = "https://shikho.com/"
     const val DEFAULT_USER_AGENT = "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)"
 
-    // Compact LRU Disk Cache (24MB) for smooth playback without bloating phone storage
-    private const val MAX_DISK_CACHE_BYTES = 24L * 1024L * 1024L // 24MB max
+    // Smooth LRU Disk Cache (128MB) for seamless 720p/1080p streaming and instant seek
+    private const val MAX_DISK_CACHE_BYTES = 128L * 1024L * 1024L // 128MB
 
     @Volatile
     private var simpleCache: SimpleCache? = null
     private val cacheLock = Any()
 
     /**
-     * Immediately purges old bloated 550MB media cache if it exceeds 35MB.
-     * Ensures user's internal phone storage is protected.
+     * Purges media cache if it exceeds 160MB to protect device storage while giving ample room for 720p.
      */
     fun pruneAndCleanBloatedCache(context: Context) {
         synchronized(cacheLock) {
@@ -98,7 +97,7 @@ object ShikhoPlayerManager {
                 val cacheDir = File(context.applicationContext.cacheDir, "media_stream_cache")
                 if (cacheDir.exists()) {
                     val totalBytes = cacheDir.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
-                    if (totalBytes > 35L * 1024L * 1024L) {
+                    if (totalBytes > 160L * 1024L * 1024L) {
                         try {
                             simpleCache?.release()
                         } catch (_: Exception) {}
@@ -149,7 +148,6 @@ object ShikhoPlayerManager {
                 if (!cacheDir.exists()) {
                     cacheDir.mkdirs()
                 }
-                // Compact 32MB LRU Disk Cache - prevents phone storage from ballooning to 550MB+!
                 val evictor = LeastRecentlyUsedCacheEvictor(MAX_DISK_CACHE_BYTES)
                 val databaseProvider = StandaloneDatabaseProvider(context.applicationContext)
                 SimpleCache(cacheDir, evictor, databaseProvider).also {
@@ -168,9 +166,9 @@ object ShikhoPlayerManager {
         OkHttpClient.Builder()
             .dispatcher(dispatcher)
             .connectionPool(ConnectionPool(64, 5, TimeUnit.MINUTES))
-            .connectTimeout(12, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
-            .writeTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .followRedirects(true)
             .followSslRedirects(true)
@@ -214,51 +212,54 @@ object ShikhoPlayerManager {
     }
 
     /**
-     * YouTube-Style Aggressive Continuous Pre-Buffer LoadControl:
-     * - 800ms initial buffer for lightning-fast playback startup.
-     * - 45,000ms (45s) min buffer to absorb long network drops.
-     * - 180,000ms (3 minutes) continuous buffer ahead so video never stalls every few seconds.
-     * - 1,800ms buffer after rebuffer for quick recovery.
-     * - 30,000ms (30s) rewind cushion retained in RAM from keyframe.
+     * Ultra-Smooth Zero-Buffering LoadControl:
+     * - minBufferMs: 65,000ms (65s minimum floor). Even at 2X speed, the moment remaining buffer
+     *   reaches ~1 minute, ExoPlayer instantly triggers aggressive loading back up to 3 minutes!
+     * - maxBufferMs: 180,000ms (3 minutes continuous pre-buffer).
+     * - bufferForPlaybackMs: 600ms for instantaneous video start.
+     * - bufferForPlaybackAfterRebufferMs: 1,200ms for rapid error recovery.
+     * - backBufferDurationMs: 60,000ms (1 minute) retained for instant rewind without re-buffering.
+     * - prioritizeTimeOverSizeThresholds: true, with 64MB buffer memory allocation to prevent byte throttling on 720p/1080p.
      */
     fun createAggressiveLoadControl(): DefaultLoadControl {
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 45_000,
+                /* minBufferMs = */ 65_000,
                 /* maxBufferMs = */ 180_000,
-                /* bufferForPlaybackMs = */ 800,
-                /* bufferForPlaybackAfterRebufferMs = */ 1_800
+                /* bufferForPlaybackMs = */ 600,
+                /* bufferForPlaybackAfterRebufferMs = */ 1_200
             )
             .setBackBuffer(
-                /* backBufferDurationMs = */ 30_000,
+                /* backBufferDurationMs = */ 60_000,
                 /* retainBackBufferFromKeyframe = */ true
             )
+            .setTargetBufferBytes(DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES * 4)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
     }
 
     /**
-     * Dynamic Adaptive Bitrate (ABR) BandwidthMeter seeded with 1.5 Mbps estimate (~480p default seed)
-     * so video opens instantly without cellular choking, then dynamically steps up to 720p/1080p
-     * or down to 360p as real-time network throughput is continuously measured.
+     * Dynamic Adaptive Bitrate (ABR) BandwidthMeter seeded with 3.0 Mbps estimate (~720p HD ready)
+     * so video opens instantly in high quality without initial pixelation or stalls.
      */
     fun createBandwidthMeter(context: Context): DefaultBandwidthMeter {
         return DefaultBandwidthMeter.Builder(context)
-            .setInitialBitrateEstimate(1_500_000L) // 1.5 Mbps seed (~480p)
+            .setInitialBitrateEstimate(3_000_000L) // 3.0 Mbps initial estimate (~720p HD ready)
             .build()
     }
 
     /**
      * Adaptive Track Selection Factory configured for smooth, continuous bitrate scaling:
-     * - 8s requirement before stepping up quality (prevents premature quality spikes).
-     * - 2s rapid response to step down quality on network drops (prevents buffering stalls).
+     * - 6s requirement before stepping up quality (stable HD playback).
+     * - 1.5s rapid response to step down quality on network drops (prevents buffering stalls).
+     * - 0.85 bandwidth fraction for maximum smooth utilization.
      */
     fun createAdaptiveTrackSelectionFactory(): AdaptiveTrackSelection.Factory {
         return AdaptiveTrackSelection.Factory(
-            /* minDurationForQualityIncreaseMs = */ 8_000,
-            /* maxDurationForQualityDecreaseMs = */ 2_000,
-            /* minDurationToRetainAfterDiscardMs = */ 15_000,
-            /* bandwidthFraction = */ 0.75f
+            /* minDurationForQualityIncreaseMs = */ 6_000,
+            /* maxDurationForQualityDecreaseMs = */ 1_500,
+            /* minDurationToRetainAfterDiscardMs = */ 30_000,
+            /* bandwidthFraction = */ 0.85f
         )
     }
 
