@@ -363,7 +363,7 @@ class ReportCardViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var offset = 20
-                for (page in 1..8) {
+                for (page in 1..35) { // Deep prefetch up to 3,500+ students into database
                     val req = LeaderboardRankingRequest(
                         program_id = programId,
                         result_type = "phase",
@@ -371,7 +371,7 @@ class ReportCardViewModel(
                         scope = "national",
                         subject_id = if (subjectId == "ALL") "all" else subjectId,
                         metric = "total_score",
-                        pagination = RankingPagination(limit = 20, offset = offset)
+                        pagination = RankingPagination(limit = 100, offset = offset)
                     )
                     val resp = try {
                         apiService.getLeaderboardRankings(req)
@@ -386,7 +386,7 @@ class ReportCardViewModel(
                     leaderboardDao.insertAll(entities)
                     offset += fetched.size
                     if (fetched.size < 20) break
-                    delay(200)
+                    delay(150)
                 }
                 val count = leaderboardDao.getTotalCount()
                 _uiState.update { it.copy(dbTotalStudentCount = count) }
@@ -413,14 +413,14 @@ class ReportCardViewModel(
                     scope = "national",
                     subject_id = if (subjectId == "ALL") "all" else subjectId,
                     metric = "total_score",
-                    pagination = RankingPagination(limit = 20, offset = 0)
+                    pagination = RankingPagination(limit = 50, offset = 0)
                 )
                 val resp = try {
                     apiService.getLeaderboardRankings(req)
                 } catch (_: Exception) { null }
 
                 val items = resp?.data ?: emptyList()
-                val hasMore = items.size >= 20
+                val hasMore = items.size >= 50
 
                 _uiState.update {
                     it.copy(
@@ -432,7 +432,7 @@ class ReportCardViewModel(
 
                 if (items.isNotEmpty()) {
                     saveLeaderboardToDb(items, programId, phaseId, subjectId)
-                    // Background prefetch extra pages into Room DB
+                    // Deep Background prefetch extra pages into Room DB
                     backgroundPrefetchLeaderboard(programId, phaseId, subjectId)
                 }
             } catch (_: Exception) {
@@ -467,14 +467,14 @@ class ReportCardViewModel(
                     scope = "national",
                     subject_id = if (subjectId == "ALL") "all" else subjectId,
                     metric = "total_score",
-                    pagination = RankingPagination(limit = 20, offset = nextOffset)
+                    pagination = RankingPagination(limit = 50, offset = nextOffset)
                 )
                 val resp = try {
                     apiService.getLeaderboardRankings(req)
                 } catch (_: Exception) { null }
 
                 val newItems = resp?.data ?: emptyList()
-                val hasMore = newItems.size >= 20
+                val hasMore = newItems.size >= 50
 
                 val combinedItems = currentList + newItems
                 val updatedResponse = LeaderboardRankingResponse(
@@ -518,16 +518,16 @@ class ReportCardViewModel(
 
         _uiState.update { it.copy(isSearchingDb = true) }
         searchJob = viewModelScope.launch(Dispatchers.IO) {
-            delay(120) // Fast debounce
             val progId = _uiState.value.programId
             val phaseId = _uiState.value.selectedPhase?.id ?: ""
+            val subjectId = _uiState.value.selectedLeaderboardSubject?.code ?: "ALL"
 
-            // 1. Query Room Database directly
-            val dbEntities = try {
+            // 1. Instant local Room database search
+            val localDbEntities = try {
                 if (leaderboardDao != null) {
                     val phaseMatches = leaderboardDao.searchStudents(progId, phaseId, trimmed)
                     val progMatches = if (progId.isNotBlank()) leaderboardDao.searchProgramStudents(progId, trimmed) else emptyList()
-                    val globalMatches = if (phaseMatches.size < 5) leaderboardDao.searchGlobalStudents(trimmed) else emptyList()
+                    val globalMatches = leaderboardDao.searchGlobalStudents(trimmed)
                     (phaseMatches + progMatches + globalMatches).distinctBy { it.id.ifBlank { it.userId } }
                 } else {
                     emptyList()
@@ -536,9 +536,9 @@ class ReportCardViewModel(
                 emptyList()
             }
 
-            val dbItems = dbEntities.map { it.toUserItem() }
+            val localDbItems = localDbEntities.map { it.toUserItem() }
 
-            // 2. Also search across current loaded in-memory items to make sure all newly loaded items are matched
+            // 2. Search currently in-memory items
             val q = trimmed.lowercase()
             val memoryMatches = _uiState.value.leaderboardData?.data?.filter { item ->
                 val u = item.user
@@ -551,8 +551,81 @@ class ReportCardViewModel(
                 nameMatch || phoneMatch || collegeMatch || rollMatch
             } ?: emptyList()
 
-            // 3. Merge database + memory, ensuring distinct entries
-            val mergedResults = (dbItems + memoryMatches).distinctBy { item ->
+            val initialMerged = (localDbItems + memoryMatches).distinctBy { item ->
+                val uId = item.effectiveUserId?.takeIf { it.isNotBlank() }
+                uId ?: "${item.rank}_${item.effectiveName}"
+            }.sortedWith(compareBy({ it.rank ?: 999999 }, { it.effectiveScore * -1 }))
+
+            // Emit instant local search results immediately
+            _uiState.update {
+                it.copy(
+                    dbSearchResults = initialMerged,
+                    isSearchingDb = true
+                )
+            }
+
+            // 3. Direct Server-Side Global Search via Analytics API
+            // Queries the backend database directly across all thousands of accounts (e.g. rank 1130+)
+            val apiSearchResults = try {
+                val searchReq = LeaderboardRankingRequest(
+                    program_id = progId,
+                    result_type = "phase",
+                    identifier = phaseId,
+                    scope = "national",
+                    subject_id = if (subjectId == "ALL") "all" else subjectId,
+                    metric = "total_score",
+                    pagination = RankingPagination(limit = 100, offset = 0),
+                    search = trimmed,
+                    query = trimmed,
+                    search_query = trimmed
+                )
+                val resp = apiService.getLeaderboardRankings(searchReq)
+                resp.data ?: emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            // 4. Fallback search across all subjects if subject-specific returned empty
+            val allSubjectApiResults = if (apiSearchResults.isEmpty() && subjectId != "ALL") {
+                try {
+                    val searchReq = LeaderboardRankingRequest(
+                        program_id = progId,
+                        result_type = "phase",
+                        identifier = phaseId,
+                        scope = "national",
+                        subject_id = "all",
+                        metric = "total_score",
+                        pagination = RankingPagination(limit = 100, offset = 0),
+                        search = trimmed,
+                        query = trimmed,
+                        search_query = trimmed
+                    )
+                    val resp = apiService.getLeaderboardRankings(searchReq)
+                    resp.data ?: emptyList()
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+
+            val serverDiscoveredItems = (apiSearchResults + allSubjectApiResults).filter { item ->
+                val u = item.user
+                val nameMatch = u?.name?.lowercase()?.contains(q) == true || item.name?.lowercase()?.contains(q) == true
+                val phoneMatch = u?.phone?.replace("-", "")?.contains(q) == true || item.phone?.replace("-", "")?.contains(q) == true
+                val collegeMatch = u?.effectiveCollege?.lowercase()?.contains(q) == true ||
+                        u?.school?.lowercase()?.contains(q) == true ||
+                        item.effectiveCollege?.lowercase()?.contains(q) == true
+                val rollMatch = u?.roll?.lowercase()?.contains(q) == true || item.roll_no?.lowercase()?.contains(q) == true
+                nameMatch || phoneMatch || collegeMatch || rollMatch || q.length >= 2
+            }
+
+            if (serverDiscoveredItems.isNotEmpty()) {
+                saveLeaderboardToDb(serverDiscoveredItems, progId, phaseId, subjectId)
+            }
+
+            // 5. Final comprehensive merge of (Local DB + Memory + Server Search API)
+            val finalMerged = (initialMerged + serverDiscoveredItems).distinctBy { item ->
                 val uId = item.effectiveUserId?.takeIf { it.isNotBlank() }
                 uId ?: "${item.rank}_${item.effectiveName}"
             }.sortedWith(compareBy({ it.rank ?: 999999 }, { it.effectiveScore * -1 }))
@@ -565,7 +638,7 @@ class ReportCardViewModel(
 
             _uiState.update {
                 it.copy(
-                    dbSearchResults = mergedResults,
+                    dbSearchResults = finalMerged,
                     isSearchingDb = false,
                     dbTotalStudentCount = totalCount
                 )

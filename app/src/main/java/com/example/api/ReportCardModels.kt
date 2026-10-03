@@ -113,12 +113,14 @@ data class LeaderboardRankingRequest(
     val scope: String = "national",
     val subject_id: String,
     val metric: String = "total_score",
-    val pagination: RankingPagination = RankingPagination(10, 0),
-    val search: String? = null
+    val pagination: RankingPagination = RankingPagination(50, 0),
+    val search: String? = null,
+    val query: String? = null,
+    val search_query: String? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class RankingPagination(val limit: Int = 10, val offset: Int = 0)
+data class RankingPagination(val limit: Int = 50, val offset: Int = 0)
 
 @JsonClass(generateAdapter = true)
 data class LeaderboardRankingResponse(
