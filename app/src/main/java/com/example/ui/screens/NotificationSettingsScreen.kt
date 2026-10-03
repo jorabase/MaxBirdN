@@ -43,6 +43,7 @@ import com.example.MainActivity
 import com.example.R
 import com.example.auth.SessionManager
 import com.example.home.HomeViewModel
+import com.example.notification.CampaignNotificationManager
 import com.example.notification.ClassAlarmReceiver
 import com.example.notification.ClassAlarmScheduler
 import com.example.ui.dialogs.FcmLiveTerminalDialog
@@ -543,6 +544,153 @@ fun NotificationSettingsScreen(
                             ClassAlarmScheduler.schedule7DayClassAlarms(context, homeUiState?.activeProgram?.id ?: "", lessons)
                         }
                     )
+                }
+            }
+
+            // ==========================================
+            // BATCH CAMPAIGNS & ORIENTATION LIVE CARD
+            // ==========================================
+            val userBatch = sessionManager.getUserBatchId() ?: "HSC '27"
+            val studentName = sessionManager.getUserFullName() ?: "শিক্ষার্থী"
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFFFAF5FF),
+                border = BorderStroke(1.5.dp, Color(0xFFC084FC).copy(alpha = 0.6f)),
+                shadowElevation = 2.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF86198F)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "📢", fontSize = 20.sp)
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "ক্যাম্পেইন, ওরিয়েন্টেশন ও স্পেশাল ঘোষণা",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF581C87)
+                            )
+                            Text(
+                                text = "আপনার ব্যাচ ($userBatch) ও অ্যাকাউন্টের জন্য সক্রিয়",
+                                fontSize = 12.sp,
+                                color = Color(0xFF7E22CE),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "নিচের বাটনগুলো দিয়ে আপনার পছন্দের নোটিফিকেশনগুলো এখনই টেস্ট করে দেখুন:",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6B21A8)
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Test Button 1: Orientation LIVE
+                    OutlinedButton(
+                        onClick = {
+                            CampaignNotificationManager.triggerOrientationLiveNotification(
+                                context = context,
+                                batchName = "HSC '27",
+                                quarter = "৫ম কোয়ার্টার",
+                                date = "৪ অক্টোবর",
+                                time = "রাত ৯টা"
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF9333EA)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF7E22CE)
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(text = "🔴", fontSize = 14.sp)
+                            Text(
+                                text = "HSC '27 ৫ম কোয়ার্টার Orientation LIVE টেস্ট",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Test Button 2: Daily Routine Personalized
+                    OutlinedButton(
+                        onClick = {
+                            CampaignNotificationManager.triggerDailyRoutineNotification(
+                                context = context,
+                                studentName = studentName
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2563EB)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF1D4ED8)
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(text = "📅", fontSize = 14.sp)
+                            Text(
+                                text = "আজকের ক্লাস রুটিন (পার্সোনালাইজড) টেস্ট",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Test Button 3: Book Selection Secrets Guideline
+                    OutlinedButton(
+                        onClick = {
+                            CampaignNotificationManager.triggerBookSelectionGuidelineNotification(context)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFF059669)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF047857)
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(text = "🤫", fontSize = 14.sp)
+                            Text(
+                                text = "বই নির্বাচনের সিক্রেট গাইডলাইন টেস্ট",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
 

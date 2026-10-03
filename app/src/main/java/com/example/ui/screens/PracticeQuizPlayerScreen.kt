@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.McqOptionItem
 import com.example.quiz.PracticeQuizViewModel
+import com.example.ui.components.QuizRichContent
 
 private fun toBengaliDigits(number: Any): String {
     val english = number.toString()
@@ -421,13 +422,13 @@ fun PracticeQuizPlayerScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Question Title Text
-                            Text(
+                            // Question Title & Diagrams
+                            QuizRichContent(
                                 text = currentQuestion.title ?: "",
-                                fontSize = 16.sp,
+                                textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, lineHeight = 24.sp),
+                                textColor = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 24.sp
+                                maxImageHeight = 220.dp
                             )
                         }
                     }
@@ -669,13 +670,13 @@ private fun McqOptionCard(
 
             Spacer(modifier = Modifier.width(14.dp))
 
-            // Option description text
-            Text(
+            // Option description / image content
+            QuizRichContent(
                 text = option.description ?: "",
-                fontSize = 15.sp,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 22.sp,
+                maxImageHeight = 140.dp,
                 modifier = Modifier.weight(1f)
             )
 

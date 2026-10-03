@@ -150,18 +150,69 @@ object ShikhoNotificationManager {
         sessionManager: SessionManager,
         userId: String?
     ) {
-        // 1. Subscribe to Global Broadcast Topic
-        try {
-            fcm.subscribeToTopic(TOPIC_SHIKHO_ALL)
-                .addOnSuccessListener {
-                    logTerminal("SUCCESS", "✅ Subscribed to Global Topic: $TOPIC_SHIKHO_ALL")
-                }
-                .addOnFailureListener { e ->
-                    logTerminal("INFO", "ℹ️ Topic subscription optional in sandbox: ${e.message}")
-                }
-        } catch (_: Exception) {}
+        // 1. Subscribe to Global Broadcast & Campaign Topics
+        val globalTopics = listOf(
+            TOPIC_SHIKHO_ALL,
+            "ALL_STUDENTS",
+            "GLOBAL_BROADCAST",
+            "CAMPAIGN_ALL",
+            "ANNOUNCEMENT_ALL",
+            "ANNOUNCEMENTS",
+            "PROMOTIONS",
+            "ORIENTATION_LIVE",
+            "ROUTINE_ALERTS",
+            "NEWS_ALL"
+        )
+        for (top in globalTopics) {
+            try {
+                fcm.subscribeToTopic(top)
+                    .addOnSuccessListener {
+                        logTerminal("SUCCESS", "✅ Subscribed to Topic: $top")
+                    }
+                    .addOnFailureListener { e ->
+                        logTerminal("INFO", "ℹ️ Topic $top optional: ${e.message}")
+                    }
+            } catch (_: Exception) {}
+        }
 
-        // 2. User-specific Direct Topic
+        // 2. Academic Batch & Passing Year Topics (e.g. HSC 27, HSC 26, SSC 26)
+        val passingYear = sessionManager.getAcademicPassingYear() ?: ""
+        val batchId = sessionManager.getUserBatchId() ?: ""
+        val programTitle = sessionManager.getActiveProgramTitleBn() ?: ""
+        val className = sessionManager.getUserClassName() ?: ""
+        val group = sessionManager.getUserGroup() ?: ""
+
+        val batchTopics = mutableListOf<String>()
+        if (passingYear.contains("2027") || batchId.contains("27") || programTitle.contains("২০২৭") || programTitle.contains("2027")) {
+            batchTopics.addAll(listOf("HSC_27", "HSC_2027", "hsc_27", "BATCH_HSC_27", "CLASS_11", "class_11"))
+        }
+        if (passingYear.contains("2026") || batchId.contains("26") || programTitle.contains("২০২৬") || programTitle.contains("2026")) {
+            batchTopics.addAll(listOf("HSC_26", "HSC_2026", "hsc_26", "BATCH_HSC_26", "CLASS_12", "class_12"))
+        }
+        if (passingYear.contains("2025") || batchId.contains("25") || programTitle.contains("২০২৫") || programTitle.contains("2025")) {
+            batchTopics.addAll(listOf("HSC_25", "HSC_2025", "SSC_25", "SSC_2025"))
+        }
+
+        if (className.isNotBlank()) {
+            batchTopics.add("CLASS_${className.uppercase()}")
+            batchTopics.add("class_${className.lowercase()}")
+        }
+        if (group.isNotBlank()) {
+            val cleanGroup = group.uppercase().replace(" ", "_")
+            batchTopics.add("STUDY_GROUP_$cleanGroup")
+            batchTopics.add("GROUP_$cleanGroup")
+        }
+
+        for (bTop in batchTopics.distinct()) {
+            try {
+                fcm.subscribeToTopic(bTop)
+                    .addOnSuccessListener {
+                        logTerminal("SUCCESS", "🎯 Subscribed to Batch Topic: $bTop")
+                    }
+            } catch (_: Exception) {}
+        }
+
+        // 3. User-specific Direct Topic
         if (!userId.isNullOrBlank()) {
             try {
                 fcm.subscribeToTopic(userId)
@@ -176,7 +227,7 @@ object ShikhoNotificationManager {
             logTerminal("WARN", "⚠️ User ID পাওয়া যায়নি (লগইন প্রয়োজন)")
         }
 
-        // 3. Program & Phase Specific Topics
+        // 4. Program & Phase Specific Topics
         val activeProgramId = sessionManager.getActiveProgramId()
         val activePhaseId = sessionManager.getActiveProgramPhaseId()
 

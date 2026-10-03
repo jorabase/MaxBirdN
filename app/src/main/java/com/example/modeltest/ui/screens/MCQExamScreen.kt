@@ -33,6 +33,7 @@ import com.example.modeltest.ui.components.ExitExamConfirmDialog
 import com.example.modeltest.ui.components.ModelTestListSkeleton
 import com.example.modeltest.ui.components.QuestionPaletteBottomSheet
 import com.example.modeltest.ui.components.ScorePopupDialog
+import com.example.ui.components.QuizRichContent
 import com.example.utils.toBengaliDigits
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -294,12 +295,12 @@ fun MCQExamScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text(
+                            QuizRichContent(
                                 text = question.question ?: "",
-                                fontSize = 16.sp,
+                                textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, lineHeight = 22.sp),
+                                textColor = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 22.sp
+                                maxImageHeight = 200.dp
                             )
 
                             if (!question.question_image.isNullOrBlank()) {
@@ -365,11 +366,12 @@ fun MCQExamScreen(
 
                                 Spacer(modifier = Modifier.width(12.dp))
 
-                                Text(
+                                QuizRichContent(
                                     text = opt.text ?: "",
-                                    fontSize = 14.5.sp,
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.5.sp),
+                                    textColor = if (isSelected) Color(0xFF1D4ED8) else MaterialTheme.colorScheme.onSurface,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isSelected) Color(0xFF1D4ED8) else MaterialTheme.colorScheme.onSurface,
+                                    maxImageHeight = 130.dp,
                                     modifier = Modifier.weight(1f)
                                 )
                             }

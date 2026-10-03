@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.example.api.PracticeQuizQuestionItem
 import com.example.quiz.FeedbackFilter
 import com.example.quiz.PracticeQuizViewModel
+import com.example.ui.components.QuizRichContent
 
 private fun toBengaliDigits(number: Any): String {
     val english = number.toString()
@@ -486,13 +487,13 @@ private fun QuestionFeedbackCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Question Title
-            Text(
+            // Question Title & Diagram
+            QuizRichContent(
                 text = question.title ?: "",
-                fontSize = 15.sp,
+                textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 22.sp
+                maxImageHeight = 220.dp
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -544,11 +545,11 @@ private fun QuestionFeedbackCard(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        Text(
+                        QuizRichContent(
                             text = explanation,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 19.sp
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 19.sp),
+                            textColor = MaterialTheme.colorScheme.onSurface,
+                            maxImageHeight = 200.dp
                         )
                     }
                 }
@@ -606,15 +607,14 @@ private fun FeedbackOptionRow(
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Text(
+            // Option text or image
+            QuizRichContent(
                 text = option.description ?: "",
-                fontSize = 14.sp,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isCorrectOption || isUserSelection) FontWeight.SemiBold else FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-                lineHeight = 20.sp
+                maxImageHeight = 140.dp,
+                modifier = Modifier.weight(1f)
             )
 
             when {

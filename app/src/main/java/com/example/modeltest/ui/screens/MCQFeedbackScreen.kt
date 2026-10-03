@@ -28,6 +28,7 @@ import com.example.modeltest.ui.FeedbackFilter
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.modeltest.ui.components.RetryErrorView
+import com.example.ui.components.QuizRichContent
 import com.example.utils.toBengaliDigits
 
 /**
@@ -358,10 +359,11 @@ private fun FeedbackQuestionCard(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(end = 8.dp)
                     )
-                    Text(
+                    QuizRichContent(
                         text = opt.text ?: "",
-                        fontSize = 13.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                        textColor = MaterialTheme.colorScheme.onSurface,
+                        maxImageHeight = 130.dp,
                         modifier = Modifier.weight(1f)
                     )
 
@@ -390,7 +392,12 @@ private fun FeedbackQuestionCard(
                         }
                         if (!item.solution.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(text = item.solution, fontSize = 13.sp, color = Color(0xFF334155), lineHeight = 18.sp)
+                            QuizRichContent(
+                                text = item.solution,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp),
+                                textColor = Color(0xFF334155),
+                                maxImageHeight = 180.dp
+                            )
                         }
                         if (!item.solution_image.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(8.dp))

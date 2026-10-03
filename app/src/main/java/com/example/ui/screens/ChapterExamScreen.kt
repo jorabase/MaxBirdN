@@ -36,6 +36,7 @@ import com.example.api.McqOptionItem
 import com.example.course.ChapterExamUiState
 import com.example.course.ChapterExamViewModel
 import com.example.course.ExamStage
+import com.example.ui.components.QuizRichContent
 import com.example.utils.toBengaliDigits
 import java.util.Locale
 
@@ -662,13 +663,13 @@ fun ExamQuestionsContent(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Question Title
-                        Text(
+                        // Question Title & Diagram
+                        QuizRichContent(
                             text = currentQuestion.title ?: "",
-                            fontSize = 17.sp,
+                            textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp),
+                            textColor = Color(0xFF0F172A),
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A),
-                            lineHeight = 24.sp
+                            maxImageHeight = 220.dp
                         )
 
                         Spacer(modifier = Modifier.height(20.dp))
@@ -757,11 +758,13 @@ fun McqOptionCard(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            QuizRichContent(
                 text = option.description ?: "",
-                fontSize = 15.sp,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                textColor = if (isSelected) Color(0xFF0072EC) else Color(0xFF1E293B),
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) Color(0xFF0072EC) else Color(0xFF1E293B)
+                maxImageHeight = 140.dp,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -1061,13 +1064,13 @@ fun ExamSolutionsContent(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Title
-                    Text(
+                    // Title & Diagrams
+                    QuizRichContent(
                         text = q?.title ?: "",
-                        fontSize = 17.sp,
+                        textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp),
+                        textColor = Color(0xFF0F172A),
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
-                        lineHeight = 24.sp
+                        maxImageHeight = 220.dp
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1145,11 +1148,11 @@ fun ExamSolutionsContent(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text(
+                            QuizRichContent(
                                 text = q?.solution ?: "সঠিক উত্তর: $correctOpt",
-                                fontSize = 14.sp,
-                                color = Color(0xFF334155),
-                                lineHeight = 22.sp
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 22.sp),
+                                textColor = Color(0xFF334155),
+                                maxImageHeight = 220.dp
                             )
                         }
                     }

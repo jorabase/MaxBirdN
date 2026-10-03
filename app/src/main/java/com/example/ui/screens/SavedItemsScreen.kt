@@ -32,6 +32,7 @@ import com.example.database.ParsedOption
 import com.example.database.SavedItemEntity
 import com.example.saved.SavedItemFilter
 import com.example.saved.SavedViewModel
+import com.example.ui.components.QuizRichContent
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -273,13 +274,13 @@ fun SavedItemCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Title / Question Text
-            Text(
+            // Title / Question Text & Diagrams
+            QuizRichContent(
                 text = item.title,
-                fontSize = 15.sp,
+                textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 22.sp
+                maxImageHeight = 200.dp
             )
 
             // If it's a question with options
@@ -357,11 +358,11 @@ fun SavedItemCard(
                             )
                             .padding(12.dp)
                     ) {
-                        Text(
+                        QuizRichContent(
                             text = parsedContent.explanation,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 20.sp
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 20.sp),
+                            textColor = MaterialTheme.colorScheme.onSurface,
+                            maxImageHeight = 180.dp
                         )
                     }
                 }
@@ -447,11 +448,12 @@ fun SavedOptionRow(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            Text(
+            QuizRichContent(
                 text = option.description,
-                fontSize = 13.sp,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isCorrect) FontWeight.Bold else FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface,
+                maxImageHeight = 130.dp,
                 modifier = Modifier.weight(1f)
             )
 
