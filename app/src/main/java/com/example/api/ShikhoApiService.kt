@@ -21,7 +21,10 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Url
 import retrofit2.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.ResponseBody
 import java.util.concurrent.TimeUnit
 
@@ -41,6 +44,9 @@ interface ShikhoApiService {
 
     @POST("/auth/v2/logout")
     suspend fun logout(): LogoutResponse
+
+    @POST("/auth/v2/token/refresh")
+    suspend fun refreshToken(@Body request: RefreshTokenRequest): RefreshTokenResponse
 
     @POST("/graphql")
     suspend fun getProfile(@Body query: GraphQlQuery): ProfileResponse
@@ -267,16 +273,91 @@ interface ShikhoApiService {
                     response
                 }
 
+                val refreshLock = Any()
+
+                fun performTokenRefresh(): String? {
+                    synchronized(refreshLock) {
+                        val refreshToken = sessionManager.getRefreshToken() ?: sessionManager.getAccessToken()
+                        if (refreshToken.isNullOrBlank()) return null
+
+                        try {
+                            val refreshClient = OkHttpClient.Builder()
+                                .connectTimeout(10, TimeUnit.SECONDS)
+                                .readTimeout(10, TimeUnit.SECONDS)
+                                .build()
+
+                            val jsonPayload = org.json.JSONObject().apply {
+                                put("token", refreshToken)
+                            }.toString()
+
+                            val refreshReq = Request.Builder()
+                                .url("https://api.shikho.com/auth/v2/token/refresh")
+                                .header("Accept", "application/json")
+                                .header("Content-Type", "application/json")
+                                .header("User-Agent", "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)")
+                                .post(jsonPayload.toRequestBody("application/json".toMediaType()))
+                                .build()
+
+                            val refreshRes = refreshClient.newCall(refreshReq).execute()
+                            if (refreshRes.isSuccessful) {
+                                val resBody = refreshRes.body?.string()
+                                if (!resBody.isNullOrBlank()) {
+                                    val jsonObj = org.json.JSONObject(resBody)
+                                    val tokensObj = jsonObj.optJSONObject("tokens")
+                                    val newAccessToken = tokensObj?.optString("access_token")
+                                    val newRefreshToken = tokensObj?.optString("refresh_token")
+                                    if (!newAccessToken.isNullOrBlank()) {
+                                        sessionManager.updateAuthTokens(
+                                            accessToken = newAccessToken,
+                                            refreshToken = if (!newRefreshToken.isNullOrBlank()) newRefreshToken else refreshToken
+                                        )
+                                        android.util.Log.i("ShikhoApiService", "✅ Token successfully refreshed automatically!")
+                                        return newAccessToken
+                                    }
+                                }
+                            } else {
+                                android.util.Log.w("ShikhoApiService", "Token refresh endpoint returned HTTP ${refreshRes.code}")
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.w("ShikhoApiService", "Token refresh attempt encountered error: ${e.message}")
+                        }
+                        return null
+                    }
+                }
+
                 val auth401Interceptor = Interceptor { chain ->
                     val request = chain.request()
-                    val response = chain.proceed(request)
-                    if (response.code == 401 || response.code == 403) {
+                    var response = chain.proceed(request)
+
+                    // NEVER treat 403 Forbidden as session expiry. 403 is permission-denied for a specific course or WAF check.
+                    if (response.code == 401) {
                         val activeToken = sessionManager.getAccessToken()
-                        if (!activeToken.isNullOrBlank()) {
-                            val url = request.url.toString()
-                            if (!url.contains("/check-user") && !url.contains("/send-sms") && !url.contains("/verify-otp") && !url.contains("/verify-pin") && !url.contains("/login")) {
-                                android.util.Log.w("ShikhoApiService", "HTTP ${response.code} Unauthorized detected for active session. Triggering auto-logout.")
+                        val url = request.url.toString()
+                        val isAuthEndpoint = url.contains("/check-user") || url.contains("/send-sms") ||
+                            url.contains("/verify-otp") || url.contains("/verify-pin") ||
+                            url.contains("/login") || url.contains("/token/refresh")
+
+                        if (!isAuthEndpoint && !activeToken.isNullOrBlank()) {
+                            // 1. Try automatic token refresh first
+                            val newToken = performTokenRefresh()
+                            if (!newToken.isNullOrBlank()) {
+                                try {
+                                    response.close()
+                                } catch (_: Exception) {}
+                                val retryReq = request.newBuilder()
+                                    .header("Authorization", "Bearer $newToken")
+                                    .build()
+                                return@Interceptor chain.proceed(retryReq)
+                            }
+
+                            // 2. Only trigger session expired dialog if this is a primary authenticated GraphQL API endpoint
+                            // Never trigger for analytics, FCM, telemetry, or external services
+                            val isCoreGraphql = url.contains("api.shikho.com/graphql")
+                            if (isCoreGraphql) {
+                                android.util.Log.w("ShikhoApiService", "HTTP 401 Unauthorized confirmed on core endpoint $url after refresh failed. Triggering session expired notification.")
                                 sessionManager.notifyUnauthorized()
+                            } else {
+                                android.util.Log.w("ShikhoApiService", "HTTP 401 on non-critical endpoint $url suppressed to prevent session loss.")
                             }
                         }
                     }

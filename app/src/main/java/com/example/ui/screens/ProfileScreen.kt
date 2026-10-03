@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
@@ -41,6 +42,7 @@ fun ProfileScreen(
     sessionManager: com.example.auth.SessionManager? = null,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     var showSessionShareDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -142,6 +144,7 @@ fun ProfileContent(
     onOpenSessionShare: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    var formattedCacheSize by remember { mutableStateOf(com.example.utils.AppCacheManager.getFormattedCacheSize(context)) }
     val imageRequest = remember(profile.avatar, profile.first_name, context) {
         AvatarUtils.buildImageRequest(context, profile.avatar, profile.first_name)
     }
@@ -372,6 +375,72 @@ fun ProfileContent(
                     )
                     Text(
                         text = "বুকমার্ক করা প্রশ্ন ও গুরুত্বপূর্ণ স্টাডি ম্যাটেরিয়াল",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Clear Storage Cache Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    com.example.utils.AppCacheManager.clearAllAppCache(context)
+                    formattedCacheSize = "0.0 MB"
+                    android.widget.Toast.makeText(context, "অ্যাপের সমস্ত ক্যাশ মেমোরি সম্পূর্ণ খালি করা হয়েছে!", android.widget.Toast.LENGTH_SHORT).show()
+                },
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE0F2FE)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = null,
+                        tint = Color(0xFF0284C7),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "ক্যাশ মেমোরি পরিষ্কার করুন",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (formattedCacheSize != "0.0 MB") {
+                            "$formattedCacheSize ক্যাশ জমা আছে • খালি করতে ট্যাপ করুন"
+                        } else {
+                            "ক্যাশ মেমোরি সম্পূর্ণ পরিষ্কার আছে (০.০ MB)"
+                        },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

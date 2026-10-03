@@ -655,16 +655,15 @@ fun LessonDetailPlayerScreen(
             val dbProgress = videoProgressManager.getProgress(videoKey)
             if (dbProgress != null && dbProgress.isEligibleForResume && !hasAutoResumed) {
                 pendingResumeSeekMs = dbProgress.positionMs
-                if (exoPlayer.playbackState == Player.STATE_READY) {
-                    hasAutoResumed = true
-                    exoPlayer.seekTo(dbProgress.positionMs)
-                    currentPosition = dbProgress.positionMs
-                    val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
-                    resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
-                    coroutineScope.launch {
-                        delay(6000)
-                        resumeNotificationText = null
-                    }
+                hasAutoResumed = true
+                exoPlayer.seekTo(dbProgress.positionMs)
+                currentPosition = dbProgress.positionMs
+                lastPlaybackPositionMs = dbProgress.positionMs
+                val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
+                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                coroutineScope.launch {
+                    delay(6000)
+                    resumeNotificationText = null
                 }
             }
         }
@@ -700,8 +699,15 @@ fun LessonDetailPlayerScreen(
     // automatically re-prepare and resume from lastPlaybackPositionMs without user intervention!
     DisposableEffect(context, activeStreamUrl) {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        var networkWasLost = false
         val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onLost(network: android.net.Network) {
+                networkWasLost = true
+            }
+
             override fun onAvailable(network: android.net.Network) {
+                if (!networkWasLost) return // Ignore initial registration event!
+                networkWasLost = false
                 coroutineScope.launch {
                     if (playbackError != null || (!exoPlayer.isPlaying && isBuffering)) {
                         android.util.Log.d("LectureDebug", "Network recovered! Auto-reconnecting and resuming from $lastPlaybackPositionMs ms")
@@ -710,7 +716,7 @@ fun LessonDetailPlayerScreen(
                         isBuffering = true
                         try {
                             if (activeStreamUrl.isNotBlank()) {
-                                val mediaSource = ShikhoPlayerManager.createMediaSource(activeStreamUrl, isLive = false)
+                                val mediaSource = ShikhoPlayerManager.createMediaSource(activeStreamUrl, isLive = false, context = context)
                                 exoPlayer.setMediaSource(mediaSource)
                                 if (lastPlaybackPositionMs > 1000L) {
                                     exoPlayer.seekTo(lastPlaybackPositionMs)
@@ -773,6 +779,8 @@ fun LessonDetailPlayerScreen(
         }
     }
     
+    var wasPlayingBeforePause by remember { mutableStateOf(false) }
+    
     DisposableEffect(lifecycleOwner, isAudioOnlyMode) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -783,12 +791,14 @@ fun LessonDetailPlayerScreen(
                     } else {
                         val activity = context as? Activity
                         if (activity?.isInPictureInPictureMode != true) {
+                            wasPlayingBeforePause = exoPlayer.isPlaying
                             exoPlayer.pause()
                         }
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    if (isPlaying && !isAudioOnlyMode) {
+                    if (wasPlayingBeforePause && !isAudioOnlyMode) {
+                        wasPlayingBeforePause = false
                         exoPlayer.play()
                     }
                 }
@@ -1022,9 +1032,13 @@ fun LessonDetailPlayerScreen(
                     onSeekFinished = { targetPos ->
                         currentPosition = targetPos
                         seekPosition = targetPos
+                        lastPlaybackPositionMs = targetPos
                         exoPlayer.seekTo(targetPos)
+                        if (exoPlayer.playbackState == Player.STATE_ENDED) {
+                            exoPlayer.play()
+                        }
                         coroutineScope.launch {
-                            delay(350)
+                            delay(600)
                             isSeeking = false
                         }
                     },
@@ -1246,9 +1260,13 @@ fun LessonDetailPlayerScreen(
                                 onSeekFinished = { targetPos ->
                                     currentPosition = targetPos
                                     seekPosition = targetPos
+                                    lastPlaybackPositionMs = targetPos
                                     exoPlayer.seekTo(targetPos)
+                                    if (exoPlayer.playbackState == Player.STATE_ENDED) {
+                                        exoPlayer.play()
+                                    }
                                     coroutineScope.launch {
-                                        delay(350)
+                                        delay(600)
                                         isSeeking = false
                                     }
                                 },

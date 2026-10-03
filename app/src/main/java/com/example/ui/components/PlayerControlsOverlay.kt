@@ -853,9 +853,9 @@ fun PlayerControlsOverlay(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 6.dp)
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp))
+                                    .padding(horizontal = 8.dp)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
                                     .background(Color.White.copy(alpha = 0.20f))
                             ) {
                                 Box(

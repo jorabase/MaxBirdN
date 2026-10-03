@@ -51,6 +51,9 @@ class MainActivity : ComponentActivity() {
         ClassAlarmScheduler.createNotificationChannel(this)
         ShikhoNotificationManager.createNotificationChannels(this)
 
+        // 1.1 Immediately purge any bloated cache to protect phone storage
+        com.example.utils.AppCacheManager.autoTrimExcessiveCache(this)
+
         // 2. Verify Firebase is initialized correctly
         try {
             val apps = com.google.firebase.FirebaseApp.getApps(this)

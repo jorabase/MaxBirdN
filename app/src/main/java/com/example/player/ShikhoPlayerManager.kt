@@ -81,10 +81,66 @@ object ShikhoPlayerManager {
     const val DEFAULT_REFERER = "https://shikho.com/"
     const val DEFAULT_USER_AGENT = "Dalvik/2.1.0 (Linux; U; Android 12; V2029 Build/SP1A.210812.003)"
 
-    // Singleton Persistent LRU Disk Cache (512MB) for YouTube-style pre-buffering
+    // Compact LRU Disk Cache (24MB) for smooth playback without bloating phone storage
+    private const val MAX_DISK_CACHE_BYTES = 24L * 1024L * 1024L // 24MB max
+
     @Volatile
     private var simpleCache: SimpleCache? = null
     private val cacheLock = Any()
+
+    /**
+     * Immediately purges old bloated 550MB media cache if it exceeds 35MB.
+     * Ensures user's internal phone storage is protected.
+     */
+    fun pruneAndCleanBloatedCache(context: Context) {
+        synchronized(cacheLock) {
+            try {
+                val cacheDir = File(context.applicationContext.cacheDir, "media_stream_cache")
+                if (cacheDir.exists()) {
+                    val totalBytes = cacheDir.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
+                    if (totalBytes > 35L * 1024L * 1024L) {
+                        try {
+                            simpleCache?.release()
+                        } catch (_: Exception) {}
+                        simpleCache = null
+                        cacheDir.deleteRecursively()
+                        cacheDir.mkdirs()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ShikhoPlayerManager", "Error pruning media cache: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Completely clears media stream cache on demand.
+     */
+    fun clearMediaCache(context: Context) {
+        synchronized(cacheLock) {
+            try {
+                simpleCache?.release()
+            } catch (_: Exception) {}
+            simpleCache = null
+            val cacheDir = File(context.applicationContext.cacheDir, "media_stream_cache")
+            if (cacheDir.exists()) {
+                cacheDir.deleteRecursively()
+                cacheDir.mkdirs()
+            }
+        }
+    }
+
+    fun getMediaCacheSizeMb(context: Context): Float {
+        return try {
+            val cacheDir = File(context.applicationContext.cacheDir, "media_stream_cache")
+            if (cacheDir.exists()) {
+                val bytes = cacheDir.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
+                bytes.toFloat() / (1024f * 1024f)
+            } else 0f
+        } catch (_: Exception) {
+            0f
+        }
+    }
 
     fun getMediaCache(context: Context): SimpleCache {
         return simpleCache ?: synchronized(cacheLock) {
@@ -93,7 +149,8 @@ object ShikhoPlayerManager {
                 if (!cacheDir.exists()) {
                     cacheDir.mkdirs()
                 }
-                val evictor = LeastRecentlyUsedCacheEvictor(512L * 1024L * 1024L) // 512MB LRU Disk Cache
+                // Compact 32MB LRU Disk Cache - prevents phone storage from ballooning to 550MB+!
+                val evictor = LeastRecentlyUsedCacheEvictor(MAX_DISK_CACHE_BYTES)
                 val databaseProvider = StandaloneDatabaseProvider(context.applicationContext)
                 SimpleCache(cacheDir, evictor, databaseProvider).also {
                     simpleCache = it

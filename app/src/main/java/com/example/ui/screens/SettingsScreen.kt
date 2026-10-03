@@ -73,6 +73,11 @@ fun SettingsScreen(
     val currentThemeMode by sessionManager.themeModeFlow.collectAsState()
     val currentLeadTime by sessionManager.classNotificationLeadTimeFlow.collectAsState()
     var showThemeDialog by remember { mutableStateOf(false) }
+    var formattedCacheSize by remember { mutableStateOf("0.0 MB") }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        formattedCacheSize = com.example.utils.AppCacheManager.getFormattedCacheSize(context)
+    }
 
     val profileUpdated by sessionManager.userProfileUpdateFlow.collectAsState()
     val userAvatarFlowValue by sessionManager.userAvatarFlow.collectAsState()
@@ -427,6 +432,27 @@ fun SettingsScreen(
                         else -> "System"
                     },
                     onClick = { showThemeDialog = true }
+                )
+            }
+
+            // Storage & Cache Section
+            SettingsSection(title = "স্টোরেজ ও ক্যাশ মেমোরি") {
+                SettingsRowItem(
+                    icon = Icons.Default.DeleteSweep,
+                    iconTint = Color(0xFF0284C7),
+                    iconBg = Color(0xFFE0F2FE),
+                    title = "ক্যাশ মেমোরি পরিষ্কার করুন",
+                    subtitle = if (formattedCacheSize != "0.0 MB") {
+                        "$formattedCacheSize ক্যাশ জমা আছে • খালি করতে ট্যাপ করুন"
+                    } else {
+                        "ক্যাশ মেমোরি সম্পূর্ণ পরিষ্কার আছে (০.০ MB)"
+                    },
+                    badge = formattedCacheSize,
+                    onClick = {
+                        com.example.utils.AppCacheManager.clearAllAppCache(context)
+                        formattedCacheSize = "0.0 MB"
+                        Toast.makeText(context, "অ্যাপের সমস্ত ক্যাশ মেমোরি সম্পূর্ণ খালি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                    }
                 )
             }
 

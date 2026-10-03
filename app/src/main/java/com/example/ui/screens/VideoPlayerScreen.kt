@@ -412,16 +412,15 @@ fun VideoPlayerScreen(
             val dbProgress = videoProgressManager.getProgress(videoKey)
             if (dbProgress != null && dbProgress.isEligibleForResume && !hasAutoResumed) {
                 pendingResumeSeekMs = dbProgress.positionMs
-                if (exoPlayer.playbackState == Player.STATE_READY) {
-                    hasAutoResumed = true
-                    exoPlayer.seekTo(dbProgress.positionMs)
-                    currentPosition = dbProgress.positionMs
-                    val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
-                    resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
-                    coroutineScope.launch {
-                        delay(6000)
-                        resumeNotificationText = null
-                    }
+                hasAutoResumed = true
+                exoPlayer.seekTo(dbProgress.positionMs)
+                currentPosition = dbProgress.positionMs
+                lastPlaybackPositionMs = dbProgress.positionMs
+                val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
+                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                coroutineScope.launch {
+                    delay(6000)
+                    resumeNotificationText = null
                 }
             }
         }
@@ -451,11 +450,18 @@ fun VideoPlayerScreen(
         }
     }
 
-    // Auto-reconnect & resume on network restoration
+    // Auto-reconnect & resume on network restoration (only after network drop)
     DisposableEffect(context, effectivePlaybackUrl) {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        var networkWasLost = false
         val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onLost(network: android.net.Network) {
+                networkWasLost = true
+            }
+
             override fun onAvailable(network: android.net.Network) {
+                if (!networkWasLost) return // Ignore initial registration event!
+                networkWasLost = false
                 coroutineScope.launch {
                     if (exoPlayer.playerError != null || (!exoPlayer.isPlaying && isBuffering)) {
                         isBuffering = true
@@ -526,6 +532,8 @@ fun VideoPlayerScreen(
         }
     }
 
+    var wasPlayingBeforePause by remember { mutableStateOf(false) }
+
     DisposableEffect(lifecycleOwner, isAudioOnlyMode) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -536,12 +544,14 @@ fun VideoPlayerScreen(
                     } else {
                         val act = context as? Activity
                         if (act?.isInPictureInPictureMode != true) {
+                            wasPlayingBeforePause = exoPlayer.isPlaying
                             exoPlayer.pause()
                         }
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    if (isPlaying && !isAudioOnlyMode) {
+                    if (wasPlayingBeforePause && !isAudioOnlyMode) {
+                        wasPlayingBeforePause = false
                         exoPlayer.play()
                     }
                 }
@@ -705,9 +715,13 @@ fun VideoPlayerScreen(
             onSeekFinished = { targetPos ->
                 currentPosition = targetPos
                 seekPosition = targetPos
+                lastPlaybackPositionMs = targetPos
                 exoPlayer.seekTo(targetPos)
+                if (exoPlayer.playbackState == Player.STATE_ENDED) {
+                    exoPlayer.play()
+                }
                 coroutineScope.launch {
-                    delay(350)
+                    delay(600)
                     isSeeking = false
                 }
             },

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import java.util.UUID
 
 class SessionManager(context: Context) {
+    private val fallbackPrefs: SharedPreferences = context.getSharedPreferences("shikho_prefs_fallback", Context.MODE_PRIVATE)
+
     private val sharedPreferences: SharedPreferences = try {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -25,7 +27,28 @@ class SessionManager(context: Context) {
         )
     } catch (e: Throwable) {
         android.util.Log.e("SessionManager", "Failed to initialize EncryptedSharedPreferences, falling back to standard SharedPreferences: ${e.message}", e)
-        context.getSharedPreferences("shikho_prefs_fallback", Context.MODE_PRIVATE)
+        fallbackPrefs
+    }
+
+    init {
+        // Auto-heal / synchronize between secure prefs and fallback prefs
+        try {
+            val secureToken = sharedPreferences.getString("access_token", null)
+            val fallbackToken = fallbackPrefs.getString("access_token", null)
+            if (secureToken.isNullOrBlank() && !fallbackToken.isNullOrBlank()) {
+                sharedPreferences.edit()
+                    .putString("access_token", fallbackToken)
+                    .putString("refresh_token", fallbackPrefs.getString("refresh_token", null))
+                    .putString("user_id", fallbackPrefs.getString("user_id", null))
+                    .apply()
+            } else if (!secureToken.isNullOrBlank() && fallbackToken.isNullOrBlank()) {
+                fallbackPrefs.edit()
+                    .putString("access_token", secureToken)
+                    .putString("refresh_token", sharedPreferences.getString("refresh_token", null))
+                    .putString("user_id", sharedPreferences.getString("user_id", null))
+                    .apply()
+            }
+        } catch (_: Exception) {}
     }
 
     fun getDeviceId(): String {
@@ -33,19 +56,21 @@ class SessionManager(context: Context) {
         if (!fcm.isNullOrBlank()) {
             return fcm
         }
-        var deviceId = sharedPreferences.getString("device_id", null)
+        var deviceId = sharedPreferences.getString("device_id", null) ?: fallbackPrefs.getString("device_id", null)
         if (deviceId == null) {
             deviceId = UUID.randomUUID().toString()
             sharedPreferences.edit().putString("device_id", deviceId).apply()
+            fallbackPrefs.edit().putString("device_id", deviceId).apply()
         }
         return deviceId
     }
 
     fun getGoogleAdsId(): String {
-        var adsId = sharedPreferences.getString("google_ads_id", null)
+        var adsId = sharedPreferences.getString("google_ads_id", null) ?: fallbackPrefs.getString("google_ads_id", null)
         if (adsId == null) {
             adsId = UUID.randomUUID().toString()
             sharedPreferences.edit().putString("google_ads_id", adsId).apply()
+            fallbackPrefs.edit().putString("google_ads_id", adsId).apply()
         }
         return adsId
     }
@@ -60,23 +85,44 @@ class SessionManager(context: Context) {
             .putString("refresh_token", refreshToken)
             .putString("user_id", userId)
             .apply()
+
+        // Mirror to fallbackPrefs to ensure session is never lost on device reboot or keystore issue
+        fallbackPrefs.edit()
+            .putString("access_token", accessToken)
+            .putString("refresh_token", refreshToken)
+            .putString("user_id", userId)
+            .apply()
     }
 
     fun updateAuthTokens(accessToken: String, refreshToken: String?, idToken: String? = null) {
-        val editor = sharedPreferences.edit()
-            .putString("access_token", accessToken)
+        val editor = sharedPreferences.edit().putString("access_token", accessToken)
+        val fallbackEditor = fallbackPrefs.edit().putString("access_token", accessToken)
         if (!refreshToken.isNullOrBlank()) {
             editor.putString("refresh_token", refreshToken)
+            fallbackEditor.putString("refresh_token", refreshToken)
         }
         if (!idToken.isNullOrBlank()) {
             editor.putString("id_token", idToken)
+            fallbackEditor.putString("id_token", idToken)
         }
         editor.apply()
+        fallbackEditor.apply()
     }
 
-    fun getAccessToken(): String? = sharedPreferences.getString("access_token", null)
+    fun getAccessToken(): String? {
+        val token = sharedPreferences.getString("access_token", null)
+        if (!token.isNullOrBlank()) return token
+        return fallbackPrefs.getString("access_token", null)
+    }
+
+    fun getRefreshToken(): String? {
+        val rToken = sharedPreferences.getString("refresh_token", null)
+        if (!rToken.isNullOrBlank()) return rToken
+        return fallbackPrefs.getString("refresh_token", null)
+    }
+
     fun getUserId(): String? {
-        val stored = sharedPreferences.getString("user_id", null)
+        val stored = sharedPreferences.getString("user_id", null) ?: fallbackPrefs.getString("user_id", null)
         if (!stored.isNullOrBlank()) return stored
         val token = getAccessToken()
         if (!token.isNullOrBlank()) {
@@ -88,6 +134,7 @@ class SessionManager(context: Context) {
                     val aud = json.optString("aud", "")
                     if (aud.isNotBlank()) {
                         sharedPreferences.edit().putString("user_id", aud).apply()
+                        fallbackPrefs.edit().putString("user_id", aud).apply()
                         return aud
                     }
                 }
@@ -452,7 +499,6 @@ class SessionManager(context: Context) {
         val activeToken = getAccessToken()
         if (activeToken.isNullOrBlank()) return
         isUnauthorizedNotified = true
-        clearSession()
         _unauthorizedEvent.tryEmit(Unit)
     }
 
@@ -471,22 +517,21 @@ class SessionManager(context: Context) {
     }
 
     fun clearSession() {
-        sharedPreferences.edit()
-            .remove("access_token")
-            .remove("refresh_token")
-            .remove("user_id")
-            .remove("active_program_id")
-            .remove("active_program_title_bn")
-            .remove("academic_batch_id")
-            .remove("academic_class_name")
-            .remove("academic_group")
-            .remove("academic_vendor")
-            .remove("academic_passing_year")
-            .remove("user_first_name")
-            .remove("user_last_name")
-            .remove("user_avatar")
-            .remove("just_signed_up")
-            .apply()
+        val keys = listOf(
+            "access_token", "refresh_token", "user_id",
+            "active_program_id", "active_program_title_bn",
+            "academic_batch_id", "academic_class_name", "academic_group",
+            "academic_vendor", "academic_passing_year",
+            "user_first_name", "user_last_name", "user_avatar", "just_signed_up"
+        )
+        val editor = sharedPreferences.edit()
+        val fallbackEditor = fallbackPrefs.edit()
+        for (k in keys) {
+            editor.remove(k)
+            fallbackEditor.remove(k)
+        }
+        editor.apply()
+        fallbackEditor.apply()
         _userAvatarFlow.value = null
         _userProfileUpdateFlow.value = System.currentTimeMillis()
     }

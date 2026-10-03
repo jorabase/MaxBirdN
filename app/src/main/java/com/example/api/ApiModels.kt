@@ -196,6 +196,18 @@ data class LogoutResponse(
     val code: Int? = null
 )
 
+@JsonClass(generateAdapter = true)
+data class RefreshTokenRequest(
+    val token: String
+)
+
+@JsonClass(generateAdapter = true)
+data class RefreshTokenResponse(
+    val tokens: LoginTokens? = null,
+    val message: String? = null,
+    val code: Int? = null
+)
+
 // GraphQL generic request payload
 @JsonClass(generateAdapter = true)
 data class GraphQlQuery(
