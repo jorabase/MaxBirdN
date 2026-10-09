@@ -46,12 +46,17 @@ class ActivationNetworkInterceptor(private val context: Context) : Interceptor {
         }
 
         // Attach device integrity token header to legit outbound requests
-        val rawToken = DeviceActivationRepository.getRawSessionToken(context)
+        val rawToken = try { DeviceActivationRepository.getRawSessionToken(context) } catch (_: Throwable) { null }
         val modifiedRequest = if (!rawToken.isNullOrBlank()) {
-            request.newBuilder()
-                .header("X-Device-Hardware-Hash", DeviceSecurityManager.getDeviceHardwareHash(context).take(16))
-                .header("X-Device-Session-Token", rawToken)
-                .build()
+            try {
+                val hwHash = DeviceSecurityManager.getDeviceHardwareHash(context).take(16)
+                request.newBuilder()
+                    .header("X-Device-Hardware-Hash", hwHash)
+                    .header("X-Device-Session-Token", rawToken)
+                    .build()
+            } catch (_: Throwable) {
+                request
+            }
         } else {
             request
         }

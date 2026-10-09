@@ -102,33 +102,46 @@ object DeviceSecurityManager {
 
     /**
      * Signs a raw session token with HMAC-SHA256 using the device's hardware identity as key.
-     * Format: rawToken:timestamp:hmacSignature
+     * Format: rawToken###timestamp###hmacSignature
      */
     fun signToken(token: String, deviceHardwareHash: String): String {
         val timestamp = System.currentTimeMillis()
-        val payload = "$token:$timestamp"
+        val payload = "$token###$timestamp"
         val signature = computeHmac(payload, deviceHardwareHash)
-        return "$payload:$signature"
+        return "$payload###$signature"
     }
 
     /**
      * Validates whether a stored signed token was genuinely created on THIS specific device
-     * and has not been edited in SharedPreferences by MT Manager.
+     * and has not been edited in SharedPreferences.
      */
     fun verifyTokenIntegrity(signedToken: String?, deviceHardwareHash: String): Boolean {
         if (signedToken.isNullOrBlank()) return false
-        val parts = signedToken.split(":")
-        if (parts.size != 3) return false
-
-        val token = parts[0]
-        val timestamp = parts[1]
-        val signature = parts[2]
-
-        if (token.isBlank() || timestamp.isBlank() || signature.isBlank()) return false
-
-        val payload = "$token:$timestamp"
-        val expectedSignature = computeHmac(payload, deviceHardwareHash)
-        return signature == expectedSignature
+        return try {
+            if (signedToken.contains("###")) {
+                val parts = signedToken.split("###")
+                if (parts.size != 3) return false
+                val token = parts[0]
+                val timestamp = parts[1]
+                val signature = parts[2]
+                if (token.isBlank() || timestamp.isBlank() || signature.isBlank()) return false
+                val payload = "$token###$timestamp"
+                val expectedSignature = computeHmac(payload, deviceHardwareHash)
+                signature == expectedSignature
+            } else {
+                val parts = signedToken.split(":")
+                if (parts.size != 3) return false
+                val token = parts[0]
+                val timestamp = parts[1]
+                val signature = parts[2]
+                if (token.isBlank() || timestamp.isBlank() || signature.isBlank()) return false
+                val payload = "$token:$timestamp"
+                val expectedSignature = computeHmac(payload, deviceHardwareHash)
+                signature == expectedSignature
+            }
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     /**
@@ -136,10 +149,16 @@ object DeviceSecurityManager {
      */
     fun extractRawToken(signedToken: String?, deviceHardwareHash: String): String? {
         if (signedToken.isNullOrBlank()) return null
-        val parts = signedToken.split(":")
-        if (parts.size != 3) return null
-        if (!verifyTokenIntegrity(signedToken, deviceHardwareHash)) return null
-        return parts[0]
+        return try {
+            if (!verifyTokenIntegrity(signedToken, deviceHardwareHash)) return null
+            if (signedToken.contains("###")) {
+                signedToken.split("###").getOrNull(0)
+            } else {
+                signedToken.split(":").getOrNull(0)
+            }
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     private fun computeHmac(data: String, deviceHardwareHash: String): String {

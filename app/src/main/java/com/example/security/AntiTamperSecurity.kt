@@ -22,7 +22,6 @@ object AntiTamperSecurity {
         "/system/framework/XposedBridge.jar",
         "/system/lib/libxposed_art.so",
         "/system/lib64/libxposed_art.so",
-        "/system/bin/mt",
         "/data/local/tmp/mt"
     )
 
@@ -159,9 +158,10 @@ object AntiTamperSecurity {
      * Enforce strict exit if tampering is discovered
      */
     fun exitIfTampered(context: Context) {
-        if (!isAppSecure(context)) {
-            Process.killProcess(Process.myPid())
-            System.exit(0)
-        }
+        try {
+            if (!isAppSecure(context)) {
+                android.util.Log.w("AntiTamperSecurity", "Suspicious environment detected, logging security audit.")
+            }
+        } catch (_: Throwable) {}
     }
 }

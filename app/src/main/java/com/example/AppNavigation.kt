@@ -432,10 +432,14 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         animatedComposable(Routes.ACTIVATION, anim = NavAnim.auth) {
             DeviceActivationScreen(
                 onActivationSuccess = {
-                    val isLoggedIn = sessionManager.getAccessToken() != null
-                    val destination = if (isLoggedIn) Routes.HOME else Routes.LOGIN
-                    navController.navigate(destination) {
-                        popUpTo(Routes.ACTIVATION) { inclusive = true }
+                    try {
+                        val isLoggedIn = sessionManager.getAccessToken() != null
+                        val destination = if (isLoggedIn) Routes.HOME else Routes.LOGIN
+                        navController.navigate(destination) {
+                            popUpTo(Routes.ACTIVATION) { inclusive = true }
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.e("AppNavigation", "Navigation failed after activation: ${e.message}", e)
                     }
                 }
             )

@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -106,35 +107,48 @@ fun DeviceActivationScreen(
     }
 
     fun handleActivate() {
-        if (accessCodeInput.trim().isBlank()) {
+        val code = accessCodeInput.trim()
+        if (code.isBlank()) {
             errorMessage = "দয়া করে এক্সেস কোডটি লিখুন।"
             return
         }
 
-        keyboardController?.hide()
+        try {
+            keyboardController?.hide()
+        } catch (_: Throwable) {}
+
         isLoading = true
         errorMessage = null
         successMessage = null
 
         coroutineScope.launch {
-            if (!isSupabaseConfigured) {
-                // If not configured, explain clearly
-                isLoading = false
-                errorMessage = "Supabase কনফিগারেশন এখনো সংযুক্ত করা হয়নি। অনুগ্রহ করে GitHub Secrets এ SUPABASE_URL এবং SUPABASE_ANON_KEY যোগ করুন।"
-                return@launch
-            }
+            try {
+                if (!isSupabaseConfigured) {
+                    isLoading = false
+                    errorMessage = "Supabase কনফিগারেশন এখনো সংযুক্ত করা হয়নি। অনুগ্রহ করে GitHub Secrets এ SUPABASE_URL এবং SUPABASE_ANON_KEY যোগ করে নতুন বিল্ড করুন।"
+                    return@launch
+                }
 
-            val result = DeviceActivationRepository.activateDevice(context, accessCodeInput.trim())
-            isLoading = false
-            when (result) {
-                is ActivationResult.Success -> {
-                    successMessage = result.message
-                    delay(1200)
-                    onActivationSuccess()
+                val result = DeviceActivationRepository.activateDevice(context, code)
+                isLoading = false
+                when (result) {
+                    is ActivationResult.Success -> {
+                        successMessage = result.message
+                        delay(1000)
+                        try {
+                            onActivationSuccess()
+                        } catch (t: Throwable) {
+                            Log.e("DeviceActivation", "Navigation error: ${t.message}", t)
+                        }
+                    }
+                    is ActivationResult.Error -> {
+                        errorMessage = result.message
+                    }
                 }
-                is ActivationResult.Error -> {
-                    errorMessage = result.message
-                }
+            } catch (t: Throwable) {
+                Log.e("DeviceActivation", "Error in handleActivate: ${t.message}", t)
+                isLoading = false
+                errorMessage = "ত্রুটি ঘটেছে: ${t.localizedMessage ?: "দয়া করে আবার চেষ্টা করুন"}"
             }
         }
     }

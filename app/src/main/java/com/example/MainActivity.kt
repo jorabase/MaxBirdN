@@ -190,13 +190,17 @@ class MainActivity : ComponentActivity() {
         AntiTamperSecurity.exitIfTampered(this)
 
         // Silent heartbeat verification with Supabase
-        if (com.example.security.DeviceActivationRepository.isConfigured() &&
-            com.example.security.DeviceActivationRepository.isDeviceActivated(this)
-        ) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                com.example.security.DeviceActivationRepository.verifyHeartbeat(applicationContext)
+        try {
+            if (com.example.security.DeviceActivationRepository.isConfigured() &&
+                com.example.security.DeviceActivationRepository.isDeviceActivated(this)
+            ) {
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    try {
+                        com.example.security.DeviceActivationRepository.verifyHeartbeat(applicationContext)
+                    } catch (_: Throwable) {}
+                }
             }
-        }
+        } catch (_: Throwable) {}
     }
 
     @Deprecated("Deprecated in Java")

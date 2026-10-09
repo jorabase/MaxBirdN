@@ -91,4 +91,30 @@ class ExampleRobolectricTest {
     assertEquals(1, filteredForMotion.size)
     assertEquals("l3", filteredForMotion[0].id)
   }
+
+  @Test
+  fun `device security token signing and verification works reliably`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val hwHash = com.example.security.DeviceSecurityManager.getDeviceHardwareHash(context)
+    val token = "test-uuid-token-1234"
+    val signedToken = com.example.security.DeviceSecurityManager.signToken(token, hwHash)
+
+    val isValid = com.example.security.DeviceSecurityManager.verifyTokenIntegrity(signedToken, hwHash)
+    org.junit.Assert.assertTrue(isValid)
+
+    val extracted = com.example.security.DeviceSecurityManager.extractRawToken(signedToken, hwHash)
+    assertEquals(token, extracted)
+
+    // Tampered token must fail
+    val isTamperedValid = com.example.security.DeviceSecurityManager.verifyTokenIntegrity("fake:1234:5678", hwHash)
+    org.junit.Assert.assertFalse(isTamperedValid)
+  }
+
+  @Test
+  fun `display device id format is valid`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val displayId = com.example.security.DeviceSecurityManager.getDisplayDeviceId(context)
+    org.junit.Assert.assertTrue(displayId.startsWith("MX-"))
+    org.junit.Assert.assertEquals(17, displayId.length) // MX-XXXX-XXXX-XXXX = 17 chars
+  }
 }
