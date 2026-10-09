@@ -403,8 +403,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 sessionManager = sessionManager,
                 onNavigateOnline = { isLoggedIn ->
                     val isActivated = DeviceActivationRepository.isDeviceActivated(context)
-                    val isConfigured = DeviceActivationRepository.isConfigured()
-                    val destination = if (isConfigured && !isActivated) {
+                    val destination = if (!isActivated) {
                         Routes.ACTIVATION
                     } else if (isLoggedIn) {
                         Routes.HOME
@@ -417,8 +416,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateOffline = {
                     val isActivated = DeviceActivationRepository.isDeviceActivated(context)
-                    val isConfigured = DeviceActivationRepository.isConfigured()
-                    if (isConfigured && !isActivated) {
+                    if (!isActivated) {
                         navController.navigate(Routes.ACTIVATION) {
                             popUpTo(Routes.SPLASH) { inclusive = true }
                         }
@@ -541,9 +539,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
         animatedComposable(Routes.HOME, anim = NavAnim.home) {
             LaunchedEffect(Unit) {
-                if (DeviceActivationRepository.isConfigured() &&
-                    !DeviceActivationRepository.isDeviceActivated(context)
-                ) {
+                if (!DeviceActivationRepository.isDeviceActivated(context)) {
                     navController.navigate(Routes.ACTIVATION) {
                         popUpTo(0) { inclusive = true }
                     }

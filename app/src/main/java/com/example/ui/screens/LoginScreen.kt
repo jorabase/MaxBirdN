@@ -87,9 +87,7 @@ fun LoginScreen(
     LaunchedEffect(Unit) {
         visible = true
         // Zero-Trust Check: verify device activation even if someone bypassed Splash directly into Login
-        if (com.example.security.DeviceActivationRepository.isConfigured() &&
-            !com.example.security.DeviceActivationRepository.isDeviceActivated(context)
-        ) {
+        if (!com.example.security.DeviceActivationRepository.isDeviceActivated(context)) {
             onNavigateToActivation?.invoke()
         }
     }
