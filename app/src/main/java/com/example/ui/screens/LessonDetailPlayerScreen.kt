@@ -196,14 +196,37 @@ fun LessonDetailPlayerScreen(
         )
     }
 
-    // Determine if this is strictly an upcoming live class (countdown state)
-    val isUpcomingLesson = remember(lesson, lesson?.isUpcoming, lesson?.isLiveNow, lesson?.classStartMs, activeStreamUrl, candidateStreams) {
+    // 1. Determine if this class is currently LIVE / ONGOING
+    val isLiveOngoing = remember(lesson, lesson?.isLiveNow, activeStreamUrl, candidateStreams) {
+        lesson?.isLiveNow == true || (
+            lesson?.isLiveClass == true &&
+            activeStreamUrl.isBlank() &&
+            candidateStreams.isEmpty() &&
+            lesson?.isUpcoming == false &&
+            lesson?.isRecordingProcessing == false
+        )
+    }
+
+    // 2. Determine if this is strictly an upcoming live class (countdown state)
+    val isUpcomingLesson = remember(lesson, lesson?.isUpcoming, isLiveOngoing, activeStreamUrl, candidateStreams) {
+        if (isLiveOngoing) return@remember false
         lesson?.isUpcoming == true || (
             lesson?.isLiveNow == false &&
             activeStreamUrl.isBlank() &&
             candidateStreams.isEmpty() &&
             (lesson?.classStartMs ?: Long.MAX_VALUE) != Long.MAX_VALUE &&
             System.currentTimeMillis() < (lesson?.classStartMs ?: Long.MAX_VALUE)
+        )
+    }
+
+    // 3. Determine if recording is currently processing (live ended, upload delay 0-60 mins)
+    val isRecordingProcessing = remember(lesson, lesson?.isRecordingProcessing, isLiveOngoing, isUpcomingLesson, activeStreamUrl, candidateStreams) {
+        if (isLiveOngoing || isUpcomingLesson) return@remember false
+        if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) return@remember false
+        lesson?.isRecordingProcessing == true || (
+            lesson?.isLiveClass == true &&
+            activeStreamUrl.isBlank() &&
+            candidateStreams.isEmpty()
         )
     }
 
@@ -1104,7 +1127,7 @@ fun LessonDetailPlayerScreen(
                         .aspectRatio(16f / 9f)
                         .background(Color.Black)
                 ) {
-                    if (isUpcomingLesson) {
+                    if (isLiveOngoing || isUpcomingLesson) {
                         UpcomingCountdownPlayerHeader(
                             lesson = lesson,
                             subjectName = subjectName,
@@ -1118,6 +1141,22 @@ fun LessonDetailPlayerScreen(
                                 val title = lesson?.title ?: "লাইভ ক্লাস"
                                 onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
                             }
+                        )
+                    } else if (isRecordingProcessing) {
+                        RecordingProcessingHeader(
+                            lesson = lesson,
+                            subjectName = subjectName,
+                            onBack = onBack,
+                            onRefreshLesson = onRefreshLesson,
+                            onJoinLive = {
+                                val classId = lesson?.live_class?.id?.takeIf { it.isNotBlank() }
+                                    ?: lesson?.content_id?.takeIf { it.isNotBlank() }
+                                    ?: lesson?.id ?: ""
+                                val lessonId = lesson?.id ?: ""
+                                val title = lesson?.title ?: "লাইভ ক্লাস"
+                                onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
+                            },
+                            onViewSlide = handleViewSlide
                         )
                     } else if (livePlayerMode == "WEB_PLAYER") {
                         val webStreamUrl = activeStreamUrl
@@ -1336,7 +1375,15 @@ fun LessonDetailPlayerScreen(
                             slideUrl = slideUrlForEmpty,
                             onRefreshLesson = onRefreshLesson,
                             onViewSlide = handleViewSlide,
-                            onBack = onBack
+                            onBack = onBack,
+                            onJoinLive = {
+                                val classId = lesson?.live_class?.id?.takeIf { it.isNotBlank() }
+                                    ?: lesson?.content_id?.takeIf { it.isNotBlank() }
+                                    ?: lesson?.id ?: ""
+                                val lessonId = lesson?.id ?: ""
+                                val title = lesson?.title ?: "লাইভ ক্লাস"
+                                onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
+                            }
                         )
                     }
                 }
@@ -1957,5 +2004,159 @@ private fun CompactCountdownTile(
     }
 }
 
+@Composable
+fun RecordingProcessingHeader(
+    lesson: StudentLessonItem?,
+    subjectName: String,
+    onBack: () -> Unit,
+    onRefreshLesson: (() -> Unit)?,
+    onJoinLive: (() -> Unit)?,
+    onViewSlide: ((LessonAttachmentItem) -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val slideUrl = lesson?.resolvedSlideUrl ?: lesson?.live_class?.lectureSlideUrl
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFF1E1B4B),
+                        Color(0xFF0F172A),
+                        Color(0xFF1E293B)
+                    )
+                )
+            )
+    ) {
+        // Top Back Button + Status Badge
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .align(Alignment.TopStart),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.15f))
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
 
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Color(0xFFD97706).copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HourglassTop,
+                        contentDescription = null,
+                        tint = Color(0xFFFBBF24),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "রেকর্ড প্রসেসিং হচ্ছে",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFDE68A)
+                    )
+                }
+            }
+        }
 
+        // Center Content
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.Center)
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "লাইভ ক্লাস সম্পন্ন হয়েছে",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "লাইভ ক্লাস শেষ হওয়ার পর সাধারণত ০ মিনিট থেকে ১ ঘণ্টার মধ্যে রেকর্ডিং সার্ভারে প্রসেস হয়ে যুক্ত হয়।",
+                fontSize = 11.5.sp,
+                color = Color.White.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                lineHeight = 16.sp
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onRefreshLesson != null) {
+                    Button(
+                        onClick = onRefreshLesson,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("সার্ভার রিফ্রেশ", fontSize = 12.sp)
+                    }
+                }
+
+                if (onJoinLive != null) {
+                    OutlinedButton(
+                        onClick = onJoinLive,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
+                        border = BorderStroke(1.dp, Color(0xFF0284C7)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.LiveTv, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("লাইভে জয়েন চেক", fontSize = 11.5.sp)
+                    }
+                }
+            }
+
+            if (!slideUrl.isNullOrBlank() && onViewSlide != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                TextButton(
+                    onClick = {
+                        onViewSlide(
+                            LessonAttachmentItem(
+                                title = "লেকচার স্লাইড ও নোটস",
+                                url = slideUrl,
+                                file_type = "pdf"
+                            )
+                        )
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF93C5FD))
+                ) {
+                    Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("লেকচার স্লাইড ও ক্লাস নোটস পড়ুন", fontSize = 11.5.sp)
+                }
+            }
+        }
+    }
+}

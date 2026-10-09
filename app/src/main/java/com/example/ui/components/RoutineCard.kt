@@ -538,6 +538,7 @@ fun ShikhoRoutineCard(
         isExamNow -> Color(0xFFF59E0B)
         isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.8f)
         isExam -> Color(0xFFFBBF24).copy(alpha = 0.8f)
+        lesson.isRecordingProcessing -> Color(0xFFF59E0B).copy(alpha = 0.8f)
         lesson.isUpcoming -> Color(0xFF0284C7).copy(alpha = 0.4f)
         else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     }
@@ -547,6 +548,7 @@ fun ShikhoRoutineCard(
         isModelTestNow || isModelTest -> Brush.linearGradient(listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF).copy(alpha = 0.6f)))
         isExamNow -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7)))
         isExam -> Brush.linearGradient(listOf(Color(0xFFFFFDF5), Color(0xFFFEF9C3).copy(alpha = 0.45f)))
+        lesson.isRecordingProcessing -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7).copy(alpha = 0.6f)))
         lesson.isUpcoming -> Brush.linearGradient(listOf(Color(0xFFF0F9FF), Color(0xFFE0F2FE).copy(alpha = 0.6f)))
         else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)))
     }
@@ -734,6 +736,15 @@ fun ShikhoRoutineCard(
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0284C7),
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                            lesson.isRecordingProcessing -> {
+                                Text(
+                                    text = "রেকর্ড প্রসেসিং",
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFD97706),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }

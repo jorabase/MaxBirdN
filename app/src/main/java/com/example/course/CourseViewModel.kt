@@ -371,6 +371,7 @@ class CourseViewModel(
                             chapter_id = chapterIdResolved,
                             chapter_name = chapterNameResolved,
                             subject_name = subjectNameResolved,
+                            is_on_going = liveClassData?.on_going ?: lesson.live_class?.is_on_going,
                             teacher = liveClassData?.teacher ?: liveClassData?.instructor ?: lesson.live_class?.teacher,
                             topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else lesson.live_class?.topics
                         )

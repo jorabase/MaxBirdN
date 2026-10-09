@@ -110,6 +110,11 @@ class LiveClassService(
                 }
             }
 
+            if (roomId.isNullOrBlank() && classId.length in 20..36 && !classId.contains(" ")) {
+                Log.d(TAG, "Using classId directly as fallback room ID: $classId")
+                roomId = classId
+            }
+
             if (!roomId.isNullOrBlank()) {
                 Log.d(TAG, "Successfully retrieved hms_room_id: $roomId")
                 Result.success(roomId)

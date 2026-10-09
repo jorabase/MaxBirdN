@@ -158,6 +158,7 @@ fun LessonStreamPlaceholder(
     onRefreshLesson: (() -> Unit)?,
     onViewSlide: (LessonAttachmentItem) -> Unit,
     onBack: () -> Unit,
+    onJoinLive: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -179,7 +180,7 @@ fun LessonStreamPlaceholder(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "এই ক্লাসের সরাসরি রেকর্ডিং লিংক পাওয়া যায়নি",
+                text = if (lesson?.isLiveClass == true) "লাইভ ক্লাসের ভিডিও প্রসেসিং বা চলছে" else "এই ক্লাসের সরাসরি রেকর্ডিং লিংক পাওয়া যায়নি",
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -187,7 +188,7 @@ fun LessonStreamPlaceholder(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "কোর্সে সরাসরি ভর্তি না থাকলে বা ক্লাস অপ্রস্তুত থাকলে Shikho API লিংক পাঠায় না।",
+                text = if (lesson?.isLiveClass == true) "লাইভ ক্লাস শেষ হওয়ার পর সাধারণত ০ মিনিট থেকে ১ ঘণ্টার মধ্যে রেকর্ডিং যুক্ত হয়। লাইভ ক্লাস চালু থাকলে নিচের বাটনে যোগ দিন।" else "কোর্সে সরাসরি ভর্তি না থাকলে বা ক্লাস অপ্রস্তুত থাকলে Shikho API লিংক পাঠায় না।",
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
@@ -198,6 +199,18 @@ fun LessonStreamPlaceholder(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (lesson?.isLiveClass == true && onJoinLive != null) {
+                    Button(
+                        onClick = onJoinLive,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.LiveTv, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("লাইভ ক্লাসে যোগ দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 if (onRefreshLesson != null) {
                     Button(
                         onClick = onRefreshLesson,

@@ -113,6 +113,33 @@ class LiveClassWebSocketManager {
                             _viewerCount.value = peerCount
                         }
                     }
+
+                    // Check result object (JSON-RPC reply to 'join')
+                    val result = msg.optJSONObject("result")
+                    if (result != null) {
+                        val room = result.optJSONObject("room")
+                        val streaming = room?.optJSONObject("streaming") ?: result.optJSONObject("streaming")
+                        val hls = streaming?.optJSONObject("hls")
+                        val variants = hls?.optJSONArray("variants")
+                        if (variants != null && variants.length() > 0) {
+                            val url = variants.optJSONObject(0)?.optString("url")
+                            if (!url.isNullOrBlank()) {
+                                Log.d(TAG, "Found Master Link in result: $url")
+                                _masterUrl.value = url
+                            }
+                        }
+                    }
+
+                    // Universal regex fallback for any HLS m3u8 stream link in websocket frame
+                    if (_masterUrl.value.isNullOrBlank() && text.contains(".m3u8", ignoreCase = true)) {
+                        val regex = Regex("""https?://[^\s"'\\]+\.m3u8[^\s"'\\]*""")
+                        val match = regex.find(text)?.value
+                        if (!match.isNullOrBlank()) {
+                            val cleanUrl = match.replace("\\/", "/")
+                            Log.d(TAG, "Regex extracted Master HLS Link: $cleanUrl")
+                            _masterUrl.value = cleanUrl
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing WebSocket message: ${e.message}", e)
                 }
@@ -129,6 +156,14 @@ class LiveClassWebSocketManager {
                 _isConnected.value = false
             }
         })
+    }
+
+    fun setDirectMasterUrl(url: String) {
+        if (url.isNotBlank()) {
+            Log.d(TAG, "Setting direct Master URL: $url")
+            _masterUrl.value = url
+            _isConnected.value = true
+        }
     }
 
     fun disconnect() {

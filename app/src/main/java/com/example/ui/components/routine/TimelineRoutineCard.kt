@@ -229,6 +229,7 @@ fun TimelineRoutineCard(
                     if (!isLiveNow && !isExamNow) {
                         val (posLabel, posBg, posColor) = when {
                             lesson.isUpcoming -> Triple("আপকামিং", Color(0xFFE0F2FE), Color(0xFF0284C7))
+                            lesson.isRecordingProcessing -> Triple("রেকর্ড প্রসেসিং", Color(0xFFFEF3C7), Color(0xFFD97706))
                             isModelTest -> Triple("মডেল টেস্ট", Color(0xFFEDE9FE), Color(0xFF7C3AED))
                             isLiveExam || isExam -> Triple("পরীক্ষা", Color(0xFFFEF3C7), Color(0xFFD97706))
                             else -> Triple("রেকর্ড", Color(0xFFF1F5F9), Color(0xFF475569))

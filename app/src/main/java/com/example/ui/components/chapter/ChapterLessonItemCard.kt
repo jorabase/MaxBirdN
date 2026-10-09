@@ -107,6 +107,15 @@ fun ChapterLessonItemCard(
             "আপকামিং",
             Color(0xFF0284C7)
         )
+        lesson.isRecordingProcessing -> Tuple7(
+            "রেকর্ড প্রসেসিং",
+            Color(0xFFF59E0B).copy(alpha = 0.18f),
+            Color(0xFFD97706),
+            Color(0xFFF59E0B).copy(alpha = 0.45f),
+            Icons.Default.HourglassTop,
+            "রেকর্ড প্রস্তুত হচ্ছে",
+            Color(0xFFD97706)
+        )
         isCompletedEffective -> Tuple7(
             "রেকর্ড • সম্পন্ন",
             Color(0xFF10B981).copy(alpha = 0.15f),
@@ -316,6 +325,7 @@ fun ChapterLessonItemCard(
                         isModelTest -> if (!lesson.model_test?.type.isNullOrBlank()) "${lesson.model_test?.type} মডেল টেস্ট • পূর্ণাঙ্গ মূল্যায়ন" else "পূর্ণাঙ্গ মডেল টেস্ট ও জাতীয় র‍্যাংকিং"
                         isLiveExam || isExam -> "অধ্যায় পরীক্ষা এবং মূল্যায়ন"
                         isLiveNow -> "সরাসরি শিক্ষক ও সহপাঠীদের সাথে"
+                        lesson.isRecordingProcessing -> "লাইভ শেষ • রেকর্ড প্রস্তুত হচ্ছে"
                         isUpcoming -> "নির্ধারিত সময়ে ক্লাস শুরু হবে"
                         isRecorded -> "রেকর্ড ভিডিও ও লেকচার শিট"
                         else -> "ক্লাস ও স্টাডি মেটেরিয়াল"
