@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import java.util.UUID
 
 class SessionManager(context: Context) {
+    val appContext: Context = context.applicationContext
     private val fallbackPrefs: SharedPreferences = context.getSharedPreferences("shikho_prefs_fallback", Context.MODE_PRIVATE)
 
     private val sharedPreferences: SharedPreferences = try {

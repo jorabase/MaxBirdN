@@ -186,6 +186,17 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             isPipModeState.value = isInPictureInPictureMode
         }
+        // Anti-tamper verification on every foreground resume
+        AntiTamperSecurity.exitIfTampered(this)
+
+        // Silent heartbeat verification with Supabase
+        if (com.example.security.DeviceActivationRepository.isConfigured() &&
+            com.example.security.DeviceActivationRepository.isDeviceActivated(this)
+        ) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                com.example.security.DeviceActivationRepository.verifyHeartbeat(applicationContext)
+            }
+        }
     }
 
     @Deprecated("Deprecated in Java")

@@ -73,8 +73,10 @@ fun LoginScreen(
     onNavigateToPin: (String) -> Unit,
     onNavigateToOtp: (String, String) -> Unit,
     sessionManager: com.example.auth.SessionManager? = null,
-    onLoginSuccess: (() -> Unit)? = null
+    onLoginSuccess: (() -> Unit)? = null,
+    onNavigateToActivation: (() -> Unit)? = null
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var phoneInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var visible by remember { mutableStateOf(false) }
@@ -82,7 +84,15 @@ fun LoginScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val isDark = isSystemInDarkTheme()
 
-    LaunchedEffect(Unit) { visible = true }
+    LaunchedEffect(Unit) {
+        visible = true
+        // Zero-Trust Check: verify device activation even if someone bypassed Splash directly into Login
+        if (com.example.security.DeviceActivationRepository.isConfigured() &&
+            !com.example.security.DeviceActivationRepository.isDeviceActivated(context)
+        ) {
+            onNavigateToActivation?.invoke()
+        }
+    }
 
     LaunchedEffect(authState) {
         when (authState) {
@@ -411,7 +421,12 @@ fun LoginScreen(
                                 keyboardActions = KeyboardActions(
                                     onDone = {
                                         keyboardController?.hide()
-                                        if (phoneInput.length >= 10) {
+                                        if (com.example.security.DeviceActivationRepository.isConfigured() &&
+                                            !com.example.security.DeviceActivationRepository.isDeviceActivated(context)
+                                        ) {
+                                            errorMessage = "অননুমোদিত ডিভাইস! আগে ডিভাইস এক্সেস সক্রিয় করতে হবে।"
+                                            onNavigateToActivation?.invoke()
+                                        } else if (phoneInput.length >= 10) {
                                             viewModel.checkUser(phoneInput)
                                         }
                                     }
@@ -539,7 +554,14 @@ fun LoginScreen(
                                     enabled = isEnabled
                                 ) {
                                     keyboardController?.hide()
-                                    viewModel.checkUser(phoneInput)
+                                    if (com.example.security.DeviceActivationRepository.isConfigured() &&
+                                        !com.example.security.DeviceActivationRepository.isDeviceActivated(context)
+                                    ) {
+                                        errorMessage = "অননুমোদিত ডিভাইস! আগে ডিভাইস এক্সেস সক্রিয় করতে হবে।"
+                                        onNavigateToActivation?.invoke()
+                                    } else {
+                                        viewModel.checkUser(phoneInput)
+                                    }
                                 },
                             contentAlignment = Alignment.Center
                         ) {

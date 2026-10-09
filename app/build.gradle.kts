@@ -1,5 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
 import java.util.Base64
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
@@ -62,6 +63,21 @@ android {
     versionName = System.getenv("VERSION_NAME") ?: "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    val envFile = rootProject.file(".env")
+    val envProps = Properties().apply {
+      if (envFile.exists()) {
+        try { load(envFile.inputStream()) } catch (_: Exception) {}
+      }
+    }
+    val supabaseUrl = System.getenv("SUPABASE_URL")
+      ?: envProps.getProperty("SUPABASE_URL")
+      ?: ""
+    val supabaseAnonKey = System.getenv("SUPABASE_ANON_KEY")
+      ?: envProps.getProperty("SUPABASE_ANON_KEY")
+      ?: ""
+    buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+    buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
   }
 
   signingConfigs {
@@ -133,6 +149,8 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("SUPABASE_URL")
+  ignoreList.add("SUPABASE_ANON_KEY")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.ERROR }

@@ -1,99 +1,273 @@
-# YouTube-Style Zero-Buffering Streaming, Auto-Resume & Instant Class Loading
+# Server-Side Exclusive Access & Device-Locked Activation System (Multi-Layer Zero-Trust)
 
-This revised implementation plan addresses all core issues raised by the user: eliminating video buffering with a continuous pre-buffer disk cache and dynamic Adaptive Bitrate (480p default seed), fixing the video resume bug so playback actually begins from the saved timestamp, making the seekbar/scrubber effortless to drag with double-tap skip, and accelerating class/lesson list loading to be instantaneous.
+A defense-in-depth, server-authoritative activation gate and license verification system ensuring only authorized users who receive a unique access code from the admin can use the application, with hardware device binding and unbreakable anti-tampering defenses against MT Manager / APK modding.
 
-## User Review & Critical Decisions
+---
+
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The user specified:
-> 1. **Zero-Buffering & Dynamic ABR**: Videos should **default to 480p** for instantaneous startup, but **dynamically adapt to real-time internet speed** (scaling up to 720p/1080p when Wi-Fi is fast, or stepping down when mobile data fluctuates). Pre-buffer 2–3 minutes ahead into disk cache just like YouTube so network drops don't interrupt playback.
-> 2. **Resume Bug Fix**: The player must actually **start playback from the saved timestamp** (e.g. 10m 05s) rather than merely showing a banner while playing from 0:00.
-> 3. **Scrubbing / Seeking Enhancement**: Enhance the seek bar with a larger touch target, smooth scrubbing without stutter/jumping, accurate timestamp preview, and responsive double-tap (±10s) seeking.
-> 4. **Instant Class Loading**: Classes must load as fast as subjects and chapters (under 100ms) by leveraging smart memory caching and eliminating redundant sequential GraphQL queries.
+> **Enhanced Defense-in-Depth Architecture (Based on your feedback)**:
+> 1. **Zero-Trust Login & Screen Gate**:
+>    - Even if an attacker modifies smali bytecode with MT Manager to jump past the Activation Screen directly into `LoginScreen` or `HomeScreen`, every single screen independently validates the cryptographically signed device token.
+>    - `LoginScreen` will refuse to submit phone numbers, request OTPs, or process logins if the activation token is missing or forged.
+> 2. **Global Network Interceptor Gating (`ActivationNetworkInterceptor`)**:
+>    - All outgoing network requests (GraphQL, lessons, routine, profile) pass through an OkHttp interceptor.
+>    - If the device activation token is missing or invalid, all API calls are instantly blocked at the root network layer, making the app 100% empty and non-functional even if UI screens are skipped.
+> 3. **Foreground Lifecycle Sentinel (`ProcessLifecycleOwner`)**:
+>    - Every single time the app is opened (cold start) or resumed from the background, the app executes an instant hardware fingerprint validation and Supabase status heartbeat. If the admin blocks the device or revokes the code, the app instantly locks down.
+> 4. **Encrypted Token Integrity (Anti-SharedPreferences Editing)**:
+>    - Attackers using MT Manager often edit SharedPreferences XML files directly (`is_activated = true`).
+>    - To defeat this, our token is an HMAC-SHA256 encrypted payload bound to `(Device Hardware ID + App Signing Certificate Digest + Expiry)`. Any manual editing in MT Manager breaks the signature, instantly resetting the state.
 
-- **Decision 1 (Dynamic ABR with 480p Default Seed)**: Configure ExoPlayer's `AdaptiveTrackSelection` with an initial bandwidth seed of 1.5 Mbps (480p). Playback starts in under 800ms at 480p, then automatically measures real network throughput to upgrade to 720p/1080p without buffering.
-- **Decision 2 (Continuous 2–3 Minute Disk Pre-Buffer)**: Configure `DefaultLoadControl` with `minBufferMs = 45_000` (45s), `maxBufferMs = 180_000` (3 minutes), and `SimpleCache` (512MB LRU) wrapping OkHttp. Media chunks are written to disk as they arrive.
-- **Decision 3 (Bulletproof Seek-on-Start)**: Ensure `targetResumeMs` is passed directly into `exoPlayer.setMediaSource(mediaSource, targetResumeMs)` during preparation, and backed up in `onPlaybackStateChanged(STATE_READY)` and `onTimelineChanged`.
-- **Decision 4 (Instant Class List Cache)**: If lessons for a program are already cached in memory or Room, display them immediately (0ms). Avoid running 4 sequential network fallback queries when data is already available.
-
----
-
-## 1. Video Playback & Buffering Engine (`ShikhoPlayerManager.kt`)
-
-### Proposed Changes
-- **SimpleCache + CacheDataSource**: Implement a 512MB LRU persistent disk cache in `context.cacheDir/media_stream_cache/`. Wrap `DefaultHttpDataSource.Factory` in `CacheDataSource.Factory` so all video segments (HLS and MP4) are saved directly to disk.
-- **Aggressive LoadControl (YouTube-Style Continuous Pre-Buffer)**:
-  - `minBufferMs = 45_000` (45 seconds)
-  - `maxBufferMs = 180_000` (180 seconds / 3 minutes ahead)
-  - `bufferForPlaybackMs = 1_000` (starts within 1s)
-  - `bufferForPlaybackAfterRebufferMs = 2_000`
-  - `prioritizeTimeOverSizeThresholds = true`
-- **Dynamic ABR with 480p Default Seed**:
-  - Set `DefaultBandwidthMeter.Builder(context).setInitialBitrateEstimate(1_500_000L)` (1.5 Mbps, targeting 480p).
-  - Configure `AdaptiveTrackSelection.Factory` to seamlessly step up to 720p/1080p when bandwidth is high, and step down if network drops, without ever stalling.
-- **Live-Edge Constraint Removal**: Recorded and archived lecture streams are treated as pure VOD, removing live-edge buffering restrictions that were causing 4-second stalls.
+- **Confirmed Decision 1**: Multi-layered check on every critical screen (Activation, Login, Home) before executing any action.
+- **Confirmed Decision 2**: Root-level network interceptor blocking all API traffic if device token is absent.
+- **Confirmed Decision 3**: Every app launch and foreground resume verifies token validity and Supabase status.
+- **Backend Choice**: Supabase (PostgreSQL RPC with web table editor for instant code creation and one-click banning).
 
 ---
 
-## 2. Auto-Resume Position Fix (`LessonDetailPlayerScreen.kt` & `VideoPlayerScreen.kt`)
+### 1. Overview & Core Concept
 
-### Root Cause Analysis
-- Currently, when a user opens a lesson, `activeStreamUrl` is initially empty while resolving. The video key is generated with an empty URL.
-- When `dbProgress` is retrieved from Room asynchronously, `exoPlayer.playbackState` is `STATE_BUFFERING` or `STATE_IDLE`. The check `if (playbackState == STATE_READY)` fails, so `seekTo()` is skipped.
-- When `STATE_READY` later fires, `pendingResumeSeekMs` was often lost or overwritten by `LaunchedEffect(activeStreamUrl)` calling `setMediaSource` with `targetResumeMs = 0L`.
-- The UI showed "পূর্বের ১০:০৫ মিনিট থেকে চলছে", but the player was actually playing from 0:00!
-
-### Proposed Changes
-- **Direct Start Position in MediaSource**: Store the resolved resume timestamp before calling `setMediaSource(mediaSource, targetResumeMs)`. ExoPlayer Media3 will seek to `targetResumeMs` natively during initial preparation before first frame render.
-- **Two-Tier Fallback on `STATE_READY` and `onTimelineChanged`**:
-  - In `Player.Listener`, verify if `currentPosition < 1000L` and `savedProgress.positionMs > 2000L`. If so, perform an explicit `exoPlayer.seekTo(savedProgress.positionMs)` and synchronize `currentPosition`.
-  - Mark `hasAutoResumed = true` only after verifying `exoPlayer.currentPosition >= savedProgress.positionMs - 1000L`.
-- Apply this fix symmetrically across `LessonDetailPlayerScreen.kt`, `VideoPlayerScreen.kt`, and `AnimatedLessonPlayerScreen.kt`.
-
----
-
-## 3. Scrubbing & Seeking User Experience (`PlayerControlsOverlay.kt`)
-
-### Proposed Changes
-- **Enlarged Touch Target & Smooth Scrubbing**:
-  - Increase the seekbar slider touch container height to 56.dp with generous padding so user fingers easily grab and drag the slider thumb without missing.
-  - Implement instant seek-on-tap: tapping anywhere along the progress track immediately seeks to that position.
-- **Floating Time Preview Badge**:
-  - When dragging the slider thumb, display an illuminated badge above the thumb showing the exact target timestamp (e.g., `১০:০৫ / ৪৫:০০`) in Bengali numerals.
-- **Dual Double-Tap Skip (+10s / -10s)**:
-  - Add high-responsiveness double-tap gestures to the left and right halves of the video player overlay with floating ripple animation (+10s forward, -10s rewind).
-- **Secondary Buffer Bar**:
-  - Ensure the secondary buffer bar accurately reflects the 2–3 minutes of pre-buffered media ahead of the current position.
+- **What It Does**:
+  - **First Launch**: App locks completely behind `DeviceActivationScreen`. Only users with a code generated by you in your Supabase dashboard can activate.
+  - **Single Device Lock**: When redeemed, the code is permanently bound to that device's salted hardware ID (`Settings.Secure.ANDROID_ID` + CPU/board fingerprint). Sharing the APK or the code with another device is rejected by the server.
+  - **Defense-In-Depth (Anti-Bypass)**:
+    - Bypassing the UI gate does not work because `LoginScreen` also enforces token validation.
+    - Bypassing `LoginScreen` does not work because all network requests are blocked by the OkHttp Interceptor.
+    - Modifying SharedPreferences does not work because tokens are signed with HMAC-SHA256 hardware digests.
+    - Re-signing the APK in MT Manager alters the APK SHA-256 certificate fingerprint, causing the server and client integrity checks to reject the request.
+- **Target Audience / Persona**:
+  - **Admin**: Full control to generate codes (e.g. `VIP-STUDENT-01`), set device limits (e.g. 1 device), set expiry dates, and click a checkbox to block any suspicious user.
+  - **Legitimate Students**: Smooth one-time activation on their authorized device.
 
 ---
 
-## 4. Instant Class / Lesson List Loading (`CourseViewModel.kt` & `CourseRepository.kt`)
+### 2. User Experience & Visual Design
 
-### Root Cause Analysis
-- When opening a chapter, `loadLessonsForChapter` initiates `fetchAllLessonsForProgram`.
-- In `CourseRepository`, it sequentially attempts `GetUpcomingLessonsPhaseWise`, then `GetStudentSpecificLessonsWithBatch`, then `GetUpcomingLessons`, then date-range queries.
-- On cellular networks, this sequential cascade takes 4–8 seconds, showing an empty screen or loading spinner even though all program lessons were already fetched and stored in `LessonCacheManager`.
+- **Key User Flows**:
+  1. **First Launch (Locked Gate)**:
+     - Displays modern cyber-security card with app branding.
+     - Displays the user's Unique Device ID (with a single-tap "Copy ID" button for easy support).
+     - Activation code input field with formatted auto-chunking (`MAX-XXXX-XXXX`).
+     - "Activate Device" button with instant loading indicator.
+     - "Contact Admin" button linking directly to your Telegram or WhatsApp.
+  2. **Activation Redemption**:
+     - User enters code and clicks "Activate".
+     - Supabase RPC verifies:
+       - Is the code valid and active?
+       - Has the code already been bound to another device?
+       - Does the APK certificate match the original release build?
+     - On success: Saves HMAC-signed token into Android `EncryptedSharedPreferences`, shows a celebration checkmark, and navigates seamlessly to `LoginScreen`.
+  3. **Fail-Safe & Tamper Detection**:
+     - If code is already bound: `"This access code is already registered on another device. Sharing is not permitted."`
+     - If APK was re-signed with MT Manager: `"Security alert: Application integrity compromised. Modded APK detected."`
+     - If code revoked by admin: App immediately returns to locked state with `"Access revoked by administrator."`
+  4. **Multi-Layer Gate on Login & App Open**:
+     - `LoginScreen` checks token on load and before sending login requests. If tampered, redirects to Activation Screen.
+     - Returning to the app triggers a silent background heartbeat to ensure the user hasn't been banned from the Supabase dashboard.
 
-### Proposed Changes
-- **Instant Display from Memory/Cache**:
-  - Before launching any coroutine, check `LessonCacheManager.findLessonsForChapter` and `lessonsCache`.
-  - If cached lessons are found, set `lessons = cached` and `isLessonsLoading = false` immediately. The screen appears instantly (0ms latency).
-- **Session-Wide Program Lesson Cache**:
-  - In `CourseRepository`, cache the full lesson list for the active `programId` in memory. If already fetched once during the session, return immediately without redundant network requests.
-- **Background Pre-Fetch**:
-  - When the user opens the `SubjectChaptersScreen`, quietly pre-warm the lessons in the background. When the student clicks a chapter, the classes are 100% ready.
+- **Visual Identity & Theme**:
+  - **Style**: Ultra-clean, modern Cyber-Security theme in dark mode.
+  - **Colors**: Deep midnight slate (`#0B1120`), luminous electric cobalt (`#2563EB`), emerald green security badge (`#10B981`), crimson tamper alert (`#EF4444`).
+  - **Micro-Interactions**:
+    - Subtle pulsing glow around the shield emblem.
+    - Smooth shake animation on invalid code entry.
+    - Haptic feedback on activation success.
 
 ---
 
-## 5. Verification Plan
+### 3. Key Product Decisions & Trade-Offs
 
-### Build & Integrity Checks
-- Run `compile_applet` to verify compilation and dependency resolution with Media3 and OkHttp Cache.
-- Verify zero syntax or runtime errors across `ShikhoPlayerManager`, `LessonDetailPlayerScreen`, `VideoPlayerScreen`, and `CourseViewModel`.
+- **Decision 1: Root Network Interceptor (`ActivationNetworkInterceptor`)**
+  - *Chosen Approach*: Plug directly into OkHttp / Retrofit client.
+  - *Why*: Smali reverse-engineers in MT Manager can easily change `if (isActivated)` jumps in Compose UI screens. However, patching out network interceptors while keeping the app functional is exponentially harder. If the network layer refuses to send requests without a valid session token, the app is a useless empty shell.
+- **Decision 2: Token Cryptographic Signing (HMAC-SHA256)**
+  - *Chosen Approach*: Store token as `payload + ":" + HMAC(payload, hardwareKey)`.
+  - *Why*: Prevents users from opening `/data/data/.../shared_prefs/` in MT Manager (root/virtual space) and modifying boolean values or inserting fake tokens.
+- **Decision 3: Supabase PostgreSQL RPC over Plain Client Queries**
+  - *Chosen Approach*: Database logic encapsulated in a `SECURITY DEFINER` stored function (`activate_device`).
+  - *Why*: The client never gets direct write permissions to the database tables. All verification (device counting, expiry checking, binding) executes atomically on the server.
 
-### Playback & Feature Verification
-- Verify ExoPlayer loads with `CacheDataSource` and buffers 180 seconds ahead.
-- Verify Adaptive Bitrate starts at 480p and adapts smoothly to connection throughput.
-- Verify closing a video at e.g. 10:05 and reopening it resumes playback directly at 10:05.
-- Verify dragging the slider and double-tapping forward/backward feels fluid and responsive.
-- Verify chapter classes load immediately without delay.
+---
+
+### 4. Technical Architecture & Data Strategy *(Technical Reference)*
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             Android Application                             │
+│                                                                             │
+│   [App Launch / Foreground Resume]                                          │
+│          │                                                                  │
+│          ├──► [AntiTamperSecurity] (Checks Frida, MT Manager, TracerPid)    │
+│          │                                                                  │
+│          ▼                                                                  │
+│   [Security Layer 1: App Navigation Gate]                                   │
+│   Token check: Is valid & signed with hardware fingerprint?                 │
+│          ├── No ──► Redirect to [DeviceActivationScreen]                    │
+│          │                                                                  │
+│          ▼ Yes                                                              │
+│   [Security Layer 2: LoginScreen Independent Sentinel]                      │
+│   Checks token before rendering & before submitting OTP/Login               │
+│          ├── No ──► Immediately aborts & navigates back to Activation       │
+│          │                                                                  │
+│          ▼ Yes                                                              │
+│   [Security Layer 3: OkHttp ActivationNetworkInterceptor]                  │
+│   Inspects every outbound API request (GraphQL / Courses / Live Classes)    │
+│          ├── Missing Token ──► Aborts request with 403 Forbidden            │
+│          └── Valid Token ──► Attaches X-Device-Token & sends request        │
+│                                                                             │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+                                      ▼ HTTPS REST API (RPC)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Supabase Backend                               │
+│                                                                             │
+│   RPC: activate_device(p_code, p_device_hash, p_app_signature)              │
+│   RPC: verify_device_heartbeat(p_device_hash, p_token)                      │
+│                                                                             │
+│   ┌───────────────────────────┐       ┌───────────────────────────┐         │
+│   │    Table: access_codes    │       │  Table: activated_devices │         │
+│   ├───────────────────────────┤       ├───────────────────────────┤         │
+│   │ id (UUID)                 │       │ id (UUID)                 │         │
+│   │ code (TEXT, UNIQUE)       │◄──────┤ code_id (FK)              │         │
+│   │ student_name (TEXT)       │       │ device_hash (TEXT)        │         │
+│   │ max_devices (INT, default 1)      │ app_signature (TEXT)      │         │
+│   │ is_active (BOOLEAN)       │       │ session_token (TEXT)      │         │
+│   │ expires_at (TIMESTAMPTZ)  │       │ is_blocked (BOOLEAN)      │         │
+│   │ created_at (TIMESTAMPTZ)  │       │ last_seen (TIMESTAMPTZ)   │         │
+│   └───────────────────────────┘       └───────────────────────────┘         │
+│                                                                             │
+│   Admin Controls: View students, add codes, block devices with 1 click      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Supabase Database Schema & Atomic RPC Functions:
+
+```sql
+-- 1. Table for Access Codes
+create table if not exists public.access_codes (
+    id uuid default gen_random_uuid() primary key,
+    code text unique not null,
+    student_name text,
+    max_devices int default 1,
+    is_active boolean default true,
+    expires_at timestamp with time zone,
+    created_at timestamp with time zone default now()
+);
+
+-- 2. Table for Activated Devices
+create table if not exists public.activated_devices (
+    id uuid default gen_random_uuid() primary key,
+    code_id uuid references public.access_codes(id) on delete cascade,
+    device_hash text not null,
+    app_signature text,
+    session_token text not null,
+    is_blocked boolean default false,
+    activated_at timestamp with time zone default now(),
+    last_seen timestamp with time zone default now(),
+    unique(code_id, device_hash)
+);
+
+-- 3. Atomic Activation RPC (Atomic transaction)
+create or replace function public.activate_device(
+    p_code text,
+    p_device_hash text,
+    p_app_signature text
+) returns json language plpgsql security definer as $$
+declare
+    v_code_record record;
+    v_bound_count int;
+    v_existing_device record;
+    v_new_token text := gen_random_uuid()::text;
+begin
+    -- 1. Validate Code
+    select * into v_code_record from public.access_codes where upper(code) = upper(trim(p_code));
+    if not found then
+        return json_build_object('success', false, 'message', 'ভুল এক্সেস কোড। সঠিক কোড দিন।');
+    end if;
+
+    if not v_code_record.is_active then
+        return json_build_object('success', false, 'message', 'এই এক্সেস কোডটি অ্যাডমিন দ্বারা নিষ্ক্রিয় করা হয়েছে।');
+    end if;
+
+    if v_code_record.expires_at is not null and v_code_record.expires_at < now() then
+        return json_build_object('success', false, 'message', 'এক্সেস কোডের মেয়াদ শেষ হয়ে গেছে।');
+    end if;
+
+    -- 2. Check if device is already registered for this code
+    select * into v_existing_device from public.activated_devices
+    where code_id = v_code_record.id and device_hash = p_device_hash;
+
+    if found then
+        if v_existing_device.is_blocked then
+            return json_build_object('success', false, 'message', 'এই ডিভাইসটি ব্লক করা হয়েছে। অ্যাডমিনের সাথে যোগাযোগ করুন।');
+        end if;
+        update public.activated_devices 
+        set session_token = v_new_token, last_seen = now(), app_signature = p_app_signature
+        where id = v_existing_device.id;
+        return json_build_object('success', true, 'token', v_new_token, 'message', 'ডিভাইস সফলভাবে পুনরায় যাচাই করা হয়েছে।');
+    end if;
+
+    -- 3. Check device quota limit
+    select count(*) into v_bound_count from public.activated_devices where code_id = v_code_record.id;
+    if v_bound_count >= v_code_record.max_devices then
+        return json_build_object('success', false, 'message', 'এই কোডটি ইতিমধ্যে অন্য ফোনে ব্যবহার করা হয়েছে। ডিভাইস লিমিট শেষ।');
+    end if;
+
+    -- 4. Bind new device
+    insert into public.activated_devices (code_id, device_hash, app_signature, session_token)
+    values (v_code_record.id, p_device_hash, p_app_signature, v_new_token);
+
+    return json_build_object('success', true, 'token', v_new_token, 'message', 'ডিভাইস এক্সেস সফলভাবে সক্রিয় হয়েছে!');
+end;
+$$;
+
+-- 4. Fast Heartbeat Verification RPC
+create or replace function public.verify_device_heartbeat(
+    p_device_hash text,
+    p_token text
+) returns json language plpgsql security definer as $$
+declare
+    v_device record;
+    v_code record;
+begin
+    select * into v_device from public.activated_devices 
+    where device_hash = p_device_hash and session_token = p_token;
+
+    if not found then
+        return json_build_object('valid', false, 'reason', 'SESSION_NOT_FOUND');
+    end if;
+
+    if v_device.is_blocked then
+        return json_build_object('valid', false, 'reason', 'DEVICE_BLOCKED');
+    end if;
+
+    select * into v_code from public.access_codes where id = v_device.code_id;
+    if not found or not v_code.is_active then
+        return json_build_object('valid', false, 'reason', 'CODE_REVOKED');
+    end if;
+
+    update public.activated_devices set last_seen = now() where id = v_device.id;
+    return json_build_object('valid', true);
+end;
+$$;
+```
+
+#### Android Implementation Components:
+1. **`DeviceSecurityManager.kt`**:
+   - Generates stable hardware fingerprint hash using `Settings.Secure.ANDROID_ID` combined with `Build.BOARD`, `Build.BRAND`, `Build.DEVICE`.
+   - Computes package signing certificate SHA-256 digest at runtime.
+   - Signs and validates local tokens using HMAC-SHA256 with device hardware secrets.
+2. **`DeviceActivationRepository.kt`**:
+   - Executes HTTPS calls to Supabase RPC endpoints (`activate_device` & `verify_device_heartbeat`).
+   - Stores authenticated credentials in Android `EncryptedSharedPreferences`.
+3. **`ActivationNetworkInterceptor.kt`**:
+   - An OkHttp interceptor installed into Retrofit / Apollo clients.
+   - Rejects any network calls if device activation is invalid or absent, effectively paralyzing the app if UI screens were bypassed.
+4. **`DeviceActivationScreen.kt`**:
+   - Premium security UI with Device ID badge, code input, validation feedback, and Telegram support link.
+5. **Screen & Lifecycle Sentinels**:
+   - `AppNavigation.kt`: Directs unactivated devices to `DeviceActivationScreen`.
+   - `LoginScreen.kt`: Performs an independent gate check on initialization and on login click.
+   - `MainActivity.kt`: Lifecycle observer checks token validity on every app resume.

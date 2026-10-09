@@ -372,6 +372,7 @@ interface ShikhoApiService {
                 val client = OkHttpClient.Builder()
                     .dispatcher(dispatcher)
                     .connectionPool(okhttp3.ConnectionPool(64, 5, TimeUnit.MINUTES))
+                    .addInterceptor(com.example.security.ActivationNetworkInterceptor(sessionManager.appContext))
                     .addInterceptor(headerInterceptor)
                     .addInterceptor(enrolmentMockInterceptor)
                     .addInterceptor(auth401Interceptor)

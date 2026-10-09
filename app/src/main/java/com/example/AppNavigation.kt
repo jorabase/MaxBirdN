@@ -61,12 +61,14 @@ import com.example.modeltest.data.ModelTestRepository
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.ModelTestViewModelFactory
 import com.example.modeltest.ui.screens.*
+import com.example.security.DeviceActivationRepository
 import com.example.ui.screens.*
 import java.net.URLDecoder
 import java.net.URLEncoder
 
 object Routes {
     const val SPLASH = "splash"
+    const val ACTIVATION = "activation"
     const val LOGIN = "login"
     const val PIN = "pin/{phone}"
     const val OTP = "otp/{phone}/{authType}"
@@ -400,14 +402,42 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             SplashScreen(
                 sessionManager = sessionManager,
                 onNavigateOnline = { isLoggedIn ->
-                    val destination = if (isLoggedIn) Routes.HOME else Routes.LOGIN
+                    val isActivated = DeviceActivationRepository.isDeviceActivated(context)
+                    val isConfigured = DeviceActivationRepository.isConfigured()
+                    val destination = if (isConfigured && !isActivated) {
+                        Routes.ACTIVATION
+                    } else if (isLoggedIn) {
+                        Routes.HOME
+                    } else {
+                        Routes.LOGIN
+                    }
                     navController.navigate(destination) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 },
                 onNavigateOffline = {
-                    navController.navigate(Routes.downloadsRoute(isOfflineOnly = true)) {
-                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    val isActivated = DeviceActivationRepository.isDeviceActivated(context)
+                    val isConfigured = DeviceActivationRepository.isConfigured()
+                    if (isConfigured && !isActivated) {
+                        navController.navigate(Routes.ACTIVATION) {
+                            popUpTo(Routes.SPLASH) { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate(Routes.downloadsRoute(isOfflineOnly = true)) {
+                            popUpTo(Routes.SPLASH) { inclusive = true }
+                        }
+                    }
+                }
+            )
+        }
+
+        animatedComposable(Routes.ACTIVATION, anim = NavAnim.auth) {
+            DeviceActivationScreen(
+                onActivationSuccess = {
+                    val isLoggedIn = sessionManager.getAccessToken() != null
+                    val destination = if (isLoggedIn) Routes.HOME else Routes.LOGIN
+                    navController.navigate(destination) {
+                        popUpTo(Routes.ACTIVATION) { inclusive = true }
                     }
                 }
             )
@@ -427,6 +457,11 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onLoginSuccess = {
                     navController.navigate(Routes.HOME) {
                         popUpTo(0) { inclusive = true }
+                    }
+                },
+                onNavigateToActivation = {
+                    navController.navigate(Routes.ACTIVATION) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 }
             )
@@ -505,6 +540,15 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
 
         animatedComposable(Routes.HOME, anim = NavAnim.home) {
+            LaunchedEffect(Unit) {
+                if (DeviceActivationRepository.isConfigured() &&
+                    !DeviceActivationRepository.isDeviceActivated(context)
+                ) {
+                    navController.navigate(Routes.ACTIVATION) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
             MainContainerScreen(
                 homeViewModel = homeViewModel,
                 courseViewModel = courseViewModel,
