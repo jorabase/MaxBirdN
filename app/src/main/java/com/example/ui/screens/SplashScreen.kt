@@ -192,14 +192,14 @@ fun SplashScreen(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(130.dp)
+                    .size(96.dp)
                     .scale(logoScale)
                     .alpha(logoAlpha)
             ) {
                 // Outer subtle ring
                 Box(
                     modifier = Modifier
-                        .size(130.dp)
+                        .size(96.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.15f))
                 )
@@ -207,11 +207,11 @@ fun SplashScreen(
                 // White circular elevated badge
                 Surface(
                     modifier = Modifier
-                        .size(116.dp)
+                        .size(86.dp)
                         .shadow(
-                            elevation = 16.dp,
+                            elevation = 12.dp,
                             shape = CircleShape,
-                            spotColor = Color(0xFF0072EC).copy(alpha = 0.6f)
+                            spotColor = Color(0xFF0072EC).copy(alpha = 0.5f)
                         ),
                     shape = CircleShape,
                     color = Color.White,
@@ -226,7 +226,7 @@ fun SplashScreen(
                             contentDescription = "MaxBird Logo",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .size(68.dp)
+                                .size(52.dp)
                         )
                     }
                 }

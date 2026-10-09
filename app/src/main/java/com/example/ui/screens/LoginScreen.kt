@@ -115,7 +115,7 @@ fun LoginScreen(
 
     // ---------- Animated gradient border (rotating) ----------
     val density = LocalDensity.current
-    val logoBoxPx = with(density) { 88.dp.toPx() }
+    val logoBoxPx = with(density) { 74.dp.toPx() }
     val center = logoBoxPx / 2f
     val rad = Math.toRadians(ringAngle.toDouble())
     val dx = (cos(rad) * logoBoxPx).toFloat()
@@ -202,20 +202,20 @@ fun LoginScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
-                            .size(88.dp)
+                            .size(74.dp)
                             .graphicsLayer { translationY = floatY }
                             .shadow(
-                                elevation = if (isDark) 20.dp else 14.dp,
-                                shape = RoundedCornerShape(28.dp),
+                                elevation = if (isDark) 16.dp else 10.dp,
+                                shape = RoundedCornerShape(22.dp),
                                 spotColor = primary,
                                 ambientColor = secondary
                             )
-                            .clip(RoundedCornerShape(28.dp))
+                            .clip(RoundedCornerShape(22.dp))
                             .background(
                                 if (isDark) Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
                                 else Brush.linearGradient(listOf(Color.White, Color(0xFFE2E8F0)))
                             )
-                            .border(2.dp, ringBrush, RoundedCornerShape(28.dp)),
+                            .border(2.dp, ringBrush, RoundedCornerShape(22.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
@@ -223,7 +223,7 @@ fun LoginScreen(
                             contentDescription = "MaxBird Logo",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .size(50.dp)
+                                .size(44.dp)
                         )
                     }
 

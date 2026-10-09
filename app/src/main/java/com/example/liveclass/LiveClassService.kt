@@ -173,4 +173,63 @@ class LiveClassService(
             Result.failure(e)
         }
     }
+
+    /**
+     * Fallback to query academic program live class details for direct HLS or live stream URL
+     */
+    suspend fun getDirectLiveClassStream(
+        classId: String,
+        userToken: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val queryStr = """
+                query GetAcademicLiveClassDetails(${'$'}id: String!) {
+                  academicProgramLiveClass(id: ${'$'}id) {
+                    id
+                    playback_url
+                    stream_url
+                    recording_url
+                    hls_url
+                    url
+                  }
+                }
+            """.trimIndent()
+            val jsonBody = JSONObject().apply {
+                put("query", queryStr)
+                put("variables", JSONObject().apply {
+                    put("id", classId)
+                })
+            }
+            val request = Request.Builder()
+                .url(GRAPHQL_URL)
+                .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
+                .addHeader("Authorization", "Bearer $userToken")
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Build-Version", BUILD_VERSION)
+                .addHeader("X-User-Timezone", TIMEZONE)
+                .build()
+            val resp = client.newCall(request).execute()
+            val body = resp.body?.string() ?: ""
+            val json = JSONObject(body)
+            val liveClass = json.optJSONObject("data")?.optJSONObject("academicProgramLiveClass")
+            val candidateUrls = listOfNotNull(
+                liveClass?.optString("playback_url"),
+                liveClass?.optString("stream_url"),
+                liveClass?.optString("hls_url"),
+                liveClass?.optString("recording_url"),
+                liveClass?.optString("url")
+            ).filter { it.isNotBlank() && it != "null" }
+            val direct = candidateUrls.firstOrNull { it.contains(".m3u8", ignoreCase = true) }
+                ?: candidateUrls.firstOrNull()
+            if (!direct.isNullOrBlank()) {
+                Log.d(TAG, "Found direct live stream URL: $direct")
+                Result.success(direct)
+            } else {
+                Result.failure(Exception("No direct stream URL available"))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to query direct live stream: ${e.message}")
+            Result.failure(e)
+        }
+    }
 }

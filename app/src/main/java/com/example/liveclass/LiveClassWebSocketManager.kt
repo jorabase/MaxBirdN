@@ -39,6 +39,13 @@ class LiveClassWebSocketManager {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+    fun setMasterUrl(url: String, viewers: Int = 1) {
+        _masterUrl.value = url
+        _viewerCount.value = viewers.coerceAtLeast(1)
+        _isConnected.value = true
+        _error.value = null
+    }
+
     fun connect(
         token: String,
         studentName: String = "Student"

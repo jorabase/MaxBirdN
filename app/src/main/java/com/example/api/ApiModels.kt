@@ -543,20 +543,34 @@ data class StudentLessonItem(
     val hasRecording: Boolean
         get() {
             if (isExam || isModelTest) return false
-            // An ongoing live class cannot be considered a finished recording
+            // An ongoing live class is never a finished recording
             if (live_class?.is_on_going == true || user_activity_state.equals("LIVE", ignoreCase = true)) {
                 return false
             }
-            if (!recording_url.isNullOrBlank() && recording_url != "null") return true
-            if (!live_class?.recording_url.isNullOrBlank() && live_class.recording_url != "null") return true
-            if (!live_class?.playback_url.isNullOrBlank() && live_class.playback_url != "null") return true
-            if (!video_url.isNullOrBlank() && video_url != "null") return true
-            if (!live_class?.video_url.isNullOrBlank() && live_class.video_url != "null") return true
-            if (!stream_url.isNullOrBlank() && stream_url != "null") return true
-            if (!live_class?.stream_url.isNullOrBlank() && live_class.stream_url != "null") return true
-            // Strictly check if candidate stream URLs list has valid playable links
-            val direct = candidateStreamUrls
-            return direct.any { it.isNotBlank() && it != "null" }
+            // For live classes, check recording_url explicitly (Shikho's official VOD recording field)
+            val recUrl = live_class?.recording_url?.takeIf { it.isNotBlank() && it != "null" }
+                ?: recording_url?.takeIf { it.isNotBlank() && it != "null" }
+            if (recUrl != null) return true
+
+            // For non-live classes (regular recorded lectures / video)
+            if (!isLiveClass) {
+                if (!video_url.isNullOrBlank() && video_url != "null") return true
+                if (!stream_url.isNullOrBlank() && stream_url != "null") return true
+                val direct = candidateStreamUrls
+                return direct.any { it.isNotBlank() && it != "null" }
+            } else {
+                // For live classes: playback_url or stream_url represents the LIVE broadcast endpoint during class.
+                // It only becomes an archived recording if explicitly marked RECORDED or after the broadcast window.
+                val isExplicitEnded = user_activity_state.equals("RECORDED", true) ||
+                                      user_activity_state.equals("COMPLETED", true) ||
+                                      user_activity_state.equals("ATTENDED", true)
+                val isPastLiveWindow = classStartMs != Long.MAX_VALUE && (System.currentTimeMillis() > classStartMs + (3 * 3600 * 1000L + 30 * 60 * 1000L))
+                if (isExplicitEnded || isPastLiveWindow) {
+                    val direct = candidateStreamUrls
+                    return direct.any { it.isNotBlank() && it != "null" }
+                }
+            }
+            return false
         }
 
     val isModelTest: Boolean

@@ -371,7 +371,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
             navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
-        } else if (lesson.isLiveNow || lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true)) {
+        } else if (lesson.isLiveNow || lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true) || (lesson.isLiveClass && !lesson.isRecorded && !lesson.isUpcoming && !lesson.isRecordingProcessing)) {
             val classId = lesson.live_class?.id?.takeIf { it.isNotBlank() }
                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                 ?: lesson.id
@@ -380,9 +380,10 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val subject = lesson.subject_name ?: "সাধারণ"
             navController.navigate(Routes.liveClassRoute(classId = classId, lessonId = lessonId, lessonTitle = title, subjectName = subject))
         } else {
-            // Both UPCOMING and RECORDED classes open LESSON_DETAIL_PLAYER!
+            // Both UPCOMING, RECORDING_PROCESSING, and RECORDED classes open LESSON_DETAIL_PLAYER!
             // When UPCOMING: it renders the live countdown timer in the top 16:9 header.
-            // When RECORDED: it renders the video player with notes/resources.
+            // When RECORDING_PROCESSING: it displays the real-time upload status (0-60 min delay) & lecture slides.
+            // When RECORDED: it renders the full video player with notes/resources.
             courseViewModel.selectLesson(lesson)
             navController.navigate(Routes.LESSON_DETAIL_PLAYER)
         }

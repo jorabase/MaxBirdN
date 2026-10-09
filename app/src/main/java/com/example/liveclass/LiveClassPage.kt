@@ -96,22 +96,33 @@ fun LiveClassPage(
                 return@launch
             }
 
-            // Step 1: GraphQL -> Room ID
+            // Step 1: Try 100ms GraphQL Room ID
             val roomResult = service.getHmsRoomId(classId, lessonId, userToken)
-            val roomId = roomResult.getOrElse {
-                uiState = LiveClassState.Error(it.message ?: "লাইভ ক্লাসের রুম আইডি পাওয়া যায়নি।")
+            val roomId = roomResult.getOrNull()
+
+            if (!roomId.isNullOrBlank()) {
+                // Step 2: HMS Token API -> 100ms Token
+                val tokenResult = service.getHmsToken(roomId, userToken)
+                val hmsToken = tokenResult.getOrNull()
+                if (!hmsToken.isNullOrBlank()) {
+                    // Step 3: Connect WebSocket
+                    wsManager.connect(hmsToken, studentName)
+                    return@launch
+                }
+            }
+
+            // Step 2 Fallback: Check direct live stream URL from academic program details
+            val directResult = service.getDirectLiveClassStream(classId, userToken)
+            val directStreamUrl = directResult.getOrNull()
+            if (!directStreamUrl.isNullOrBlank()) {
+                wsManager.setMasterUrl(directStreamUrl)
+                uiState = LiveClassState.Preview(viewerCount.coerceAtLeast(1))
                 return@launch
             }
 
-            // Step 2: HMS Token API -> 100ms Token
-            val tokenResult = service.getHmsToken(roomId, userToken)
-            val hmsToken = tokenResult.getOrElse {
-                uiState = LiveClassState.Error(it.message ?: "লাইভ ক্লাসের সিকিউর টোকেন নেওয়া সম্ভব হয়নি।")
-                return@launch
-            }
-
-            // Step 3: Connect WebSocket
-            wsManager.connect(hmsToken, studentName)
+            val errMsg = roomResult.exceptionOrNull()?.message
+                ?: "লাইভ ক্লাসের ব্রডকাস্ট সংযোগ পাওয়া যায়নি। ক্লাস শুরু হতে বিলম্ব হলে অনুগ্রহ করে একটু অপেক্ষা করে রিফ্রেশ করুন।"
+            uiState = LiveClassState.Error(errMsg)
         }
     }
 

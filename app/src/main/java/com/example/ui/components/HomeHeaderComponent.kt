@@ -184,18 +184,18 @@ fun HomeHeader(
                     // App Logo Badge
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(38.dp)
                             .shadow(
-                                elevation = 8.dp,
-                                shape = RoundedCornerShape(12.dp),
-                                spotColor = Color(0xFF38BDF8).copy(alpha = 0.4f)
+                                elevation = 6.dp,
+                                shape = RoundedCornerShape(10.dp),
+                                spotColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
                             )
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(Color.White)
                             .border(
                                 1.dp,
                                 Brush.linearGradient(listOf(Color(0xFF38BDF8), Color(0xFF818CF8))),
-                                RoundedCornerShape(12.dp)
+                                RoundedCornerShape(10.dp)
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -205,7 +205,7 @@ fun HomeHeader(
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(7.dp)
+                                .padding(4.dp)
                         )
                     }
 
