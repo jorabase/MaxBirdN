@@ -40,7 +40,10 @@ data class HomeUiState(
     val isCourseSubjectsLoading: Boolean = false,
     val selectedSubjectCodes: Set<String> = emptySet(),
     val isSavingSubjectFilter: Boolean = false,
-    val programPhases: List<PhaseItem> = emptyList()
+    val programPhases: List<PhaseItem> = emptyList(),
+    // Dynamic In-App Notices (Admin Managed)
+    val notices: List<com.example.notice.AppNotice> = emptyList(),
+    val showNoticePopup: Boolean = false
 ) {
     /**
      * Filtered weekly routine containing only lessons matching the selected subjects.
@@ -317,12 +320,40 @@ class HomeViewModel(
                 if (active != null) {
                     fetchWeeklyRoutine(active)
                 }
+
+                // 4. Fetch dynamic in-app announcements / notices from Admin (Supabase)
+                fetchAppNotices(forceRefresh = isRefresh)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
                     errorMessage = e.localizedMessage ?: "কোর্স লোড করতে সমস্যা হয়েছে"
                 )
+            }
+        }
+    }
+
+    fun dismissNoticePopup(dontShowAgainToday: Boolean = false) {
+        val notices = _uiState.value.notices
+        com.example.notice.AppNoticeRepository.markPopupDismissed(getApplication(), notices, dontShowAgainToday)
+        _uiState.value = _uiState.value.copy(showNoticePopup = false)
+    }
+
+    fun refreshNotices() {
+        fetchAppNotices(forceRefresh = true)
+    }
+
+    private fun fetchAppNotices(forceRefresh: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                val notices = com.example.notice.AppNoticeRepository.getActiveNotices(forceRefresh = forceRefresh)
+                val shouldShow = com.example.notice.AppNoticeRepository.shouldShowPopup(getApplication(), notices)
+                _uiState.value = _uiState.value.copy(
+                    notices = notices,
+                    showNoticePopup = shouldShow
+                )
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Failed to fetch notices: ${e.message}")
             }
         }
     }

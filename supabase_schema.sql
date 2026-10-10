@@ -123,3 +123,51 @@ $$;
 
 -- ৫. উদাহরণ: পরীক্ষামূলক একটি কোড যোগ করতে চাইলে নিচের লাইনটি চালাতে পারেন:
 -- INSERT INTO public.access_codes (code, student_name, max_devices) VALUES ('VIP-STUDENT-01', 'Fahim Mia', 1);
+
+-- ========================================================
+-- ৬. আধুনিক ডায়নামিক অ্যাপ নোটিশ সিস্টেম (MAXBIRD NOTICE SYSTEM)
+-- ========================================================
+-- টেবিল: app_notices
+-- এতে অ্যাডমিন অ্যাপ থেকে এক বা একাধিক নোটিশ ছবি, শিরোনাম, লিংক, প্রায়োরিটি দিয়ে যোগ করা যাবে।
+CREATE TABLE IF NOT EXISTS public.app_notices (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    image_url TEXT NOT NULL,
+    action_url TEXT,
+    action_button_text TEXT DEFAULT 'বিস্তারিত দেখুন',
+    priority INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT true,
+    show_as_popup BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- সিকিউরিটি: Row Level Security (RLS) সক্রিয়করণ
+ALTER TABLE public.app_notices ENABLE ROW LEVEL SECURITY;
+
+-- পলিসি ১: ইউজার অ্যাপ সক্রিয় নোটিশ পড়ার অনুমতি
+CREATE POLICY "Allow public read active notices" 
+ON public.app_notices FOR SELECT 
+TO anon, authenticated 
+USING (is_active = true);
+
+-- পলিসি ২: অ্যাডমিন অ্যাপ থেকে নোটিশ যোগ, আপডেট ও ডিলিট করার সম্পূর্ণ অনুমতি
+CREATE POLICY "Allow full access for admin operations" 
+ON public.app_notices FOR ALL 
+TO anon, authenticated 
+USING (true) 
+WITH CHECK (true);
+
+-- উদাহরণ: পরীক্ষামূলক একটি টেস্ট নোটিশ (প্রয়োজনে আন-কমেন্ট করে রান করতে পারেন):
+-- INSERT INTO public.app_notices (title, description, image_url, action_url, action_button_text, priority, is_active, show_as_popup)
+-- VALUES (
+--     'নতুন লাইভ ক্লাস ও কোর্স আপডেট!',
+--     'এইচএসসি ২০২৬ ব্যাচের জন্য নতুন স্পেশাল মডেল টেস্ট যুক্ত করা হয়েছে। এখনই চেক করুন।',
+--     'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
+--     'https://t.me/your_channel',
+--     'টেলিগ্রামে যুক্ত হোন',
+--     10,
+--     true,
+--     true
+-- );
