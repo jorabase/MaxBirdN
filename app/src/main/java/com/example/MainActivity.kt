@@ -32,6 +32,14 @@ import com.example.notification.ShikhoFirebaseMessagingService
 import com.example.notification.ShikhoNotificationManager
 import com.example.security.AntiTamperSecurity
 import com.example.ui.theme.MyApplicationTheme
+import com.example.update.AppUpdateInfo
+import com.example.update.AppUpdateRepository
+import com.example.ui.dialogs.UpdateDialog
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 val LocalPictureInPictureMode = compositionLocalOf { false }
 
@@ -84,6 +92,20 @@ class MainActivity : ComponentActivity() {
                 else -> systemInDark
             }
 
+            var startupUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+            val startupScope = rememberCoroutineScope()
+
+            LaunchedEffect(Unit) {
+                startupScope.launch(Dispatchers.IO) {
+                    val info = AppUpdateRepository.fetchLatestUpdate()
+                    if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                        withContext(Dispatchers.Main) {
+                            startupUpdateInfo = info
+                        }
+                    }
+                }
+            }
+
             CompositionLocalProvider(LocalPictureInPictureMode provides isPipModeState.value) {
                 MyApplicationTheme(darkTheme = isDarkTheme) {
                     Surface(
@@ -92,6 +114,17 @@ class MainActivity : ComponentActivity() {
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             AppNavigation()
+
+                            startupUpdateInfo?.let { updateInfo ->
+                                UpdateDialog(
+                                    updateInfo = updateInfo,
+                                    onDismiss = {
+                                        if (!updateInfo.isForce) {
+                                            startupUpdateInfo = null
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }

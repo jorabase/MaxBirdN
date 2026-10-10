@@ -52,6 +52,14 @@ import com.example.MainActivity
 import com.example.auth.SessionManager
 import com.example.ui.dialogs.FcmLiveTerminalDialog
 import com.example.utils.AvatarUtils
+import com.example.update.AppUpdateInfo
+import com.example.update.AppUpdateRepository
+import com.example.ui.dialogs.UpdateDialog
+import com.example.BuildConfig
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -453,6 +461,39 @@ fun SettingsScreen(
                         formattedCacheSize = "0.0 MB"
                         Toast.makeText(context, "অ্যাপের সমস্ত ক্যাশ মেমোরি সম্পূর্ণ খালি করা হয়েছে!", Toast.LENGTH_SHORT).show()
                     }
+                )
+            }
+
+            // App Update Section
+            val scope = rememberCoroutineScope()
+            var manualUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+
+            SettingsSection(title = "অ্যাপ আপডেট ও সংস্করণ") {
+                SettingsRowItem(
+                    icon = Icons.Default.SystemUpdate,
+                    iconTint = Color(0xFF10B981),
+                    iconBg = Color(0xFFD1FAE5),
+                    title = "অ্যাপ আপডেট চেক করুন",
+                    subtitle = "সর্বশেষ সংস্করণে আছেন কিনা যাচাই করুন",
+                    onClick = {
+                        scope.launch(Dispatchers.IO) {
+                            val info = AppUpdateRepository.fetchLatestUpdate()
+                            withContext(Dispatchers.Main) {
+                                if (info != null && info.versionCode > BuildConfig.VERSION_CODE) {
+                                    manualUpdateInfo = info
+                                } else {
+                                    Toast.makeText(context, "আপনার অ্যাপটি ইতিমধ্যে সর্বশেষ সংস্করণে আছে!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            manualUpdateInfo?.let { updateInfo ->
+                UpdateDialog(
+                    updateInfo = updateInfo,
+                    onDismiss = { manualUpdateInfo = null }
                 )
             }
 
