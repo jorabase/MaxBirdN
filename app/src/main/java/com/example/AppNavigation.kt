@@ -391,7 +391,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
     }
 
-    val startDestination = Routes.SPLASH
+    val startDestination = Routes.ACTIVATION
 
     NavHost(
         navController = navController,

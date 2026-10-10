@@ -87,9 +87,6 @@ object DeviceActivationRepository {
      * valid, untampered activation token signed with this hardware identity.
      */
     fun isDeviceActivated(context: Context): Boolean {
-        if (BuildConfig.DEBUG) {
-            return true
-        }
         return try {
             val prefs = getPrefs(context)
             val signedToken = prefs.getString(KEY_SIGNED_TOKEN, null)
