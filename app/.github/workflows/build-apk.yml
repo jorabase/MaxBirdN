@@ -1,4 +1,4 @@
-name: Build Android App
+name: Build APK
 
 on:
   workflow_dispatch:
@@ -7,12 +7,10 @@ on:
         description: 'Version Name (e.g. 6.1.0)'
         required: true
         default: '6.1.0'
-        type: string
       version_code:
         description: 'Version Code (e.g. 60100)'
         required: true
         default: '60100'
-        type: string
   push:
     branches: [ "main", "master" ]
   pull_request:
@@ -38,8 +36,8 @@ jobs:
 
     - name: Build APK with custom versions
       env:
-        VERSION_NAME: ${{ github.event.inputs.version_name && github.event.inputs.version_name || '6.0.0' }}
-        VERSION_CODE: ${{ github.event.inputs.version_code && github.event.inputs.version_code || '60000' }}
+        VERSION_NAME: ${{ github.event.inputs.version_name || '6.0.0' }}
+        VERSION_CODE: ${{ github.event.inputs.version_code || '60000' }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       run: |
