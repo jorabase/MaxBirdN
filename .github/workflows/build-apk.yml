@@ -17,6 +17,16 @@ on:
           - "debug"
           - "aab"
           - "all"
+      version_name:
+        description: "App Version Name (e.g. 1.2.0 - leave blank for auto 1.0.<run_number>)"
+        required: false
+        default: ""
+        type: string
+      version_code:
+        description: "App Version Code (e.g. 15 - leave blank for auto run_number)"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   build:
@@ -35,12 +45,33 @@ jobs:
       STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      VERSION_CODE: ${{ github.run_number }}
-      VERSION_NAME: "1.0.${{ github.run_number }}"
+      VERSION_CODE: ${{ inputs.version_code != '' && inputs.version_code || github.run_number }}
+      VERSION_NAME: ${{ inputs.version_name != '' && inputs.version_name || format('1.0.{0}', github.run_number) }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
+
+      - name: Configure App Versioning
+        run: |
+          CUSTOM_VNAME="${{ inputs.version_name }}"
+          CUSTOM_VCODE="${{ inputs.version_code }}"
+
+          if [ -n "$CUSTOM_VNAME" ]; then
+            echo "Custom Version Name provided: $CUSTOM_VNAME"
+            echo "VERSION_NAME=$CUSTOM_VNAME" >> $GITHUB_ENV
+          else
+            echo "Default Version Name used: 1.0.${{ github.run_number }}"
+            echo "VERSION_NAME=1.0.${{ github.run_number }}" >> $GITHUB_ENV
+          fi
+
+          if [ -n "$CUSTOM_VCODE" ]; then
+            echo "Custom Version Code provided: $CUSTOM_VCODE"
+            echo "VERSION_CODE=$CUSTOM_VCODE" >> $GITHUB_ENV
+          else
+            echo "Default Version Code used: ${{ github.run_number }}"
+            echo "VERSION_CODE=${{ github.run_number }}" >> $GITHUB_ENV
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
@@ -147,7 +178,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release APK
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'all')) }}
-        run: ./gradlew assembleRelease --no-daemon -Djava.awt.headless=true --stacktrace
+        run: ./gradlew assembleRelease --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" --stacktrace
 
       # -----------------------------------------------------------
       # 3. DEBUG APK
@@ -155,7 +186,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Debug APK
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true --stacktrace
+        run: ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" --stacktrace
 
       # -----------------------------------------------------------
       # 4. RELEASE AAB
@@ -163,7 +194,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release AAB
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'aab' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew bundleRelease --no-daemon -Djava.awt.headless=true --stacktrace
+        run: ./gradlew bundleRelease --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" --stacktrace
 
       # -----------------------------------------------------------
       # 5. ORGANIZE & UPLOAD ARTIFACTS
@@ -239,4 +270,6 @@ jobs:
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package Name:** \`com.maxbird.ff.app\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Version Name:** \`$VERSION_NAME\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Version Code:** \`$VERSION_CODE\`" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
