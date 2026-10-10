@@ -61,10 +61,11 @@ object DeviceActivationRepository {
         } catch (_: Throwable) { "" }
 
         val cleanUrl = rawUrl.trim().removeSurrounding("\"").removeSurrounding("'").trim()
-        val formattedUrl = if (cleanUrl.isNotBlank() && !cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-            "https://$cleanUrl"
-        } else {
-            cleanUrl
+        val formattedUrl = when {
+            cleanUrl.isBlank() -> ""
+            cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://") -> cleanUrl
+            !cleanUrl.contains(".") -> "https://$cleanUrl.supabase.co"
+            else -> "https://$cleanUrl"
         }
 
         // Strip any whitespace, quotes or hidden newlines from anonKey to prevent OkHttp header crash
