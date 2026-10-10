@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version Name (e.g. v6.1.0)'
+        description: 'Version Name (e.g. 6.1.0)'
         required: true
         default: '6.1.0'
         type: string
@@ -12,7 +12,7 @@ on:
         description: 'Version Code (e.g. 60100)'
         required: true
         default: '60100'
-        type: number
+        type: string
   push:
     branches: [ "main", "master" ]
   pull_request:
@@ -38,13 +38,13 @@ jobs:
 
     - name: Build APK with custom versions
       env:
-        VERSION_NAME: ${{ github.event.inputs.version_name || '6.0.0' }}
-        VERSION_CODE: ${{ github.event.inputs.version_code || '60000' }}
+        VERSION_NAME: ${{ github.event.inputs.version_name && github.event.inputs.version_name || '6.0.0' }}
+        VERSION_CODE: ${{ github.event.inputs.version_code && github.event.inputs.version_code || '60000' }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       run: |
         echo "Building with Version Name: $VERSION_NAME and Version Code: $VERSION_CODE"
-        ./gradlew assembleRelease || gradle assembleRelease
+        ./gradlew assembleRelease -PVERSION_NAME="$VERSION_NAME" -PVERSION_CODE="$VERSION_CODE" || gradle assembleRelease -PVERSION_NAME="$VERSION_NAME" -PVERSION_CODE="$VERSION_CODE"
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
