@@ -94,7 +94,12 @@ fun HomeScreen(
 
     // Entrance animation
     var contentVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { contentVisible = true }
+    LaunchedEffect(Unit) {
+        contentVisible = true
+        if (uiState.activeProgram == null && !uiState.isLoading && uiState.enrolledPrograms.isEmpty()) {
+            viewModel.loadData()
+        }
+    }
     val contentAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
         animationSpec = tween(550, easing = FastOutSlowInEasing),

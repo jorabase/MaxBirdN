@@ -357,10 +357,10 @@ private fun ModelTestCard(
 
     // Live, Completed, Ended, Upcoming detection
     val (statusLabel, statusBg, statusText) = when {
-        isLive -> Triple("🔴 লাইভ চলছে", Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
-        isCompleted -> Triple("সম্পন্ন", Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
-        isMissed -> Triple("লাইভ শেষ", Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
-        else -> Triple("আসন্ন", Color(0xFF3B82F6).copy(alpha = 0.12f), Color(0xFF1D4ED8))
+        isLive -> Triple("🔴 লাইভ এক্সাম", Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
+        isCompleted -> Triple("রেকর্ড এক্সাম • সম্পন্ন", Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
+        isMissed -> Triple("রেকর্ড এক্সাম", Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
+        else -> Triple("আপকামিং এক্সাম", Color(0xFF7C3AED).copy(alpha = 0.12f), Color(0xFF7C3AED))
     }
 
     Card(
@@ -444,7 +444,13 @@ private fun ClassCard(
 ) {
     val title = item.title ?: "লেকচার ক্লাস"
     val dateStr = formatModelTestDate(item.start_time ?: item.live_class?.start_time)
-    val isLive = item.live_class?.is_on_going == true
+    val isLive = item.isLiveNow
+    val isUpcoming = item.isUpcoming
+    val (statusLabel, statusBg, statusColor) = when {
+        isLive -> Triple("🔴 লাইভ ক্লাস", Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
+        isUpcoming -> Triple("আপকামিং ক্লাস", Color(0xFF0284C7).copy(alpha = 0.12f), Color(0xFF0284C7))
+        else -> Triple("রেকর্ড ক্লাস", Color(0xFF3B82F6).copy(alpha = 0.12f), Color(0xFF1D4ED8))
+    }
 
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -464,13 +470,13 @@ private fun ClassCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = if (isLive) Color(0xFFEF4444).copy(alpha = 0.12f) else Color(0xFF3B82F6).copy(alpha = 0.12f)
+                    color = statusBg
                 ) {
                     Text(
-                        text = if (isLive) "লাইভ চলছে" else "ক্লাস",
+                        text = statusLabel,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isLive) Color(0xFFDC2626) else Color(0xFF1D4ED8),
+                        color = statusColor,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }

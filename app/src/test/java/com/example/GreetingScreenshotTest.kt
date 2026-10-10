@@ -26,3 +26,4 @@ class GreetingScreenshotTest {
     composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/greeting.png")
   }
 }
+

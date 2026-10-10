@@ -663,14 +663,14 @@ fun ShikhoRoutineCard(
                                             .background(Color(0xFFEF4444))
                                     )
                                     Text(
-                                        "চলছে",
+                                        "লাইভ ক্লাস",
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFDC2626)
                                     )
                                 }
                             }
-                            isModelTestNow -> {
+                            isModelTestNow || isExamNow -> {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -681,79 +681,50 @@ fun ShikhoRoutineCard(
                                             .size(6.dp)
                                             .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
                                             .clip(CircleShape)
-                                            .background(Color(0xFF7C3AED))
+                                            .background(Color(0xFFEA580C))
                                     )
                                     Text(
-                                        "মডেল টেস্ট চলছে",
+                                        "লাইভ এক্সাম",
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF6D28D9)
+                                        color = Color(0xFFC2410C)
                                     )
                                 }
                             }
-                            isModelTest -> {
-                                Text(
-                                    text = "মডেল টেস্ট",
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF6D28D9),
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                )
-                            }
-                            isExamNow -> {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFD97706))
-                                    )
+                            isModelTest || isExam || isLiveExam -> {
+                                if (lesson.isExamUpcoming) {
                                     Text(
-                                        "পরীক্ষা চলছে",
+                                        text = "আপকামিং এক্সাম",
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFB45309)
+                                        color = Color(0xFF7C3AED),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = "রেকর্ড এক্সাম",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFB45309),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 }
-                            }
-                            isExam -> {
-                                Text(
-                                    text = "চ্যাপ্টার এক্সাম",
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFB45309),
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                )
                             }
                             lesson.isUpcoming -> {
                                 Text(
-                                    text = "আপকামিং",
+                                    text = "আপকামিং ক্লাস",
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0284C7),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
-                            lesson.isRecordingProcessing -> {
-                                Text(
-                                    text = "রেকর্ড প্রসেসিং",
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFD97706),
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                )
-                            }
                             else -> {
                                 Text(
-                                    text = "রেকর্ড",
+                                    text = "রেকর্ড ক্লাস",
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF475569),
+                                    color = Color(0xFF2563EB),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }

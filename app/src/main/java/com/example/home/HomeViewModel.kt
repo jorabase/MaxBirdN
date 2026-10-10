@@ -95,7 +95,12 @@ class HomeViewModel(
     val wallpaperConfigFlow: StateFlow<com.example.ui.theme.HeaderWallpaperConfig> = sessionManager.headerWallpaperFlow
 
     init {
-        loadData()
+        val hasToken = !sessionManager.getAccessToken().isNullOrBlank()
+        val isActivated = !com.example.security.DeviceActivationRepository.isConfigured() ||
+                com.example.security.DeviceActivationRepository.isDeviceActivated(getApplication())
+        if (hasToken && isActivated) {
+            loadData()
+        }
         completedItemRepository?.let { repo ->
             viewModelScope.launch {
                 repo.completedIdsState.collect { completedSet ->

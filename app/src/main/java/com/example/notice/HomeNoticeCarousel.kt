@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +30,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -51,7 +54,7 @@ import kotlinx.coroutines.delay
 
 /**
  * Ultra-sleek, flat bKash-style Notice Banner Carousel rendered on the HomeScreen.
- * Auto-cycles smoothly every 6 seconds if multiple active notices exist.
+ * Shows strictly ONE banner at a time across full container width and auto-cycles smoothly every 6 seconds.
  */
 @Composable
 fun HomeNoticeCarousel(
@@ -64,15 +67,23 @@ fun HomeNoticeCarousel(
     val context = LocalContext.current
     val pagerState = rememberPagerState(pageCount = { notices.size })
 
-    // Auto-scroll effect: smoothly transitions to the next page every 6 seconds
+    // Auto-scroll effect: smoothly transitions to the next page every 6 seconds without getting stuck
     if (notices.size > 1) {
-        LaunchedEffect(pagerState.currentPage, notices.size) {
-            delay(6000L)
-            val nextPage = (pagerState.currentPage + 1) % notices.size
-            pagerState.animateScrollToPage(
-                page = nextPage,
-                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
-            )
+        LaunchedEffect(notices.size) {
+            while (true) {
+                delay(6000L)
+                if (!pagerState.isScrollInProgress) {
+                    val nextPage = (pagerState.currentPage + 1) % notices.size
+                    try {
+                        pagerState.animateScrollToPage(
+                            page = nextPage,
+                            animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+                        )
+                    } catch (e: Exception) {
+                        // Ignore cancellation/interruption
+                    }
+                }
+            }
         }
     }
 
@@ -80,17 +91,23 @@ fun HomeNoticeCarousel(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Sleek Flat Horizontal Pager (bKash banner style: flat aspect ratio 16:5.6)
+        // Sleek Flat Horizontal Pager: strictly ONE item per page, full container width (bKash banner style)
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds(),
+            pageSize = PageSize.Fill,
+            beyondViewportPageCount = 0,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp),
+            pageSpacing = 0.dp
         ) { page ->
             val notice = notices[page]
 
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 5.6f)
+                    .aspectRatio(16f / 4.8f)
                     .clip(RoundedCornerShape(16.dp))
                     .clickable { onNoticeClick(notice) },
                 shape = RoundedCornerShape(16.dp),
@@ -224,7 +241,7 @@ fun HomeNoticeCarousel(
 
         // bKash-style animated smooth pagination indicator dots
         if (notices.size > 1) {
-            Spacer(modifier = Modifier.height(7.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
@@ -232,18 +249,18 @@ fun HomeNoticeCarousel(
                 notices.indices.forEach { index ->
                     val isSelected = pagerState.currentPage == index
                     val dotWidth by animateDpAsState(
-                        targetValue = if (isSelected) 18.dp else 5.5.dp,
+                        targetValue = if (isSelected) 20.dp else 6.dp,
                         animationSpec = tween(durationMillis = 300),
                         label = "dotWidth"
                     )
                     Box(
                         modifier = Modifier
-                            .padding(horizontal = 2.5.dp)
-                            .height(4.5.dp)
+                            .padding(horizontal = 3.dp)
+                            .height(5.dp)
                             .width(dotWidth)
                             .clip(CircleShape)
                             .background(
-                                if (isSelected) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.22f)
+                                if (isSelected) Color(0xFF0284C7) else Color(0xFF94A3B8).copy(alpha = 0.5f)
                             )
                     )
                 }

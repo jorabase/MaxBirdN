@@ -60,8 +60,13 @@ class CourseViewModel(
     }
 
     init {
-        fetchEnrolledPrograms()
-        loadSubjects()
+        val hasToken = !sessionManager.getAccessToken().isNullOrBlank()
+        val isActivated = !com.example.security.DeviceActivationRepository.isConfigured() ||
+                com.example.security.DeviceActivationRepository.isDeviceActivated(sessionManager.appContext)
+        if (hasToken && isActivated) {
+            fetchEnrolledPrograms()
+            loadSubjects()
+        }
         completedItemRepository?.let { repo ->
             viewModelScope.launch {
                 repo.completedIdsState.collect { completedSet ->
