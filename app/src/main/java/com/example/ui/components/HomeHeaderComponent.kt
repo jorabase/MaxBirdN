@@ -13,8 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -181,35 +181,56 @@ fun HomeHeader(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // App Logo Badge
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .shadow(
-                                elevation = 6.dp,
-                                shape = RoundedCornerShape(10.dp),
-                                spotColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
-                            )
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White)
-                            .border(
-                                1.dp,
-                                Brush.linearGradient(listOf(Color(0xFF38BDF8), Color(0xFF818CF8))),
-                                RoundedCornerShape(10.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
-                            contentDescription = "MaxBird Logo",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(4.dp)
-                        )
+                    val fallbackInitial = remember(userName) {
+                        userName.trim().firstOrNull()?.toString()?.uppercase() ?: "U"
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    val imageRequest = remember(avatarUrl, userName, context) {
+                        AvatarUtils.buildImageRequest(context, avatarUrl, userName)
+                    }
+
+                    // Profile Avatar replacing the app logo
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .graphicsLayer { alpha = avatarGlow }
+                            .shadow(
+                                elevation = 6.dp,
+                                shape = CircleShape,
+                                spotColor = if (isPremium) Color(0xFFF59E0B).copy(alpha = 0.45f) else Color(0xFF38BDF8).copy(alpha = 0.4f)
+                            )
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    if (isPremium) {
+                                        listOf(Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFF818CF8))
+                                    } else {
+                                        listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
+                                    }
+                                )
+                            )
+                            .padding(2.2.dp)
+                            .clickable { onAvatarClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(Color(0xFF07152B))
+                        ) {
+                            SubcomposeAsyncImage(
+                                model = imageRequest,
+                                contentDescription = "প্রোফাইল ছবি",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                error = { AvatarFallbackBadge(fallbackInitial) },
+                                loading = { AvatarFallbackBadge(fallbackInitial) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
                         AnimatedRainbowGreetingText(
@@ -230,84 +251,31 @@ fun HomeHeader(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Notification Bell
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF051226).copy(alpha = 0.55f))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
-                        .clickable { onNotificationClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "নোটিফিকেশন",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    if (unreadNotificationCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 3.dp, y = (-3).dp)
-                                .size(15.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFEF4444))
-                                .border(1.5.dp, Color(0xFF07152B), CircleShape),
-                            contentAlignment = Alignment.Center
+                if (isPremium) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF59E0B).copy(alpha = 0.18f),
+                        border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = Color(0xFFFBBF24),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = if (unreadNotificationCount > 9) "9+" else unreadNotificationCount.toString(),
-                                color = Color.White,
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "PRO",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFBBF24)
                             )
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Profile Avatar
-                val fallbackInitial = remember(userName) {
-                    userName.trim().firstOrNull()?.toString()?.uppercase() ?: "U"
-                }
-
-                val imageRequest = remember(avatarUrl, userName, context) {
-                    AvatarUtils.buildImageRequest(context, avatarUrl, userName)
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .graphicsLayer { alpha = avatarGlow }
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(Color(0xFFF59E0B), Color(0xFFFB7185), Color(0xFF818CF8))
-                            )
-                        )
-                        .padding(2.dp)
-                        .clickable { onAvatarClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(Color(0xFF07152B))
-                    ) {
-                        SubcomposeAsyncImage(
-                            model = imageRequest,
-                            contentDescription = "Profile Avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            error = { AvatarFallbackBadge(fallbackInitial) },
-                            loading = { AvatarFallbackBadge(fallbackInitial) }
-                        )
                     }
                 }
             }

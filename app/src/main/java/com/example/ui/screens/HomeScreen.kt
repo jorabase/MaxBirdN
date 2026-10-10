@@ -54,12 +54,28 @@ fun HomeScreen(
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
     onNavigateToReportCard: (programId: String?, programTitle: String?, phaseId: String?) -> Unit = { _, _, _ -> },
     onNavigateToNotificationHistory: () -> Unit = {},
+    onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val wallpaperConfig by viewModel.wallpaperConfigFlow.collectAsState()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+
+    // ===== LOGIC: Notice Popup Dialog (Admin Managed) =====
+    if (uiState.showNoticePopup && uiState.notices.any { it.showAsPopup }) {
+        val popupNotices = remember(uiState.notices) { uiState.notices.filter { it.showAsPopup } }
+        com.example.notice.NoticePopupDialog(
+            notices = popupNotices,
+            onDismiss = { dontShowAgainToday ->
+                viewModel.dismissNoticePopup(dontShowAgainToday)
+            },
+            onNoticeActionClick = { notice ->
+                viewModel.dismissNoticePopup(false)
+                handleNoticeAction(context, notice, onOpenPdf)
+            }
+        )
+    }
 
     // ===== LOGIC: Scroll-driven collapsible header (unchanged) =====
     var isHeaderVisible by remember { mutableStateOf(true) }
@@ -78,7 +94,12 @@ fun HomeScreen(
 
     // Entrance animation
     var contentVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { contentVisible = true }
+    LaunchedEffect(Unit) {
+        contentVisible = true
+        if (uiState.activeProgram == null && !uiState.isLoading && uiState.enrolledPrograms.isEmpty()) {
+            viewModel.loadData()
+        }
+    }
     val contentAlpha by animateFloatAsState(
         targetValue = if (contentVisible) 1f else 0f,
         animationSpec = tween(550, easing = FastOutSlowInEasing),
@@ -226,6 +247,16 @@ fun HomeScreen(
                             uiState.courseSubjects
                                 .filter { sub -> sub.code != null && uiState.selectedSubjectCodes.contains(sub.code) }
                                 .mapNotNull { sub -> sub.display_bn.takeIf { !it.isNullOrBlank() } ?: sub.code }
+                        }
+
+                        // Dynamic Notice Carousel / Banner (Admin Managed)
+                        if (uiState.notices.isNotEmpty()) {
+                            com.example.notice.HomeNoticeCarousel(
+                                notices = uiState.notices,
+                                onNoticeClick = { notice ->
+                                    handleNoticeAction(context, notice, onOpenPdf)
+                                }
+                            )
                         }
 
                         WeeklyRoutineSection(
@@ -691,3 +722,38 @@ fun AccountCompletionBanner(
         }
     }
 }
+
+/**
+ * Handles clicks on notice banners / dialog action buttons.
+ * Opens PDF files via in-app PDF viewer or web links via system browser.
+ */
+private fun handleNoticeAction(
+    context: android.content.Context,
+    notice: com.example.notice.AppNotice,
+    onOpenPdf: ((filePath: String, title: String) -> Unit)? = null
+) {
+    val rawUrl = notice.actionUrl?.trim() ?: return
+    if (rawUrl.isBlank()) return
+
+    if (rawUrl.endsWith(".pdf", ignoreCase = true) || rawUrl.contains(".pdf?", ignoreCase = true)) {
+        if (onOpenPdf != null) {
+            onOpenPdf(rawUrl, notice.title.ifBlank { "নোটিশ ডকুমেন্টস" })
+            return
+        }
+    }
+
+    try {
+        val uri = android.net.Uri.parse(rawUrl)
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(
+            context,
+            "লিংক ওপেন করা সম্ভব হয়নি: ${e.localizedMessage ?: "ব্রাউজার এরর"}",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+}
+

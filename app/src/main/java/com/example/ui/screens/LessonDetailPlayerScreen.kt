@@ -200,22 +200,20 @@ fun LessonDetailPlayerScreen(
     val isLiveOngoing = remember(lesson, lesson?.isLiveNow, activeStreamUrl, candidateStreams) {
         lesson?.isLiveNow == true || (
             lesson?.isLiveClass == true &&
-            activeStreamUrl.isBlank() &&
-            candidateStreams.isEmpty() &&
             lesson?.isUpcoming == false &&
-            lesson?.isRecordingProcessing == false
+            lesson?.hasRecording == false &&
+            (lesson?.classStartMs ?: Long.MAX_VALUE) <= System.currentTimeMillis() &&
+            ((lesson?.classEndMs ?: Long.MAX_VALUE) + 45 * 60 * 1000L) >= System.currentTimeMillis()
         )
     }
 
     // 2. Determine if this is strictly an upcoming live class (countdown state)
-    val isUpcomingLesson = remember(lesson, lesson?.isUpcoming, isLiveOngoing, activeStreamUrl, candidateStreams) {
+    val isUpcomingLesson = remember(lesson, lesson?.isUpcoming, isLiveOngoing) {
         if (isLiveOngoing) return@remember false
         lesson?.isUpcoming == true || (
-            lesson?.isLiveNow == false &&
-            activeStreamUrl.isBlank() &&
-            candidateStreams.isEmpty() &&
+            lesson?.isLiveClass == true &&
             (lesson?.classStartMs ?: Long.MAX_VALUE) != Long.MAX_VALUE &&
-            System.currentTimeMillis() < (lesson?.classStartMs ?: Long.MAX_VALUE)
+            System.currentTimeMillis() < ((lesson?.classStartMs ?: Long.MAX_VALUE) - 5 * 60 * 1000L)
         )
     }
 
@@ -223,10 +221,9 @@ fun LessonDetailPlayerScreen(
     val isRecordingProcessing = remember(lesson, lesson?.isRecordingProcessing, isLiveOngoing, isUpcomingLesson, activeStreamUrl, candidateStreams) {
         if (isLiveOngoing || isUpcomingLesson) return@remember false
         if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) return@remember false
-        lesson?.isRecordingProcessing == true || (
-            lesson?.isLiveClass == true &&
-            activeStreamUrl.isBlank() &&
-            candidateStreams.isEmpty()
+        lesson?.isLiveClass == true && !lesson.hasRecording && (
+            ((lesson.classEndMs != Long.MAX_VALUE) && System.currentTimeMillis() > (lesson.classEndMs + 45 * 60 * 1000L)) ||
+            lesson.live_class?.is_on_going == false
         )
     }
 
@@ -1921,7 +1918,8 @@ fun UpcomingCountdownPlayerHeader(
                 ) {
                     Icon(Icons.Default.LiveTv, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("লাইভে যোগ দিন", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    val isAttended = lesson?.user_activity_state.equals("ATTENDED", true) || lesson?.user_activity_state.equals("COMPLETED", true)
+                    Text(if (isAttended) "লাইভে পুনরায় যোগ দিন" else "লাইভে যোগ দিন", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             } else {
                 Row(

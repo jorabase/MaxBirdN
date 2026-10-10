@@ -76,6 +76,13 @@ private fun String?.toBn(): String {
     return sb.toString()
 }
 
+// =========================================================================
+// শিক্ষার্থী প্রোফাইল পপআপ টগল (STUDENT PROFILE DIALOG TOGGLE)
+// এটি false করা আছে যাতে লিডারবোর্ডে কারো প্রোফাইলে ক্লিক করলে কিছু না ঘটে।
+// পরবর্তীতে পুনরায় সচল করতে চাইলে এটিকে true করে দিলেই প্রোফাইল ডিটেইলস শো হবে।
+// =========================================================================
+const val ENABLE_STUDENT_PROFILE_CLICK: Boolean = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportCardScreen(
@@ -144,22 +151,24 @@ fun ReportCardScreen(
                     userName = uiState.userName,
                     userAvatar = uiState.userAvatar,
                     onClick = {
-                        val myUserId = viewModel.currentUserId
-                        val myUserItem = LeaderboardUserItem(
-                            user_id = myUserId,
-                            rank = uiState.leaderboardData?.user_rank,
-                            score = uiState.leaderboardData?.user_marks,
-                            user = LeaderboardUserInfo(
-                                id = myUserId,
+                        if (ENABLE_STUDENT_PROFILE_CLICK) {
+                            val myUserId = viewModel.currentUserId
+                            val myUserItem = LeaderboardUserItem(
                                 user_id = myUserId,
-                                name = uiState.userName,
-                                avatar = uiState.userAvatar,
-                                school = uiState.userSchool,
-                                phone = uiState.userPhone
+                                rank = uiState.leaderboardData?.user_rank,
+                                score = uiState.leaderboardData?.user_marks,
+                                user = LeaderboardUserInfo(
+                                    id = myUserId,
+                                    user_id = myUserId,
+                                    name = uiState.userName,
+                                    avatar = uiState.userAvatar,
+                                    school = uiState.userSchool,
+                                    phone = uiState.userPhone
+                                )
                             )
-                        )
-                        selectedStudentForProfile = myUserItem
-                        viewModel.fetchStudentFullProfile(myUserId, isCurrentUser = true, studentItem = myUserItem)
+                            selectedStudentForProfile = myUserItem
+                            viewModel.fetchStudentFullProfile(myUserId, isCurrentUser = true, studentItem = myUserItem)
+                        }
                     },
                     onShare = {
                         val rank = uiState.leaderboardData?.user_rank ?: 0
@@ -403,13 +412,15 @@ fun ReportCardScreen(
                                         userItem = userItem,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                         onClick = {
-                                            selectedStudentForProfile = userItem
-                                            val effectiveId = userItem.effectiveUserId ?: ""
-                                            val myUserId = viewModel.currentUserId
-                                            val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
-                                                    (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
-                                            val targetId = if (isSelf) myUserId else effectiveId
-                                            viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                            if (ENABLE_STUDENT_PROFILE_CLICK) {
+                                                selectedStudentForProfile = userItem
+                                                val effectiveId = userItem.effectiveUserId ?: ""
+                                                val myUserId = viewModel.currentUserId
+                                                val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
+                                                        (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
+                                                val targetId = if (isSelf) myUserId else effectiveId
+                                                viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                            }
                                         }
                                     )
                                 }
@@ -455,13 +466,15 @@ fun ReportCardScreen(
                                     LeaderboardPodiumView(
                                         topUsers = filteredUsers.take(3),
                                         onUserClick = { userItem ->
-                                            selectedStudentForProfile = userItem
-                                            val effectiveId = userItem.effectiveUserId ?: ""
-                                            val myUserId = viewModel.currentUserId
-                                            val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
-                                                    (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
-                                            val targetId = if (isSelf) myUserId else effectiveId
-                                            viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                            if (ENABLE_STUDENT_PROFILE_CLICK) {
+                                                selectedStudentForProfile = userItem
+                                                val effectiveId = userItem.effectiveUserId ?: ""
+                                                val myUserId = viewModel.currentUserId
+                                                val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
+                                                        (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
+                                                val targetId = if (isSelf) myUserId else effectiveId
+                                                viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                            }
                                         }
                                     )
                                 }
@@ -484,13 +497,15 @@ fun ReportCardScreen(
                                             userItem = userItem,
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                             onClick = {
-                                                selectedStudentForProfile = userItem
-                                                val effectiveId = userItem.effectiveUserId ?: ""
-                                                val myUserId = viewModel.currentUserId
-                                                val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
-                                                        (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
-                                                val targetId = if (isSelf) myUserId else effectiveId
-                                                viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                                if (ENABLE_STUDENT_PROFILE_CLICK) {
+                                                    selectedStudentForProfile = userItem
+                                                    val effectiveId = userItem.effectiveUserId ?: ""
+                                                    val myUserId = viewModel.currentUserId
+                                                    val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
+                                                            (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
+                                                    val targetId = if (isSelf) myUserId else effectiveId
+                                                    viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                                                }
                                             }
                                         )
                                     }
@@ -554,26 +569,28 @@ fun ReportCardScreen(
         }
     }
 
-    selectedStudentForProfile?.let { userItem ->
-        val effectiveId = userItem.effectiveUserId ?: ""
-        val myUserId = viewModel.currentUserId
-        val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
-                (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
-        StudentProfileDetailDialog(
-            userItem = userItem,
-            fullProfile = uiState.selectedStudentFullProfile,
-            isSelf = isSelf,
-            isLoadingProfile = uiState.isFetchingStudentProfile,
-            errorMessage = uiState.profileFetchError,
-            onRetry = {
-                val targetId = if (isSelf) myUserId else effectiveId
-                viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
-            },
-            onDismiss = {
-                selectedStudentForProfile = null
-                viewModel.clearSelectedStudentProfile()
-            }
-        )
+    if (ENABLE_STUDENT_PROFILE_CLICK) {
+        selectedStudentForProfile?.let { userItem ->
+            val effectiveId = userItem.effectiveUserId ?: ""
+            val myUserId = viewModel.currentUserId
+            val isSelf = (effectiveId.isNotBlank() && effectiveId == myUserId) ||
+                    (userItem.rank != null && userItem.rank == uiState.leaderboardData?.user_rank)
+            StudentProfileDetailDialog(
+                userItem = userItem,
+                fullProfile = uiState.selectedStudentFullProfile,
+                isSelf = isSelf,
+                isLoadingProfile = uiState.isFetchingStudentProfile,
+                errorMessage = uiState.profileFetchError,
+                onRetry = {
+                    val targetId = if (isSelf) myUserId else effectiveId
+                    viewModel.fetchStudentFullProfile(targetId, isCurrentUser = isSelf, studentItem = userItem)
+                },
+                onDismiss = {
+                    selectedStudentForProfile = null
+                    viewModel.clearSelectedStudentProfile()
+                }
+            )
+        }
     }
 }
 
@@ -1828,7 +1845,9 @@ fun PodiumColumn(
         modifier = modifier
             .padding(horizontal = 4.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() }
+            .then(
+                if (ENABLE_STUDENT_PROFILE_CLICK) Modifier.clickable { onClick() } else Modifier
+            )
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -1993,7 +2012,9 @@ fun LeaderboardUserRowItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .then(
+                if (ENABLE_STUDENT_PROFILE_CLICK) Modifier.clickable { onClick() } else Modifier
+            ),
         shape = RoundedCornerShape(14.dp),
         color = Color.White,
         border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
@@ -2106,7 +2127,9 @@ fun StickyMyRankBar(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .then(
+                if (ENABLE_STUDENT_PROFILE_CLICK) Modifier.clickable { onClick() } else Modifier
+            ),
         color = Color(0xFF0F172A),
         shadowElevation = 12.dp
     ) {

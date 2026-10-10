@@ -192,11 +192,11 @@ fun TimelineRoutineCard(
                                         .clip(CircleShape)
                                         .background(Color.White)
                                 )
-                                Text("চলছে", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("লাইভ ক্লাস", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     } else if (isExamNow) {
-                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFD97706)) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFEA580C)) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -209,7 +209,7 @@ fun TimelineRoutineCard(
                                         .clip(CircleShape)
                                         .background(Color.White)
                                 )
-                                Text("পরীক্ষা চলছে", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("লাইভ এক্সাম", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
                     }
@@ -228,11 +228,12 @@ fun TimelineRoutineCard(
 
                     if (!isLiveNow && !isExamNow) {
                         val (posLabel, posBg, posColor) = when {
-                            lesson.isUpcoming -> Triple("আপকামিং", Color(0xFFE0F2FE), Color(0xFF0284C7))
-                            lesson.isRecordingProcessing -> Triple("রেকর্ড প্রসেসিং", Color(0xFFFEF3C7), Color(0xFFD97706))
-                            isModelTest -> Triple("মডেল টেস্ট", Color(0xFFEDE9FE), Color(0xFF7C3AED))
-                            isLiveExam || isExam -> Triple("পরীক্ষা", Color(0xFFFEF3C7), Color(0xFFD97706))
-                            else -> Triple("রেকর্ড", Color(0xFFF1F5F9), Color(0xFF475569))
+                            isLiveExam || isExam || isModelTest -> when {
+                                lesson.isExamUpcoming -> Triple("আপকামিং এক্সাম", Color(0xFFEDE9FE), Color(0xFF7C3AED))
+                                else -> Triple("রেকর্ড এক্সাম", Color(0xFFFEF3C7), Color(0xFFD97706))
+                            }
+                            lesson.isUpcoming -> Triple("আপকামিং ক্লাস", Color(0xFFE0F2FE), Color(0xFF0284C7))
+                            else -> Triple("রেকর্ড ক্লাস", Color(0xFFEFF6FF), Color(0xFF2563EB))
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),

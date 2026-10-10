@@ -27,11 +27,16 @@ class ActivationNetworkInterceptor(private val context: Context) : Interceptor {
             return chain.proceed(request)
         }
 
+        // Allow authentication requests
+        if (url.contains("/auth/v2/")) {
+            return chain.proceed(request)
+        }
+
         // If Supabase backend is configured, enforce strict token verification
         if (DeviceActivationRepository.isConfigured()) {
             val isActivated = DeviceActivationRepository.isDeviceActivated(context)
             if (!isActivated) {
-                android.util.Log.e("ActivationInterceptor", "🚨 Blocked unauthorized request to $url (Device not activated)")
+                android.util.Log.w("ActivationInterceptor", "Blocked unauthorized request to $url (Device not activated)")
                 return Response.Builder()
                     .code(403)
                     .protocol(Protocol.HTTP_1_1)

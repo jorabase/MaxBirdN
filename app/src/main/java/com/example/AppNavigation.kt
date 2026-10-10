@@ -373,7 +373,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val encodedTitle = URLEncoder.encode(title, "UTF-8")
             val encodedChapter = URLEncoder.encode(chapter, "UTF-8")
             navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
-        } else if (lesson.isLiveNow || lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true) || (lesson.isLiveClass && !lesson.isRecorded && !lesson.isUpcoming && !lesson.isRecordingProcessing)) {
+        } else if (lesson.isLiveNow || lesson.live_class?.is_on_going == true || lesson.user_activity_state.equals("LIVE", ignoreCase = true) || (lesson.isLiveClass && !lesson.isRecorded && !lesson.isUpcoming)) {
             val classId = lesson.live_class?.id?.takeIf { it.isNotBlank() }
                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                 ?: lesson.id

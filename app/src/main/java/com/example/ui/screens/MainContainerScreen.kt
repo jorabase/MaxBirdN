@@ -174,7 +174,8 @@ fun MainContainerScreen(
                         onOpenLessonDetail = onOpenLessonDetail,
                         onNavigateToExam = onNavigateToExam,
                         onNavigateToReportCard = onNavigateToReportCard,
-                        onNavigateToNotificationHistory = onNavigateToNotificationHistory
+                        onNavigateToNotificationHistory = onNavigateToNotificationHistory,
+                        onOpenPdf = onOpenPdf
                     )
                 }
                 1 -> {

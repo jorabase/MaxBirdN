@@ -152,6 +152,75 @@ object ClassTypeUtils {
                 textColor = Color(0xFFDC2626),
                 backgroundColor = Color(0xFFFEE2E2)
             )
+            "আপকামিং ক্লাস" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF0284C7),
+                backgroundColor = Color(0xFFE0F2FE)
+            )
+            "রেকর্ড ক্লাস" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF2563EB),
+                backgroundColor = Color(0xFFEFF6FF)
+            )
+            "লাইভ এক্সাম" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFFEA580C),
+                backgroundColor = Color(0xFFFFEDD5)
+            )
+            "আপকামিং এক্সাম" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF7C3AED),
+                backgroundColor = Color(0xFFEDE9FE)
+            )
+            "রেকর্ড এক্সাম" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFFD97706),
+                backgroundColor = Color(0xFFFEF3C7)
+            )
+            else -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF475569),
+                backgroundColor = Color(0xFFF1F5F9)
+            )
+        }
+    }
+
+    /**
+     * Returns the standardized status badge for Live/Recorded/Upcoming classes and exams.
+     */
+    fun getClassPositionBadgeStyle(lesson: StudentLessonItem): ClassTypeBadgeStyle {
+        val label = lesson.classPositionLabel
+        return when (label) {
+            "লাইভ ক্লাস" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFFDC2626),
+                backgroundColor = Color(0xFFFEE2E2)
+            )
+            "আপকামিং ক্লাস" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF0284C7),
+                backgroundColor = Color(0xFFE0F2FE)
+            )
+            "রেকর্ড ক্লাস" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF2563EB),
+                backgroundColor = Color(0xFFEFF6FF)
+            )
+            "লাইভ এক্সাম" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFFEA580C),
+                backgroundColor = Color(0xFFFFEDD5)
+            )
+            "আপকামিং এক্সাম" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFF7C3AED),
+                backgroundColor = Color(0xFFEDE9FE)
+            )
+            "রেকর্ড এক্সাম" -> ClassTypeBadgeStyle(
+                label = label,
+                textColor = Color(0xFFD97706),
+                backgroundColor = Color(0xFFFEF3C7)
+            )
             else -> ClassTypeBadgeStyle(
                 label = label,
                 textColor = Color(0xFF475569),
