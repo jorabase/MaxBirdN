@@ -327,9 +327,9 @@ fun BirdgramScreen(
             border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f)),
             shadowElevation = 8.dp,
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(end = 12.dp, top = 8.dp)
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 12.dp, bottom = 12.dp)
                 .offset { IntOffset(homeOffsetX.roundToInt(), homeOffsetY.roundToInt()) }
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->

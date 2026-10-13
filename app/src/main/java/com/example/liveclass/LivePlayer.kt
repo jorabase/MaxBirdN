@@ -8,17 +8,17 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Tv
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -58,9 +58,12 @@ fun LivePlayer(
 
     var isEnded by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(true) }
+    var isBuffering by remember { mutableStateOf(false) }
     var isPlayerError by remember { mutableStateOf(false) }
     var playerErrorMessage by remember { mutableStateOf("") }
     var retryCount by remember { mutableIntStateOf(0) }
+    var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
 
     // Initialize ExoPlayer with resilient load control
     val exoPlayer = remember(activeStreamUrl) {
@@ -81,6 +84,7 @@ fun LivePlayer(
             setMediaSource(mediaSource)
             prepare()
             playWhenReady = true
+            setPlaybackSpeed(playbackSpeed)
 
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
@@ -92,25 +96,28 @@ fun LivePlayer(
                         Player.STATE_ENDED -> {
                             Log.d(TAG, "Stream playback reached STATE_ENDED.")
                             isEnded = true
+                            isBuffering = false
                             isPlayerError = false
                         }
                         Player.STATE_READY -> {
+                            isBuffering = false
                             isPlayerError = false
                             retryCount = 0
                         }
                         Player.STATE_BUFFERING -> {
-                            // Buffering normally
+                            isBuffering = true
                         }
                         Player.STATE_IDLE -> {
-                            // Idle
+                            isBuffering = false
                         }
                     }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
                     Log.w(TAG, "Playback error: ${error.errorCodeName} (${error.errorCode}): ${error.message}", error)
+                    isBuffering = false
 
-                    // 1. Auto-recover from BehindLiveWindowException (standard Media3 live sliding window recovery)
+                    // 1. Auto-recover from BehindLiveWindowException
                     if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
                         error.cause is BehindLiveWindowException) {
                         Log.d(TAG, "BehindLiveWindowException encountered...")
@@ -121,8 +128,6 @@ fun LivePlayer(
                             play()
                             return
                         } else {
-                            // The live sliding window is gone because live broadcast has ended!
-                            Log.d(TAG, "Live window expired after retries. Broadcaster finished stream.")
                             if (currentUrlIndex + 1 < allUrls.size) {
                                 currentUrlIndex++
                                 activeStreamUrl = allUrls[currentUrlIndex]
@@ -135,8 +140,7 @@ fun LivePlayer(
                         }
                     }
 
-                    // 2. If the video played content and failed at the tail/end (e.g., 404 on live segment or container EOF),
-                    // treat as natural completion of the live broadcast instead of fatal crash!
+                    // 2. Natural completion check
                     val pos = currentPosition
                     val dur = duration
                     val isNearVodEnd = dur > 0 && pos >= (dur - 3000L)
@@ -147,7 +151,6 @@ fun LivePlayer(
                     )
 
                     if (isNearVodEnd || isLiveBroadcastEnded) {
-                        Log.d(TAG, "Stream reached natural completion (pos: $pos, dur: $dur). Marking as ended.")
                         if (currentUrlIndex + 1 < allUrls.size) {
                             currentUrlIndex++
                             activeStreamUrl = allUrls[currentUrlIndex]
@@ -159,10 +162,9 @@ fun LivePlayer(
                         return
                     }
 
-                    // 3. Transient source/network errors: Auto-retry up to 3 times
+                    // 3. Transient errors auto-retry
                     if (retryCount < 3) {
                         retryCount++
-                        Log.d(TAG, "Auto-retrying stream (attempt $retryCount)...")
                         coroutineScope.launch {
                             delay(1200L * retryCount)
                             seekToDefaultPosition()
@@ -172,16 +174,15 @@ fun LivePlayer(
                         return
                     }
 
-                    // 4. If current URL failed and an alternative recording/stream exists, switch candidate
+                    // 4. Switch candidate URL if available
                     if (currentUrlIndex + 1 < allUrls.size) {
                         currentUrlIndex++
                         activeStreamUrl = allUrls[currentUrlIndex]
-                        Log.d(TAG, "Switching to alternative stream URL: $activeStreamUrl")
                         retryCount = 0
                         return
                     }
 
-                    // 5. In-player error overlay (Keeps chat and classroom intact! Never fatal exit!)
+                    // 5. In-player error overlay
                     isPlayerError = true
                     playerErrorMessage = when {
                         error.message?.contains("Source error", ignoreCase = true) == true ->
@@ -197,56 +198,32 @@ fun LivePlayer(
 
     DisposableEffect(exoPlayer) {
         onDispose {
-            exoPlayer.stop()
-            exoPlayer.release()
+            try {
+                exoPlayer.stop()
+                exoPlayer.release()
+            } catch (_: Exception) {}
         }
     }
 
-    // Apply dynamic resolution track selection constraints
+    // Apply playback speed changes
+    LaunchedEffect(playbackSpeed, exoPlayer) {
+        try {
+            exoPlayer.setPlaybackSpeed(playbackSpeed)
+        } catch (_: Exception) {}
+    }
+
+    // Apply resolution constraints
     LaunchedEffect(selectedResolution, exoPlayer) {
         try {
             when (selectedResolution.lowercase()) {
-                "1080p" -> {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setMaxVideoSize(1920, 1080)
-                        .setMinVideoSize(1280, 721)
-                        .build()
-                }
-                "720p" -> {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setMaxVideoSize(1280, 720)
-                        .build()
-                }
-                "480p" -> {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setMaxVideoSize(854, 480)
-                        .build()
-                }
-                "360p" -> {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setMaxVideoSize(640, 360)
-                        .build()
-                }
-                "240p" -> {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .setMaxVideoSize(426, 240)
-                        .build()
-                }
-                else -> {
-                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                        .buildUpon()
-                        .clearVideoSizeConstraints()
-                        .build()
-                }
+                "1080p" -> exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon().setMaxVideoSize(1920, 1080).build()
+                "720p" -> exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
+                "480p" -> exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon().setMaxVideoSize(854, 480).build()
+                "360p" -> exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon().setMaxVideoSize(640, 360).build()
+                "240p" -> exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon().setMaxVideoSize(426, 240).build()
+                else -> exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon().clearVideoSizeConstraints().build()
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error applying resolution constraint: ${e.message}")
-        }
+        } catch (_: Exception) {}
     }
 
     // Connect PiP Controller
@@ -277,7 +254,29 @@ fun LivePlayer(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Overlay 1: Broadcast Ended / Stream Completed
+        // Buffering Indicator Overlay
+        if (isBuffering && !isEnded && !isPlayerError) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.6f),
+                    modifier = Modifier.size(54.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF38BDF8),
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Overlay 1: Broadcast Ended
         AnimatedVisibility(
             visible = isEnded,
             enter = fadeIn(),
@@ -371,7 +370,7 @@ fun LivePlayer(
             }
         }
 
-        // Overlay 2: In-Player Error Recovery (Keeps chat and classroom intact!)
+        // Overlay 2: In-Player Error Recovery
         AnimatedVisibility(
             visible = isPlayerError && !isEnded,
             enter = fadeIn(),

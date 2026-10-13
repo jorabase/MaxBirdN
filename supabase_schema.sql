@@ -60,6 +60,7 @@ ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP WI
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS expiry_date TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS batch TEXT DEFAULT '';
+ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS can_view_profiles BOOLEAN DEFAULT false;
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT now();
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now();
 
@@ -71,10 +72,13 @@ CREATE TABLE IF NOT EXISTS public.activated_devices (
     app_signature TEXT,
     session_token TEXT NOT NULL,
     is_blocked BOOLEAN DEFAULT false,
+    can_view_profiles BOOLEAN DEFAULT false,
     activated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     last_seen TIMESTAMP WITH TIME ZONE DEFAULT now(),
     UNIQUE(code_id, device_hash)
 );
+
+ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS can_view_profiles BOOLEAN DEFAULT false;
 
 -- ৪. সেন্ট্রাল ডিভাইস কন্ট্রোল টেবিল (ADMIN DEVICE MANAGEMENT TABLE)
 CREATE TABLE IF NOT EXISTS public.devices (
@@ -89,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.devices (
     app_version TEXT,
     applied_code TEXT,
     is_banned BOOLEAN DEFAULT false,
+    can_view_profiles BOOLEAN DEFAULT false,
     ban_reason TEXT DEFAULT 'অ্যাডমিন কর্তৃক ব্যান করা হয়েছে',
     banned_at TIMESTAMP WITH TIME ZONE,
     status TEXT DEFAULT 'active', -- 'active', 'banned', 'pending'
@@ -96,6 +101,8 @@ CREATE TABLE IF NOT EXISTS public.devices (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
+
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS can_view_profiles BOOLEAN DEFAULT false;
 
 -- ৫. পারমিশন ও গ্রান্টস (Admin Panel ও Student App যেন অবাধে ডাটা রিড/রাইট করতে পারে)
 GRANT ALL ON TABLE public.access_codes TO anon, authenticated, service_role;

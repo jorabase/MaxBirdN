@@ -77,11 +77,11 @@ private fun String?.toBn(): String {
 }
 
 // =========================================================================
-// শিক্ষার্থী প্রোফাইল পপআপ টগল (STUDENT PROFILE DIALOG TOGGLE)
-// এটি false করা আছে যাতে লিডারবোর্ডে কারো প্রোফাইলে ক্লিক করলে কিছু না ঘটে।
-// পরবর্তীতে পুনরায় সচল করতে চাইলে এটিকে true করে দিলেই প্রোফাইল ডিটেইলস শো হবে।
+// শিক্ষার্থী প্রোফাইল পপআপ ডায়নামিক পারমিশন (STUDENT PROFILE DYNAMIC PERMISSION)
+// অ্যাডমিন প্যানেল থেকে কোনো এক্সেস আইডি বা ডিভাইসে অন করা থাকলে প্রোফাইল ভিউ হবে,
+// অন্যথায় ডিফল্টভাবে অফ থাকবে এবং কারো প্রোফাইলে ক্লিক করলে কিছুই হবে না।
 // =========================================================================
-const val ENABLE_STUDENT_PROFILE_CLICK: Boolean = false
+val LocalCanViewProfiles = compositionLocalOf { false }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +95,10 @@ fun ReportCardScreen(
     val pullRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     var selectedStudentForProfile by remember { mutableStateOf<LeaderboardUserItem?>(null) }
+
+    LaunchedEffect(Unit) {
+        viewModel.checkProfileViewPermission(context)
+    }
 
     val shouldLoadMore = remember {
         derivedStateOf {
@@ -116,7 +120,8 @@ fun ReportCardScreen(
         }
     }
 
-    Scaffold(
+    CompositionLocalProvider(LocalCanViewProfiles provides uiState.canViewProfiles) {
+        Scaffold(
         topBar = {
             ReportCardTopBar(
                 title = if (uiState.selectedTab == ReportTab.RESULT_DETAILS) "রিপোর্ট কার্ড" else "বিষয়ভিত্তিক লিডারবোর্ড",
@@ -151,7 +156,7 @@ fun ReportCardScreen(
                     userName = uiState.userName,
                     userAvatar = uiState.userAvatar,
                     onClick = {
-                        if (ENABLE_STUDENT_PROFILE_CLICK) {
+                        if (uiState.canViewProfiles) {
                             val myUserId = viewModel.currentUserId
                             val myUserItem = LeaderboardUserItem(
                                 user_id = myUserId,
@@ -191,7 +196,10 @@ fun ReportCardScreen(
     ) { innerPadding ->
         PullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
-            onRefresh = { viewModel.refreshData() },
+            onRefresh = {
+                viewModel.refreshData()
+                viewModel.checkProfileViewPermission(context, forceRefresh = true)
+            },
             state = pullRefreshState,
             modifier = Modifier
                 .fillMaxSize()
@@ -341,26 +349,11 @@ fun ReportCardScreen(
                         val leaderboard = uiState.leaderboardData
                         val rawUsers = leaderboard?.data ?: emptyList()
 
-                        // If searching, prioritize direct database search results (with fallback to filtered raw users)
                         val isSearching = uiState.searchQuery.isNotBlank()
                         val filteredUsers = if (!isSearching) {
                             rawUsers
                         } else {
-                            if (uiState.dbSearchResults.isNotEmpty()) {
-                                uiState.dbSearchResults
-                            } else {
-                                val q = uiState.searchQuery.trim().lowercase()
-                                rawUsers.filter { item ->
-                                    val u = item.user
-                                    val nameMatch = u?.name?.lowercase()?.contains(q) == true || item.name?.lowercase()?.contains(q) == true
-                                    val phoneMatch = u?.phone?.replace("-", "")?.contains(q) == true || item.phone?.replace("-", "")?.contains(q) == true
-                                    val collegeMatch = u?.effectiveCollege?.lowercase()?.contains(q) == true ||
-                                            u?.school?.lowercase()?.contains(q) == true ||
-                                            item.effectiveCollege?.lowercase()?.contains(q) == true
-                                    val rollMatch = u?.roll?.lowercase()?.contains(q) == true || item.roll_no?.lowercase()?.contains(q) == true
-                                    nameMatch || phoneMatch || collegeMatch || rollMatch
-                                }
-                            }
+                            uiState.dbSearchResults
                         }
 
                         if (isSearching) {
@@ -412,7 +405,7 @@ fun ReportCardScreen(
                                         userItem = userItem,
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                         onClick = {
-                                            if (ENABLE_STUDENT_PROFILE_CLICK) {
+                                            if (uiState.canViewProfiles) {
                                                 selectedStudentForProfile = userItem
                                                 val effectiveId = userItem.effectiveUserId ?: ""
                                                 val myUserId = viewModel.currentUserId
@@ -466,7 +459,7 @@ fun ReportCardScreen(
                                     LeaderboardPodiumView(
                                         topUsers = filteredUsers.take(3),
                                         onUserClick = { userItem ->
-                                            if (ENABLE_STUDENT_PROFILE_CLICK) {
+                                            if (uiState.canViewProfiles) {
                                                 selectedStudentForProfile = userItem
                                                 val effectiveId = userItem.effectiveUserId ?: ""
                                                 val myUserId = viewModel.currentUserId
@@ -497,7 +490,7 @@ fun ReportCardScreen(
                                             userItem = userItem,
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                             onClick = {
-                                                if (ENABLE_STUDENT_PROFILE_CLICK) {
+                                                if (uiState.canViewProfiles) {
                                                     selectedStudentForProfile = userItem
                                                     val effectiveId = userItem.effectiveUserId ?: ""
                                                     val myUserId = viewModel.currentUserId
@@ -569,7 +562,7 @@ fun ReportCardScreen(
         }
     }
 
-    if (ENABLE_STUDENT_PROFILE_CLICK) {
+    if (uiState.canViewProfiles) {
         selectedStudentForProfile?.let { userItem ->
             val effectiveId = userItem.effectiveUserId ?: ""
             val myUserId = viewModel.currentUserId
@@ -592,6 +585,7 @@ fun ReportCardScreen(
             )
         }
     }
+}
 }
 
 // =======================================================
@@ -1846,7 +1840,7 @@ fun PodiumColumn(
             .padding(horizontal = 4.dp)
             .clip(RoundedCornerShape(16.dp))
             .then(
-                if (ENABLE_STUDENT_PROFILE_CLICK) Modifier.clickable { onClick() } else Modifier
+                if (LocalCanViewProfiles.current) Modifier.clickable { onClick() } else Modifier
             )
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -2013,7 +2007,7 @@ fun LeaderboardUserRowItem(
         modifier = modifier
             .fillMaxWidth()
             .then(
-                if (ENABLE_STUDENT_PROFILE_CLICK) Modifier.clickable { onClick() } else Modifier
+                if (LocalCanViewProfiles.current) Modifier.clickable { onClick() } else Modifier
             ),
         shape = RoundedCornerShape(14.dp),
         color = Color.White,
@@ -2128,7 +2122,7 @@ fun StickyMyRankBar(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (ENABLE_STUDENT_PROFILE_CLICK) Modifier.clickable { onClick() } else Modifier
+                if (LocalCanViewProfiles.current) Modifier.clickable { onClick() } else Modifier
             ),
         color = Color(0xFF0F172A),
         shadowElevation = 12.dp

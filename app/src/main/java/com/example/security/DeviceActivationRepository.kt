@@ -38,6 +38,8 @@ object DeviceActivationRepository {
     private const val KEY_ACTIVATED_CODE = "key_activated_code"
     private const val KEY_ACTIVATED_AT = "key_activated_at"
     private const val KEY_LAST_HEARTBEAT_AT = "key_last_heartbeat_at"
+    private const val KEY_CAN_VIEW_PROFILES = "key_can_view_profiles"
+    private const val KEY_LAST_PROFILE_PERMISSION_CHECK = "key_last_profile_permission_check"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -646,6 +648,117 @@ object DeviceActivationRepository {
             }
         } catch (e: Throwable) {
             HeartbeatResult.NetworkError(e.message ?: "Network error")
+        }
+    }
+
+    fun isProfileViewPermissionCached(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_CAN_VIEW_PROFILES, false)
+    }
+
+    /**
+     * Checks if profile viewing from Leaderboard is enabled by Admin for this device / access code in Supabase.
+     * Defaults to false (disabled for all users) until admin toggles it ON in Supabase for this device or access code.
+     */
+    suspend fun checkProfileViewPermission(context: Context, forceRefresh: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        val prefs = getPrefs(context)
+        val now = System.currentTimeMillis()
+        val lastCheck = prefs.getLong(KEY_LAST_PROFILE_PERMISSION_CHECK, 0L)
+
+        if (!forceRefresh && (now - lastCheck < 20_000L)) {
+            return@withContext prefs.getBoolean(KEY_CAN_VIEW_PROFILES, false)
+        }
+
+        try {
+            val (supabaseUrl, anonKey) = getSupabaseConfig()
+            if (supabaseUrl.isBlank() || anonKey.isBlank()) {
+                return@withContext prefs.getBoolean(KEY_CAN_VIEW_PROFILES, false)
+            }
+
+            val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
+            val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
+            val activatedCode = prefs.getString(KEY_ACTIVATED_CODE, "") ?: ""
+
+            var canView = false
+
+            // 1. Check devices table by device_hash or display_device_id
+            try {
+                val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=can_view_profiles"
+                val devReq = Request.Builder()
+                    .url(devUrl)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .get()
+                    .build()
+                val devResp = httpClient.newCall(devReq).execute()
+                if (devResp.isSuccessful) {
+                    val devBody = devResp.body?.string() ?: "[]"
+                    val devArr = org.json.JSONArray(devBody)
+                    if (devArr.length() > 0) {
+                        val obj = devArr.getJSONObject(0)
+                        if (obj.optBoolean("can_view_profiles", false)) {
+                            canView = true
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+
+            // 2. If not yet true, check access_codes table by applied code
+            if (!canView && activatedCode.isNotBlank()) {
+                try {
+                    val codeUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/access_codes?code=ilike.${activatedCode.trim()}&select=can_view_profiles"
+                    val codeReq = Request.Builder()
+                        .url(codeUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val codeResp = httpClient.newCall(codeReq).execute()
+                    if (codeResp.isSuccessful) {
+                        val codeBody = codeResp.body?.string() ?: "[]"
+                        val codeArr = org.json.JSONArray(codeBody)
+                        if (codeArr.length() > 0) {
+                            val obj = codeArr.getJSONObject(0)
+                            if (obj.optBoolean("can_view_profiles", false)) {
+                                canView = true
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 3. If not yet true, check activated_devices table by device_hash
+            if (!canView) {
+                try {
+                    val actUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/activated_devices?device_hash=eq.$deviceHardwareHash&select=can_view_profiles"
+                    val actReq = Request.Builder()
+                        .url(actUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val actResp = httpClient.newCall(actReq).execute()
+                    if (actResp.isSuccessful) {
+                        val actBody = actResp.body?.string() ?: "[]"
+                        val actArr = org.json.JSONArray(actBody)
+                        if (actArr.length() > 0) {
+                            val obj = actArr.getJSONObject(0)
+                            if (obj.optBoolean("can_view_profiles", false)) {
+                                canView = true
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            prefs.edit()
+                .putBoolean(KEY_CAN_VIEW_PROFILES, canView)
+                .putLong(KEY_LAST_PROFILE_PERMISSION_CHECK, now)
+                .apply()
+
+            canView
+        } catch (e: Throwable) {
+            Log.e(TAG, "checkProfileViewPermission error: ${e.message}")
+            prefs.getBoolean(KEY_CAN_VIEW_PROFILES, false)
         }
     }
 }

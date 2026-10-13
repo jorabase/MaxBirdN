@@ -15,6 +15,7 @@ interface LeaderboardStudentDao {
         SELECT * FROM leaderboard_students
         WHERE programId = :programId
           AND (:phaseId = '' OR :phaseId = 'all' OR phaseId = :phaseId)
+          AND (:subjectId = '' OR :subjectId = 'all' OR :subjectId = 'ALL' OR subjectId = :subjectId)
           AND (
               LOWER(name) LIKE '%' || LOWER(:query) || '%'
               OR phone LIKE '%' || :query || '%'
@@ -26,7 +27,7 @@ interface LeaderboardStudentDao {
         ORDER BY rank ASC
         LIMIT 300
     """)
-    suspend fun searchStudents(programId: String, phaseId: String, query: String): List<LeaderboardStudentEntity>
+    suspend fun searchStudents(programId: String, phaseId: String, subjectId: String, query: String): List<LeaderboardStudentEntity>
 
     @Query("""
         SELECT * FROM leaderboard_students

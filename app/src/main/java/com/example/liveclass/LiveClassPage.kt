@@ -539,14 +539,6 @@ fun LiveClassPage(
                     Column(modifier = Modifier.fillMaxSize()) {
                         var showControls by remember { mutableStateOf(true) }
 
-                        // Auto-hide controls after 4 seconds of inactivity
-                        LaunchedEffect(showControls) {
-                            if (showControls) {
-                                delay(4000L)
-                                showControls = false
-                            }
-                        }
-
                         // Top Video Section with click listener to toggle controls
                         Box(
                             modifier = Modifier
