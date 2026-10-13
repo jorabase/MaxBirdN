@@ -383,6 +383,7 @@ object ShikhoPlayerManager {
         return builder.build().apply {
             volume = 1.0f
             playWhenReady = true
+            EqualizerManager.bindPlayer(context, this)
         }
     }
 

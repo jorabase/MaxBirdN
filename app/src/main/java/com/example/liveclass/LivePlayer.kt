@@ -199,6 +199,7 @@ fun LivePlayer(
     DisposableEffect(exoPlayer) {
         onDispose {
             try {
+                com.example.player.EqualizerManager.unbindPlayer(context)
                 exoPlayer.stop()
                 exoPlayer.release()
             } catch (_: Exception) {}

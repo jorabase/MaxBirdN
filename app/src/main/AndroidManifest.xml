@@ -16,6 +16,18 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <queries>
+        <intent>
+            <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
+        </intent>
+    </queries>
+
     <application
         android:name=".ShikhoApp"
         android:allowBackup="true"

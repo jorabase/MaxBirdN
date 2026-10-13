@@ -69,6 +69,7 @@ fun PlayerControlsOverlay(
     onSpeedClick: () -> Unit,
     onQualityClick: () -> Unit = {},
     selectedQualityLabel: String = "অটো",
+    onEqualizerClick: () -> Unit = {},
     onPipClick: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     resizeMode: Int = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT,
@@ -513,6 +514,33 @@ fun PlayerControlsOverlay(
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+
+                        // Equalizer Connector & Audio Control
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.White.copy(alpha = 0.18f),
+                            border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.25f)),
+                            modifier = Modifier.clickable { onEqualizerClick() }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = "ইকুলাইজার",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "ইকুলাইজার",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }

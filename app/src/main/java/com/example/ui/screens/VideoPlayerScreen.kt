@@ -59,10 +59,12 @@ import com.example.player.ShikhoPlayerManager
 import com.example.player.VideoProgressManager
 import com.example.player.VideoTrackQuality
 import com.example.ui.components.AmbientAudioVisualizerOverlay
+import com.example.ui.components.EqualizerBottomSheet
 import com.example.ui.components.PlaybackSpeedDialog
 import com.example.ui.components.PlayerControlsOverlay
 import com.example.ui.components.VideoDownloadQualityDialog
 import com.example.ui.components.VideoQualityDialog
+import com.example.player.EqualizerManager
 import com.example.util.PipHelper
 import com.example.util.SetupPipController
 import kotlinx.coroutines.delay
@@ -98,6 +100,7 @@ fun VideoPlayerScreen(
     // Dialog state
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
     var availableQualities by remember { mutableStateOf<List<VideoTrackQuality>>(emptyList()) }
     var selectedQualityLabel by remember { mutableStateOf("অটো") }
@@ -401,6 +404,7 @@ fun VideoPlayerScreen(
 
         onDispose {
             saveCurrentProgress()
+            EqualizerManager.unbindPlayer(context)
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
@@ -729,6 +733,7 @@ fun VideoPlayerScreen(
             onToggleControls = { areControlsVisible = !areControlsVisible },
             onSpeedClick = { showSpeedDialog = true },
             onQualityClick = { showQualityDialog = true },
+            onEqualizerClick = { showEqualizerBottomSheet = true },
             selectedQualityLabel = selectedQualityLabel,
             onPipClick = { enterPipMode() },
             onDownloadClick = {
@@ -778,6 +783,13 @@ fun VideoPlayerScreen(
                     exoPlayer.playbackParameters = PlaybackParameters(speed)
                 },
                 onDismiss = { showSpeedDialog = false }
+            )
+        }
+
+        // Audio Equalizer Bottom Sheet
+        if (showEqualizerBottomSheet) {
+            EqualizerBottomSheet(
+                onDismiss = { showEqualizerBottomSheet = false }
             )
         }
 

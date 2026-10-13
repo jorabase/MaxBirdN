@@ -99,6 +99,7 @@ import com.example.course.CourseRepository
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.player.ShikhoPlayerManager
+import com.example.player.EqualizerManager
 import com.example.player.PlayerClassType
 import com.example.player.VideoTrackQuality
 import com.example.ui.components.*
@@ -267,6 +268,7 @@ fun LessonDetailPlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var availableQualities by remember { mutableStateOf<List<VideoTrackQuality>>(emptyList()) }
     var selectedQualityLabel by remember { mutableStateOf("অটো") }
 
@@ -645,6 +647,7 @@ fun LessonDetailPlayerScreen(
         exoPlayer.addListener(listener)
 
         onDispose {
+            EqualizerManager.unbindPlayer(context)
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
@@ -1065,6 +1068,7 @@ fun LessonDetailPlayerScreen(
                     onToggleControls = { areControlsVisible = !areControlsVisible },
                     onSpeedClick = { showSpeedDialog = true },
                     onQualityClick = { showQualityDialog = true },
+                    onEqualizerClick = { showEqualizerBottomSheet = true },
                     selectedQualityLabel = selectedQualityLabel,
                     downloadedItem = videoDownloadedItem,
                     onDownloadClick = handleDownloadVideo,
@@ -1309,6 +1313,7 @@ fun LessonDetailPlayerScreen(
                                 onToggleControls = { areControlsVisible = !areControlsVisible },
                                 onSpeedClick = { showSpeedDialog = true },
                                 onQualityClick = { showQualityDialog = true },
+                                onEqualizerClick = { showEqualizerBottomSheet = true },
                                 selectedQualityLabel = selectedQualityLabel,
                                 downloadedItem = videoDownloadedItem,
                                 onDownloadClick = handleDownloadVideo,
@@ -1460,6 +1465,13 @@ fun LessonDetailPlayerScreen(
                 exoPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
             },
             onDismiss = { showSpeedDialog = false }
+        )
+    }
+
+    // Audio Equalizer Bottom Sheet
+    if (showEqualizerBottomSheet) {
+        EqualizerBottomSheet(
+            onDismiss = { showEqualizerBottomSheet = false }
         )
     }
 

@@ -81,6 +81,7 @@ fun SettingsScreen(
     val currentThemeMode by sessionManager.themeModeFlow.collectAsState()
     val currentLeadTime by sessionManager.classNotificationLeadTimeFlow.collectAsState()
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var formattedCacheSize by remember { mutableStateOf("0.0 MB") }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -441,6 +442,18 @@ fun SettingsScreen(
                     },
                     onClick = { showThemeDialog = true }
                 )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                SettingsRowItem(
+                    icon = Icons.Default.Tune,
+                    iconTint = Color(0xFF10B981),
+                    iconBg = Color(0xFFD1FAE5),
+                    title = "অডিও ইকুলাইজার ও সাউন্ড কন্ট্রোল",
+                    subtitle = "মোবাইলে থাকা ইকুলাইজার কানেক্ট ও সাউন্ড কাস্টমাইজ করুন",
+                    badge = "ইকুলাইজার",
+                    onClick = { showEqualizerBottomSheet = true }
+                )
             }
 
             // Storage & Cache Section
@@ -606,6 +619,12 @@ fun SettingsScreen(
         FcmLiveTerminalDialog(
             sessionManager = sessionManager,
             onDismissRequest = { showTerminalDialog = false }
+        )
+    }
+
+    if (showEqualizerBottomSheet) {
+        com.example.ui.components.EqualizerBottomSheet(
+            onDismiss = { showEqualizerBottomSheet = false }
         )
     }
 }

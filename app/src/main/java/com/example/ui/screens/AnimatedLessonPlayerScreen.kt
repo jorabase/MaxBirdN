@@ -65,6 +65,8 @@ import com.example.download.DownloadQualityOption
 import com.example.player.PlayerClassType
 import com.example.player.ShikhoPlayerManager
 import com.example.player.VideoProgressManager
+import com.example.player.EqualizerManager
+import com.example.ui.components.EqualizerBottomSheet
 import com.example.ui.components.VideoDownloadQualityDialog
 import com.example.util.PipHelper
 import com.example.util.SetupPipController
@@ -168,6 +170,7 @@ fun AnimatedLessonPlayerScreen(
     var originalSpeedBeforeHold by remember { mutableFloatStateOf(1.0f) }
     var is2xHoldActive by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
     // Mute State
@@ -292,6 +295,7 @@ fun AnimatedLessonPlayerScreen(
         exoPlayer.addListener(listener)
 
         onDispose {
+            EqualizerManager.unbindPlayer(context)
             exoPlayer.removeListener(listener)
             exoPlayer.release()
             activity?.let { act ->
@@ -958,6 +962,37 @@ fun AnimatedLessonPlayerScreen(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
+                    // Equalizer Connector & Sound Control
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = 0.15f),
+                        border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showEqualizerBottomSheet = true }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = "ইকুলাইজার",
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "ইকুলাইজার",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     // 4. SMART VIDEO DOWNLOAD BUTTON WITH LIVE STATUS
                     when (downloadedItem?.status) {
                         DownloadedItemEntity.STATUS_DOWNLOADING -> {
@@ -1400,6 +1435,13 @@ fun AnimatedLessonPlayerScreen(
                     exoPlayer.playbackParameters = PlaybackParameters(speed)
                 },
                 onDismiss = { showSpeedDialog = false }
+            )
+        }
+
+        // ==================== 13. AUDIO EQUALIZER BOTTOM SHEET ====================
+        if (showEqualizerBottomSheet) {
+            EqualizerBottomSheet(
+                onDismiss = { showEqualizerBottomSheet = false }
             )
         }
     }
