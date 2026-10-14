@@ -1,19 +1,20 @@
 package com.example.notice
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -21,32 +22,23 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -89,44 +81,64 @@ fun NoticePopupDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(26.dp))
+                .shadow(
+                    elevation = 24.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    spotColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
+                )
+                .clip(RoundedCornerShape(28.dp))
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF1E293B),
-                            Color(0xFF0F172A)
+                            Color(0xFF131F36),
+                            Color(0xFF0A1222),
+                            Color(0xFF070D19)
                         )
                     )
                 )
                 .border(
-                    width = 1.dp,
+                    width = 1.2.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF38BDF8).copy(alpha = 0.6f),
-                            Color(0xFF818CF8).copy(alpha = 0.2f)
+                            Color(0xFF38BDF8).copy(alpha = 0.65f),
+                            Color(0xFF818CF8).copy(alpha = 0.35f),
+                            Color(0xFF1E293B).copy(alpha = 0.6f)
                         )
                     ),
-                    shape = RoundedCornerShape(26.dp)
+                    shape = RoundedCornerShape(28.dp)
                 )
         ) {
+            // Subtle Ambient Top Glow inside Modal
+            Canvas(modifier = Modifier.matchParentSize()) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFF0284C7).copy(alpha = 0.16f), Color.Transparent),
+                        center = Offset(size.width * 0.2f, 0f),
+                        radius = size.width * 0.7f
+                    ),
+                    center = Offset(size.width * 0.2f, 0f),
+                    radius = size.width * 0.7f
+                )
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 18.dp, vertical = 18.dp)
             ) {
-                // Header Bar: Badge + Indicator + Close Button
+                // Header Bar: Badge + Bengali Page Counter + Close Button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(50),
                         color = Color(0xFF0284C7).copy(alpha = 0.22f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
+                        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.45f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -139,39 +151,47 @@ fun NoticePopupDialog(
                             Text(
                                 text = "বিশেষ নোটিশ",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFFE0F2FE)
                             )
                         }
                     }
 
-                    if (notices.size > 1) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.1f)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (notices.size > 1) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.White.copy(alpha = 0.08f),
+                                border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.15f))
+                            ) {
+                                Text(
+                                    text = "${(pagerState.currentPage + 1).toNoticeBnDigits()} / ${notices.size.toNoticeBnDigits()}",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFBAE6FD),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { onDismiss(dontShowAgainToday) },
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .border(0.8.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                         ) {
-                            Text(
-                                text = "${pagerState.currentPage + 1} / ${notices.size}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFCBD5E1),
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "বন্ধ করুন",
+                                tint = Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(17.dp)
                             )
                         }
-                    }
-
-                    IconButton(
-                        onClick = { onDismiss(dontShowAgainToday) },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "বন্ধ করুন",
-                            tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
                 }
 
@@ -184,6 +204,7 @@ fun NoticePopupDialog(
                 ) { page ->
                     val notice = notices[page]
                     val noticeScrollState = rememberScrollState()
+                    val hasAction = !notice.actionUrl.isNullOrBlank()
 
                     Column(
                         modifier = Modifier
@@ -191,69 +212,81 @@ fun NoticePopupDialog(
                             .verticalScroll(noticeScrollState),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Image Banner
+                        // Image Banner with subtle border & bottom scrim
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .clickable {
-                                    if (!notice.actionUrl.isNullOrBlank()) {
-                                        onNoticeActionClick(notice)
-                                    }
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable(enabled = hasAction) {
+                                    if (hasAction) onNoticeActionClick(notice)
                                 },
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1528)),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
                         ) {
-                            SubcomposeAsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(notice.imageUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = notice.title,
-                                modifier = Modifier.fillMaxWidth(),
-                                contentScale = ContentScale.Crop,
-                                loading = {
-                                    Box(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = Color(0xFF38BDF8),
-                                            modifier = Modifier.size(28.dp),
-                                            strokeWidth = 2.5.dp
-                                        )
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                SubcomposeAsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(notice.imageUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = notice.title,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                    loading = {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                color = Color(0xFF38BDF8),
+                                                modifier = Modifier.size(28.dp),
+                                                strokeWidth = 2.5.dp
+                                            )
+                                        }
+                                    },
+                                    error = {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFF111C30)),
+                                            verticalArrangement = Arrangement.Center,
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.BrokenImage,
+                                                contentDescription = null,
+                                                tint = Color(0xFF64748B),
+                                                modifier = Modifier.size(28.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = "ছবি লোড করা যায়নি",
+                                                color = Color(0xFF94A3B8),
+                                                fontSize = 12.sp
+                                            )
+                                        }
                                     }
-                                },
-                                error = {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(Color(0xFF1E293B)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "ছবি লোড করা যায়নি",
-                                            color = Color.Gray,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                            )
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         // Title
                         if (notice.title.isNotBlank()) {
                             Text(
                                 text = notice.title,
-                                fontSize = 16.5.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
+                                lineHeight = 22.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp)
                             )
                         }
 
@@ -263,36 +296,49 @@ fun NoticePopupDialog(
                             Text(
                                 text = notice.description,
                                 fontSize = 13.sp,
-                                color = Color(0xFF94A3B8),
+                                color = Color(0xFFCBD5E1),
                                 lineHeight = 19.sp,
                                 textAlign = TextAlign.Center,
-                                maxLines = 4,
+                                maxLines = 5,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 6.dp)
                             )
                         }
 
                         // Action Button
-                        if (!notice.actionUrl.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(14.dp))
+                        if (hasAction) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            val btnInteraction = remember { MutableInteractionSource() }
+                            val isBtnPressed by btnInteraction.collectIsPressedAsState()
+                            val btnScale by animateFloatAsState(
+                                targetValue = if (isBtnPressed) 0.97f else 1f,
+                                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                label = "actionBtnScale"
+                            )
+
                             Button(
                                 onClick = { onNoticeActionClick(notice) },
+                                interactionSource = btnInteraction,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(44.dp),
+                                    .height(48.dp)
+                                    .graphicsLayer { scaleX = btnScale; scaleY = btnScale }
+                                    .shadow(8.dp, RoundedCornerShape(14.dp), spotColor = Color(0xFF0284C7)),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues()
+                                contentPadding = PaddingValues()
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(44.dp)
+                                        .fillMaxSize()
                                         .background(
                                             Brush.horizontalGradient(
                                                 colors = listOf(
                                                     Color(0xFF0284C7),
-                                                    Color(0xFF2563EB)
+                                                    Color(0xFF2563EB),
+                                                    Color(0xFF4F46E5)
                                                 )
                                             ),
                                             shape = RoundedCornerShape(14.dp)
@@ -304,12 +350,12 @@ fun NoticePopupDialog(
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
-                                            text = notice.actionButtonText,
+                                            text = notice.actionButtonText.ifBlank { "বিস্তারিত দেখুন" },
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
+                                            fontSize = 14.5.sp,
                                             color = Color.White
                                         )
-                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Icon(
                                             imageVector = Icons.Default.OpenInNew,
                                             contentDescription = null,
@@ -323,73 +369,96 @@ fun NoticePopupDialog(
                     }
                 }
 
-                // Multiple notices indicators & arrow controls
+                // Multiple notices animated pill indicators & arrow controls
                 if (notices.size > 1) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val canGoBack = pagerState.currentPage > 0
+                        val canGoNext = pagerState.currentPage < notices.size - 1
+
                         IconButton(
                             onClick = {
-                                if (pagerState.currentPage > 0) {
+                                if (canGoBack) {
                                     coroutineScope.launch {
                                         pagerState.animateScrollToPage(pagerState.currentPage - 1)
                                     }
                                 }
                             },
-                            enabled = pagerState.currentPage > 0,
-                            modifier = Modifier.size(28.dp)
+                            enabled = canGoBack,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(if (canGoBack) Color.White.copy(alpha = 0.08f) else Color.Transparent)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowLeft,
                                 contentDescription = "পূর্ববর্তী",
-                                tint = if (pagerState.currentPage > 0) Color.White else Color.White.copy(alpha = 0.2f),
+                                tint = if (canGoBack) Color.White else Color.White.copy(alpha = 0.2f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
-                        // Dots
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        // Animated Pill Dots
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             repeat(notices.size) { index ->
                                 val isSelected = pagerState.currentPage == index
+                                val dotWidth by animateDpAsState(
+                                    targetValue = if (isSelected) 20.dp else 6.dp,
+                                    animationSpec = tween(250, easing = FastOutSlowInEasing),
+                                    label = "dotWidth$index"
+                                )
+                                val dotColor by animateColorAsState(
+                                    targetValue = if (isSelected) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.25f),
+                                    animationSpec = tween(250),
+                                    label = "dotColor$index"
+                                )
                                 Box(
                                     modifier = Modifier
-                                        .size(if (isSelected) 8.dp else 6.dp)
+                                        .height(6.dp)
+                                        .width(dotWidth)
                                         .clip(CircleShape)
-                                        .background(
-                                            if (isSelected) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.25f)
-                                        )
+                                        .background(dotColor)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
                         IconButton(
                             onClick = {
-                                if (pagerState.currentPage < notices.size - 1) {
+                                if (canGoNext) {
                                     coroutineScope.launch {
                                         pagerState.animateScrollToPage(pagerState.currentPage + 1)
                                     }
                                 }
                             },
-                            enabled = pagerState.currentPage < notices.size - 1,
-                            modifier = Modifier.size(28.dp)
+                            enabled = canGoNext,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(if (canGoNext) Color.White.copy(alpha = 0.08f) else Color.Transparent)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowRight,
                                 contentDescription = "পরবর্তী",
-                                tint = if (pagerState.currentPage < notices.size - 1) Color.White else Color.White.copy(alpha = 0.2f),
+                                tint = if (canGoNext) Color.White else Color.White.copy(alpha = 0.2f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                     }
                 }
 
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Bottom Footer: "Don't show again today" checkbox & Dismiss button
@@ -398,25 +467,26 @@ fun NoticePopupDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Custom toggle for "আজকে আর দেখাবেন না"
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .clickable { dontShowAgainToday = !dontShowAgainToday }
-                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                            .padding(vertical = 6.dp, horizontal = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val checkBg by animateColorAsState(
+                            targetValue = if (dontShowAgainToday) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.08f),
+                            label = "checkBg"
+                        )
                         Box(
                             modifier = Modifier
-                                .size(18.dp)
-                                .clip(RoundedCornerShape(5.dp))
-                                .background(
-                                    if (dontShowAgainToday) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.1f)
-                                )
+                                .size(20.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(checkBg)
                                 .border(
-                                    width = 1.dp,
+                                    width = 1.2.dp,
                                     color = if (dontShowAgainToday) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.3f),
-                                    shape = RoundedCornerShape(5.dp)
+                                    shape = RoundedCornerShape(6.dp)
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
@@ -424,32 +494,35 @@ fun NoticePopupDialog(
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(13.dp)
+                                    tint = Color(0xFF0F172A),
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(7.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "আজকে আর দেখাবেন না",
-                            fontSize = 11.5.sp,
-                            color = Color(0xFF94A3B8)
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (dontShowAgainToday) Color(0xFFE2E8F0) else Color(0xFF94A3B8)
                         )
                     }
 
-                    // Simple "বন্ধ করুন" text button
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color.White.copy(alpha = 0.08f),
-                        modifier = Modifier.clickable { onDismiss(dontShowAgainToday) }
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White.copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onDismiss(dontShowAgainToday) }
                     ) {
                         Text(
                             text = "বন্ধ করুন",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFFCBD5E1),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE2E8F0),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -457,3 +530,11 @@ fun NoticePopupDialog(
         }
     }
 }
+
+private val noticeBnDigits = mapOf(
+    '0' to '০', '1' to '১', '2' to '২', '3' to '৩', '4' to '৪',
+    '5' to '৫', '6' to '৬', '7' to '৭', '8' to '৮', '9' to '৯'
+)
+
+private fun Int.toNoticeBnDigits(): String =
+    toString().map { noticeBnDigits[it] ?: it }.joinToString("")

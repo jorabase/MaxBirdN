@@ -1,15 +1,19 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -91,12 +96,15 @@ fun WeeklyRoutineSection(
     onOpenLessonDetail: (StudentLessonItem) -> Unit = {},
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null
 ) {
-    val dhakaZone = TimeZone.getTimeZone("Asia/Dhaka")
+    val isDark = isSystemInDarkTheme()
+    val dhakaZone = remember { TimeZone.getTimeZone("Asia/Dhaka") }
     val todayCal = Calendar.getInstance(dhakaZone)
-    val todayDateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }.format(todayCal.time)
+    val todayDateKey = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }.format(todayCal.time)
+    }
 
     // ===== LOGIC: daysList calculation (হুবহু সেম) =====
-    val daysList = remember(lessons) {
+    val daysList = remember(lessons, todayDateKey) {
         val satCal = todayCal.clone() as Calendar
         satCal.set(Calendar.HOUR_OF_DAY, 0)
         satCal.set(Calendar.MINUTE, 0)
@@ -107,12 +115,16 @@ fun WeeklyRoutineSection(
             satCal.add(Calendar.DAY_OF_YEAR, -1)
         }
 
+        val keyFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }
+        val dayNumFormatter = SimpleDateFormat("dd", Locale.US).apply { timeZone = dhakaZone }
+        val fullDateFormatter = SimpleDateFormat("dd/MM/yyyy", Locale.US).apply { timeZone = dhakaZone }
+
         (0..6).map { offset ->
             val dayCal = satCal.clone() as Calendar
             dayCal.add(Calendar.DAY_OF_YEAR, offset)
 
-            val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }.format(dayCal.time)
-            val dateNum = SimpleDateFormat("dd", Locale.US).apply { timeZone = dhakaZone }.format(dayCal.time).toBengaliDigits()
+            val dateKey = keyFormatter.format(dayCal.time)
+            val dateNum = dayNumFormatter.format(dayCal.time).toBengaliDigits()
 
             val dayOfWeek = dayCal.get(Calendar.DAY_OF_WEEK)
             val (shortName, fullName) = when (dayOfWeek) {
@@ -126,7 +138,7 @@ fun WeeklyRoutineSection(
                 else -> "শনি" to "শনিবার"
             }
 
-            val fullDateBn = "$fullName, ${SimpleDateFormat("dd/MM/yyyy", Locale.US).apply { timeZone = dhakaZone }.format(dayCal.time).toBengaliDigits()}"
+            val fullDateBn = "$fullName, ${fullDateFormatter.format(dayCal.time).toBengaliDigits()}"
 
             val rawDayLessons = lessons.filter { lesson ->
                 val startTime = lesson.start_time ?: lesson.live_class?.start_time
@@ -134,24 +146,32 @@ fun WeeklyRoutineSection(
                 else {
                     val lessonCal = parseIsoToDhakaCalendar(startTime)
                     if (lessonCal != null) {
-                        val lessonDateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }.format(lessonCal.time)
+                        val lessonDateKey = keyFormatter.format(lessonCal.time)
                         lessonDateKey == dateKey
                     } else false
                 }
             }
             val dayLessons = sortRoutineLessons(rawDayLessons)
 
-            val classCount = dayLessons.count { it.content_type == "LiveClass" || it.content_type == "RecordedClass" || it.content_type == "Lesson" || it.content_type == null }
-            val examCount = dayLessons.count { it.content_type == "LiveExam" || it.content_type == "ModelTest" || it.content_type == "Quiz" }
+            val classCount = dayLessons.count {
+                it.content_type == "LiveClass" || it.content_type == "RecordedClass" ||
+                        it.content_type == "Lesson" || it.content_type == null
+            }
+            val examCount = dayLessons.count {
+                it.content_type == "LiveExam" || it.content_type == "ModelTest" || it.content_type == "Quiz"
+            }
 
-            RoutineDayItem(offset, shortName, fullName, dateNum, fullDateBn, dateKey, dateKey == todayDateKey, dayLessons, classCount, examCount)
+            RoutineDayItem(
+                offset, shortName, fullName, dateNum, fullDateBn,
+                dateKey, dateKey == todayDateKey, dayLessons, classCount, examCount
+            )
         }
     }
 
     // ===== LOGIC: selectedDayIndex (সেম) =====
     var selectedDayIndex by remember(daysList) {
         val todayIdx = daysList.indexOfFirst { it.isToday }
-        mutableStateOf(if (todayIdx >= 0) todayIdx else 0)
+        mutableIntStateOf(if (todayIdx >= 0) todayIdx else 0)
     }
 
     val selectedDay = daysList.getOrNull(selectedDayIndex) ?: daysList.firstOrNull()
@@ -164,10 +184,10 @@ fun WeeklyRoutineSection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // NEW: gradient icon badge
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
+                        .shadow(4.dp, RoundedCornerShape(12.dp), spotColor = Color(0xFF0284C7))
                         .clip(RoundedCornerShape(12.dp))
                         .background(Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8)))),
                     contentAlignment = Alignment.Center
@@ -179,34 +199,49 @@ fun WeeklyRoutineSection(
                         modifier = Modifier.size(18.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "রুটিন",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "সাপ্তাহিক রুটিন",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "আজকের ক্লাস ও পরীক্ষার সময়সূচি",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            // NEW: gradient "সব দেখুন" pill
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Brush.horizontalGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8))))
-                    .clickable { onSeeAllClick() }
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
+            // Gradient "সব দেখুন" pill
+            Surface(
+                onClick = onSeeAllClick,
+                shape = RoundedCornerShape(50),
+                color = Color.Transparent,
+                shadowElevation = 3.dp
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Icon(Icons.Default.CalendarToday, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                    Text("সব দেখুন", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                Box(
+                    modifier = Modifier
+                        .background(Brush.horizontalGradient(listOf(Color(0xFF0284C7), Color(0xFF2563EB))))
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(Icons.Default.CalendarToday, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                        Text("সব দেখুন", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ---------- 2. 7-Day Strip — NEW: প্রতিদিন আলাদা রঙ + spring bounce ----------
+        // ---------- 2. 7-Day Strip — প্রতিদিন আলাদা রঙ + spring bounce ----------
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -214,9 +249,10 @@ fun WeeklyRoutineSection(
             daysList.forEach { day ->
                 val isSelected = day.dayIndex == selectedDayIndex
                 val scheme = getDayColorScheme(day.dayIndex)
+                val hasEvents = (day.classCount + day.examCount) > 0
 
                 val pillScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.07f else 1f,
+                    targetValue = if (isSelected) 1.06f else 1f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMedium
@@ -224,65 +260,91 @@ fun WeeklyRoutineSection(
                     label = "pillScale${day.dayIndex}"
                 )
 
+                val unselectedBrush = if (isDark) {
+                    Brush.verticalGradient(listOf(Color(0xFF0F1B2D), Color(0xFF16263E)))
+                } else {
+                    Brush.verticalGradient(listOf(scheme.unselectedBg, Color.White))
+                }
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 2.dp)
+                        .padding(horizontal = 2.5.dp)
                         .graphicsLayer { scaleX = pillScale; scaleY = pillScale }
-                        .clip(RoundedCornerShape(22.dp))
+                        .shadow(
+                            elevation = if (isSelected) 6.dp else 0.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            spotColor = scheme.accentBorder
+                        )
+                        .clip(RoundedCornerShape(20.dp))
                         .background(
-                            if (isSelected) {
-                                Brush.verticalGradient(scheme.selectedGradient)
-                            } else {
-                                Brush.verticalGradient(listOf(Color(0xFF0D1B2A), Color(0xFF13233C)))
-                            }
+                            if (isSelected) Brush.verticalGradient(scheme.selectedGradient)
+                            else unselectedBrush
                         )
                         .border(
                             width = when {
                                 isSelected -> 1.5.dp
-                                day.isToday -> 1.dp
-                                else -> 0.dp
+                                day.isToday -> 1.2.dp
+                                else -> 1.dp
                             },
                             color = when {
                                 isSelected -> scheme.accentBorder
-                                day.isToday -> Color(0xFF38BDF8).copy(alpha = 0.45f)
-                                else -> Color.Transparent
+                                day.isToday -> Color(0xFF38BDF8).copy(alpha = 0.65f)
+                                isDark -> Color(0xFF1E293B)
+                                else -> scheme.accentBorder.copy(alpha = 0.25f)
                             },
-                            shape = RoundedCornerShape(22.dp)
+                            shape = RoundedCornerShape(20.dp)
                         )
                         .clickable { selectedDayIndex = day.dayIndex }
-                        .padding(vertical = 12.dp, horizontal = 2.dp),
+                        .padding(vertical = 11.dp, horizontal = 2.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = day.shortDayName,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else Color(0xFF94A3B8)
+                        color = when {
+                            isSelected -> Color.White
+                            isDark -> Color(0xFF94A3B8)
+                            else -> scheme.unselectedText
+                        }
                     )
 
-                    Spacer(modifier = Modifier.height(5.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
                         text = day.dateNumBn,
-                        fontSize = 16.sp,
+                        fontSize = 15.5.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = if (isSelected) Color.White else Color(0xFFE2E8F0)
+                        color = when {
+                            isSelected -> Color.White
+                            isDark -> Color(0xFFE2E8F0)
+                            else -> Color(0xFF0F172A)
+                        }
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
+                    // Event indicator dots
                     if (isSelected) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Box(modifier = Modifier.size(4.5.dp).clip(CircleShape).background(Color.White))
-                            Box(modifier = Modifier.size(4.5.dp).clip(CircleShape).background(Color.White))
+                            if (hasEvents) {
+                                Box(modifier = Modifier.size(4.5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.75f)))
+                            }
                         }
                     } else {
                         Box(
                             modifier = Modifier
-                                .size(4.5.dp)
+                                .size(if (day.isToday) 5.5.dp else 4.5.dp)
                                 .clip(CircleShape)
-                                .background(scheme.accentBorder)
+                                .background(
+                                    if (hasEvents) scheme.accentBorder
+                                    else scheme.accentBorder.copy(alpha = 0.35f)
+                                )
                         )
                     }
                 }
@@ -291,89 +353,155 @@ fun WeeklyRoutineSection(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ---------- 3. Summary Row (সেম) ----------
+        // ---------- 3. Summary Row ----------
         if (selectedDay != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.55f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarToday, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(selectedDay.fullDateBn, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = selectedDay.fullDateBn,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF0284C7)))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("ক্লাস ${selectedDay.classCount.toString().toBengaliDigits()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("|", fontSize = 12.sp, color = Color(0xFF94A3B8))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFFF59E0B)))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("এক্সাম ${selectedDay.examCount.toString().toBengaliDigits()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF0284C7)))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "ক্লাস ${selectedDay.classCount.toString().toBengaliDigits()}",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("|", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFFF59E0B)))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "এক্সাম ${selectedDay.examCount.toString().toBengaliDigits()}",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             // ---------- 4. Lessons / Empty / Loading ----------
-            when {
-                isLoading -> {
-                    Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = Color(0xFF1E293B)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+            AnimatedContent(
+                targetState = Triple(isLoading, selectedDay.dateKey, selectedDay.lessons),
+                transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) },
+                label = "routineDayTransition"
+            ) { (loading, _, dayLessons) ->
+                when {
+                    loading -> {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.surfaceVariant
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color(0xFF38BDF8))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("রুটিন লোড হচ্ছে...", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.2.dp,
+                                    color = Color(0xFF38BDF8)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "রুটিন লোড হচ্ছে...",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
-                }
 
-                selectedDay.lessons.isEmpty() -> {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF1E293B).copy(alpha = 0.7f),
-                        border = BorderStroke(1.dp, Color(0xFF334155))
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                    dayLessons.isEmpty() -> {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isDark) Color(0xFF131F33).copy(alpha = 0.8f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
-                            Icon(Icons.Default.EventBusy, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("আজকে কোন ক্লাস বা পরীক্ষা নেই ✨", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFFCBD5E1), textAlign = TextAlign.Center)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.EventBusy,
+                                    contentDescription = null,
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "আজকে কোন ক্লাস বা পরীক্ষা নেই ✨",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
-                }
 
-                else -> {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(end = 16.dp)
-                    ) {
-                        items(selectedDay.lessons) { lesson ->
-                            ShikhoRoutineCard(
-                                lesson = lesson,
-                                onClick = { onOpenLessonDetail(lesson) },
-                                onNavigateToExam = onNavigateToExam
-                            )
+                    else -> {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(end = 16.dp)
+                        ) {
+                            itemsIndexed(
+                                items = dayLessons,
+                                key = { idx, item -> "${item.id ?: idx}_${item.start_time ?: idx}" }
+                            ) { _, lesson ->
+                                ShikhoRoutineCard(
+                                    lesson = lesson,
+                                    onClick = { onOpenLessonDetail(lesson) },
+                                    onNavigateToExam = onNavigateToExam
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // ---------- 5. সাবজেক্ট সাজাও Bento Card (সেম + press scale) ----------
+        // ---------- 5. সাবজেক্ট সাজাও Bento Card ----------
         val bentoInteraction = remember { MutableInteractionSource() }
         val isBentoPressed by bentoInteraction.collectIsPressedAsState()
         val bentoScale by animateFloatAsState(
@@ -390,35 +518,57 @@ fun WeeklyRoutineSection(
                 .clickable(interactionSource = bentoInteraction, indication = null) { onCustomizeSubjectsClick() },
             shape = RoundedCornerShape(22.dp),
             color = Color(0xFF071731),
-            border = BorderStroke(1.dp, Color(0xFF1E3A5F)),
+            border = BorderStroke(
+                width = 1.dp,
+                brush = Brush.horizontalGradient(
+                    listOf(Color(0xFF38BDF8).copy(alpha = 0.4f), Color(0xFF1E3A5F))
+                )
+            ),
             shadowElevation = 6.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.horizontalGradient(listOf(Color(0xFF071731), Color(0xFF0C2448))))
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF071731), Color(0xFF0E2952))))
                     .padding(16.dp)
             ) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF0284C7).copy(alpha = 0.2f))
-                                .border(1.2.dp, Color(0xFF38BDF8), CircleShape),
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF0284C7).copy(alpha = 0.22f))
+                                .border(1.2.dp, Color(0xFF38BDF8).copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Tune, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(22.dp))
+                            Icon(
+                                Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = Color(0xFF38BDF8),
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(12.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("সাবজেক্ট সাজাও", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(
+                                    text = "সাবজেক্ট সাজাও",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
                                     Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFF38BDF8)))
                                     Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFFF59E0B)))
                                     Box(Modifier.size(5.dp).clip(CircleShape).background(Color(0xFF10B981)))
@@ -444,8 +594,16 @@ fun WeeklyRoutineSection(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Surface(shape = RoundedCornerShape(20.dp), color = Color(0xFF0284C7), shadowElevation = 2.dp) {
-                        Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFF0284C7),
+                        border = BorderStroke(1.dp, Color(0xFF7DD3FC).copy(alpha = 0.4f)),
+                        shadowElevation = 2.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(Icons.Default.FilterList, null, tint = Color.White, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(5.dp))
                             Text("ফিল্টার", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -455,17 +613,28 @@ fun WeeklyRoutineSection(
 
                 if (selectedSubjectNames.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         itemsIndexed(selectedSubjectNames) { index, subName ->
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.3f))
+                                color = Color(0xFF0F2547),
+                                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.35f))
                             ) {
-                                Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF38BDF8)))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("${(index + 1).toString().toBengaliDigits()}. $subName", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFFF1F5F9))
+                                    Text(
+                                        text = "${(index + 1).toString().toBengaliDigits()}. $subName",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFFF1F5F9)
+                                    )
                                 }
                             }
                         }
@@ -477,9 +646,8 @@ fun WeeklyRoutineSection(
 }
 
 /**
- * Routine Card — Compact, premium M3 design with an adaptive (screen-relative) width,
- * so 1.5–2 cards are always visible instead of one oversized card filling the whole screen.
- * All data bindings, states (live/exam) and click behavior are unchanged from before.
+ * Routine Card — Compact, premium M3 design with an adaptive (screen-relative) width
+ * and full dark/light mode contrast support.
  */
 @Composable
 fun ShikhoRoutineCard(
@@ -488,12 +656,13 @@ fun ShikhoRoutineCard(
     modifier: Modifier = Modifier,
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null
 ) {
+    val isDark = isSystemInDarkTheme()
     val startTime = lesson.start_time ?: lesson.live_class?.start_time
     val endTime = lesson.end_time ?: lesson.live_class?.end_time
-    val startCal = parseIsoToDhakaCalendar(startTime, isEndOfDay = false)
-    val endCal = parseIsoToDhakaCalendar(endTime, isEndOfDay = true)
-    val timeString = formatTimeRange(startCal, endCal)
-    val durationString = calculateDurationText(startCal, endCal)
+    val startCal = remember(startTime) { parseIsoToDhakaCalendar(startTime, isEndOfDay = false) }
+    val endCal = remember(endTime) { parseIsoToDhakaCalendar(endTime, isEndOfDay = true) }
+    val timeString = remember(startCal, endCal) { formatTimeRange(startCal, endCal) }
+    val durationString = remember(startCal, endCal) { calculateDurationText(startCal, endCal) }
 
     val isModelTest = lesson.isModelTest
     val isLiveExam = lesson.isLiveExam
@@ -513,9 +682,7 @@ fun ShikhoRoutineCard(
     val titleText = ClassTypeUtils.formatLessonTitle(lesson.title ?: lesson.live_class?.chapter_name ?: "অনলাইন ক্লাস")
     val subjectColors = SubjectColorUtils.getColorScheme(subjectName)
 
-    val handleCardClick = {
-        onClick()
-    }
+    val handleCardClick = { onClick() }
 
     val interaction = remember { MutableInteractionSource() }
     val isPressed by interaction.collectIsPressedAsState()
@@ -536,51 +703,58 @@ fun ShikhoRoutineCard(
         isLiveNow -> Color(0xFFEF4444)
         isModelTestNow -> Color(0xFF7C3AED)
         isExamNow -> Color(0xFFF59E0B)
-        isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.8f)
-        isExam -> Color(0xFFFBBF24).copy(alpha = 0.8f)
-        lesson.isRecordingProcessing -> Color(0xFFF59E0B).copy(alpha = 0.8f)
-        lesson.isUpcoming -> Color(0xFF0284C7).copy(alpha = 0.4f)
+        isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.7f)
+        isExam -> Color(0xFFFBBF24).copy(alpha = 0.75f)
+        lesson.isRecordingProcessing -> Color(0xFFF59E0B).copy(alpha = 0.75f)
+        lesson.isUpcoming -> Color(0xFF0284C7).copy(alpha = 0.45f)
         else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
     }
 
-    val cardBackgroundGradient = when {
-        isLiveNow -> Brush.linearGradient(listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E6)))
-        isModelTestNow || isModelTest -> Brush.linearGradient(listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF).copy(alpha = 0.6f)))
-        isExamNow -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7)))
-        isExam -> Brush.linearGradient(listOf(Color(0xFFFFFDF5), Color(0xFFFEF9C3).copy(alpha = 0.45f)))
-        lesson.isRecordingProcessing -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7).copy(alpha = 0.6f)))
-        lesson.isUpcoming -> Brush.linearGradient(listOf(Color(0xFFF0F9FF), Color(0xFFE0F2FE).copy(alpha = 0.6f)))
-        else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)))
+    val cardBackgroundGradient = if (isDark) {
+        when {
+            isLiveNow -> Brush.linearGradient(listOf(Color(0xFF2D1219), Color(0xFF1F0D12)))
+            isModelTestNow || isModelTest -> Brush.linearGradient(listOf(Color(0xFF23153C), Color(0xFF160F29)))
+            isExamNow || isExam -> Brush.linearGradient(listOf(Color(0xFF2B2111), Color(0xFF1C160B)))
+            lesson.isUpcoming -> Brush.linearGradient(listOf(Color(0xFF0F2238), Color(0xFF0B1829)))
+            else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)))
+        }
+    } else {
+        when {
+            isLiveNow -> Brush.linearGradient(listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E6)))
+            isModelTestNow || isModelTest -> Brush.linearGradient(listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF).copy(alpha = 0.6f)))
+            isExamNow -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7)))
+            isExam -> Brush.linearGradient(listOf(Color(0xFFFFFDF5), Color(0xFFFEF9C3).copy(alpha = 0.45f)))
+            lesson.isRecordingProcessing -> Brush.linearGradient(listOf(Color(0xFFFFFBEB), Color(0xFFFEF3C7).copy(alpha = 0.6f)))
+            lesson.isUpcoming -> Brush.linearGradient(listOf(Color(0xFFF0F9FF), Color(0xFFE0F2FE).copy(alpha = 0.6f)))
+            else -> Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)))
+        }
     }
 
-    // ADAPTIVE WIDTH (not hardcoded): sized as a fraction of the actual device screen width,
-    // clamped to a sensible range, so this always leaves the next card peeking on any device.
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-    val cardWidth = (screenWidthDp * 0.6f).coerceIn(188.dp, 238.dp)
+    val cardWidth = (screenWidthDp * 0.62f).coerceIn(194.dp, 244.dp)
 
     Surface(
         modifier = modifier
             .width(cardWidth)
-            .height(128.dp)
+            .height(132.dp)
             .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = handleCardClick),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(if (isLiveNow || isExamNow) 1.4.dp else 1.dp, cardBorderColor),
-        shadowElevation = if (isLiveNow || isExamNow) 5.dp else 2.dp
+        border = BorderStroke(if (isLiveNow || isExamNow) 1.5.dp else 1.dp, cardBorderColor),
+        shadowElevation = if (isLiveNow || isExamNow) 6.dp else 3.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(cardBackgroundGradient)
         ) {
-            // Slim rounded top accent strip — replaces the old thick side bar,
-            // frees up width for content while keeping the same subject/status color cue
+            // Top accent strip
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(4.5.dp)
                     .background(
                         when {
                             isLiveNow -> Brush.horizontalGradient(listOf(Color(0xFFEF4444), Color(0xFFF43F5E)))
@@ -597,7 +771,7 @@ fun ShikhoRoutineCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // Header Badges
@@ -608,9 +782,9 @@ fun ShikhoRoutineCard(
                 ) {
                     // Subject Tag
                     Surface(
-                        shape = RoundedCornerShape(7.dp),
-                        color = subjectColors.backgroundColor.copy(alpha = 0.9f),
-                        border = BorderStroke(0.8.dp, subjectColors.textColor.copy(alpha = 0.25f)),
+                        shape = RoundedCornerShape(8.dp),
+                        color = subjectColors.backgroundColor.copy(alpha = 0.92f),
+                        border = BorderStroke(0.8.dp, subjectColors.textColor.copy(alpha = 0.3f)),
                         modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Text(
@@ -626,9 +800,9 @@ fun ShikhoRoutineCard(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Status / Exam / Live Badge (চলছে, আপকামিং, রেকর্ড)
+                    // Status / Exam / Live Badge
                     Surface(
-                        shape = RoundedCornerShape(7.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = when {
                             isLiveNow -> Color(0xFFFEE2E2)
                             isModelTestNow || isModelTest -> Color(0xFFEDE9FE)
@@ -740,7 +914,7 @@ fun ShikhoRoutineCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp,
+                    lineHeight = 16.5.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -758,12 +932,12 @@ fun ShikhoRoutineCard(
                         Icon(
                             imageVector = Icons.Default.AccessTime,
                             contentDescription = null,
-                            tint = if (isLiveNow || isExamNow) Color(0xFFDC2626) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(11.dp)
+                            tint = if (isLiveNow || isExamNow) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(11.5.dp)
                         )
                         Text(
                             text = if (durationString.isNotBlank()) "$timeString • $durationString" else timeString,
-                            fontSize = 10.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
@@ -779,17 +953,17 @@ fun ShikhoRoutineCard(
                         color = when {
                             isLiveNow -> Color(0xFFEF4444)
                             isExamNow -> Color(0xFFF59E0B)
-                            isExam -> Color(0xFFF59E0B).copy(alpha = 0.15f)
-                            else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                            isExam -> Color(0xFFF59E0B).copy(alpha = 0.2f)
+                            else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
                         },
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Go",
                                 tint = if (isLiveNow || isExamNow) Color.White else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(12.5.dp)
                             )
                         }
                     }

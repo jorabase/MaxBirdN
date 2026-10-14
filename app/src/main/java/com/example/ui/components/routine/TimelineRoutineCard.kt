@@ -6,14 +6,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +37,7 @@ fun TimelineRoutineCard(
     modifier: Modifier = Modifier,
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null
 ) {
+    val isDark = isSystemInDarkTheme()
     val st = lesson.start_time ?: lesson.live_class?.start_time
     val et = lesson.end_time ?: lesson.live_class?.end_time
 
@@ -71,19 +77,17 @@ fun TimelineRoutineCard(
     val titleText = ClassTypeUtils.formatLessonTitle(lesson.title ?: lesson.live_class?.chapter_name ?: "অনলাইন ক্লাস")
     val subjectColors = SubjectColorUtils.getColorScheme(subjectName)
 
-    val handleCardClick = {
-        onClick()
-    }
+    val handleCardClick = { onClick() }
 
     val titleFontSize = when {
-        titleText.length > 50 -> 11.5.sp
-        titleText.length > 30 -> 12.5.sp
-        else -> 13.5.sp
+        titleText.length > 50 -> 12.sp
+        titleText.length > 30 -> 13.sp
+        else -> 14.sp
     }
     val titleLineHeight = when {
-        titleText.length > 50 -> 15.5.sp
-        titleText.length > 30 -> 17.sp
-        else -> 18.5.sp
+        titleText.length > 50 -> 16.sp
+        titleText.length > 30 -> 17.5.sp
+        else -> 19.sp
     }
 
     val interaction = remember { MutableInteractionSource() }
@@ -101,176 +105,248 @@ fun TimelineRoutineCard(
         label = "tlLiveDotScale"
     )
 
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        // Timeline dot
-        Box(
+    val primaryAccent = when {
+        isLiveNow -> Color(0xFFEF4444)
+        isModelTestNow || isModelTest -> Color(0xFF7C3AED)
+        isExamNow || isExam -> Color(0xFFD97706)
+        else -> Color(0xFF0284C7)
+    }
+
+    val cardContainerColor = if (isDark) {
+        when {
+            isLiveNow -> Color(0xFF281117)
+            isModelTestNow || isModelTest -> Color(0xFF1F1435)
+            isExamNow || isExam -> Color(0xFF261D10)
+            else -> MaterialTheme.colorScheme.surface
+        }
+    } else {
+        when {
+            isLiveNow -> Color(0xFFFFF1F2)
+            isModelTestNow || isModelTest -> Color(0xFFFAF5FF)
+            isExamNow -> Color(0xFFFFFBEB)
+            isExam -> Color(0xFFFEF3C7).copy(alpha = 0.3f)
+            else -> MaterialTheme.colorScheme.surface
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.Top
+    ) {
+        // Timeline dot + Vertical track line
+        Column(
             modifier = Modifier
-                .width(28.dp)
-                .padding(top = 12.dp),
-            contentAlignment = Alignment.TopCenter
+                .width(30.dp)
+                .fillMaxHeight(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(14.dp))
             Box(
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
-                    .background(
-                        when {
-                            isLiveNow -> Color(0xFFFEE2E2)
-                            isModelTestNow || isModelTest -> Color(0xFFEDE9FE)
-                            isExamNow || isExam -> Color(0xFFFEF3C7)
-                            else -> Color(0xFFE0F2FE)
-                        }
-                    ),
+                    .background(primaryAccent.copy(alpha = if (isDark) 0.25f else 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .size(if (isLiveNow || isExamNow || isModelTestNow) 10.dp else 8.dp)
+                        .size(if (isLiveNow || isExamNow || isModelTestNow) 10.dp else 8.5.dp)
                         .graphicsLayer {
-                            if (isLiveNow || isExamNow || isModelTestNow) { scaleX = liveDotScale; scaleY = liveDotScale }
+                            if (isLiveNow || isExamNow || isModelTestNow) {
+                                scaleX = liveDotScale
+                                scaleY = liveDotScale
+                            }
                         }
                         .clip(CircleShape)
-                        .background(
-                            when {
-                                isLiveNow -> Color(0xFFEF4444)
-                                isModelTestNow || isModelTest -> Color(0xFF7C3AED)
-                                isExamNow || isExam -> Color(0xFFD97706)
-                                else -> Color(0xFF0284C7)
-                            }
-                        )
+                        .background(primaryAccent)
                 )
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .width(2.dp)
+                    .weight(1f)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                primaryAccent.copy(alpha = 0.45f),
+                                primaryAccent.copy(alpha = 0.1f)
+                            )
+                        )
+                    )
+            )
         }
 
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
         // Main Card
         Card(
             modifier = Modifier
                 .weight(1f)
+                .padding(bottom = 8.dp)
                 .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
                 .clickable(interactionSource = interaction, indication = null, onClick = handleCardClick),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = when {
-                    isLiveNow -> Color(0xFFFFF1F2)
-                    isModelTestNow -> Color(0xFFFAF5FF)
-                    isModelTest -> Color(0xFFFAF5FF)
-                    isExamNow -> Color(0xFFFFFBEB)
-                    isExam -> Color(0xFFFEF3C7).copy(alpha = 0.25f)
-                    else -> MaterialTheme.colorScheme.surface
-                }
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (isLiveNow || isExamNow || isModelTestNow) 4.dp else 2.dp
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = if (isLiveNow || isExamNow || isModelTestNow) 3.5.dp else 1.5.dp),
             border = when {
                 isLiveNow -> BorderStroke(1.5.dp, Color(0xFFEF4444))
                 isModelTestNow -> BorderStroke(1.5.dp, Color(0xFF7C3AED))
                 isModelTest -> BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.5f))
                 isExamNow -> BorderStroke(1.5.dp, Color(0xFFF59E0B))
-                isExam -> BorderStroke(1.dp, Color(0xFFFCD34D))
+                isExam -> BorderStroke(1.dp, Color(0xFFFCD34D).copy(alpha = 0.7f))
                 else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-                // Top Tag Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isLiveNow) {
-                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFEF4444)) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
-                                        .clip(CircleShape)
-                                        .background(Color.White)
-                                )
-                                Text("লাইভ ক্লাস", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    // Top Tag Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isLiveNow) {
+                            Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFEF4444)) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                    )
+                                    Text("লাইভ ক্লাস", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        } else if (isExamNow) {
+                            Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFEA580C)) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                    )
+                                    Text("লাইভ এক্সাম", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
                             }
                         }
-                    } else if (isExamNow) {
-                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFEA580C)) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
-                                        .clip(CircleShape)
-                                        .background(Color.White)
-                                )
-                                Text("লাইভ এক্সাম", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                        }
-                    }
 
-                    Surface(shape = RoundedCornerShape(8.dp), color = subjectColors.backgroundColor) {
-                        Text(
-                            text = subjectName,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = subjectColors.textColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    if (!isLiveNow && !isExamNow) {
-                        val (posLabel, posBg, posColor) = when {
-                            isLiveExam || isExam || isModelTest -> when {
-                                lesson.isExamUpcoming -> Triple("আপকামিং এক্সাম", Color(0xFFEDE9FE), Color(0xFF7C3AED))
-                                else -> Triple("রেকর্ড এক্সাম", Color(0xFFFEF3C7), Color(0xFFD97706))
-                            }
-                            lesson.isUpcoming -> Triple("আপকামিং ক্লাস", Color(0xFFE0F2FE), Color(0xFF0284C7))
-                            else -> Triple("রেকর্ড ক্লাস", Color(0xFFEFF6FF), Color(0xFF2563EB))
-                        }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = posBg
+                            color = subjectColors.backgroundColor,
+                            border = BorderStroke(0.8.dp, subjectColors.textColor.copy(alpha = 0.25f))
                         ) {
                             Text(
-                                text = posLabel,
-                                fontSize = 10.sp,
+                                text = subjectName,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = posColor,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                color = subjectColors.textColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                        }
+
+                        if (!isLiveNow && !isExamNow) {
+                            val (posLabel, posBg, posColor) = when {
+                                isLiveExam || isExam || isModelTest -> when {
+                                    lesson.isExamUpcoming -> Triple("আপকামিং এক্সাম", Color(0xFFEDE9FE), Color(0xFF7C3AED))
+                                    else -> Triple("রেকর্ড এক্সাম", Color(0xFFFEF3C7), Color(0xFFD97706))
+                                }
+                                lesson.isUpcoming -> Triple("আপকামিং ক্লাস", Color(0xFFE0F2FE), Color(0xFF0284C7))
+                                else -> Triple("রেকর্ড ক্লাস", Color(0xFFEFF6FF), Color(0xFF2563EB))
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = posBg
+                            ) {
+                                Text(
+                                    text = posLabel,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = posColor,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = titleText,
+                        fontSize = titleFontSize,
+                        lineHeight = titleLineHeight,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (formattedTime.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = primaryAccent.copy(alpha = 0.12f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccessTime,
+                                    contentDescription = null,
+                                    tint = primaryAccent,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = formattedTime,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = primaryAccent
+                                )
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
-                Text(
-                    text = titleText,
-                    fontSize = titleFontSize,
-                    lineHeight = titleLineHeight,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                if (formattedTime.isNotBlank()) {
-                    Text(
-                        text = formattedTime,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFDC2626)
-                    )
+                Surface(
+                    shape = CircleShape,
+                    color = primaryAccent.copy(alpha = 0.14f),
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Open",
+                            tint = primaryAccent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                 }
             }
         }
