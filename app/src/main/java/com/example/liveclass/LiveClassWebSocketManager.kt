@@ -1293,9 +1293,15 @@ class LiveClassWebSocketManager {
         text: String,
         studentName: String,
         role: String = "teacher",
-        targetRole: String = "teacher"
+        targetRole: String = "teacher",
+        onComplete: ((Boolean) -> Unit)? = null
     ) {
-        val ws = webSocket ?: return
+        val ws = webSocket
+        if (ws == null || !_isConnected.value) {
+            Log.w(TAG, "Cannot send chat: WebSocket is null or not connected")
+            onComplete?.invoke(false)
+            return
+        }
         try {
             val reqId = UUID.randomUUID().toString()
             pendingRpcRequests[reqId] = RpcRequestMeta("broadcast")
@@ -1321,9 +1327,11 @@ class LiveClassWebSocketManager {
                 put("jsonrpc", "2.0")
             }
             Log.d(TAG, "Sending real 100ms broadcast chat: $broadcastMsg")
-            ws.send(broadcastMsg.toString())
+            val sent = ws.send(broadcastMsg.toString())
+            onComplete?.invoke(sent)
         } catch (e: Exception) {
             Log.w(TAG, "Failed to send chat message over WebSocket: ${e.message}")
+            onComplete?.invoke(false)
         }
     }
 

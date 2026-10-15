@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,7 +52,6 @@ import com.example.auth.SessionManager
 import com.example.liveclass.poll.*
 import com.example.util.PipHelper
 import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val TAG = "LiveClassPage"
@@ -65,28 +63,36 @@ sealed class LiveClassState {
     data class Error(val message: String) : LiveClassState()
 }
 
+enum class ChatDeliveryStatus {
+    SENDING,
+    SENT,
+    FAILED
+}
+
 data class LiveChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val senderName: String,
     val message: String,
     val timestamp: String = "এখন",
     val isTeacher: Boolean = false,
-    val role: String = "student"
+    val role: String = "student",
+    val status: ChatDeliveryStatus = ChatDeliveryStatus.SENT,
+    val isPinned: Boolean = false
 )
 
 data class LiveResolutionOption(
     val id: String,
     val title: String,
-    val subtitle: String,
-    val badge: String
+    val subtitle: String
 )
 
 val LIVE_RESOLUTIONS = listOf(
-    LiveResolutionOption("auto", "Auto (স্বয়ংক্রিয়)", "নেটওয়ার্ক স্পিড অনুযায়ী এডাপ্টিভ কোয়ালিটি", "AUTO"),
-    LiveResolutionOption("720p", "720p HD", "সর্বোচ্চ স্পষ্টতা (বোর্ডের লেখার জন্য সেরা)", "HD"),
-    LiveResolutionOption("480p", "480p Standard", "ব্যালেন্সড ডেটা ও স্পষ্ট ভিডিও", "SD"),
-    LiveResolutionOption("360p", "360p Data Saver", "কম ইন্টারনেটে নিরবচ্ছিন্ন স্ট্রিমিং", "360P"),
-    LiveResolutionOption("240p", "240p Ultra Saver", "দুর্বল নেটওয়ার্কের জন্য বিশেষ মোড", "LOW")
+    LiveResolutionOption("auto", "Auto (স্বয়ংক্রিয়)", "নেটওয়ার্ক স্পিড অনুযায়ী এডাপ্টিভ"),
+    LiveResolutionOption("1080p", "1080p Full HD", "সর্বোচ্চ রেজুলেশন ও স্পষ্টতা"),
+    LiveResolutionOption("720p", "720p HD", "স্ট্যান্ডার্ড হাই ডেফিনিশন (রিকমেন্ডেড)"),
+    LiveResolutionOption("480p", "480p SD", "ব্যালেন্সড ডেটা ও কোয়ালিটি"),
+    LiveResolutionOption("360p", "360p Data Saver", "সাশ্রয়ী ডেটা খরচ"),
+    LiveResolutionOption("240p", "240p Low", "দুর্বল ইন্টারনেটের জন্য")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,15 +123,24 @@ fun LiveClassPage(
     var selectedResolution by remember { mutableStateOf("auto") }
     var showResolutionDialog by remember { mutableStateOf(false) }
 
-    // Controls visibility & auto-hide timer so nothing blocks the video canvas
+    // Click on video toggles player overlay controls: click once -> show, click again -> hide!
     var showPlayerControls by remember { mutableStateOf(true) }
-    var showLandscapeChatDrawer by remember { mutableStateOf(false) }
+    var lastUserInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var showLandscapeChat by remember { mutableStateOf(false) }
+
+    // Auto-hides video controls after 4 seconds of inactivity
+    LaunchedEffect(showPlayerControls, lastUserInteractionTime) {
+        if (showPlayerControls) {
+            kotlinx.coroutines.delay(4000L)
+            showPlayerControls = false
+        }
+    }
 
     var uiState by remember { mutableStateOf<LiveClassState>(LiveClassState.Loading) }
     var studentName by remember {
         mutableStateOf(sessionManager.getUserFullName() ?: "শিক্ষার্থী")
     }
-    var selectedRole by remember { mutableStateOf("teacher") } // Matches HAR default target: ["teacher"]
+    var selectedRole by remember { mutableStateOf("student") } // "teacher", "student", "all"
 
     var lectureSlideUrls by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLiveOnGoing by remember { mutableStateOf(true) }
@@ -146,9 +161,8 @@ fun LiveClassPage(
     val chatMessages = remember { mutableStateListOf<LiveChatMessage>() }
     val chatListState = rememberLazyListState()
 
-    // Quick comment chips for instant interaction during live class
     val quickReplyChips = remember {
-        listOf("হ্যালো স্যার 👋", "জি ভাইয়া বুঝতে পেরেছি ✅", "আরেকবার একটু বুঝিয়ে দিন 🙏", "ক্লিয়ার দেখা যাচ্ছে ✨")
+        listOf("হ্যালো স্যার 👋", "জি বুঝতে পেরেছি ✅", "আরেকবার বুঝিয়ে দিন 🙏", "ক্লিয়ার দেখা যাচ্ছে ✨")
     }
 
     // 100ms Real Live Poll / Quiz State
@@ -170,7 +184,7 @@ fun LiveClassPage(
             ?: activePoll?.takeIf { it.pollId == targetId }
     }
 
-    // Keep screen on while watching Live Class and manage immersive fullscreen in landscape
+    // Keep screen on while playing Live Class
     DisposableEffect(isLandscape, uiState) {
         val window = activity?.window
         if (window != null) {
@@ -192,23 +206,12 @@ fun LiveClassPage(
         }
     }
 
-    // Auto-hide top & bottom edge controls after 3.5 seconds so the class video is 100% unobstructed
-    LaunchedEffect(showPlayerControls, uiState) {
-        if (showPlayerControls && uiState is LiveClassState.Playing) {
-            delay(3500)
-            showPlayerControls = false
-        }
-    }
-
-    // Helper function to toggle Mobile Screen Rotation (Portrait <-> Sensor Landscape)
     fun toggleScreenOrientation() {
         val act = activity ?: return
         if (isLandscape) {
             act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            showLandscapeChatDrawer = false
-            // Unlock to sensor after returning to portrait so normal phone rotation works too
             coroutineScope.launch {
-                delay(1500)
+                kotlinx.coroutines.delay(1200)
                 act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
         } else {
@@ -258,7 +261,7 @@ fun LiveClassPage(
             var directPlaybackSet = false
             if (!academicInfo?.playbackUrl.isNullOrBlank()) {
                 wsManager.setMasterUrl(academicInfo!!.playbackUrl!!)
-                uiState = LiveClassState.Playing // Enter directly into seamless playing mode
+                uiState = LiveClassState.Playing
                 directPlaybackSet = true
             } else if (cleanDiscovered.isNotEmpty()) {
                 wsManager.setMasterUrl(cleanDiscovered.first())
@@ -315,7 +318,7 @@ fun LiveClassPage(
     val incomingMsg by wsManager.incomingChatMessages.collectAsState()
     LaunchedEffect(incomingMsg) {
         incomingMsg?.let { msg ->
-            if (chatMessages.none { it.id == msg.id }) {
+            if (chatMessages.none { it.id == msg.id || (it.message == msg.message && it.senderName == msg.senderName) }) {
                 chatMessages.add(msg)
                 coroutineScope.launch {
                     if (chatMessages.isNotEmpty()) {
@@ -326,36 +329,81 @@ fun LiveClassPage(
         }
     }
 
-    fun sendUserChat(messageText: String) {
-        val cleanText = messageText.trim()
+    fun sendUserChat(textToSend: String) {
+        val cleanText = textToSend.trim()
         if (cleanText.isBlank() || !isChatEnabled) return
+        if (!isConnected) {
+            android.widget.Toast.makeText(context, "লাইভ সার্ভারের সাথে সংযোগ নেই! বার্তা পাঠানো সম্ভব হয়নি।", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val myName = studentName.ifBlank { "আপনি" }
+        val isTeacher = selectedRole == "teacher"
         val formattedTime = try {
             java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
         } catch (_: Exception) {
             "এখন"
         }
+        val msgId = java.util.UUID.randomUUID().toString()
 
         chatMessages.add(
             LiveChatMessage(
+                id = msgId,
                 senderName = myName,
                 message = cleanText,
                 timestamp = formattedTime,
-                isTeacher = false,
-                role = selectedRole
+                isTeacher = isTeacher,
+                role = selectedRole,
+                status = ChatDeliveryStatus.SENDING
             )
-        )
-        wsManager.sendChatMessage(
-            text = cleanText,
-            studentName = myName,
-            role = selectedRole,
-            targetRole = selectedRole
         )
         chatMessageInput = ""
         keyboardController?.hide()
         coroutineScope.launch {
             if (chatMessages.isNotEmpty()) {
                 chatListState.animateScrollToItem(chatMessages.size - 1)
+            }
+        }
+
+        wsManager.sendChatMessage(
+            text = cleanText,
+            studentName = myName,
+            role = selectedRole,
+            targetRole = selectedRole
+        ) { isSuccess ->
+            val idx = chatMessages.indexOfFirst { it.id == msgId }
+            if (idx >= 0) {
+                chatMessages[idx] = chatMessages[idx].copy(
+                    status = if (isSuccess) ChatDeliveryStatus.SENT else ChatDeliveryStatus.FAILED
+                )
+            }
+            if (!isSuccess) {
+                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "বার্তা পাঠানো যায়নি! অনুগ্রহ করে পুনরায় চেষ্টা করুন।", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun retryChatMessage(msgId: String) {
+        val idx = chatMessages.indexOfFirst { it.id == msgId }
+        if (idx < 0) return
+        val msg = chatMessages[idx]
+        if (!isConnected) {
+            android.widget.Toast.makeText(context, "লাইভ সার্ভারের সাথে সংযোগ নেই! পুনরায় সংযোগের চেষ্টা করা হচ্ছে...", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        chatMessages[idx] = msg.copy(status = ChatDeliveryStatus.SENDING)
+        wsManager.sendChatMessage(
+            text = msg.message,
+            studentName = msg.senderName,
+            role = msg.role,
+            targetRole = msg.role
+        ) { isSuccess ->
+            val currentIdx = chatMessages.indexOfFirst { it.id == msgId }
+            if (currentIdx >= 0) {
+                chatMessages[currentIdx] = chatMessages[currentIdx].copy(
+                    status = if (isSuccess) ChatDeliveryStatus.SENT else ChatDeliveryStatus.FAILED
+                )
             }
         }
     }
@@ -377,7 +425,6 @@ fun LiveClassPage(
         }
     }
 
-    // Picture-in-Picture (PiP) Mode: Pure video canvas
     if (isPipMode) {
         val activePlaybackUrl = masterUrl ?: candidateUrls.firstOrNull { it.isNotBlank() }
         if (!activePlaybackUrl.isNullOrBlank()) {
@@ -402,7 +449,7 @@ fun LiveClassPage(
     }
 
     Scaffold(
-        containerColor = Color(0xFF090D16),
+        containerColor = Color(0xFF0F172A),
         contentWindowInsets = if (isLandscape) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         modifier = modifier
     ) { paddingValues ->
@@ -412,9 +459,6 @@ fun LiveClassPage(
                 .padding(if (isLandscape) PaddingValues(0.dp) else paddingValues)
         ) {
             when (val state = uiState) {
-                // ==========================================
-                // 1. LOADING STATE
-                // ==========================================
                 is LiveClassState.Loading -> {
                     Column(
                         modifier = Modifier
@@ -423,25 +467,17 @@ fun LiveClassPage(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
-                                strokeWidth = 3.5.dp,
-                                color = Color(0xFF38BDF8),
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.LiveTv,
-                                contentDescription = null,
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        CircularProgressIndicator(
+                            strokeWidth = 3.dp,
+                            color = Color(0xFF38BDF8),
+                            modifier = Modifier.size(52.dp)
+                        )
 
                         Spacer(modifier = Modifier.height(24.dp))
 
                         Text(
-                            text = "লাইভ ক্লাসে সংযোগ স্থাপন হচ্ছে...",
-                            fontSize = 18.sp,
+                            text = "লাইভ ক্লাসে যোগ দেওয়া হচ্ছে...",
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -450,330 +486,870 @@ fun LiveClassPage(
 
                         Text(
                             text = effectiveLessonTitle,
-                            fontSize = 13.5.sp,
-                            color = Color(0xFF94A3B8),
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
 
-                // ==========================================
-                // 2. PREVIEW STATE
-                // ==========================================
                 is LiveClassState.Preview -> {
                     LaunchedEffect(Unit) {
                         uiState = LiveClassState.Playing
                     }
                 }
 
-                // ==========================================
-                // 3. PLAYING STATE (PORTRAIT & FULL LANDSCAPE)
-                // ==========================================
                 is LiveClassState.Playing -> {
                     val activePlaybackUrl = masterUrl ?: candidateUrls.firstOrNull { it.isNotBlank() }
 
-                    if (isLandscape) {
-                        // =====================================================
-                        // FULLSCREEN LANDSCAPE MODE (UNOBSTRUCTED + SIDE DRAWER)
-                        // =====================================================
-                        Row(
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // ========================================================
+                        // VIDEO PLAYER AREA (16:9 in Portrait, Fullscreen in Landscape)
+                        // Touch on video toggles controls: click once -> show, click again -> hide!
+                        // Auto-hides after 4s.
+                        // ========================================================
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
+                                .then(
+                                    if (isLandscape) Modifier.fillMaxSize()
+                                    else Modifier.aspectRatio(16f / 9f)
+                                )
                                 .background(Color.Black)
                         ) {
-                            // Video Canvas Area
+                            if (!activePlaybackUrl.isNullOrBlank()) {
+                                LivePlayer(
+                                    masterUrl = activePlaybackUrl,
+                                    candidateUrls = candidateUrls,
+                                    selectedResolution = selectedResolution,
+                                    isPipActive = false,
+                                    modifier = Modifier.fillMaxSize(),
+                                    onBack = {
+                                        if (isLandscape) toggleScreenOrientation()
+                                        else {
+                                            wsManager.disconnect()
+                                            onBack()
+                                        }
+                                    }
+                                )
+                            }
+
+                            // Touch Interceptor covering the video surface
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .background(Color.Black)
+                                    .fillMaxSize()
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
                                         showPlayerControls = !showPlayerControls
+                                        if (showPlayerControls) {
+                                            lastUserInteractionTime = System.currentTimeMillis()
+                                        }
                                     }
-                            ) {
-                                if (!activePlaybackUrl.isNullOrBlank()) {
-                                    LivePlayer(
-                                        masterUrl = activePlaybackUrl,
-                                        candidateUrls = candidateUrls,
-                                        selectedResolution = selectedResolution,
-                                        isPipActive = false,
-                                        modifier = Modifier.fillMaxSize(),
-                                        onBack = { toggleScreenOrientation() }
-                                    )
-                                }
+                            )
 
-                                // Top Edge Bar (Only visible when tapped; auto-hides in 3.5s)
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = showPlayerControls,
-                                    enter = fadeIn() + slideInVertically { -it },
-                                    exit = fadeOut() + slideOutVertically { -it },
-                                    modifier = Modifier.align(Alignment.TopCenter)
+                            // ----------------------------------------------------
+                            // TOP CONTROLS OVERLAY (Back, LIVE, Viewers, Resolution, Poll)
+                            // Clean, responsive: never overflows or breaks!
+                            // ----------------------------------------------------
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showPlayerControls,
+                                enter = fadeIn(),
+                                exit = fadeOut(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.TopCenter)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent)
+                                            )
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 8.dp)
                                 ) {
-                                    VideoTopControlBar(
-                                        isLiveOnGoing = isLiveOnGoing,
-                                        viewerCount = viewerCount,
-                                        lessonTitle = effectiveLessonTitle,
-                                        isLandscape = true,
-                                        selectedResolution = selectedResolution,
-                                        hasSlides = lectureSlideUrls.isNotEmpty(),
-                                        onBackClick = { toggleScreenOrientation() },
-                                        onOpenResolution = { showResolutionDialog = true },
-                                        onEnterPip = { PipHelper.enterPipMode(activity, isPlaying = true) },
-                                        onOpenSlide = {
-                                            lectureSlideUrls.firstOrNull()?.let { url ->
-                                                try {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                                } catch (_: Exception) {}
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // 1. Back button
+                                        IconButton(
+                                            onClick = {
+                                                if (isLandscape) toggleScreenOrientation()
+                                                else {
+                                                    wsManager.disconnect()
+                                                    onBack()
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.5f))
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                                contentDescription = "Back",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(6.dp))
+
+                                        // 2. LIVE / RECORDING Badge
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isLiveOnGoing) Color(0xFFE11D48) else Color(0xFF10B981)
+                                        ) {
+                                            Text(
+                                                text = if (isLiveOnGoing) "🔴 LIVE" else "📺 RECORDING",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(6.dp))
+
+                                        // 3. Viewer Count Badge
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color.Black.copy(alpha = 0.55f)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Visibility,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF38BDF8),
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = "${if (viewerCount > 0) viewerCount else 1} জন",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
                                             }
                                         }
-                                    )
-                                }
 
-                                // Bottom Edge Bar (Only visible when tapped; auto-hides in 3.5s)
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = showPlayerControls,
-                                    enter = fadeIn() + slideInVertically { it },
-                                    exit = fadeOut() + slideOutVertically { it },
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                ) {
-                                    VideoBottomEdgeBar(
-                                        isLandscape = true,
-                                        isHandRaised = isHandRaised,
-                                        hasActivePoll = activePoll?.isLive == true,
-                                        showChatDrawer = showLandscapeChatDrawer,
-                                        onToggleHandRaise = { wsManager.toggleHandRaise(studentName) },
-                                        onOpenPolls = {
-                                            wsManager.requestPollList("started")
-                                            wsManager.requestPollList("stopped")
-                                            val currActive = activePoll
-                                            if (currActive != null && currActive.isLive) {
-                                                wsManager.loadFullPollDetails(currActive.pollId)
-                                                selectedPollIdForQuestion = currActive.pollId
-                                            } else {
-                                                showPreviousPollsDialog = true
+                                        Spacer(modifier = Modifier.weight(1f))
+
+                                        // 4. Resolution Switcher Button (Clean Pill)
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color.Black.copy(alpha = 0.6f),
+                                            border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)),
+                                            modifier = Modifier.clickable {
+                                                lastUserInteractionTime = System.currentTimeMillis()
+                                                showResolutionDialog = true
                                             }
-                                        },
-                                        onToggleChatDrawer = { showLandscapeChatDrawer = !showLandscapeChatDrawer },
-                                        onToggleOrientation = { toggleScreenOrientation() }
-                                    )
-                                }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Tune,
+                                                    contentDescription = "Resolution",
+                                                    tint = Color(0xFF38BDF8),
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = when (selectedResolution.lowercase()) {
+                                                        "auto" -> "Auto"
+                                                        else -> selectedResolution.uppercase()
+                                                    },
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
 
-                                // Non-intrusive corner Poll notification pill
-                                val activePollItem = activePoll
-                                if (activePollItem != null && activePollItem.isLive && selectedPollIdForQuestion == null) {
-                                    LivePollFloatingNotification(
-                                        activePoll = activePollItem,
-                                        onOpenPoll = {
-                                            wsManager.loadFullPollDetails(it.pollId)
-                                            selectedPollIdForQuestion = it.pollId
-                                        },
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(top = 56.dp, end = 16.dp)
-                                    )
+                                        // 5. Active Poll shortcut if live
+                                        if (activePoll?.isLive == true) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color(0xFFDC2626),
+                                                modifier = Modifier.clickable {
+                                                    lastUserInteractionTime = System.currentTimeMillis()
+                                                    wsManager.loadFullPollDetails(activePoll!!.pollId)
+                                                    selectedPollIdForQuestion = activePoll!!.pollId
+                                                }
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Quiz,
+                                                        contentDescription = "Live Poll",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Text(
+                                                        text = "পোল",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
-                            // Collapsible Right-Side Live Chat Drawer in Landscape Mode
-                            AnimatedVisibility(
-                                visible = showLandscapeChatDrawer,
-                                enter = slideInHorizontally { it } + expandHorizontally(),
-                                exit = slideOutHorizontally { it } + shrinkHorizontally()
+                            // ----------------------------------------------------
+                            // BOTTOM CONTROLS OVERLAY (Fullscreen, PiP, Slides, Landscape Chat)
+                            // Positioned at Bottom of video, exactly where users look!
+                            // ----------------------------------------------------
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = showPlayerControls,
+                                enter = fadeIn(),
+                                exit = fadeOut(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter)
                             ) {
-                                Surface(
+                                Box(
                                     modifier = Modifier
-                                        .width(330.dp)
-                                        .fillMaxHeight(),
-                                    color = Color(0xFF0F172A),
-                                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                                        .fillMaxWidth()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                                            )
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
-                                    LiveChatSection(
-                                        lessonTitle = effectiveLessonTitle,
-                                        subjectName = subjectName,
-                                        teacherName = roomTeacherName,
-                                        isCompactLandscape = true,
-                                        isConnected = isConnected,
-                                        isChatEnabled = isChatEnabled,
-                                        isHandRaised = isHandRaised,
-                                        activePoll = activePoll,
-                                        selectedRole = selectedRole,
-                                        onSelectRole = { selectedRole = it },
-                                        chatMessages = chatMessages,
-                                        chatListState = chatListState,
-                                        chatMessageInput = chatMessageInput,
-                                        onChatInputChanged = { chatMessageInput = it },
-                                        quickReplyChips = quickReplyChips,
-                                        onSendMessage = { sendUserChat(it) },
-                                        onToggleHandRaise = { wsManager.toggleHandRaise(studentName) },
-                                        onOpenPolls = {
-                                            wsManager.requestPollList("started")
-                                            wsManager.requestPollList("stopped")
-                                            val currActive = activePoll
-                                            if (currActive != null && currActive.isLive) {
-                                                wsManager.loadFullPollDetails(currActive.pollId)
-                                                selectedPollIdForQuestion = currActive.pollId
-                                            } else {
-                                                showPreviousPollsDialog = true
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (isLandscape) {
+                                            Text(
+                                                text = effectiveLessonTitle,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "🔴 লাইভ ক্লাস প্লেয়ার",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF38BDF8)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.weight(1f))
+
+                                        // Slide Notes
+                                        if (lectureSlideUrls.isNotEmpty()) {
+                                            IconButton(
+                                                onClick = {
+                                                    lastUserInteractionTime = System.currentTimeMillis()
+                                                    lectureSlideUrls.firstOrNull()?.let { url ->
+                                                        try {
+                                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                                        } catch (e: Exception) {
+                                                            Log.w(TAG, "Cannot open slide URL: ${e.message}")
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.5f))
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Description,
+                                                    contentDescription = "Lecture Notes",
+                                                    tint = Color(0xFF38BDF8),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
                                             }
-                                        },
-                                        onCloseDrawer = { showLandscapeChatDrawer = false }
-                                    )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                        }
+
+                                        // Picture in Picture
+                                        IconButton(
+                                            onClick = {
+                                                lastUserInteractionTime = System.currentTimeMillis()
+                                                PipHelper.enterPipMode(activity, isPlaying = true)
+                                            },
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.5f))
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PictureInPictureAlt,
+                                                contentDescription = "Picture in Picture",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+
+                                        // Landscape Chat Toggle Button
+                                        if (isLandscape) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            IconButton(
+                                                onClick = {
+                                                    lastUserInteractionTime = System.currentTimeMillis()
+                                                    showLandscapeChat = !showLandscapeChat
+                                                },
+                                                modifier = Modifier
+                                                    .size(34.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (showLandscapeChat) Color(0xFF0284C7) else Color.Black.copy(alpha = 0.5f))
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Chat,
+                                                    contentDescription = "Toggle Chat in Landscape",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(17.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(6.dp))
+
+                                        // Fullscreen / Screen Rotation Button (Bottom-Right corner)
+                                        IconButton(
+                                            onClick = {
+                                                lastUserInteractionTime = System.currentTimeMillis()
+                                                toggleScreenOrientation()
+                                            },
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.6f))
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                                contentDescription = if (isLandscape) "Exit Fullscreen" else "Rotate Fullscreen",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Non-intrusive Live Poll notification pill
+                            val activePollItem = activePoll
+                            if (activePollItem != null && activePollItem.isLive && selectedPollIdForQuestion == null) {
+                                LivePollFloatingNotification(
+                                    activePoll = activePollItem,
+                                    onOpenPoll = {
+                                        wsManager.loadFullPollDetails(it.pollId)
+                                        selectedPollIdForQuestion = it.pollId
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(bottom = 48.dp, end = 10.dp)
+                                )
+                            }
+
+                            // Landscape Live Chat Side Drawer (when toggled on in Landscape Mode)
+                            if (isLandscape && showLandscapeChat) {
+                                Surface(
+                                    shape = RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp),
+                                    color = Color(0xF20F172A),
+                                    border = BorderStroke(1.dp, Color(0xFF334155)),
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .width(320.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) { /* Consume taps inside chat drawer */ }
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(10.dp)
+                                    ) {
+                                        // Header
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Chat, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("লাইভ চ্যাট", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Spacer(Modifier.weight(1f))
+                                            IconButton(
+                                                onClick = { showLandscapeChat = false },
+                                                modifier = Modifier.size(26.dp)
+                                            ) {
+                                                Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+
+                                        // Messages list
+                                        LazyColumn(
+                                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            items(chatMessages, key = { it.id }) { item ->
+                                                ChatMessageCard(
+                                                    item = item,
+                                                    myName = studentName,
+                                                    onRetry = { retryChatMessage(item.id) }
+                                                )
+                                            }
+                                        }
+
+                                        // Input
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = chatMessageInput,
+                                                onValueChange = { chatMessageInput = it },
+                                                placeholder = { Text("বার্তা লিখুন...", fontSize = 11.sp, color = Color.White.copy(0.5f)) },
+                                                singleLine = true,
+                                                shape = RoundedCornerShape(16.dp),
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    focusedBorderColor = Color(0xFF38BDF8),
+                                                    unfocusedBorderColor = Color(0xFF334155),
+                                                    focusedTextColor = Color.White,
+                                                    unfocusedTextColor = Color.White,
+                                                    focusedContainerColor = Color(0xFF1E293B),
+                                                    unfocusedContainerColor = Color(0xFF1E293B)
+                                                ),
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    if (chatMessageInput.isNotBlank()) {
+                                                        sendUserChat(chatMessageInput)
+                                                    }
+                                                },
+                                                enabled = chatMessageInput.isNotBlank(),
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (chatMessageInput.isNotBlank()) Color(0xFF0284C7) else Color(0xFF1E293B))
+                                            ) {
+                                                Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                    } else {
-                        // =====================================================
-                        // PORTRAIT MODE (16:9 UNOBSTRUCTED VIDEO + INTERACTION)
-                        // =====================================================
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // 16:9 Video Box — Clean center, thin auto-hiding top/bottom edge bars
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(16f / 9f)
-                                    .background(Color.Black)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        showPlayerControls = !showPlayerControls
-                                    }
-                            ) {
-                                if (!activePlaybackUrl.isNullOrBlank()) {
-                                    LivePlayer(
-                                        masterUrl = activePlaybackUrl,
-                                        candidateUrls = candidateUrls,
-                                        selectedResolution = selectedResolution,
-                                        isPipActive = false,
-                                        modifier = Modifier.fillMaxSize(),
-                                        onBack = {
-                                            wsManager.disconnect()
-                                            onBack()
-                                        }
-                                    )
-                                }
 
-                                // Top Edge Bar (Auto-hides after 3.5s)
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = showPlayerControls,
-                                    enter = fadeIn() + slideInVertically { -it },
-                                    exit = fadeOut() + slideOutVertically { -it },
-                                    modifier = Modifier.align(Alignment.TopCenter)
-                                ) {
-                                    VideoTopControlBar(
-                                        isLiveOnGoing = isLiveOnGoing,
-                                        viewerCount = viewerCount,
-                                        lessonTitle = "",
-                                        isLandscape = false,
-                                        selectedResolution = selectedResolution,
-                                        hasSlides = lectureSlideUrls.isNotEmpty(),
-                                        onBackClick = {
-                                            wsManager.disconnect()
-                                            onBack()
-                                        },
-                                        onOpenResolution = { showResolutionDialog = true },
-                                        onEnterPip = { PipHelper.enterPipMode(activity, isPlaying = true) },
-                                        onOpenSlide = {
-                                            lectureSlideUrls.firstOrNull()?.let { url ->
-                                                try {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                                } catch (_: Exception) {}
-                                            }
-                                        }
-                                    )
-                                }
-
-                                // Bottom Edge Bar with Fullscreen/Rotate toggle (Auto-hides after 3.5s)
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = showPlayerControls,
-                                    enter = fadeIn() + slideInVertically { it },
-                                    exit = fadeOut() + slideOutVertically { it },
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                ) {
-                                    VideoBottomEdgeBar(
-                                        isLandscape = false,
-                                        isHandRaised = isHandRaised,
-                                        hasActivePoll = activePoll?.isLive == true,
-                                        showChatDrawer = false,
-                                        onToggleHandRaise = { wsManager.toggleHandRaise(studentName) },
-                                        onOpenPolls = {
-                                            wsManager.requestPollList("started")
-                                            wsManager.requestPollList("stopped")
-                                            val currActive = activePoll
-                                            if (currActive != null && currActive.isLive) {
-                                                wsManager.loadFullPollDetails(currActive.pollId)
-                                                selectedPollIdForQuestion = currActive.pollId
-                                            } else {
-                                                showPreviousPollsDialog = true
-                                            }
-                                        },
-                                        onToggleChatDrawer = {},
-                                        onToggleOrientation = { toggleScreenOrientation() }
-                                    )
-                                }
-
-                                // Non-intrusive Poll notification pill
-                                val activePollItem = activePoll
-                                if (activePollItem != null && activePollItem.isLive && selectedPollIdForQuestion == null) {
-                                    LivePollFloatingNotification(
-                                        activePoll = activePollItem,
-                                        onOpenPoll = {
-                                            wsManager.loadFullPollDetails(it.pollId)
-                                            selectedPollIdForQuestion = it.pollId
-                                        },
-                                        modifier = Modifier
-                                            .align(Alignment.BottomStart)
-                                            .padding(start = 10.dp, bottom = 42.dp)
-                                    )
-                                }
-                            }
-
-                            // Bottom Live Class Info, Action Bar & Real-time Chat
-                            LiveChatSection(
-                                lessonTitle = effectiveLessonTitle,
-                                subjectName = subjectName,
-                                teacherName = roomTeacherName,
-                                isCompactLandscape = false,
-                                isConnected = isConnected,
-                                isChatEnabled = isChatEnabled,
-                                isHandRaised = isHandRaised,
-                                activePoll = activePoll,
-                                selectedRole = selectedRole,
-                                onSelectRole = { selectedRole = it },
-                                chatMessages = chatMessages,
-                                chatListState = chatListState,
-                                chatMessageInput = chatMessageInput,
-                                onChatInputChanged = { chatMessageInput = it },
-                                quickReplyChips = quickReplyChips,
-                                onSendMessage = { sendUserChat(it) },
-                                onToggleHandRaise = { wsManager.toggleHandRaise(studentName) },
-                                onOpenPolls = {
-                                    wsManager.requestPollList("started")
-                                    wsManager.requestPollList("stopped")
-                                    val currActive = activePoll
-                                    if (currActive != null && currActive.isLive) {
-                                        wsManager.loadFullPollDetails(currActive.pollId)
-                                        selectedPollIdForQuestion = currActive.pollId
-                                    } else {
-                                        showPreviousPollsDialog = true
-                                    }
-                                },
-                                onCloseDrawer = null,
+                        // ========================================================
+                        // BELOW VIDEO: CLEAN SHIKHO UI (Portrait Mode)
+                        // ========================================================
+                        if (!isLandscape) {
+                            Column(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
-                            )
+                                    .background(Color(0xFF0F172A))
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                // 1. Title
+                                Text(
+                                    text = effectiveLessonTitle,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                // 2. Subtitle (Subject)
+                                Text(
+                                    text = subjectName,
+                                    fontSize = 12.5.sp,
+                                    color = Color(0xFF38BDF8),
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
+                                )
+
+                                HorizontalDivider(color = Color(0xFF334155))
+
+                                // 3. Live Chat Header Row with Hand Raise, Poll and Connection status
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Chat,
+                                        contentDescription = null,
+                                        tint = Color(0xFF38BDF8),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "লাইভ চ্যাট",
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+
+                                    Spacer(modifier = Modifier.weight(1f))
+
+                                    // Hand Raise button (হাত তুলুন / হাত নামান)
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isHandRaised) Color(0xFFF59E0B) else Color(0xFF1E293B),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isHandRaised) Color(0xFFFBBF24) else Color(0xFF334155)
+                                        ),
+                                        modifier = Modifier
+                                            .padding(end = 6.dp)
+                                            .clickable { wsManager.toggleHandRaise(studentName) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.FrontHand,
+                                                contentDescription = "Hand Raise",
+                                                tint = if (isHandRaised) Color(0xFF090D16) else Color(0xFFFBBF24),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = if (isHandRaised) "হাত নামান" else "হাত তুলুন",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isHandRaised) Color(0xFF090D16) else Color.White
+                                            )
+                                        }
+                                    }
+
+                                    // Poll / Quiz button
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (activePoll?.isLive == true) Color(0xFFDC2626) else Color(0xFF1E293B),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (activePoll?.isLive == true) Color(0xFFEF4444) else Color(0xFF334155)
+                                        ),
+                                        modifier = Modifier
+                                            .padding(end = 6.dp)
+                                            .clickable {
+                                                wsManager.requestPollList("started")
+                                                wsManager.requestPollList("stopped")
+                                                val currActive = activePoll
+                                                if (currActive != null && currActive.isLive) {
+                                                    wsManager.loadFullPollDetails(currActive.pollId)
+                                                    selectedPollIdForQuestion = currActive.pollId
+                                                } else {
+                                                    showPreviousPollsDialog = true
+                                                }
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Quiz,
+                                                contentDescription = null,
+                                                tint = if (activePoll?.isLive == true) Color.White else Color(0xFFF59E0B),
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = if (activePoll?.isLive == true) "🔴 পোল চলছে" else "পোল/কুইজ",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+
+                                    // Real-time connection status
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (isConnected) Color(0xFF065F46) else Color(0xFF334155)
+                                    ) {
+                                        Text(
+                                            text = if (isConnected) "🟢 কানেক্টেড" else "🔴 অফলাইন",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isConnected) Color(0xFF34D399) else Color(0xFF94A3B8),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
+                                // 4. Role selector chips: Teacher, Student, * All
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "রোল:",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White.copy(alpha = 0.7f)
+                                    )
+                                    val rolesList = listOf(
+                                        Triple("teacher", "Teacher", Icons.Default.School),
+                                        Triple("student", "Student", Icons.Default.Person),
+                                        Triple("all", "* All", Icons.Default.Public)
+                                    )
+                                    rolesList.forEach { (roleKey, roleLabel, roleIcon) ->
+                                        val isSelected = selectedRole == roleKey
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isSelected) Color(0xFF0284C7) else Color(0xFF1E293B),
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) Color(0xFF38BDF8) else Color(0xFF334155)
+                                            ),
+                                            modifier = Modifier.clickable { selectedRole = roleKey }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = roleIcon,
+                                                    contentDescription = null,
+                                                    tint = if (isSelected) Color.White else Color(0xFF94A3B8),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Text(
+                                                    text = roleLabel,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isSelected) Color.White else Color(0xFF94A3B8)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 5. Pinned Teacher Message Announcement Banner (if any)
+                                val pinnedTeacherMsg = chatMessages.lastOrNull { it.isTeacher && (it.isPinned || it.id.startsWith("pin_")) }
+                                if (pinnedTeacherMsg != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF0C2440),
+                                        border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Campaign,
+                                                contentDescription = "Pinned Announcement",
+                                                tint = Color(0xFF38BDF8),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(Modifier.width(6.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = "📌 শিক্ষকের পিন করা ঘোষণা (${pinnedTeacherMsg.senderName}):",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF38BDF8)
+                                                )
+                                                Text(
+                                                    text = pinnedTeacherMsg.message,
+                                                    fontSize = 11.5.sp,
+                                                    color = Color.White,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 6. Chat messages list
+                                LazyColumn(
+                                    state = chatListState,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    reverseLayout = false
+                                ) {
+                                    if (chatMessages.isEmpty()) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 32.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "কোনো চ্যাট বার্তা নেই",
+                                                    fontSize = 12.sp,
+                                                    color = Color.White.copy(alpha = 0.4f)
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        items(chatMessages, key = { it.id }) { item ->
+                                            ChatMessageCard(
+                                                item = item,
+                                                myName = studentName,
+                                                onRetry = { retryChatMessage(item.id) }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // 7. Quick Comment Chips
+                                if (isChatEnabled) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 6.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        quickReplyChips.forEach { chipText ->
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = Color(0xFF1E293B),
+                                                border = BorderStroke(0.7.dp, Color(0xFF334155)),
+                                                modifier = Modifier.clickable { sendUserChat(chipText) }
+                                            ) {
+                                                Text(
+                                                    text = chipText,
+                                                    fontSize = 10.5.sp,
+                                                    color = Color(0xFFE2E8F0),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 8. Chat Input or Disabled banner
+                                if (!isChatEnabled) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0xFF1E293B),
+                                        border = BorderStroke(1.dp, Color(0xFF334155)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = null,
+                                                tint = Color(0xFFF59E0B),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "শিক্ষক এই মুহূর্তে লাইভ চ্যাট বন্ধ রেখেছেন",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = Color(0xFFE2E8F0)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = chatMessageInput,
+                                            onValueChange = { chatMessageInput = it },
+                                            placeholder = {
+                                                Text(
+                                                    "প্রশ্ন বা বার্তা লিখুন...",
+                                                    fontSize = 12.sp,
+                                                    color = Color.White.copy(alpha = 0.5f)
+                                                )
+                                            },
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(20.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF38BDF8),
+                                                unfocusedBorderColor = Color(0xFF334155),
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedContainerColor = Color(0xFF1E293B),
+                                                unfocusedContainerColor = Color(0xFF1E293B)
+                                            ),
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                            keyboardActions = KeyboardActions(onSend = {
+                                                if (chatMessageInput.isNotBlank()) {
+                                                    sendUserChat(chatMessageInput)
+                                                }
+                                            }),
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        IconButton(
+                                            onClick = {
+                                                if (chatMessageInput.isNotBlank()) {
+                                                    sendUserChat(chatMessageInput)
+                                                }
+                                            },
+                                            enabled = chatMessageInput.isNotBlank(),
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (chatMessageInput.isNotBlank()) Color(0xFF0284C7) else Color(0xFF1E293B)
+                                                )
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                                contentDescription = "Send",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // ==========================================
-                // 4. ERROR STATE
-                // ==========================================
                 is LiveClassState.Error -> {
                     Column(
                         modifier = Modifier
@@ -784,25 +1360,24 @@ fun LiveClassPage(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(68.dp)
+                                .size(64.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFDC2626).copy(alpha = 0.15f))
-                                .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f), CircleShape),
+                                .background(Color(0xFFFEE2E2)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ErrorOutline,
                                 contentDescription = null,
-                                tint = Color(0xFFEF4444),
-                                modifier = Modifier.size(34.dp)
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(32.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
                             text = "লাইভ ক্লাসে কানেক্ট করা সম্ভব হয়নি",
-                            fontSize = 18.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             textAlign = TextAlign.Center
@@ -812,13 +1387,13 @@ fun LiveClassPage(
 
                         Text(
                             text = state.message,
-                            fontSize = 13.5.sp,
-                            color = Color(0xFF94A3B8),
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center,
-                            lineHeight = 19.sp
+                            lineHeight = 18.sp
                         )
 
-                        Spacer(modifier = Modifier.height(26.dp))
+                        Spacer(modifier = Modifier.height(24.dp))
 
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedButton(
@@ -826,25 +1401,19 @@ fun LiveClassPage(
                                     wsManager.disconnect()
                                     onBack()
                                 },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                                border = BorderStroke(1.dp, Color(0xFF334155))
+                                border = BorderStroke(1.dp, Color(0xFF475569))
                             ) {
                                 Text("ফিরে যান")
                             }
 
                             Button(
                                 onClick = { startLiveClassConnection() },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("পুনরায় চেষ্টা করুন", fontWeight = FontWeight.Bold)
+                                Text("পুনরায় চেষ্টা করুন")
                             }
                         }
                     }
@@ -853,27 +1422,27 @@ fun LiveClassPage(
         }
     }
 
-    // Resolution Switcher Dialog
+    // Video Resolution Picker Dialog
     if (showResolutionDialog) {
         AlertDialog(
             onDismissRequest = { showResolutionDialog = false },
-            containerColor = Color(0xFF131B2E),
+            containerColor = Color(0xFF1E293B),
             titleContentColor = Color.White,
             textContentColor = Color.White,
             title = {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.HighQuality,
+                        imageVector = Icons.Default.Tune,
                         contentDescription = null,
                         tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "ভিডিও রেজুলেশন নির্বাচন করুন",
-                        fontSize = 16.5.sp,
+                        text = "ভিডিও রেজুলেশন (Resolution)",
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -886,11 +1455,11 @@ fun LiveClassPage(
                     LIVE_RESOLUTIONS.forEach { option ->
                         val isSelected = selectedResolution.equals(option.id, ignoreCase = true)
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) Color(0xFF0284C7).copy(alpha = 0.22f) else Color(0xFF0B1120),
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF0284C7).copy(alpha = 0.25f) else Color(0xFF0F172A),
                             border = BorderStroke(
                                 1.dp,
-                                if (isSelected) Color(0xFF38BDF8) else Color(0xFF1E293B)
+                                if (isSelected) Color(0xFF38BDF8) else Color(0xFF334155)
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -902,35 +1471,20 @@ fun LiveClassPage(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (isSelected) Color(0xFF38BDF8) else Color(0xFF1E293B)
-                                ) {
-                                    Text(
-                                        text = option.badge,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (isSelected) Color(0xFF090D16) else Color(0xFF94A3B8),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = option.title,
-                                        fontSize = 14.sp,
+                                        fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isSelected) Color(0xFF38BDF8) else Color.White
                                     )
                                     Text(
                                         text = option.subtitle,
                                         fontSize = 11.sp,
-                                        color = Color(0xFF94A3B8)
+                                        color = Color.White.copy(alpha = 0.6f)
                                     )
                                 }
                                 if (isSelected) {
@@ -948,13 +1502,13 @@ fun LiveClassPage(
             },
             confirmButton = {
                 TextButton(onClick = { showResolutionDialog = false }) {
-                    Text("বন্ধ করুন", color = Color(0xFF94A3B8))
+                    Text("বাতিল", color = Color(0xFF94A3B8))
                 }
             }
         )
     }
 
-    // 1. Real Poll Question Dialog
+    // 1. Real Poll Question Dialog (Screenshots 2, 4, 5)
     currentQuestionDialogPoll?.let { poll ->
         LivePollQuestionDialog(
             poll = poll,
@@ -972,7 +1526,7 @@ fun LiveClassPage(
         )
     }
 
-    // 2. Real Poll Participation Summary & Leaderboard Dialog
+    // 2. Real Poll Participation Summary & Leaderboard Dialog (Screenshot 1)
     currentResultDialogPoll?.let { poll ->
         LivePollResultDialog(
             poll = poll,
@@ -983,7 +1537,7 @@ fun LiveClassPage(
         )
     }
 
-    // 3. Real Previous Polls/Quizzes Dialog
+    // 3. Real Previous Polls/Quizzes Dialog (Screenshot 3)
     if (showPreviousPollsDialog) {
         PreviousPollsDialog(
             polls = previousPolls,
@@ -997,782 +1551,244 @@ fun LiveClassPage(
     }
 }
 
-/**
- * Sleek Top Edge Control Bar over the video player.
- * Never touches the middle of the video screen.
- */
 @Composable
-private fun VideoTopControlBar(
-    isLiveOnGoing: Boolean,
-    viewerCount: Int,
-    lessonTitle: String,
-    isLandscape: Boolean,
-    selectedResolution: String,
-    hasSlides: Boolean,
-    onBackClick: () -> Unit,
-    onOpenResolution: () -> Unit,
-    onEnterPip: () -> Unit,
-    onOpenSlide: () -> Unit
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "live_dot")
-    val liveDotAlpha by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.25f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent)
-                )
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBackClick,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Pulsing LIVE Badge
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = if (isLiveOnGoing) Color(0xFFDC2626) else Color(0xFF059669)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                ) {
-                    if (isLiveOnGoing) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = liveDotAlpha))
-                        )
-                    }
-                    Text(
-                        text = if (isLiveOnGoing) "LIVE" else "RECORDED",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // Viewer Count Pill
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color.Black.copy(alpha = 0.5f),
-                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Visibility,
-                        contentDescription = null,
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = "${viewerCount.coerceAtLeast(1)}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
-
-            if (isLandscape && lessonTitle.isNotBlank()) {
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = lessonTitle,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.9f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
-
-            // Slide PDF Button if available
-            if (hasSlides) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.5f),
-                    border = BorderStroke(0.6.dp, Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .padding(end = 6.dp)
-                        .clickable { onOpenSlide() }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Description,
-                            contentDescription = "Slides",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "স্লাইড",
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-
-            // Resolution Switcher Pill
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color.Black.copy(alpha = 0.5f),
-                border = BorderStroke(0.6.dp, Color(0xFF38BDF8).copy(alpha = 0.5f)),
-                modifier = Modifier.clickable { onOpenResolution() }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Quality",
-                        tint = Color(0xFF38BDF8),
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = if (selectedResolution.equals("auto", true)) "Auto" else selectedResolution.uppercase(),
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // Picture-in-Picture Button
-            IconButton(
-                onClick = onEnterPip,
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f))
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PictureInPictureAlt,
-                    contentDescription = "PiP",
-                    tint = Color.White,
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Sleek Bottom Edge Bar on the video player for quick Fullscreen/Rotation toggle,
- * Hand Raise, Poll access, and Landscape Chat Drawer toggle.
- */
-@Composable
-private fun VideoBottomEdgeBar(
-    isLandscape: Boolean,
-    isHandRaised: Boolean,
-    hasActivePoll: Boolean,
-    showChatDrawer: Boolean,
-    onToggleHandRaise: () -> Unit,
-    onOpenPolls: () -> Unit,
-    onToggleChatDrawer: () -> Unit,
-    onToggleOrientation: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f))
-                )
-            )
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
-        ) {
-            if (isLandscape) {
-                // Hand Raise button inside landscape bar
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (isHandRaised) Color(0xFFF59E0B) else Color.Black.copy(alpha = 0.55f),
-                    border = BorderStroke(0.8.dp, if (isHandRaised) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .clickable { onToggleHandRaise() }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FrontHand,
-                            contentDescription = "Raise Hand",
-                            tint = if (isHandRaised) Color(0xFF090D16) else Color(0xFFFBBF24),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = if (isHandRaised) "হাত নামান" else "হাত তুলুন",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isHandRaised) Color(0xFF090D16) else Color.White
-                        )
-                    }
-                }
-
-                // Poll/Quiz button inside landscape bar
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (hasActivePoll) Color(0xFFDC2626) else Color.Black.copy(alpha = 0.55f),
-                    border = BorderStroke(0.8.dp, if (hasActivePoll) Color(0xFFEF4444) else Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .clickable { onOpenPolls() }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Quiz,
-                            contentDescription = "Poll",
-                            tint = if (hasActivePoll) Color.White else Color(0xFF38BDF8),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = if (hasActivePoll) "LIVE পোল" else "পোল/কুইজ",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-
-                // Landscape Chat Drawer Toggle Button
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (showChatDrawer) Color(0xFF0284C7) else Color.Black.copy(alpha = 0.55f),
-                    border = BorderStroke(0.8.dp, if (showChatDrawer) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .padding(end = 8.dp)
-                        .clickable { onToggleChatDrawer() }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Chat,
-                            contentDescription = "Live Chat",
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = if (showChatDrawer) "চ্যাট লুকান" else "লাইভ চ্যাট",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-
-            // Fullscreen / Rotate Screen Button
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color.Black.copy(alpha = 0.55f),
-                border = BorderStroke(0.7.dp, Color.White.copy(alpha = 0.25f)),
-                modifier = Modifier.clickable { onToggleOrientation() }
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                        contentDescription = "Rotate / Fullscreen",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (isLandscape) "ছোট করুন" else "ফুলস্ক্রিন",
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Complete Interactive Section: Class Info, Hand Raise, Polls, Quick Chips & Real-time Chat.
- */
-@Composable
-private fun LiveChatSection(
-    lessonTitle: String,
-    subjectName: String,
-    teacherName: String,
-    isCompactLandscape: Boolean,
-    isConnected: Boolean,
-    isChatEnabled: Boolean,
-    isHandRaised: Boolean,
-    activePoll: LivePollItem?,
-    selectedRole: String,
-    onSelectRole: (String) -> Unit,
-    chatMessages: List<LiveChatMessage>,
-    chatListState: androidx.compose.foundation.lazy.LazyListState,
-    chatMessageInput: String,
-    onChatInputChanged: (String) -> Unit,
-    quickReplyChips: List<String>,
-    onSendMessage: (String) -> Unit,
-    onToggleHandRaise: () -> Unit,
-    onOpenPolls: () -> Unit,
-    onCloseDrawer: (() -> Unit)?,
+fun ChatMessageCard(
+    item: LiveChatMessage,
+    myName: String,
+    onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .background(Color(0xFF090D16))
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        if (!isCompactLandscape) {
-            // Class Header Card in Portrait Mode
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color(0xFF111827),
-                border = BorderStroke(1.dp, Color(0xFF1E293B)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = lessonTitle,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = subjectName,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF38BDF8),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                if (teacherName.isNotBlank()) {
-                                    Text(
-                                        text = "• $teacherName",
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF94A3B8),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
+    val isTeacherMsg = item.isTeacher || item.role == "teacher"
+    val isMyMsg = item.senderName.equals(myName, ignoreCase = true) || item.senderName == "আপনি"
 
-                        // Action Buttons: Real Hand Raise & Real Poll/Quiz
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Hand Raise Button (_handraise protocol)
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (isHandRaised) Color(0xFFF59E0B) else Color(0xFF1E293B),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isHandRaised) Color(0xFFFBBF24) else Color(0xFF334155)
-                                ),
-                                modifier = Modifier.clickable { onToggleHandRaise() }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.FrontHand,
-                                        contentDescription = "Raise Hand",
-                                        tint = if (isHandRaised) Color(0xFF090D16) else Color(0xFFFBBF24),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = if (isHandRaised) "হাত নামান" else "হাত তুলুন",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isHandRaised) Color(0xFF090D16) else Color.White
-                                    )
-                                }
-                            }
-
-                            // Poll / Quiz Button
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (activePoll?.isLive == true) Color(0xFFDC2626) else Color(0xFF1E293B),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (activePoll?.isLive == true) Color(0xFFEF4444) else Color(0xFF334155)
-                                ),
-                                modifier = Modifier.clickable { onOpenPolls() }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Quiz,
-                                        contentDescription = "Poll/Quiz",
-                                        tint = if (activePoll?.isLive == true) Color.White else Color(0xFF38BDF8),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Text(
-                                        text = if (activePoll?.isLive == true) "🔴 পোল চলছে" else "পোল/কুইজ",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // Chat Section Header & Role Filter
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Forum,
-                contentDescription = null,
-                tint = Color(0xFF38BDF8),
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "লাইভ কমেন্ট ও প্রশ্নোত্তর",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Teacher vs All target selector
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val targets = listOf(
-                    "teacher" to "শিক্ষককে",
-                    "all" to "সবাইকে"
-                )
-                targets.forEach { (key, label) ->
-                    val isSelected = selectedRole == key
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) Color(0xFF0284C7) else Color(0xFF111827),
-                        border = BorderStroke(
-                            0.8.dp,
-                            if (isSelected) Color(0xFF38BDF8) else Color(0xFF1E293B)
-                        ),
-                        modifier = Modifier.clickable { onSelectRole(key) }
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) Color.White else Color(0xFF94A3B8),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-                }
-            }
-
-            if (onCloseDrawer != null) {
-                Spacer(modifier = Modifier.width(6.dp))
-                IconButton(
-                    onClick = onCloseDrawer,
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close Chat",
-                        tint = Color(0xFF94A3B8),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
-
-        // Chat Messages List
+    if (isTeacherMsg) {
+        // ==========================================
+        // TEACHER MESSAGE: GLOWING, HIGH-CONTRAST CARD
+        // ==========================================
         Surface(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            color = Color(0xFF0D1322),
-            border = BorderStroke(1.dp, Color(0xFF1E293B))
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF0C2440),
+            border = BorderStroke(1.2.dp, Color(0xFF38BDF8)),
+            modifier = modifier.fillMaxWidth()
         ) {
-            if (chatMessages.isEmpty()) {
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                // Left Accent Stripe in Cyan
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .background(Color(0xFF38BDF8))
+                )
+
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                        .weight(1f)
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.ChatBubbleOutline,
-                        contentDescription = null,
-                        tint = Color(0xFF475569),
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    // Header Row
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Official Teacher Badge
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF0284C7)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "শিক্ষক (Teacher)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = item.senderName,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF38BDF8)
+                        )
+
+                        Text(
+                            text = "• ${item.timestamp}",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.55f)
+                        )
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Verified Announcement",
+                            tint = Color(0xFFFBBF24),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Message Body
                     Text(
-                        text = "ক্লাস চলাকালীন যেকোনো প্রশ্ন বা মতামত এখানে লিখুন",
-                        fontSize = 12.sp,
-                        color = Color(0xFF64748B),
-                        textAlign = TextAlign.Center
+                        text = item.message,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White,
+                        lineHeight = 18.sp
                     )
                 }
-            } else {
-                LazyColumn(
-                    state = chatListState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            }
+        }
+    } else {
+        // ==========================================
+        // STUDENT MESSAGE (WITH CLEAR DELIVERY STATUS)
+        // ==========================================
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = if (isMyMsg) Color(0xFF1E293B) else Color(0xFF1E293B).copy(alpha = 0.6f),
+            border = BorderStroke(
+                if (isMyMsg) 1.dp else 0.5.dp,
+                if (isMyMsg) Color(0xFF0284C7).copy(alpha = 0.7f) else Color(0xFF334155)
+            ),
+            modifier = modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    items(chatMessages, key = { it.id }) { item ->
-                        val isTeacherMsg = item.isTeacher
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isTeacherMsg) Color(0xFF1E293B) else Color(0xFF131C31),
-                            border = BorderStroke(
-                                0.8.dp,
-                                if (isTeacherMsg) Color(0xFF38BDF8).copy(alpha = 0.6f) else Color(0xFF1E293B)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    val (badgeLabel, badgeBg) = if (isMyMsg) {
+                        Pair("আপনি", Color(0xFF0284C7))
+                    } else if (item.role == "all" || item.role == "*") {
+                        Pair("* All", Color(0xFF4F46E5))
+                    } else {
+                        Pair("Student", Color(0xFF059669))
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = badgeBg
+                    ) {
+                        Text(
+                            text = badgeLabel,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+
+                    Text(
+                        text = item.senderName,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isMyMsg) Color(0xFF38BDF8) else Color(0xFFF1F5F9)
+                    )
+
+                    Text(
+                        text = "• ${item.timestamp}",
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // DELIVERY STATUS INDICATOR (for user's own sent messages)
+                    if (isMyMsg) {
+                        when (item.status) {
+                            ChatDeliveryStatus.SENDING -> {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = if (isTeacherMsg) Color(0xFF0284C7) else Color(0xFF059669)
-                                    ) {
-                                        Text(
-                                            text = if (isTeacherMsg) "শিক্ষক" else "শিক্ষার্থী",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
-                                    }
-
-                                    Text(
-                                        text = item.senderName,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isTeacherMsg) Color(0xFF38BDF8) else Color(0xFFE2E8F0),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false)
+                                    CircularProgressIndicator(
+                                        color = Color(0xFF38BDF8),
+                                        strokeWidth = 1.5.dp,
+                                        modifier = Modifier.size(11.dp)
                                     )
-
                                     Text(
-                                        text = "• ${item.timestamp}",
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF64748B)
+                                        text = "পাঠানো হচ্ছে...",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF38BDF8)
                                     )
                                 }
-
-                                Spacer(modifier = Modifier.height(3.dp))
-
-                                Text(
-                                    text = item.message,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFFF1F5F9),
-                                    lineHeight = 18.sp
-                                )
+                            }
+                            ChatDeliveryStatus.SENT -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DoneAll,
+                                        contentDescription = "Delivered",
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = "গেছে",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF10B981)
+                                    )
+                                }
+                            }
+                            ChatDeliveryStatus.FAILED -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = "Failed",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = "ব্যর্থ",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEF4444)
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFFEF4444).copy(alpha = 0.2f),
+                                        border = BorderStroke(0.7.dp, Color(0xFFEF4444)),
+                                        modifier = Modifier.clickable { onRetry() }
+                                    ) {
+                                        Text(
+                                            text = "পুনরায় পাঠান",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFEF4444),
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
-        // Quick Comment Chips Row (Only when chat is enabled)
-        if (isChatEnabled && !isCompactLandscape) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                quickReplyChips.take(3).forEach { chipText ->
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF111827),
-                        border = BorderStroke(0.8.dp, Color(0xFF1E293B)),
-                        modifier = Modifier.clickable { onSendMessage(chipText) }
-                    ) {
-                        Text(
-                            text = chipText,
-                            fontSize = 10.5.sp,
-                            color = Color(0xFFCBD5E1),
-                            maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Chat Input Row or Teacher Disabled Banner
-        if (!isChatEnabled) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF1E293B),
-                border = BorderStroke(1.dp, Color(0xFF334155)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFFF59E0B),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "শিক্ষক এই মুহূর্তে লাইভ চ্যাট বন্ধ রেখেছেন",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFFE2E8F0)
-                    )
-                }
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = chatMessageInput,
-                    onValueChange = onChatInputChanged,
-                    placeholder = {
-                        Text(
-                            text = if (selectedRole == "teacher") "শিক্ষককে প্রশ্ন করুন..." else "কমেন্ট লিখুন...",
-                            fontSize = 12.5.sp,
-                            color = Color(0xFF64748B)
-                        )
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(22.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0xFF1E293B),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color(0xFF111827),
-                        unfocusedContainerColor = Color(0xFF111827)
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                    keyboardActions = KeyboardActions(onSend = {
-                        onSendMessage(chatMessageInput)
-                    }),
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = item.message,
+                    fontSize = 12.5.sp,
+                    color = Color.White.copy(alpha = 0.9f)
                 )
-
-                IconButton(
-                    onClick = { onSendMessage(chatMessageInput) },
-                    enabled = chatMessageInput.isNotBlank(),
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (chatMessageInput.isNotBlank()) Color(0xFF0284C7) else Color(0xFF1E293B)
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
-                        tint = Color.White,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
             }
         }
     }

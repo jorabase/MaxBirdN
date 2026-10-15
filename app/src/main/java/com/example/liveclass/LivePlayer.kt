@@ -240,7 +240,7 @@ fun LivePlayer(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
-                    useController = !isPipActive
+                    useController = false
                     setShowBuffering(if (isPipActive) PlayerView.SHOW_BUFFERING_NEVER else PlayerView.SHOW_BUFFERING_ALWAYS)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -250,7 +250,7 @@ fun LivePlayer(
             },
             update = { playerView ->
                 playerView.player = exoPlayer
-                playerView.useController = !isPipActive
+                playerView.useController = false
             },
             modifier = Modifier.fillMaxSize()
         )
