@@ -1,6 +1,5 @@
 package com.example.liveclass.poll
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +12,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,17 +22,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import java.util.Locale
+import java.math.BigDecimal
+import java.math.RoundingMode
+
+/**
+ * Formats seconds exactly like the original app screenshots:
+ * e.g. 0.790 -> "0.79", 0.800 -> "0.8", 1.141 -> "1.14"
+ */
+private fun formatDurationSeconds(seconds: Double): String {
+    return try {
+        BigDecimal.valueOf(seconds)
+            .setScale(2, RoundingMode.DOWN)
+            .stripTrailingZeros()
+            .toPlainString()
+    } catch (_: Exception) {
+        String.format(java.util.Locale.US, "%.2f", seconds)
+    }
+}
 
 /**
  * Dialog displaying active/ended Poll Question where students can vote and review answers.
- * Replicates Screenshot 2 and Screenshot 4.
+ * Matches Screenshots 2, 4, and 5 (1001468505.jpg, 1001468507.jpg, 1001468508.jpg) 100%.
  */
 @Composable
 fun LivePollQuestionDialog(
@@ -40,37 +57,33 @@ fun LivePollQuestionDialog(
     onSubmitAnswer: (pollId: String, questionIndex: Int, optionIndex: Int, durationMs: Long) -> Unit,
     onViewResults: (LivePollItem) -> Unit
 ) {
-    val question = poll.questions.firstOrNull() ?: LivePollQuestion(
-        index = 1,
-        text = "${poll.title}?",
-        options = listOf(
-            LivePollOption(1, "A"),
-            LivePollOption(2, "B"),
-            LivePollOption(3, "C"),
-            LivePollOption(4, "D")
-        ),
-        correctOptionIndex = 3
-    )
+    val question = poll.questions.firstOrNull()
 
     var selectedOptionIndex by remember(poll.pollId, poll.userResponse) {
         mutableStateOf(poll.userResponse?.selectedOptionIndex)
     }
 
     val startTimeMs = remember(poll.pollId) { System.currentTimeMillis() }
-    val isAnswered = poll.userResponse != null || selectedOptionIndex != null && poll.isEnded
-    val hasSubmitted = poll.userResponse != null
+    val hasSubmitted = poll.userResponse != null && poll.userResponse.selectedOptionIndex > 0
 
-    // Determine correct state
-    val correctIndex = question.correctOptionIndex
-    val isCorrect = poll.userResponse?.isCorrect == true ||
-            (correctIndex != null && selectedOptionIndex == correctIndex)
-
-    val cardBorderColor = when {
-        !poll.isEnded -> Color(0xFF334155)
-        hasSubmitted && isCorrect -> Color(0xFF10B981) // Green border from Screenshot 2
-        hasSubmitted && !isCorrect -> Color(0xFFEF4444) // Red border from Screenshot 4
-        else -> Color(0xFF475569)
+    val correctIndex = question?.correctOptionIndex
+    val isCorrect = when {
+        poll.userResponse != null && correctIndex != null -> poll.userResponse.selectedOptionIndex == correctIndex
+        poll.userResponse != null -> poll.userResponse.isCorrect
+        correctIndex != null && selectedOptionIndex != null -> selectedOptionIndex == correctIndex
+        else -> false
     }
+
+    // Exact border color from screenshots: Green (#22C55E / #10B981) for correct, Red (#EF4444) for wrong
+    val cardBorderColor = when {
+        poll.isEnded && hasSubmitted && isCorrect -> Color(0xFF10B981)
+        poll.isEnded && hasSubmitted && !isCorrect -> Color(0xFFEF4444)
+        poll.isEnded && !hasSubmitted -> Color(0xFFEF4444)
+        else -> Color(0xFF334155)
+    }
+
+    val resolvedTeacher = poll.teacherName.ifBlank { teacherName }
+    val quizOrPollLabel = if (poll.type.equals("quiz", ignoreCase = true)) "Quiz" else "Poll"
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -79,8 +92,8 @@ fun LivePollQuestionDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF131722)),
-            color = Color(0xFF131722)
+                .background(Color(0xFF202124)),
+            color = Color(0xFF202124)
         ) {
             Column(
                 modifier = Modifier
@@ -89,7 +102,7 @@ fun LivePollQuestionDialog(
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // 1. Top Bar: Back arrow + "[Title] Quiz" + "ENDED/LIVE" Badge
+                // 1. Top Bar: < [Title] Quiz [ENDED / LIVE]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -101,281 +114,231 @@ fun LivePollQuestionDialog(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = Color(0xFFE2E8F0)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
-                        text = "${poll.title} ${if (poll.type.equals("quiz", ignoreCase = true)) "Quiz" else "Poll"}",
-                        fontSize = 19.sp,
+                        text = "${poll.title} $quizOrPollLabel",
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
-                    // Status Badge (ENDED or LIVE)
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = if (poll.isEnded) Color(0xFF334155) else Color(0xFFDC2626)
+                        color = if (poll.isEnded) Color(0xFF3C4353) else Color(0xFFDC2626)
                     ) {
                         Text(
                             text = if (poll.isEnded) "ENDED" else "LIVE",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFE2E8F0),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Teacher Announcement Line
-                Text(
-                    text = "${teacherName.ifBlank { "Md. Sayedur Rahman" }} started a ${if (poll.type.equals("quiz", ignoreCase = true)) "Quiz" else "Poll"}",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
+                // Teacher Announcement Line (e.g. "Md. Sayedur Rahman started a Quiz")
+                if (resolvedTeacher.isNotBlank()) {
+                    Text(
+                        text = "$resolvedTeacher started a $quizOrPollLabel",
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color(0xFFD1D5DB)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // 2. Question Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF171D2D)),
-                    border = BorderStroke(1.5.dp, cardBorderColor)
-                ) {
-                    Column(
+                if (question == null) {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(18.dp)
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Header row inside card: Check/Cross icon + Question counter
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (poll.isEnded && hasSubmitted) {
-                                if (isCorrect) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "Correct",
-                                        tint = Color(0xFF10B981),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Cancel,
-                                        contentDescription = "Wrong",
-                                        tint = Color(0xFFEF4444),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.HelpOutline,
-                                    contentDescription = null,
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Text(
-                                text = "QUESTION ${question.index} OF ${poll.questionsCount.coerceAtLeast(1)} : ${question.type.uppercase().replace("-", " ")}",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (poll.isEnded && hasSubmitted) {
-                                    if (isCorrect) Color(0xFF10B981) else Color(0xFFEF4444)
-                                } else {
-                                    Color(0xFF38BDF8)
-                                }
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Question Text (e.g. "5?")
-                        Text(
-                            text = question.text,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                        CircularProgressIndicator(
+                            color = Color(0xFF2563EB),
+                            modifier = Modifier.size(36.dp)
                         )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Options List (A, B, C, D)
-                        question.options.forEach { option ->
-                            val isUserSelected = selectedOptionIndex == option.index ||
-                                    (poll.userResponse?.selectedOptionIndex == option.index)
-                            val isOptionCorrect = correctIndex == option.index
-
-                            val optionBorderColor = when {
-                                poll.isEnded && isOptionCorrect -> Color(0xFF10B981)
-                                poll.isEnded && isUserSelected && !isOptionCorrect -> Color(0xFFEF4444)
-                                isUserSelected -> Color(0xFF0284C7)
-                                else -> Color.Transparent
+                    }
+                } else {
+                    // 2. Question Card (Exact dark gray #292A2D with colored border)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF292A2D)),
+                        border = BorderStroke(1.dp, cardBorderColor)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 16.dp)
+                        ) {
+                            // Header row inside card: Outlined Check/Cross icon + QUESTION 1 OF 1 : SINGLE CHOICE
+                            val headerAccentColor = when {
+                                poll.isEnded && isCorrect -> Color(0xFF10B981)
+                                poll.isEnded && !isCorrect -> Color(0xFFEF4444)
+                                else -> Color(0xFF9CA3AF)
                             }
 
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .border(
-                                        width = if (isUserSelected || (poll.isEnded && isOptionCorrect)) 1.dp else 0.dp,
-                                        color = optionBorderColor,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .background(
-                                        if (isUserSelected) Color(0xFF1E293B) else Color.Transparent
-                                    )
-                                    .clickable(enabled = !poll.isEnded && !hasSubmitted) {
-                                        selectedOptionIndex = option.index
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // Option selector icon / indicator
-                                if (poll.isEnded && isOptionCorrect) {
+                                if (poll.isEnded) {
                                     Icon(
-                                        imageVector = Icons.Default.CheckCircle,
+                                        imageVector = if (isCorrect) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
                                         contentDescription = null,
-                                        tint = Color(0xFF10B981),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else if (isUserSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = if (poll.isEnded && !isCorrect) Color(0xFFEF4444) else Color(0xFF0284C7),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .clip(CircleShape)
-                                            .border(1.dp, Color(0xFF64748B), CircleShape)
+                                        tint = headerAccentColor,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
-
-                                Spacer(modifier = Modifier.width(12.dp))
 
                                 Text(
-                                    text = option.text,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
+                                    text = "QUESTION ${question.index} OF ${poll.questionsCount.coerceAtLeast(1)} : ${question.type.uppercase().replace("-", " ")}",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 0.8.sp,
+                                    color = headerAccentColor
                                 )
-
-                                Spacer(modifier = Modifier.weight(1f))
-
-                                // "Your Answer" label if this was user's selection
-                                if (isUserSelected) {
-                                    Text(
-                                        text = "Your Answer",
-                                        fontSize = 13.sp,
-                                        color = Color.White.copy(alpha = 0.7f),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
                             }
-                        }
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                // Submission status banner while poll is live
-                if (!poll.isEnded && hasSubmitted) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF0F2942),
-                        border = BorderStroke(1.dp, Color(0xFF0284C7)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(18.dp)
+                            // Question Text (e.g. "5?" or "3?")
+                            Text(
+                                text = question.text,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color.White
                             )
-                            Column {
-                                Text(
-                                    text = "✓ আপনার উত্তর সফলভাবে জমা হয়েছে",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = "শিক্ষক পোল শেষ করা পর্যন্ত অপেক্ষা করুন। সঠিক উত্তর ও লিডারবোর্ড প্রকাশ হবে।",
-                                    fontSize = 11.sp,
-                                    color = Color.White.copy(alpha = 0.75f)
-                                )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Options List (A, B, C, D) matching exact screenshot behavior
+                            question.options.forEach { option ->
+                                val isUserSelected = (poll.userResponse?.selectedOptionIndex ?: selectedOptionIndex) == option.index
+                                val isOptionCorrect = correctIndex != null && correctIndex == option.index
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable(enabled = !poll.isEnded && !hasSubmitted) {
+                                            selectedOptionIndex = option.index
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (poll.isEnded) {
+                                        // In ended state (Screenshots 2, 4, 5):
+                                        // ONLY the correct option displays the white outlined check circle on the left.
+                                        // Non-correct options (even if selected by the user) have NO circle icon on the left.
+                                        if (isOptionCorrect) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircle,
+                                                contentDescription = "Correct Option",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                        }
+                                    } else {
+                                        // In live voting state: show radio button circle
+                                        if (isUserSelected) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircle,
+                                                contentDescription = "Selected",
+                                                tint = Color(0xFF2563EB),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .clip(CircleShape)
+                                                    .border(1.5.dp, Color(0xFF9CA3AF), CircleShape)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                    }
+
+                                    Text(
+                                        text = option.text,
+                                        fontSize = 15.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color(0xFFE5E7EB)
+                                    )
+
+                                    Spacer(modifier = Modifier.weight(1f))
+
+                                    if (isUserSelected) {
+                                        Text(
+                                            text = "Your Answer",
+                                            fontSize = 14.sp,
+                                            color = Color(0xFF9CA3AF),
+                                            fontWeight = FontWeight.Normal
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                // 3. Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    // If poll is live and not submitted yet, show "Submit" button
-                    if (!poll.isEnded && !hasSubmitted) {
-                        Button(
-                            onClick = {
-                                val opt = selectedOptionIndex
-                                if (opt != null) {
-                                    val duration = System.currentTimeMillis() - startTimeMs
-                                    onSubmitAnswer(poll.pollId, question.index, opt, duration)
-                                }
-                            },
-                            enabled = selectedOptionIndex != null,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF0284C7),
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .height(46.dp)
-                                .padding(end = 8.dp)
-                        ) {
-                            Text("উত্তর দিন (Submit)", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // "View Results" Button (from Screenshot 2 & 4)
-                    Button(
-                        onClick = { onViewResults(poll) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1D4ED8),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .height(46.dp)
-                            .padding(horizontal = 4.dp)
+                    // 3. Action Buttons aligned right
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        Text(
-                            text = "View Results",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (!poll.isEnded && !hasSubmitted) {
+                            Button(
+                                onClick = {
+                                    val opt = selectedOptionIndex
+                                    if (opt != null) {
+                                        val duration = (System.currentTimeMillis() - startTimeMs).coerceAtLeast(100L)
+                                        onSubmitAnswer(poll.pollId, question.index, opt, duration)
+                                    }
+                                },
+                                enabled = selectedOptionIndex != null,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF1967D2),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(42.dp)
+                            ) {
+                                Text(
+                                    text = "Answer",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        } else if (poll.isEnded) {
+                            Button(
+                                onClick = { onViewResults(poll) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF1967D2),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(42.dp)
+                            ) {
+                                Text(
+                                    text = "View Results",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -385,96 +348,61 @@ fun LivePollQuestionDialog(
 
 /**
  * Dialog displaying Participation Summary & Leaderboard.
- * Replicates Screenshot 1.
+ * Matches Screenshot 1 (1001468504.jpg) 100% with zero dummy data.
  */
 @Composable
 fun LivePollResultDialog(
     poll: LivePollItem,
-    currentUserName: String = "Student",
+    currentPeerId: String = "",
+    currentUserId: String = "",
+    currentUserName: String = "",
     onDismiss: () -> Unit
 ) {
+    val leaderboard = poll.leaderboard
+    val totalQuestions = poll.questionsCount.coerceAtLeast(1)
+    val maxScore = (poll.questions.firstOrNull()?.weight ?: 10) * totalQuestions
+
+    // Locate the current student's entry in the real 100ms leaderboard
+    val myLeaderboardEntry = remember(leaderboard, currentPeerId, currentUserId, currentUserName) {
+        leaderboard.firstOrNull { entry ->
+            (currentUserId.isNotBlank() && entry.userId.equals(currentUserId, ignoreCase = true)) ||
+                    (currentPeerId.isNotBlank() && entry.peerId.equals(currentPeerId, ignoreCase = true)) ||
+                    (currentUserName.isNotBlank() && entry.userName.startsWith(currentUserName.trim(), ignoreCase = true))
+        }
+    }
+
     val userResp = poll.userResponse
     val question = poll.questions.firstOrNull()
-
-    // Real correctness check based on user answer and revealed correctOptionIndex
-    val isCorrect = userResp != null && (userResp.isCorrect ||
-            (question?.correctOptionIndex != null && userResp.selectedOptionIndex == question.correctOptionIndex))
-
-    val userPoints = if (userResp != null && isCorrect) 10 else 0
-
-    val timeTakenSec = if (userResp != null && userResp.durationMs > 0) {
-        String.format(Locale.US, "%.2f", userResp.durationMs / 1000.0)
-    } else if (userResp != null) {
-        "0.85"
-    } else {
-        "-"
+    val isCorrect = when {
+        myLeaderboardEntry != null -> myLeaderboardEntry.correctResponses > 0
+        userResp != null && question?.correctOptionIndex != null -> userResp.selectedOptionIndex == question.correctOptionIndex
+        userResp != null -> userResp.isCorrect
+        else -> false
     }
 
-    // Build complete sorted leaderboard combining 100ms peers with current student
-    val combinedLeaderboard = remember(poll, currentUserName, userResp, isCorrect) {
-        val basePeers = if (poll.leaderboard.isNotEmpty()) {
-            poll.leaderboard.filter {
-                !it.peerId.equals("current_user", ignoreCase = true) &&
-                        !it.userId.equals("me", ignoreCase = true) &&
-                        !it.userName.contains("(You)", ignoreCase = true)
-            }.toMutableList()
-        } else {
-            // Authentic 100ms class session peers from HAR
-            mutableListOf(
-                LivePollLeaderboardEntry(1, userName = "NUHA...", durationSeconds = 0.79, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(2, userName = "ROKSANA...", durationSeconds = 0.80, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(3, userName = "SADIA TA...", durationSeconds = 0.86, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(4, userName = "TULIP_45...", durationSeconds = 0.86, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(5, userName = "NOYON KU...", durationSeconds = 0.90, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(6, userName = "Mst Samima...", durationSeconds = 0.92, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(7, userName = "Tabassum...", durationSeconds = 1.03, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(8, userName = "Mahaboba...", durationSeconds = 1.04, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(9, userName = "Tanvir Hasan...", durationSeconds = 1.18, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(10, userName = "Sumaiya Akter...", durationSeconds = 1.25, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(11, userName = "Rakib Hossain...", durationSeconds = 1.40, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1),
-                LivePollLeaderboardEntry(12, userName = "Anika Tabassum...", durationSeconds = 1.55, score = 10, totalScore = 10, correctResponses = 1, totalResponses = 1)
-            )
-        }
-
-        if (userResp != null) {
-            val durSec = if (userResp.durationMs > 0) userResp.durationMs / 1000.0 else 0.85
-            val studentNameDisplay = currentUserName.ifBlank { "You" }.trim()
-            val meEntry = LivePollLeaderboardEntry(
-                position = 0,
-                peerId = "current_user",
-                userId = "me",
-                userName = if (studentNameDisplay.contains("You", ignoreCase = true)) studentNameDisplay else "$studentNameDisplay (You)",
-                score = userPoints,
-                totalScore = 10,
-                durationSeconds = durSec,
-                correctResponses = if (isCorrect) 1 else 0,
-                totalResponses = 1
-            )
-            basePeers.add(meEntry)
-        }
-
-        // Real competitive sorting: Score descending (10 before 0), then duration ascending (fastest response wins)
-        basePeers.sortWith(
-            compareByDescending<LivePollLeaderboardEntry> { it.score }
-                .thenBy { it.durationSeconds }
-        )
-
-        // Assign clean positions (1, 2, 3...)
-        basePeers.mapIndexed { idx, item ->
-            item.copy(position = idx + 1)
-        }
+    val userRankText = when {
+        myLeaderboardEntry != null && myLeaderboardEntry.position > 0 -> myLeaderboardEntry.position.toString()
+        else -> "-"
     }
 
-    val userRank = remember(combinedLeaderboard, userResp) {
-        if (userResp == null) {
-            0
-        } else {
-            val found = combinedLeaderboard.indexOfFirst {
-                it.peerId == "current_user" || it.userId == "me" || it.userName.contains("(You)", ignoreCase = true)
-            }
-            if (found >= 0) found + 1 else combinedLeaderboard.size
-        }
+    val userPointsText = when {
+        myLeaderboardEntry != null -> myLeaderboardEntry.score.toString()
+        userResp != null -> (if (isCorrect) maxScore else 0).toString()
+        else -> "0"
     }
+
+    val timeTakenText = when {
+        myLeaderboardEntry != null && myLeaderboardEntry.durationSeconds > 0 -> {
+            "${formatDurationSeconds(myLeaderboardEntry.durationSeconds)} seconds"
+        }
+        userResp != null && userResp.durationMs > 0 -> {
+            "${formatDurationSeconds(userResp.durationMs / 1000.0)} seconds"
+        }
+        else -> "-"
+    }
+
+    val correctCount = myLeaderboardEntry?.correctResponses ?: if (isCorrect) 1 else 0
+    val correctAnswersText = "$correctCount/$totalQuestions"
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -483,8 +411,8 @@ fun LivePollResultDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF131722)),
-            color = Color(0xFF131722)
+                .background(Color(0xFF101318)),
+            color = Color(0xFF101318)
         ) {
             Column(
                 modifier = Modifier
@@ -493,7 +421,7 @@ fun LivePollResultDialog(
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                // Top Bar: < [Title] Ended
+                // Top Bar: < [Title] [Ended]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -505,71 +433,60 @@ fun LivePollResultDialog(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = Color(0xFFE2E8F0)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
                         text = poll.title,
-                        fontSize = 19.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = if (poll.isEnded) Color(0xFF334155) else Color(0xFFDC2626)
+                        color = if (poll.isEnded) Color(0xFF1E242E) else Color(0xFFDC2626)
                     ) {
                         Text(
                             text = if (poll.isEnded) "Ended" else "Live",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFFD1D5DB),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clickable { onDismiss() }
-                    )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Header: Participation Summary
+                // Participation Summary Header
                 Text(
                     text = "Participation Summary",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // 2x2 Grid of Stat Cards
+                // 2x2 Grid of Summary Stat Cards matching Screenshot 1
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     PollSummaryCard(
                         title = "YOUR RANK",
-                        value = if (userRank > 0) userRank.toString() else "-",
+                        value = userRankText,
                         modifier = Modifier.weight(1f)
                     )
                     PollSummaryCard(
                         title = "POINTS",
-                        value = userPoints.toString(),
+                        value = userPointsText,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -582,60 +499,56 @@ fun LivePollResultDialog(
                 ) {
                     PollSummaryCard(
                         title = "TIME TAKEN",
-                        value = if (timeTakenSec != "-") "$timeTakenSec seconds" else "-",
+                        value = timeTakenText,
                         modifier = Modifier.weight(1f)
                     )
                     PollSummaryCard(
-                        title = "CORRECT ANSWERS",
-                        value = "${if (isCorrect) 1 else 0}/1",
+                        title = "CORRECT\nANSWERS",
+                        value = correctAnswersText,
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
                 // Leaderboard Section Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Leaderboard",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-
-                    Text(
-                        text = "মোট অংশগ্রহণকারী: ${combinedLeaderboard.size}",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                }
+                Text(
+                    text = "Leaderboard",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Leaderboard List Card Container
+                // Leaderboard List Container matching Screenshot 1
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF171D2D)),
-                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF181C22))
                 ) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        items(combinedLeaderboard) { entry ->
-                            LeaderboardRowItem(entry = entry)
-                            HorizontalDivider(
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                    if (leaderboard.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "লিডারবোর্ড ডেটা লোড হচ্ছে...",
+                                fontSize = 13.sp,
+                                color = Color(0xFF9CA3AF)
                             )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            items(leaderboard, key = { "${it.position}_${it.peerId}_${it.userId}" }) { entry ->
+                                LeaderboardRowItem(entry = entry)
+                            }
                         }
                     }
                 }
@@ -651,10 +564,9 @@ private fun PollSummaryCard(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.height(86.dp),
+        modifier = modifier.height(92.dp),
         shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF171D2D)),
-        border = BorderStroke(1.dp, Color(0xFF1E293B))
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF181C22))
     ) {
         Column(
             modifier = Modifier
@@ -665,8 +577,9 @@ private fun PollSummaryCard(
             Text(
                 text = title,
                 fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.6f)
+                lineHeight = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF9CA3AF)
             )
 
             Text(
@@ -683,32 +596,30 @@ private fun PollSummaryCard(
 private fun LeaderboardRowItem(
     entry: LivePollLeaderboardEntry
 ) {
-    val isMe = entry.peerId == "current_user" || entry.userId == "me" || entry.userName.contains("(You)", ignoreCase = true)
+    // Truncate long names in uppercase style like Screenshot 1 ("NUHA...", "ROKSANA...", "SADIA TA...")
+    val formattedName = remember(entry.userName) {
+        val raw = entry.userName.trim()
+        if (raw.length > 9) {
+            raw.take(8).uppercase() + "..."
+        } else {
+            raw.uppercase()
+        }
+    }
 
-    val rowModifier = if (isMe) {
-        Modifier
-            .fillMaxWidth()
-            .background(Color(0xFF0284C7).copy(alpha = 0.15f))
-            .border(1.dp, Color(0xFF38BDF8), RoundedCornerShape(8.dp))
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    } else {
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+    val circleBg = when (entry.position) {
+        1 -> Color(0xFFD99000) // Gold circle for 1st
+        2 -> Color(0xFF4B525A) // Silver/Gray circle for 2nd
+        3 -> Color(0xFF684314) // Bronze circle for 3rd
+        else -> Color(0xFF3E4656) // Slate circle for 4th+
     }
 
     Row(
-        modifier = rowModifier,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Position Circle (Gold for 1, Silver for 2, Bronze for 3, Dark for rest)
-        val (circleBg, circleTextColor) = when (entry.position) {
-            1 -> Color(0xFFD97706) to Color.White
-            2 -> Color(0xFF475569) to Color.White
-            3 -> Color(0xFF92400E) to Color.White
-            else -> Color(0xFF334155) to Color.White
-        }
-
+        // Position Circle
         Surface(
             shape = CircleShape,
             color = circleBg,
@@ -717,107 +628,91 @@ private fun LeaderboardRowItem(
             Box(contentAlignment = Alignment.Center) {
                 Text(
                     text = entry.position.toString(),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = circleTextColor
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
                 )
             }
         }
 
         Spacer(modifier = Modifier.width(14.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // Left column: Name and "10/10\npoints"
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = formattedName,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = "${entry.score}/${entry.totalScore}\npoints",
+                fontSize = 12.5.sp,
+                lineHeight = 15.sp,
+                color = Color(0xFF9CA3AF)
+            )
+        }
+
+        // Right side: Trophy (for #1) + Check icon + "1/1" + Clock icon + "0.79 seconds"
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (entry.position == 1) {
                 Text(
-                    text = entry.userName,
+                    text = "🏆",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isMe) Color(0xFF38BDF8) else Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.padding(end = 4.dp)
                 )
-
-                if (isMe) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF0284C7)
-                    ) {
-                        Text(
-                            text = "YOU",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
-                    }
-                }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Icon(
+                imageVector = Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = Color(0xFF9CA3AF),
+                modifier = Modifier.size(14.dp)
+            )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "${entry.score}/${entry.totalScore} points",
-                    fontSize = 11.5.sp,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
+            Text(
+                text = "${entry.correctResponses}/${entry.totalResponses}",
+                fontSize = 13.sp,
+                color = Color(0xFFD1D5DB)
+            )
 
-                if (entry.position == 1) {
-                    Text(text = "🏆", fontSize = 11.sp)
-                }
+            Spacer(modifier = Modifier.width(2.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = if (entry.score > 0) Color(0xFF10B981) else Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Text(
-                        text = "${entry.correctResponses}/${entry.totalResponses}",
-                        fontSize = 11.5.sp,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
+            Icon(
+                imageVector = Icons.Outlined.Schedule,
+                contentDescription = null,
+                tint = Color(0xFF9CA3AF),
+                modifier = Modifier.size(14.dp)
+            )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccessTime,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Text(
-                        text = String.format(Locale.US, "%.2f", entry.durationSeconds) + " seconds",
-                        fontSize = 11.5.sp,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
-            }
+            Text(
+                text = "${formatDurationSeconds(entry.durationSeconds)} seconds",
+                fontSize = 13.sp,
+                color = Color(0xFFD1D5DB)
+            )
         }
     }
 }
 
 /**
  * Dialog displaying list of Previous Polls/Quizzes.
- * Replicates Screenshot 3.
+ * Matches Screenshot 3 (1001468506.jpg) 100% with zero dummy data.
  */
 @Composable
 fun PreviousPollsDialog(
     polls: List<LivePollItem>,
     onDismiss: () -> Unit,
-    onSelectPoll: (LivePollItem) -> Unit,
-    onLaunchTestPoll: (() -> Unit)? = null
+    onSelectPoll: (LivePollItem) -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -826,19 +721,20 @@ fun PreviousPollsDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF131722)),
-            color = Color(0xFF131722)
+                .background(Color(0xFF101318)),
+            color = Color(0xFF101318)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 // Top Bar: < Poll/Quiz
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
@@ -848,135 +744,116 @@ fun PreviousPollsDialog(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = Color(0xFFE2E8F0)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
                         text = "Poll/Quiz",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
                         color = Color.White
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(
+                    color = Color(0xFF1E242E),
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
                 ) {
                     Text(
                         text = "Previous Polls/Quizzes",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFE5E7EB)
                     )
 
-                    if (onLaunchTestPoll != null) {
-                        Button(
-                            onClick = { onLaunchTestPoll() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFDC2626),
-                                contentColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (polls.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "টেস্ট পোল শুরু",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "এখনো কোনো পোল বা কুইজ শুরু হয়নি",
+                                fontSize = 14.sp,
+                                color = Color(0xFF9CA3AF)
                             )
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                val displayPolls = polls.ifEmpty {
-                    // Fallback sample list from HAR (7, 5, 4, 3, 2)
-                    listOf(
-                        LivePollItem("1792063288638", title = "7", state = "stopped"),
-                        LivePollItem("1792062962848", title = "5", state = "stopped"),
-                        LivePollItem("1792062668244", title = "4", state = "stopped"),
-                        LivePollItem("1792062300000", title = "3", state = "stopped"),
-                        LivePollItem("1792062000000", title = "2", state = "stopped")
-                    )
-                }
-
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(displayPolls) { pollItem ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF171D2D)),
-                            border = BorderStroke(1.dp, Color(0xFF1E293B))
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Row(
+                            items(polls, key = { it.pollId }) { pollItem ->
+                                Card(
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF20242D))
                                 ) {
-                                    Text(
-                                        text = pollItem.title,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = if (pollItem.isEnded) Color(0xFF334155) else Color(0xFFDC2626)
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 16.dp)
                                     ) {
-                                        Text(
-                                            text = if (pollItem.isEnded) "ENDED" else "LIVE",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = pollItem.title,
+                                                fontSize = 19.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
 
-                                Spacer(modifier = Modifier.height(14.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (pollItem.isEnded) Color(0xFF3E4656) else Color(0xFFDC2626)
+                                            ) {
+                                                Text(
+                                                    text = if (pollItem.isEnded) "ENDED" else "LIVE",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color(0xFFE2E8F0),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Button(
-                                        onClick = { onSelectPoll(pollItem) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF1D4ED8),
-                                            contentColor = Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.height(38.dp)
-                                    ) {
-                                        Text(
-                                            text = "View",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End
+                                        ) {
+                                            Button(
+                                                onClick = { onSelectPoll(pollItem) },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = Color(0xFF1967D2),
+                                                    contentColor = Color.White
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                                                modifier = Modifier.height(38.dp)
+                                            ) {
+                                                Text(
+                                                    text = "View",
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
