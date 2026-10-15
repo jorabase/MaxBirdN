@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -579,7 +580,133 @@ fun AnimatedLessonPlayerScreen(
                         }
                     )
                 }
+                .pointerInput(isScreenLocked, maxVolume) {
+                    if (isScreenLocked) return@pointerInput
+                    val activity = context as? Activity ?: (context as? ContextWrapper)?.baseContext as? Activity
+                    var isDragOnLeft = false
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            isDragOnLeft = offset.x < size.width * 0.45f
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            if (isDragOnLeft) {
+                                val window = activity?.window
+                                val currentAttr = window?.attributes
+                                var currentB = currentAttr?.screenBrightness ?: 0.5f
+                                if (currentB < 0f) currentB = 0.5f
+                                val delta = -dragAmount / 400f
+                                val newB = (currentB + delta).coerceIn(0.01f, 1.0f)
+                                currentAttr?.screenBrightness = newB
+                                window?.attributes = currentAttr
+                                gestureBrightness = newB
+                                gestureVolume = -1
+                                isGestureHudVisible = true
+                            } else {
+                                val maxV = maxVolume.coerceAtLeast(1)
+                                val currentV = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: (maxV / 2)
+                                val delta = if (dragAmount < -15f) 1 else if (dragAmount > 15f) -1 else 0
+                                if (delta != 0) {
+                                    val newV = (currentV + delta).coerceIn(0, maxV)
+                                    audioManager?.setStreamVolume(AudioManager.STREAM_MUSIC, newV, 0)
+                                    gestureVolume = newV
+                                    gestureBrightness = -1f
+                                    isGestureHudVisible = true
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            coroutineScope.launch {
+                                delay(1200)
+                                isGestureHudVisible = false
+                            }
+                        }
+                    )
+                }
         )
+
+        // 2.5 Gesture HUD Overlay (Brightness & Volume)
+        AnimatedVisibility(
+            visible = isGestureHudVisible && !isScreenLocked,
+            enter = fadeIn() + scaleIn(initialScale = 0.9f),
+            exit = fadeOut() + scaleOut(targetScale = 0.9f),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF0F172A).copy(alpha = 0.90f),
+                border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.25f)),
+                shadowElevation = 12.dp
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
+                ) {
+                    if (gestureBrightness >= 0f) {
+                        val percent = (gestureBrightness * 100).toInt()
+                        Icon(
+                            imageVector = when {
+                                gestureBrightness > 0.6f -> Icons.Default.BrightnessHigh
+                                gestureBrightness > 0.25f -> Icons.Default.BrightnessMedium
+                                else -> Icons.Default.BrightnessLow
+                            },
+                            contentDescription = null,
+                            tint = Color(0xFFFDE047),
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "উজ্জ্বলতা ${toBengaliDigits(percent.toString())}%",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { gestureBrightness },
+                            modifier = Modifier
+                                .width(120.dp)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = Color(0xFFFDE047),
+                            trackColor = Color.White.copy(alpha = 0.2f),
+                        )
+                    } else if (gestureVolume >= 0) {
+                        val maxV = maxVolume.coerceAtLeast(1)
+                        val fraction = (gestureVolume.toFloat() / maxV).coerceIn(0f, 1f)
+                        val percent = (fraction * 100).toInt()
+                        Icon(
+                            imageVector = when {
+                                gestureVolume == 0 -> Icons.Default.VolumeMute
+                                gestureVolume > maxV / 2 -> Icons.Default.VolumeUp
+                                else -> Icons.Default.VolumeDown
+                            },
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "ভলিউম ${toBengaliDigits(percent.toString())}%",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .width(120.dp)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = Color(0xFF60A5FA),
+                            trackColor = Color.White.copy(alpha = 0.2f),
+                        )
+                    }
+                }
+            }
+        }
 
         // 3. Double-Tap Seek Visual Feedback Arcs
         if (doubleTapFeedbackSide != null) {
