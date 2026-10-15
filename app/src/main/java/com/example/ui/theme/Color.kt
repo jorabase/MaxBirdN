@@ -49,3 +49,17 @@ val GlassBorderLight = Color(0x1A0F172A)
 val TextPrimaryLight = TextNavyDark
 val TextSecondaryLight = TextSlateMuted
 
+// Modern UI Gradients & Borders
+val CardBorderSubtle = Color(0xFFE2E8F0)
+val CardBorderDark = Color(0xFF334155)
+val PrimaryGradient = listOf(Color(0xFF0284C7), Color(0xFF0369A1))
+val AccentGradient = listOf(Color(0xFF38BDF8), Color(0xFF0284C7))
+val EmeraldGradient = listOf(Color(0xFF10B981), Color(0xFF059669))
+val AmberGradient = listOf(Color(0xFFF59E0B), Color(0xFFD97706))
+val RoseGradient = listOf(Color(0xFFF43F5E), Color(0xFFE11D48))
+val PurpleGradient = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9))
+val DarkCardGradient = listOf(Color(0xFF1E293B), Color(0xFF0F172A))
+val LightCardSurface = Color(0xFFFFFFFF)
+val DarkCardSurface = Color(0xFF111827)
+
+

@@ -30,4 +30,25 @@ object NotificationDeepLinkDispatcher {
         pendingDeepLink = null
         return link
     }
+
+    /**
+     * Extracts destination screen hint from deep link URI.
+     */
+    fun extractScreenHint(deeplink: String): String? {
+        return try {
+            val uri = Uri.parse(deeplink)
+            uri.getQueryParameter("screen") ?: uri.path?.removePrefix("/")
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Checks if a deep link targets live class or exam.
+     */
+    fun isUrgentLiveEvent(deeplink: String): Boolean {
+        val lower = deeplink.lowercase()
+        return lower.contains("live") || lower.contains("exam") || lower.contains("quiz")
+    }
 }
+
