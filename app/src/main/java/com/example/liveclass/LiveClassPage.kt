@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 
 import android.app.Activity
 import com.example.LocalPictureInPictureMode
+import com.example.liveclass.poll.*
 import com.example.util.PipHelper
 
 private const val TAG = "LiveClassPage"
@@ -120,6 +121,22 @@ fun LiveClassPage(
         mutableStateListOf<LiveChatMessage>()
     }
 
+    // 100ms Live Poll / Quiz State
+    val activePoll by wsManager.activePoll.collectAsState()
+    val previousPolls by wsManager.previousPolls.collectAsState()
+    var activePollDialog by remember { mutableStateOf<LivePollItem?>(null) }
+    var activeResultDialog by remember { mutableStateOf<LivePollItem?>(null) }
+    var showPreviousPollsDialog by remember { mutableStateOf(false) }
+
+    // Auto-pop active poll question dialog when teacher starts a new poll
+    LaunchedEffect(activePoll) {
+        activePoll?.let { poll ->
+            if (poll.state == "started" && poll.userResponse == null && activePollDialog == null) {
+                activePollDialog = poll
+            }
+        }
+    }
+
     // Function to initialize connection flow: GraphQL -> Token -> WebSocket
     fun startLiveClassConnection() {
         uiState = LiveClassState.Loading
@@ -156,26 +173,33 @@ fun LiveClassPage(
             wsManager.addCandidateUrls(cleanDiscovered)
 
             // Step 2: Instantly set direct playback URL if available (whether ongoing or recorded) for zero-delay streaming
+            var directPlaybackSet = false
             if (!academicInfo?.playbackUrl.isNullOrBlank()) {
                 Log.d(TAG, "Loading direct playback URL: ${academicInfo?.playbackUrl}")
                 wsManager.setMasterUrl(academicInfo!!.playbackUrl!!)
                 uiState = LiveClassState.Preview(viewerCount.coerceAtLeast(1))
-                return@launch
+                directPlaybackSet = true
             } else if (cleanDiscovered.isNotEmpty()) {
                 Log.d(TAG, "Loading candidate stream URL: ${cleanDiscovered.first()}")
                 wsManager.setMasterUrl(cleanDiscovered.first())
                 uiState = LiveClassState.Preview(viewerCount.coerceAtLeast(1))
-                return@launch
+                directPlaybackSet = true
             }
 
-            // Step 3: Try 100ms HMS Room connection
+            // Step 3: Connect 100ms HMS Room WebSocket for Real-time Live Polls, Leaderboards, and Chat
             if (!roomId.isNullOrBlank()) {
                 val tokenResult = service.getHmsToken(roomId, userToken)
                 val hmsToken = tokenResult.getOrNull()
                 if (!hmsToken.isNullOrBlank()) {
+                    Log.d(TAG, "Connecting to 100ms WebSocket for real-time polls & chat (roomId: $roomId)")
                     wsManager.connect(hmsToken, studentName)
                     return@launch
                 }
+            }
+
+            // If direct playback was already set and running, keep playing even if HMS room token was unavailable
+            if (directPlaybackSet) {
+                return@launch
             }
 
             // Step 4: Fallback to direct stream/playback URL
@@ -718,8 +742,57 @@ fun LiveClassPage(
                                                 }
                                             }
                                         }
+
+                                        // 100ms Live Poll / Quiz Action Button
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        IconButton(
+                                            onClick = {
+                                                val currActive = activePoll
+                                                if (currActive != null && currActive.isLive) {
+                                                    activePollDialog = currActive
+                                                } else {
+                                                    showPreviousPollsDialog = true
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(
+                                                    if (activePoll?.isLive == true) Color(0xFFDC2626) else Color.Black.copy(alpha = 0.5f)
+                                                )
+                                                .padding(horizontal = 4.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Quiz,
+                                                    contentDescription = "Poll / Quiz",
+                                                    tint = if (activePoll?.isLive == true) Color.White else Color(0xFFF59E0B),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = "পোল",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
                                     }
                                 }
+                            }
+
+                            // Floating Live Poll prompt when active poll is ongoing
+                            val activePollItem = activePoll
+                            if (activePollItem != null && activePollItem.isLive && activePollDialog == null) {
+                                LivePollFloatingNotification(
+                                    activePoll = activePollItem,
+                                    onOpenPoll = { activePollDialog = it },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(10.dp)
+                                )
                             }
                         }
 
@@ -772,6 +845,42 @@ fun LiveClassPage(
                                 )
 
                                 Spacer(modifier = Modifier.weight(1f))
+
+                                // Poll/Quiz Chip Button in Chat Header
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (activePoll?.isLive == true) Color(0xFFDC2626) else Color(0xFF1E293B),
+                                    border = BorderStroke(1.dp, if (activePoll?.isLive == true) Color(0xFFEF4444) else Color(0xFF334155)),
+                                    modifier = Modifier
+                                        .padding(end = 6.dp)
+                                        .clickable {
+                                            val currActive = activePoll
+                                            if (currActive != null && currActive.isLive) {
+                                                activePollDialog = currActive
+                                            } else {
+                                                showPreviousPollsDialog = true
+                                            }
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Quiz,
+                                            contentDescription = null,
+                                            tint = if (activePoll?.isLive == true) Color.White else Color(0xFFF59E0B),
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = if (activePoll?.isLive == true) "🔴 পোল চলছে" else "পোল/কুইজ",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
 
                                 // Connection indicator badge
                                 Surface(
@@ -1172,4 +1281,57 @@ fun LiveClassPage(
             }
         )
     }
+
+    // 1. Live Poll Question Dialog (Screenshots 2 & 4)
+    activePollDialog?.let { poll ->
+        LivePollQuestionDialog(
+            poll = poll,
+            teacherName = poll.teacherName.ifBlank { "Md. Sayedur Rahman" },
+            onDismiss = { activePollDialog = null },
+            onSubmitAnswer = { pId, qIdx, optIdx, dur ->
+                wsManager.submitPollAnswer(pId, qIdx, optIdx, dur)
+                // If it's a test poll, simulate teacher ending the poll after 2.5 seconds to reveal answer & leaderboard
+                if (pId.startsWith("test_")) {
+                    coroutineScope.launch {
+                        delay(2500)
+                        wsManager.stopActivePoll(pId)
+                    }
+                }
+            },
+            onViewResults = { pollItem ->
+                activePollDialog = null
+                activeResultDialog = pollItem
+            }
+        )
+    }
+
+    // 2. Live Poll Participation Summary & Leaderboard Dialog (Screenshot 1)
+    activeResultDialog?.let { poll ->
+        LivePollResultDialog(
+            poll = poll,
+            currentUserName = studentName,
+            onDismiss = { activeResultDialog = null }
+        )
+    }
+
+    // 3. Previous Polls/Quizzes Dialog (Screenshot 3)
+    if (showPreviousPollsDialog) {
+        PreviousPollsDialog(
+            polls = previousPolls,
+            onDismiss = { showPreviousPollsDialog = false },
+            onSelectPoll = { selectedPoll ->
+                showPreviousPollsDialog = false
+                if (selectedPoll.isEnded && selectedPoll.userResponse != null) {
+                    activeResultDialog = selectedPoll
+                } else {
+                    activePollDialog = selectedPoll
+                }
+            },
+            onLaunchTestPoll = {
+                showPreviousPollsDialog = false
+                wsManager.launchTestPoll()
+            }
+        )
+    }
 }
+
