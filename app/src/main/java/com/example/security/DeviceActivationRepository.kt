@@ -393,6 +393,19 @@ object DeviceActivationRepository {
                 return@withContext ActivationResult.Error("এই এক্সেস কোডটি অ্যাডমিন দ্বারা নিষ্ক্রিয় করা হয়েছে।")
             }
 
+            val expiresAtStr = codeObj.optString("expires_at")
+            if (!expiresAtStr.isNullOrBlank() && !expiresAtStr.equals("null", ignoreCase = true)) {
+                try {
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                    sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    val cleanExpiry = expiresAtStr.replace("Z", "").substringBefore("+").substringBefore(".")
+                    val expireTime = sdf.parse(cleanExpiry)?.time ?: Long.MAX_VALUE
+                    if (System.currentTimeMillis() > expireTime) {
+                        return@withContext ActivationResult.Error("এই এক্সেস কোডটির মেয়াদ শেষ হয়ে গেছে। নতুন কোড সংগ্রহ করুন।")
+                    }
+                } catch (_: Exception) {}
+            }
+
             // 3. Check bound devices quota
             val boundUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/activated_devices?code_id=eq.$codeId&select=id,device_hash,is_blocked,session_token"
             val boundReq = Request.Builder()
@@ -475,7 +488,7 @@ object DeviceActivationRepository {
                 put("status", "active")
             }
             val upsertReq = Request.Builder()
-                .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices")
+                .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices?on_conflict=device_hash")
                 .addHeader("apikey", anonKey)
                 .addHeader("Authorization", "Bearer $anonKey")
                 .addHeader("Content-Type", "application/json")

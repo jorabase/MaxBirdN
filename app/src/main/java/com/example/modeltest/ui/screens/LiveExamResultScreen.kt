@@ -31,11 +31,18 @@ import kotlin.random.Random
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveExamResultScreen(
+    sessionId: String = "",
     viewModel: ModelTestViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToFeedback: (sessionId: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(sessionId) {
+        if (sessionId.isNotBlank()) {
+            viewModel.loadPreResult(sessionId)
+        }
+    }
 
     var activePdfViewerUrl by remember { mutableStateOf<String?>(null) }
     var isSyllabusExpanded by remember { mutableStateOf(false) }
@@ -46,12 +53,12 @@ fun LiveExamResultScreen(
     val mcqCorrect = uiState.minimalScoreResult?.correct
         ?: uiState.minimalScoreResult?.correct_answers
         ?: preResult?.mcq_score?.toInt()
-        ?: 10
+        ?: 0
 
     val mcqTotal = uiState.minimalScoreResult?.total
         ?: uiState.minimalScoreResult?.total_questions
         ?: preResult?.mcq_total_marks?.toInt()
-        ?: 30
+        ?: 0
 
     val mcqWrong = uiState.minimalScoreResult?.wrong_answers
         ?: maxOf(0, mcqTotal - mcqCorrect)

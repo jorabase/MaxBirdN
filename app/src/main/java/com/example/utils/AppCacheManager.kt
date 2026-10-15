@@ -73,14 +73,25 @@ object AppCacheManager {
     }
 
     /**
-     * Auto-trims cache if it grows beyond a reasonable threshold (35MB).
+     * Auto-trims cache if it grows beyond a reasonable threshold (250MB),
+     * while preserving ExoPlayer media cache and PDF preview cache.
      */
     fun autoTrimExcessiveCache(context: Context) {
         try {
             val totalBytes = getTotalCacheSizeBytes(context)
-            if (totalBytes > 35L * 1024L * 1024L) {
-                Log.w(TAG, "Cache size exceeded threshold (${totalBytes / (1024 * 1024)}MB). Auto-trimming...")
-                clearAllAppCache(context)
+            if (totalBytes > 250L * 1024L * 1024L) {
+                Log.w(TAG, "Cache size exceeded threshold (${totalBytes / (1024 * 1024)}MB). Auto-trimming non-essential temporary items...")
+                val protectedNames = setOf("shikho_media_cache", "pdf_preview_cache", "downloads")
+                context.cacheDir?.listFiles()?.forEach { file ->
+                    if (!protectedNames.contains(file.name)) {
+                        try { file.deleteRecursively() } catch (_: Exception) {}
+                    }
+                }
+                context.externalCacheDir?.listFiles()?.forEach { file ->
+                    if (!protectedNames.contains(file.name)) {
+                        try { file.deleteRecursively() } catch (_: Exception) {}
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Auto-trim cache error: ${e.message}")

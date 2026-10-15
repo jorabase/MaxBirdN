@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 object NotificationDeepLinkDispatcher {
     private const val TAG = "DeepLinkDispatcher"
 
-    private val _deepLinkEvents = MutableSharedFlow<String>(extraBufferCapacity = 5)
+    private val _deepLinkEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
     val deepLinkEvents: SharedFlow<String> = _deepLinkEvents.asSharedFlow()
 
     @Volatile

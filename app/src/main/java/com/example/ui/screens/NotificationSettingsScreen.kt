@@ -789,6 +789,13 @@ fun NotificationSettingsScreen(
                                         onClick = {
                                             selectedLeadTime = mins
                                             sessionManager.setClassNotificationLeadTimeMinutes(mins)
+                                            val lessons = homeUiState?.filteredWeeklyRoutine ?: homeUiState?.weeklyRoutine ?: emptyList()
+                                            ClassAlarmScheduler.schedule7DayClassAlarms(context, homeUiState?.activeProgram?.id ?: "", lessons)
+                                            Toast.makeText(
+                                                context,
+                                                "রিমাইন্ডারের সময় ${mins.toString().toBengaliDigits()} মিনিট সেট করা হলো!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         },
                                         enabled = isAllEnabled,
                                         modifier = Modifier.size(16.dp)

@@ -115,6 +115,19 @@ fun BirdgramScreen(
         }
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            webViewRef?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                clearHistory()
+                removeAllViews()
+                destroy()
+            }
+            webViewRef = null
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -284,7 +297,12 @@ fun BirdgramScreen(
                         }
 
                         override fun onPermissionRequest(request: PermissionRequest?) {
-                            request?.grant(request.resources)
+                            val host = request?.origin?.host ?: ""
+                            if (host.endsWith("telegram.org", ignoreCase = true) || host.endsWith("shikho.com", ignoreCase = true)) {
+                                request?.grant(request.resources)
+                            } else {
+                                request?.deny()
+                            }
                         }
                     }
 

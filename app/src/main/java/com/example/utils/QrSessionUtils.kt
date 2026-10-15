@@ -23,7 +23,7 @@ object QrSessionUtils {
 
     fun createSessionPayload(sessionManager: SessionManager): String? {
         val token = sessionManager.getAccessToken() ?: return null
-        val refreshToken = sessionManager.getUserId()
+        val refreshToken = sessionManager.getRefreshToken()
         val userId = sessionManager.getUserId() ?: "user_${System.currentTimeMillis()}"
         val phone = sessionManager.getUserPhone() ?: ""
         val firstName = sessionManager.getUserFirstName() ?: ""

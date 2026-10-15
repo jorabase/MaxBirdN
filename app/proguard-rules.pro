@@ -43,9 +43,31 @@
 -keepclassmembers class * {
     @com.squareup.moshi.Json <fields>;
     @com.squareup.moshi.JsonClass <fields>;
+    @com.squareup.moshi.FromJson <methods>;
+    @com.squareup.moshi.ToJson <methods>;
 }
 -keep @com.squareup.moshi.JsonClass class * { *; }
 -keep class com.example.api.** {
+    <fields>;
+    <methods>;
+}
+-keep class com.example.birdgram.** {
+    <fields>;
+    <methods>;
+}
+-keep class com.example.auth.** {
+    <fields>;
+    <methods>;
+}
+-keep class com.example.modeltest.data.** {
+    <fields>;
+    <methods>;
+}
+-keep class com.example.notice.** {
+    <fields>;
+    <methods>;
+}
+-keep class com.example.update.** {
     <fields>;
     <methods>;
 }

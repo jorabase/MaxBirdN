@@ -256,7 +256,7 @@ class BirdgramRepository(
             val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext
 
-            val endpoint = "${supabaseUrl.trimEnd('/')}/rest/v1/user_telegram_sessions"
+            val endpoint = "${supabaseUrl.trimEnd('/')}/rest/v1/user_telegram_sessions?on_conflict=access_key"
 
             val payload = JSONObject().apply {
                 put("access_key", session.accessKey)

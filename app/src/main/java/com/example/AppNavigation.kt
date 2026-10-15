@@ -315,23 +315,30 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         com.example.notification.NotificationDeepLinkDispatcher.deepLinkEvents.collect { link ->
             if (link.isNotBlank()) {
                 try {
-                    if (link.startsWith("http://", ignoreCase = true) || link.startsWith("https://", ignoreCase = true)) {
-                        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link)).apply {
+                    val cleanLink = link.trim()
+                    if (cleanLink.startsWith("http://", ignoreCase = true) || cleanLink.startsWith("https://", ignoreCase = true)) {
+                        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(cleanLink)).apply {
                             flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                         }
                         context.startActivity(browserIntent)
-                    } else if (link.startsWith("shikho://", ignoreCase = true)) {
-                        val uri = android.net.Uri.parse(link)
-                        when (uri.host) {
-                            "chapter-report" -> {
+                    } else if (cleanLink.startsWith("shikho://", ignoreCase = true)) {
+                        val uri = android.net.Uri.parse(cleanLink)
+                        when (uri.host?.lowercase()) {
+                            "chapter-report", "report", "report_card" -> {
                                 navController.navigate(Routes.REPORT_CARD)
                             }
-                            "live-class" -> {
+                            "routine", "full-routine", "routine_full" -> {
+                                navController.navigate(Routes.ROUTINE_FULL)
+                            }
+                            "live", "live-class" -> {
                                 val classId = uri.getQueryParameter("class_id") ?: uri.getQueryParameter("id") ?: ""
                                 val lessonId = uri.getQueryParameter("lesson_id") ?: classId
                                 if (classId.isNotBlank()) {
                                     navController.navigate(Routes.liveClassRoute(classId, lessonId))
                                 }
+                            }
+                            "downloads" -> {
+                                navController.navigate(Routes.downloadsRoute())
                             }
                             else -> {
                                 val path = uri.path?.removePrefix("/") ?: uri.host
@@ -341,7 +348,12 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             }
                         }
                     } else {
-                        navController.navigate(link)
+                        when (cleanLink.lowercase()) {
+                            "routine", "full-routine", "routine_full" -> navController.navigate(Routes.ROUTINE_FULL)
+                            "downloads" -> navController.navigate(Routes.downloadsRoute())
+                            "report", "report_card" -> navController.navigate(Routes.REPORT_CARD)
+                            else -> navController.navigate(cleanLink)
+                        }
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("AppNavigation", "Error navigating deep link: $link", e)
@@ -982,18 +994,38 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
+            val modelTestUiState by modelTestViewModel.uiState.collectAsState()
+            val isLiveExam = modelTestUiState.liveCqExamId.isNotBlank() ||
+                    modelTestUiState.liveExamFinalResult != null ||
+                    modelTestUiState.modelTestInfo?.exam_category?.contains("LIVE", ignoreCase = true) == true
 
-            LiveExamResultScreen(
-                viewModel = modelTestViewModel,
-                onNavigateBack = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.HOME) { inclusive = true }
+            if (isLiveExam) {
+                LiveExamResultScreen(
+                    sessionId = sessionId,
+                    viewModel = modelTestViewModel,
+                    onNavigateBack = {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(Routes.HOME) { inclusive = true }
+                        }
+                    },
+                    onNavigateToFeedback = { sId ->
+                        navController.navigate("model_test_feedback/$sId")
                     }
-                },
-                onNavigateToFeedback = { sId ->
-                    navController.navigate("model_test_feedback/$sId")
-                }
-            )
+                )
+            } else {
+                com.example.modeltest.ui.screens.ModelTestResultScreen(
+                    sessionId = sessionId,
+                    viewModel = modelTestViewModel,
+                    onViewFeedback = { sId ->
+                        navController.navigate("model_test_feedback/$sId")
+                    },
+                    onNavigateHome = {
+                        navController.navigate(Routes.HOME) {
+                            popUpTo(Routes.HOME) { inclusive = true }
+                        }
+                    }
+                )
+            }
         }
 
         animatedComposable(
@@ -1133,20 +1165,29 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     )
                 },
                 onOpenChapterResources = {
-                    val chapterId = courseUiState.selectedLesson?.chapter_id?.takeIf { it.isNotBlank() }
-                        ?: courseUiState.selectedLesson?.live_class?.chapter_id
+                    val lesson = courseUiState.selectedLesson
+                    val chapterId = lesson?.chapter_id?.takeIf { it.isNotBlank() }
+                        ?: lesson?.live_class?.chapter_id
                         ?: ""
+                    val sCode = lesson?.subject_code ?: "DEFAULT"
+                    val encodedTitle = URLEncoder.encode(courseUiState.selectedSubjectTitle.ifBlank { "রিসোর্স" }, "UTF-8")
+                    val encodedColor = URLEncoder.encode(courseUiState.selectedSubjectColor.ifBlank { "#0072EC" }, "UTF-8")
+                    val encodedPhase = URLEncoder.encode(lesson?.phase_id ?: "", "UTF-8")
+
                     if (chapterId.isNotBlank()) {
-                        val encodedName = URLEncoder.encode(courseUiState.selectedSubjectTitle, "UTF-8")
-                        val encodedSubCode = URLEncoder.encode(courseUiState.selectedLesson?.subject_code ?: "", "UTF-8")
-                        val encodedPhase = URLEncoder.encode(courseUiState.selectedLesson?.phase_id ?: "", "UTF-8")
-                        navController.navigate("chapter_resources/$chapterId?name=$encodedName&subjectCode=$encodedSubCode&phaseId=$encodedPhase")
+                        val encodedName = URLEncoder.encode(lesson?.chapter_name?.takeIf { it.isNotBlank() } ?: courseUiState.selectedSubjectTitle, "UTF-8")
+                        navController.navigate("chapter_resources/$chapterId?name=$encodedName&subjectCode=$sCode&phaseId=$encodedPhase")
                     } else {
-                        navController.navigate(Routes.SMART_NOTES)
+                        navController.navigate("smart_notes/$sCode?title=$encodedTitle&color=$encodedColor&phaseId=$encodedPhase")
                     }
                 },
                 onOpenSubjectResources = {
-                    navController.navigate(Routes.SMART_NOTES)
+                    val lesson = courseUiState.selectedLesson
+                    val sCode = lesson?.subject_code ?: "DEFAULT"
+                    val encodedTitle = URLEncoder.encode(courseUiState.selectedSubjectTitle.ifBlank { "রিসোর্স" }, "UTF-8")
+                    val encodedColor = URLEncoder.encode(courseUiState.selectedSubjectColor.ifBlank { "#0072EC" }, "UTF-8")
+                    val encodedPhase = URLEncoder.encode(lesson?.phase_id ?: "", "UTF-8")
+                    navController.navigate("smart_notes/$sCode?title=$encodedTitle&color=$encodedColor&phaseId=$encodedPhase")
                 },
                 onNavigateToPdfViewer = { url, title ->
                     navController.navigate(

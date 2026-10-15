@@ -42,6 +42,20 @@ fun HlsWebPlayerView(
 ) {
     var isLoading by remember { mutableStateOf(true) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    var lastLoadedUrl by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            webViewInstance?.apply {
+                stopLoading()
+                loadUrl("about:blank")
+                clearHistory()
+                removeAllViews()
+                destroy()
+            }
+            webViewInstance = null
+        }
+    }
 
     val htmlContent = remember(streamUrl) {
         """
@@ -103,17 +117,21 @@ fun HlsWebPlayerView(
                         "https://app.shikho.com"
                     }
                     loadDataWithBaseURL(baseUrl, htmlContent, "text/html", "UTF-8", null)
+                    lastLoadedUrl = streamUrl
                     webViewInstance = this
                 }
             },
             update = { wv ->
-                val baseUrl = try {
-                    val uri = android.net.Uri.parse(streamUrl)
-                    if (uri.scheme != null && uri.host != null) "${uri.scheme}://${uri.host}" else "https://app.shikho.com"
-                } catch (_: Exception) {
-                    "https://app.shikho.com"
+                if (lastLoadedUrl != streamUrl) {
+                    lastLoadedUrl = streamUrl
+                    val baseUrl = try {
+                        val uri = android.net.Uri.parse(streamUrl)
+                        if (uri.scheme != null && uri.host != null) "${uri.scheme}://${uri.host}" else "https://app.shikho.com"
+                    } catch (_: Exception) {
+                        "https://app.shikho.com"
+                    }
+                    wv.loadDataWithBaseURL(baseUrl, htmlContent, "text/html", "UTF-8", null)
                 }
-                wv.loadDataWithBaseURL(baseUrl, htmlContent, "text/html", "UTF-8", null)
             },
             modifier = Modifier.fillMaxSize()
         )

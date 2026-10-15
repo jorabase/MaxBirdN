@@ -17,6 +17,16 @@ import kotlinx.coroutines.launch
 
 class ClassAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action
+        if (action == Intent.ACTION_BOOT_COMPLETED ||
+            action == "android.intent.action.QUICKBOOT_POWERON" ||
+            action == "com.htc.intent.action.QUICKBOOT_POWERON"
+        ) {
+            Log.d("ClassAlarmReceiver", "🔄 Device rebooted: rescheduling all active custom study alarms")
+            CustomAlarmScheduler.rescheduleAllActive(context)
+            return
+        }
+
         val subjectName = intent.getStringExtra("subject_name") ?: "কোর্স"
         val lessonTitle = intent.getStringExtra("lesson_title") ?: "লাইভ ক্লাস"
         val lessonId = intent.getStringExtra("lesson_id") ?: ""
@@ -28,7 +38,7 @@ class ClassAlarmReceiver : BroadcastReceiver() {
         Log.d("ClassAlarmReceiver", "🚨 Alarm triggered: $subjectName ($mentorName), startNow: $isStartNow")
 
         val customTitle = intent.getStringExtra("custom_title")
-        val customBody = intent.getStringExtra("custom_body")
+        val customBody = intent.getStringExtra("custom_body") ?: intent.getStringExtra("custom_note")
 
         // Exact Shikho notification formats
         val title = customTitle ?: if (isStartNow) {

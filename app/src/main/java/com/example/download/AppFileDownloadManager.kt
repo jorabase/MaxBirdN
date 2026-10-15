@@ -42,6 +42,7 @@ class AppFileDownloadManager private constructor(
 ) {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeJobs = ConcurrentHashMap<String, Job>()
+    private val pausedIds = ConcurrentHashMap.newKeySet<String>()
 
     // Ultra-optimized high-throughput HTTP client for maximum mobile network saturation
     private val httpClient: OkHttpClient by lazy {
@@ -489,13 +490,18 @@ class AppFileDownloadManager private constructor(
                     )
                 }
             } catch (e: CancellationException) {
-                Log.w(TAG, "Download cancelled for id: $id")
-                try {
-                    if (targetFile.exists()) {
-                        if (isHls) targetFile.parentFile?.deleteRecursively() else targetFile.delete()
-                    }
-                    downloadedItemDao.deleteDownloadedItem(id)
-                } catch (_: Exception) {}
+                val isPaused = pausedIds.remove(id)
+                if (isPaused) {
+                    Log.i(TAG, "Download paused for id: $id, retaining partial files and database record")
+                } else {
+                    Log.w(TAG, "Download cancelled for id: $id")
+                    try {
+                        if (targetFile.exists()) {
+                            if (isHls) targetFile.parentFile?.deleteRecursively() else targetFile.delete()
+                        }
+                        downloadedItemDao.deleteDownloadedItem(id)
+                    } catch (_: Exception) {}
+                }
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed for id: $id: ${e.message}", e)
@@ -777,8 +783,11 @@ class AppFileDownloadManager private constructor(
             )
             Log.d(TAG, "Ultra-fast HLS download complete! Total size: $finalBytes bytes ($totalTasks chunks) for id: $id")
         } catch (e: CancellationException) {
-            AppDownloadNotificationHelper.cancelNotification(context, id)
-            streamDir.deleteRecursively()
+            val isPaused = pausedIds.contains(id)
+            if (!isPaused) {
+                AppDownloadNotificationHelper.cancelNotification(context, id)
+                streamDir.deleteRecursively()
+            }
             throw e
         } catch (e: Exception) {
             AppDownloadNotificationHelper.showDownloadFailedNotification(context, id, title)
@@ -796,6 +805,8 @@ class AppFileDownloadManager private constructor(
     ): String {
         val sb = StringBuilder()
         var segmentIndex = 0
+        var mapIndex = 0
+        var keyIndex = 0
         val isAudio = prefix.startsWith("audio")
 
         for (line in playlistContent.lines()) {
@@ -810,7 +821,7 @@ class AppFileDownloadManager private constructor(
                     val match = mapRegex.find(trimmed)
                     if (match != null) {
                         val initUrl = resolveUrl(baseUrl, match.groupValues[1])
-                        val initFileName = "${prefix}_init.mp4"
+                        val initFileName = "${prefix}_init_${mapIndex++}.mp4"
                         tasks.add(DownloadChunkTask(initUrl, File(streamDir, initFileName)))
                         sb.append("#EXT-X-MAP:URI=\"$initFileName\"\n")
                     } else {
@@ -823,7 +834,7 @@ class AppFileDownloadManager private constructor(
                     val match = keyUriRegex.find(trimmed)
                     if (match != null) {
                         val keyUrl = resolveUrl(baseUrl, match.groupValues[1])
-                        val keyFileName = "${prefix}_key.bin"
+                        val keyFileName = "${prefix}_key_${keyIndex++}.bin"
                         tasks.add(DownloadChunkTask(keyUrl, File(streamDir, keyFileName)))
                         val rewrittenKeyLine = trimmed.replace(match.value, "URI=\"$keyFileName\"")
                         sb.append(rewrittenKeyLine).append("\n")
@@ -1164,6 +1175,7 @@ class AppFileDownloadManager private constructor(
      * Pause an active download.
      */
     fun pauseDownload(id: String) {
+        pausedIds.add(id)
         activeJobs[id]?.cancel()
         activeJobs.remove(id)
         coroutineScope.launch {
@@ -1194,6 +1206,7 @@ class AppFileDownloadManager private constructor(
      * Resume a paused or failed download.
      */
     fun resumeDownload(id: String) {
+        pausedIds.remove(id)
         coroutineScope.launch {
             try {
                 val item = downloadedItemDao.getDownloadedItemByIdOnce(id)
@@ -1216,6 +1229,7 @@ class AppFileDownloadManager private constructor(
      * Cancel an active download.
      */
     fun cancelDownload(id: String) {
+        pausedIds.remove(id)
         activeJobs[id]?.cancel()
         activeJobs.remove(id)
         coroutineScope.launch {

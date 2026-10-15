@@ -305,8 +305,10 @@ fun ExamIntroBottomSheet(
                             color = Color(0xFF475569)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
+                        val examDurationMinutes = (uiState.examInfo?.total_number_of_question ?: totalQ).coerceAtLeast(1)
+                        val examDurationText = "${toBengaliDigits(examDurationMinutes.coerceAtLeast(1).toString())} মিনিট"
                         Text(
-                            text = "মোট প্রশ্ন: ${toBengaliDigits(totalQ.toString())} টি | সময়: ২৫ মিনিট",
+                            text = "মোট প্রশ্ন: ${toBengaliDigits(totalQ.toString())} টি | সময়: $examDurationText",
                             fontSize = 13.sp,
                             color = Color(0xFF64748B)
                         )
@@ -445,8 +447,10 @@ fun ExamRulesContent(
                             Icon(Icons.Default.AccessTime, contentDescription = null, tint = Color(0xFFD97706))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
+                                val examDurationMinutes = (uiState.examInfo?.total_number_of_question ?: totalQ).coerceAtLeast(1)
+                                val examDurationText = "${toBengaliDigits(examDurationMinutes.coerceAtLeast(1).toString())} মিনিট"
                                 Text("সময়", fontSize = 12.sp, color = Color(0xFF64748B))
-                                Text("২৪ ঘণ্টা", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                                Text(examDurationText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
                             }
                         }
                     }
@@ -928,6 +932,17 @@ fun ExamPerformanceContent(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // 2 Metric cards
+                val totalSec = uiState.timeSpentPerQuestion.values.sum()
+                val totalMinutes = (totalSec / 60).toInt()
+                val remSeconds = (totalSec % 60).toInt()
+                val totalTimeSpentText = when {
+                    totalMinutes > 0 && remSeconds > 0 -> "${toBengaliDigits(totalMinutes.toString())} মিনিট ${toBengaliDigits(remSeconds.toString())} সে."
+                    totalMinutes > 0 -> "${toBengaliDigits(totalMinutes.toString())} মিনিট"
+                    else -> "${toBengaliDigits(totalSec.toInt().coerceAtLeast(1).toString())} সেকেন্ড"
+                }
+                val avgSecPerQ = if (totalCount > 0) totalSec / totalCount else 0.0
+                val avgTimeText = "${toBengaliDigits(String.format(java.util.Locale.US, "%.1f", avgSecPerQ))} সেকেন্ড"
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -945,7 +960,7 @@ fun ExamPerformanceContent(
                                 Text("মোট সময় ব্যয়", fontSize = 12.sp, color = Color(0xFF64748B))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("১ মিনিট", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                            Text(totalTimeSpentText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
                         }
                     }
 
@@ -962,7 +977,7 @@ fun ExamPerformanceContent(
                                 Text("প্রতি প্রশ্নে সময়", fontSize = 12.sp, color = Color(0xFF64748B))
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text("২.৫ সেকেন্ড", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                            Text(avgTimeText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
                         }
                     }
                 }

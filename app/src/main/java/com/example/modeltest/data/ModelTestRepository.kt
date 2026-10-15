@@ -787,15 +787,38 @@ class ModelTestRepository(
             variables = mapOf("id" to modelTestId)
         )
         return result.mapCatching {
-            it.data?.getModelTestPreResult ?: ModelTestPreResultDetails(
-                model_test_title = "মডেল টেস্ট ফলাফল",
-                total_score = 0.0,
-                total_marks = 100.0,
-                mcq_score = 0.0,
-                mcq_total_marks = 30.0,
-                cq_score = 0.0,
-                cq_total_marks = 70.0
-            )
+            val raw = it.data?.getModelTestPreResult
+            if (raw != null) {
+                val mcqMarks = raw.result?.mcq_obtained_marks ?: raw.mcq_score ?: 0.0
+                val mcqTotal = raw.result?.mcq_total_marks ?: raw.mcq_total_marks ?: 30.0
+                val cqMarks = raw.result?.cq_obtained_marks ?: raw.cq_score ?: 0.0
+                val cqTotal = raw.result?.cq_total_marks ?: raw.cq_total_marks ?: 70.0
+                val totalObtained = mcqMarks + cqMarks
+                val totalMax = mcqTotal + cqTotal
+                val accuracy = if (totalMax > 0) (totalObtained / totalMax) * 100.0 else 0.0
+
+                raw.copy(
+                    model_test_title = raw.title ?: raw.model_test_title ?: "মডেল টেস্ট ফলাফল",
+                    total_score = totalObtained,
+                    total_marks = totalMax,
+                    mcq_score = mcqMarks,
+                    mcq_total_marks = mcqTotal,
+                    cq_score = cqMarks,
+                    cq_total_marks = cqTotal,
+                    grade = raw.result?.grade ?: raw.grade,
+                    accuracy_percentage = accuracy
+                )
+            } else {
+                ModelTestPreResultDetails(
+                    model_test_title = "মডেল টেস্ট ফলাফল",
+                    total_score = 0.0,
+                    total_marks = 100.0,
+                    mcq_score = 0.0,
+                    mcq_total_marks = 30.0,
+                    cq_score = 0.0,
+                    cq_total_marks = 70.0
+                )
+            }
         }
     }
 

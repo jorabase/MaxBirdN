@@ -145,16 +145,7 @@ fun MainContainerScreen(
                         onCourseSelected = { program ->
                             homeViewModel.switchActiveCourse(program)
                             courseViewModel.openCourse(program)
-                            try {
-                                Toast.makeText(context, "${program.title_bn ?: "কোর্স"} নির্বাচিত হয়েছে ✨", Toast.LENGTH_SHORT).show()
-                                val intent = android.content.Intent(context, com.example.MainActivity::class.java).apply {
-                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                }
-                                context.startActivity(intent)
-                                (context as? Activity)?.finish()
-                            } catch (_: Exception) {
-                                selectedIndex = 1
-                            }
+                            Toast.makeText(context, "${program.title_bn ?: "কোর্স"} নির্বাচিত হয়েছে ✨", Toast.LENGTH_SHORT).show()
                         },
                         onOpenCourse = { phaseId ->
                             val activeProg = homeViewModel.uiState.value.activeProgram

@@ -59,8 +59,12 @@ class MainActivity : ComponentActivity() {
         ClassAlarmScheduler.createNotificationChannel(this)
         ShikhoNotificationManager.createNotificationChannels(this)
 
-        // 1.1 Immediately purge any bloated cache to protect phone storage
-        com.example.utils.AppCacheManager.autoTrimExcessiveCache(this)
+        // 1.1 Purge any bloated cache on background IO thread to prevent startup UI freeze
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                com.example.utils.AppCacheManager.autoTrimExcessiveCache(applicationContext)
+            } catch (_: Throwable) {}
+        }
 
         // 2. Verify Firebase is initialized correctly
         try {
@@ -191,6 +195,21 @@ class MainActivity : ComponentActivity() {
 
     private fun handleNotificationIntent(intent: Intent?) {
         if (intent == null) return
+
+        // 1. Handle downloads notification tap
+        if (intent.getStringExtra("OPEN_SCREEN") == "DOWNLOADS") {
+            NotificationDeepLinkDispatcher.setPendingDeepLink("downloads")
+            return
+        }
+
+        // 2. Handle class alarm notification tap
+        val lessonId = intent.getStringExtra("lesson_id")
+        if (!lessonId.isNullOrBlank()) {
+            NotificationDeepLinkDispatcher.setPendingDeepLink("lesson_player?lesson_id=$lessonId")
+            return
+        }
+
+        // 3. Handle push notification deep links
         val url = intent.getStringExtra(ShikhoFirebaseMessagingService.EXTRA_NOTIFICATION_URL)
             ?: intent.getStringExtra(ShikhoFirebaseMessagingService.EXTRA_NOTIFICATION_DEEPLINK)
             ?: intent.dataString
@@ -229,7 +248,13 @@ class MainActivity : ComponentActivity() {
             ) {
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                     try {
-                        com.example.security.DeviceActivationRepository.verifyHeartbeat(applicationContext)
+                        val result = com.example.security.DeviceActivationRepository.verifyHeartbeat(applicationContext)
+                        if (result is com.example.security.HeartbeatResult.Revoked) {
+                            com.example.security.DeviceActivationRepository.clearActivation(applicationContext)
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                recreate()
+                            }
+                        }
                     } catch (_: Throwable) {}
                 }
             }

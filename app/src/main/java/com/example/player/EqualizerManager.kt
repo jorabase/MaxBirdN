@@ -181,7 +181,7 @@ object EqualizerManager {
     private var nativeVirtualizer: Virtualizer? = null
     private var nativeLoudnessEnhancer: LoudnessEnhancer? = null
 
-    private var activePlayer: ExoPlayer? = null
+    private var activePlayer: java.lang.ref.WeakReference<ExoPlayer>? = null
     private var activeAnalyticsListener: AnalyticsListener? = null
     private var isInitialized = false
 
@@ -305,7 +305,7 @@ object EqualizerManager {
      */
     fun bindPlayer(context: Context, player: ExoPlayer) {
         init(context)
-        activePlayer = player
+        activePlayer = java.lang.ref.WeakReference(player)
 
         // Listen for session ID changes
         val listener = object : AnalyticsListener {
@@ -337,7 +337,7 @@ object EqualizerManager {
      * Unbinds the active player and releases effects.
      */
     fun unbindPlayer(context: Context) {
-        val player = activePlayer
+        val player = activePlayer?.get()
         val listener = activeAnalyticsListener
         if (player != null && listener != null) {
             try {

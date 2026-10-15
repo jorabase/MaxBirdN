@@ -119,6 +119,7 @@ object CustomAlarmScheduler {
             putExtra("is_custom", true)
             putExtra("custom_id", item.id)
             putExtra("custom_title", item.title)
+            putExtra("custom_body", item.note)
             putExtra("custom_note", item.note)
             putExtra("trigger_time", item.triggerTimeMillis)
         }

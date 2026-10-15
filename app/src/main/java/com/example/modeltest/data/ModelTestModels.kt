@@ -471,7 +471,44 @@ data class ModelTestPreResultData(
 )
 
 @JsonClass(generateAdapter = true)
+data class PreResultSummary(
+    val cq_obtained_marks: Double? = null,
+    val cq_total_marks: Double? = null,
+    val grade: String? = null,
+    val mcq_obtained_marks: Double? = null,
+    val mcq_total_marks: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class PreResultStageResult(
+    val correct_answer: Int? = null,
+    val incorrect_answer: Int? = null,
+    val marks_obtained: Double? = null,
+    val is_passed: Boolean? = null,
+    val total_marks: Double? = null,
+    val total_question: Int? = null,
+    val id: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class PreResultStageItem(
+    val result: PreResultStageResult? = null,
+    val end_time: String? = null,
+    val start_time: String? = null,
+    val title: String? = null,
+    val type: String? = null,
+    val is_running: Boolean? = null,
+    val session_id: String? = null
+)
+
+@JsonClass(generateAdapter = true)
 data class ModelTestPreResultDetails(
+    val title: String? = null,
+    val subject_id: String? = null,
+    val subject_name: String? = null,
+    val result: PreResultSummary? = null,
+    val stages: List<PreResultStageItem>? = null,
+    // Flat UI convenience fields
     val model_test_title: String? = null,
     val total_score: Double? = null,
     val total_marks: Double? = null,
@@ -479,6 +516,7 @@ data class ModelTestPreResultDetails(
     val mcq_total_marks: Double? = null,
     val cq_score: Double? = null,
     val cq_total_marks: Double? = null,
+    val grade: String? = null,
     val rank: Int? = null,
     val total_participants: Int? = null,
     val accuracy_percentage: Double? = null

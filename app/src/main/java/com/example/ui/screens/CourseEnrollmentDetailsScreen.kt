@@ -129,7 +129,7 @@ fun CourseEnrollmentDetailsScreen(
                             fetchedPhases.map {
                                 EnrollmentPhaseDisplay(
                                     title = it.title ?: "কোয়ার্টার",
-                                    isEnrolled = true
+                                    isEnrolled = it.has_enrolment ?: true
                                 )
                             }
                         } else {

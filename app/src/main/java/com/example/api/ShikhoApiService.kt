@@ -245,14 +245,16 @@ interface ShikhoApiService {
                             val contentType = body.contentType()
                             val jsonString = body.string()
 
+                            val urlPath = origRequest.url.encodedPath
+                            val isClassOrQuizEndpoint = urlPath.contains("/classes") || urlPath.contains("quiz") || urlPath.contains("question") || urlPath.contains("model-test")
+
                             val modifiedString = if (jsonString.contains("has_enrolment") || jsonString.contains("is_active") || 
                                 jsonString.contains("is_locked") || jsonString.contains("is_enrolled") || jsonString.contains("is_purchased") ||
                                 jsonString.contains("access_level") || jsonString.contains("is_expired") || jsonString.contains("show_trial") ||
                                 jsonString.contains("is_free")) {
-                                jsonString
+                                var s = jsonString
                                     .replace(Regex("\"has_enrolment\"\\s*:\\s*false"), "\"has_enrolment\": true")
                                     .replace(Regex("\"has_free_trial_enrolment\"\\s*:\\s*false"), "\"has_free_trial_enrolment\": true")
-                                    .replace(Regex("\"is_active\"\\s*:\\s*false"), "\"is_active\": true")
                                     .replace(Regex("\"is_enrolled\"\\s*:\\s*false"), "\"is_enrolled\": true")
                                     .replace(Regex("\"is_purchased\"\\s*:\\s*false"), "\"is_purchased\": true")
                                     .replace(Regex("\"is_locked\"\\s*:\\s*true"), "\"is_locked\": false")
@@ -262,6 +264,10 @@ interface ShikhoApiService {
                                     .replace(Regex("\"access_level\"\\s*:\\s*\"[^\"]+\""), "\"access_level\": \"Full\"")
                                     .replace(Regex("\"type\"\\s*:\\s*\"FullApTrial\""), "\"type\": \"Paid\"")
                                     .replace(Regex("\"enroled_subscription_division\"\\s*:\\s*\"[^\"]+\""), "\"enroled_subscription_division\": \"full\"")
+                                if (!isClassOrQuizEndpoint) {
+                                    s = s.replace(Regex("\"is_active\"\\s*:\\s*false"), "\"is_active\": true")
+                                }
+                                s
                             } else {
                                 jsonString
                             }
@@ -333,9 +339,10 @@ interface ShikhoApiService {
                     if (response.code == 401) {
                         val activeToken = sessionManager.getAccessToken()
                         val url = request.url.toString()
-                        val isAuthEndpoint = url.contains("/check-user") || url.contains("/send-sms") ||
-                            url.contains("/verify-otp") || url.contains("/verify-pin") ||
-                            url.contains("/login") || url.contains("/token/refresh")
+                        val isAuthEndpoint = url.contains("/check-user") || url.contains("/user/check") ||
+                            url.contains("/send-sms") || url.contains("/send/sms") ||
+                            url.contains("/verify-otp") || url.contains("/verify/otp") ||
+                            url.contains("/verify-pin") || url.contains("/login") || url.contains("/token/refresh")
 
                         if (!isAuthEndpoint && !activeToken.isNullOrBlank()) {
                             // 1. Try automatic token refresh first

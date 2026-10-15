@@ -579,15 +579,40 @@ class ChapterExamViewModel(
     }
 
     private fun deduceCorrectOption(solutionText: String, options: List<McqOptionItem>?): String {
-        if (options.isNullOrEmpty()) return "B"
+        if (options.isNullOrEmpty()) return "A"
+
+        // 1. Check full description match first if description has meaningful text
         options.forEach { opt ->
-            val optNo = opt.no ?: ""
-            val desc = opt.description ?: ""
-            if (solutionText.contains(desc, ignoreCase = true) || solutionText.contains(optNo, ignoreCase = true)) {
-                return optNo
+            val desc = opt.description?.trim().orEmpty()
+            if (desc.length > 3 && solutionText.contains(desc, ignoreCase = true)) {
+                return opt.no ?: "A"
             }
         }
-        return "B"
+
+        // 2. Regex matching for explicit answer labels like "সঠিক উত্তর: (ক/A)", "Ans: B", "Option: C"
+        val answerRegexes = listOf(
+            Regex("""(?:সঠিক\s*উত্তর|উত্তর|Ans(?:wer)?)\s*[:=–-]?\s*[\(]?([A-Da-dক-ঘ])[\)]?""", RegexOption.IGNORE_CASE),
+            Regex("""\b([A-Da-d])\s*[\)\.:]""", RegexOption.IGNORE_CASE)
+        )
+
+        for (regex in answerRegexes) {
+            val match = regex.find(solutionText)
+            if (match != null) {
+                val matchedLetter = match.groupValues[1].uppercase()
+                val converted = when (matchedLetter) {
+                    "ক", "A" -> "A"
+                    "খ", "B" -> "B"
+                    "গ", "C" -> "C"
+                    "ঘ", "D" -> "D"
+                    else -> matchedLetter
+                }
+                if (options.any { it.no.equals(converted, ignoreCase = true) }) {
+                    return converted
+                }
+            }
+        }
+
+        return options.firstOrNull()?.no ?: "A"
     }
 
     override fun onCleared() {
