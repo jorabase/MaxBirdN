@@ -96,11 +96,19 @@ fun PracticeQuizFeedbackScreen(
         val givenAns = ans?.given_ans ?: q.given_ans
         val descs = q.mcq_options?.map { it.description }
         val rawCorrect = q.correct_option ?: ans?.correct_ans
-        val correctOpt = if (!rawCorrect.isNullOrBlank()) rawCorrect
-            else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(q.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
+        val userIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenAns)
+        val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+            directCorrectOption = rawCorrect,
+            ansCorrectOption = ans?.correct_ans,
+            solutionText = q.description,
+            optionsDescriptions = descs,
+            userSelectedOptionIndex = userIdx,
+            isUserMarkedCorrectByServer = ans?.is_correct
+        )
+        val correctOpt = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
         when {
             givenAns.isNullOrBlank() -> unansweredCount++
-            com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, correctOpt) -> correctCount++
+            com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, correctOpt) || ans?.is_correct == true -> correctCount++
             else -> incorrectCount++
         }
     }
@@ -114,18 +122,34 @@ fun PracticeQuizFeedbackScreen(
                 val given = ans?.given_ans ?: q.given_ans
                 val descs = q.mcq_options?.map { it.description }
                 val rawCorrect = q.correct_option ?: ans?.correct_ans
-                val correct = if (!rawCorrect.isNullOrBlank()) rawCorrect
-                    else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(q.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
-                !given.isNullOrBlank() && com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correct)
+                val userIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(given)
+                val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+                    directCorrectOption = rawCorrect,
+                    ansCorrectOption = ans?.correct_ans,
+                    solutionText = q.description,
+                    optionsDescriptions = descs,
+                    userSelectedOptionIndex = userIdx,
+                    isUserMarkedCorrectByServer = ans?.is_correct
+                )
+                val correct = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
+                !given.isNullOrBlank() && (com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correct) || ans?.is_correct == true)
             }
             FeedbackFilter.INCORRECT -> questions.filter { q ->
                 val ans = answersMap[q.id]
                 val given = ans?.given_ans ?: q.given_ans
                 val descs = q.mcq_options?.map { it.description }
                 val rawCorrect = q.correct_option ?: ans?.correct_ans
-                val correct = if (!rawCorrect.isNullOrBlank()) rawCorrect
-                    else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(q.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
-                !given.isNullOrBlank() && !com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correct)
+                val userIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(given)
+                val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+                    directCorrectOption = rawCorrect,
+                    ansCorrectOption = ans?.correct_ans,
+                    solutionText = q.description,
+                    optionsDescriptions = descs,
+                    userSelectedOptionIndex = userIdx,
+                    isUserMarkedCorrectByServer = ans?.is_correct
+                )
+                val correct = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
+                !given.isNullOrBlank() && (!com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correct) && ans?.is_correct != true)
             }
             FeedbackFilter.UNANSWERED -> questions.filter { q ->
                 val ans = answersMap[q.id]
@@ -364,8 +388,16 @@ fun PracticeQuizFeedbackScreen(
                             val userGivenAns = ans?.given_ans ?: question.given_ans
                             val descs = question.mcq_options?.map { it.description }
                             val rawCorrect = question.correct_option ?: ans?.correct_ans
-                            val correctOpt = if (!rawCorrect.isNullOrBlank()) rawCorrect
-                                else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(question.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
+                            val userIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(userGivenAns)
+                            val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+                                directCorrectOption = rawCorrect,
+                                ansCorrectOption = ans?.correct_ans,
+                                solutionText = question.description,
+                                optionsDescriptions = descs,
+                                userSelectedOptionIndex = userIdx,
+                                isUserMarkedCorrectByServer = ans?.is_correct
+                            )
+                            val correctOpt = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
                             val isBookmarked = uiState.bookmarkedQuestionIds.contains(question.id)
 
                             QuestionFeedbackCard(
@@ -503,6 +535,53 @@ private fun QuestionFeedbackCard(
             )
 
             Spacer(modifier = Modifier.height(14.dp))
+
+            // Answer Status Summary Banner
+            val isUserAnswered = !userGivenAns.isNullOrBlank()
+            val userGivenBengali = com.example.utils.McqAnswerUtils.toBengaliLetter(userGivenAns)
+            val correctOptBengali = com.example.utils.McqAnswerUtils.toBengaliLetter(correctOpt)
+            val isUserCorrect = isUserAnswered && com.example.utils.McqAnswerUtils.isAnswerCorrect(userGivenAns, correctOpt)
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = when {
+                    !isUserAnswered -> Color(0xFFF1F5F9)
+                    isUserCorrect -> Color(0xFFDCFCE7)
+                    else -> Color(0xFFFEE2E2)
+                },
+                border = BorderStroke(
+                    1.dp,
+                    when {
+                        !isUserAnswered -> Color(0xFFCBD5E1)
+                        isUserCorrect -> Color(0xFF10B981)
+                        else -> Color(0xFFEF4444)
+                    }
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = when {
+                            !isUserAnswered -> "তুমি কোনো উত্তর দেওনি"
+                            isUserCorrect -> "তোমার উত্তর সঠিক: ($userGivenBengali)"
+                            else -> "তোমার উত্তর: ($userGivenBengali) • সঠিক উত্তর: ($correctOptBengali)"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            !isUserAnswered -> Color(0xFF64748B)
+                            isUserCorrect -> Color(0xFF047857)
+                            else -> Color(0xFFB91C1C)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // 4 Options
             val options = question.mcq_options ?: emptyList()

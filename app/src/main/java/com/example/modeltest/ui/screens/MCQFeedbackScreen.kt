@@ -326,9 +326,70 @@ private fun FeedbackQuestionCard(
 
             // Options
             val options = item.options ?: emptyList()
+            val effectiveCorrectOption = remember(item) {
+                if (item.correct_option != null && item.correct_option in options.indices) {
+                    item.correct_option
+                } else {
+                    com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+                        directCorrectOption = null,
+                        ansCorrectOption = null,
+                        solutionText = item.solution,
+                        optionsDescriptions = options.map { it.text },
+                        userSelectedOptionIndex = item.user_selected_option,
+                        isUserMarkedCorrectByServer = item.is_correct
+                    )
+                }
+            }
+
+            // Answer Status Summary Banner
+            val userSelectedLetter = item.user_selected_option?.let { bengaliLetters.getOrElse(it) { "${it + 1}" } }
+            val correctLetter = effectiveCorrectOption?.let { bengaliLetters.getOrElse(it) { "${it + 1}" } }
+            val isUserCorrect = item.is_correct == true || (item.user_selected_option != null && item.user_selected_option == effectiveCorrectOption)
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = when {
+                    item.user_selected_option == null -> Color(0xFFF1F5F9)
+                    isUserCorrect -> Color(0xFFDCFCE7)
+                    else -> Color(0xFFFEE2E2)
+                },
+                border = BorderStroke(
+                    1.dp,
+                    when {
+                        item.user_selected_option == null -> Color(0xFFCBD5E1)
+                        isUserCorrect -> Color(0xFF10B981)
+                        else -> Color(0xFFEF4444)
+                    }
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = when {
+                            item.user_selected_option == null -> "তুমি কোনো উত্তর দেওনি"
+                            isUserCorrect -> "তোমার উত্তর সঠিক: ($userSelectedLetter)"
+                            else -> "তোমার উত্তর: ($userSelectedLetter) • সঠিক উত্তর: ($correctLetter)"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            item.user_selected_option == null -> Color(0xFF64748B)
+                            isUserCorrect -> Color(0xFF047857)
+                            else -> Color(0xFFB91C1C)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             options.forEachIndexed { optIdx, opt ->
                 val optIndex = opt.index ?: optIdx
-                val isCorrectAnswer = optIndex == item.correct_option
+                val isCorrectAnswer = optIndex == effectiveCorrectOption
                 val isUserSelection = optIndex == item.user_selected_option
 
                 val optBg = when {
@@ -367,10 +428,49 @@ private fun FeedbackQuestionCard(
                         modifier = Modifier.weight(1f)
                     )
 
-                    if (isCorrectAnswer) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = "Correct", tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
-                    } else if (isUserSelection) {
-                        Icon(Icons.Default.Cancel, contentDescription = "Wrong", tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
+                    when {
+                        isCorrectAnswer && isUserSelection -> {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF10B981)
+                            ) {
+                                Text(
+                                    text = "তোমার সঠিক উত্তর",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        isCorrectAnswer -> {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF059669)
+                            ) {
+                                Text(
+                                    text = "সঠিক উত্তর",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        isUserSelection -> {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFEF4444)
+                            ) {
+                                Text(
+                                    text = "তোমার উত্তর",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

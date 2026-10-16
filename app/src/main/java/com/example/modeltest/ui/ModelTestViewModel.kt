@@ -527,6 +527,7 @@ class ModelTestViewModel(
         _uiState.update { it.copy(isSubmittingMcq = true) }
 
         viewModelScope.launch {
+            val allAnswers = _uiState.value.selectedAnswers
             val qId = if (currQ != null && selectedOpt >= 0) currQ.id else null
             val optIdx = if (currQ != null && selectedOpt >= 0) selectedOpt else null
             repository.submitMcqAnswer(
@@ -534,7 +535,8 @@ class ModelTestViewModel(
                 questionId = qId,
                 selectedOptionIndex = optIdx,
                 isTimeout = isTimeout,
-                isFinalSubmitted = true
+                isFinalSubmitted = true,
+                allAnswers = allAnswers
             )
 
             // Clear local cached state

@@ -433,7 +433,7 @@ class ChapterExamViewModel(
                 questions.forEach { q ->
                     val given = userAns[q.id] ?: ""
                     val sol = q.solution ?: ""
-                    val correctOpt = q.correct_option ?: deduceCorrectOption(sol, q.mcq_options)
+                    val correctOpt = q.correct_option ?: deduceCorrectOption(sol, q.mcq_options, q.correct_option, given)
                     if (given.isBlank()) {
                         unanswered++
                     } else if (com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correctOpt)) {
@@ -525,7 +525,21 @@ class ChapterExamViewModel(
             }
 
             val finalSolutions = if (items.isNotEmpty()) {
-                items
+                val qMap = _uiState.value.questions.associateBy { it.id }
+                items.map { item ->
+                    val origQ = qMap[item.question?.id]
+                    val mergedOptions = item.question?.mcq_options?.ifEmpty { null } ?: origQ?.mcq_options
+                    val solText = item.question?.solution?.ifBlank { null } ?: origQ?.solution ?: ""
+                    val directCorrect = item.question?.correct_option ?: origQ?.correct_option
+                    val resolvedCorrect = directCorrect ?: deduceCorrectOption(solText, mergedOptions, directCorrect, item.given_ans)
+                    item.copy(
+                        question = item.question?.copy(
+                            mcq_options = mergedOptions,
+                            solution = solText,
+                            correct_option = resolvedCorrect
+                        ) ?: origQ?.copy(correct_option = resolvedCorrect)
+                    )
+                }
             } else {
                 buildLocalSolutions()
             }
@@ -556,7 +570,7 @@ class ChapterExamViewModel(
         val userAns = _uiState.value.userAnswers
         return questions.map { q ->
             val given = userAns[q.id] ?: ""
-            val correctOpt = q.correct_option ?: deduceCorrectOption(q.solution ?: "", q.mcq_options)
+            val correctOpt = q.correct_option ?: deduceCorrectOption(q.solution ?: "", q.mcq_options, q.correct_option, given)
             ExamAnswerSolutionItem(
                 given_ans = given,
                 question = q.copy(correct_option = correctOpt)
@@ -578,26 +592,24 @@ class ChapterExamViewModel(
         }
     }
 
-    private fun deduceCorrectOption(solutionText: String, options: List<McqOptionItem>?): String {
+    private fun deduceCorrectOption(
+        solutionText: String,
+        options: List<McqOptionItem>?,
+        directCorrectOption: String? = null,
+        userGivenAns: String? = null
+    ): String {
         val descs = options?.map { it.description }
-        val extractedIdx = com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(solutionText, descs)
-        if (extractedIdx != null) {
-            val matchedOpt = options?.getOrNull(extractedIdx)
-            return matchedOpt?.no ?: com.example.utils.McqAnswerUtils.indexToBengaliLetter(extractedIdx)
-        }
-
-        // Secondary check: If solution unambiguously matches only one long option description
-        if (!options.isNullOrEmpty() && solutionText.isNotBlank()) {
-            val matchingOptions = options.filter { opt ->
-                val desc = opt.description?.trim().orEmpty()
-                desc.length >= 8 && solutionText.contains(desc, ignoreCase = true)
-            }
-            if (matchingOptions.size == 1) {
-                return matchingOptions.first().no ?: "A"
-            }
-        }
-
-        return options?.firstOrNull()?.no ?: "A"
+        val userIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(userGivenAns)
+        val resolvedIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+            directCorrectOption = directCorrectOption,
+            ansCorrectOption = null,
+            solutionText = solutionText,
+            optionsDescriptions = descs,
+            userSelectedOptionIndex = userIdx,
+            isUserMarkedCorrectByServer = null
+        )
+        val matchedOpt = options?.getOrNull(resolvedIdx)
+        return matchedOpt?.no ?: com.example.utils.McqAnswerUtils.indexToBengaliLetter(resolvedIdx)
     }
 
     override fun onCleared() {

@@ -560,7 +560,8 @@ class ModelTestRepository(
         questionId: String? = null,
         selectedOptionIndex: Int? = null,
         isTimeout: Boolean = false,
-        isFinalSubmitted: Boolean = false
+        isFinalSubmitted: Boolean = false,
+        allAnswers: Map<String, Int>? = null
     ): Result<SubmitMcqResult> {
         val mutation = """
             mutation SubmitMcqOfModelQuestion(${'$'}is_final_submitted: Boolean!, ${'$'}is_timeout: Boolean!, ${'$'}id: String!, ${'$'}answers: [UpdateMcqSessionsQuestionAnswer]!) {
@@ -572,7 +573,29 @@ class ModelTestRepository(
             }
         """.trimIndent()
 
-        val answersList = if (!questionId.isNullOrBlank() && selectedOptionIndex != null && selectedOptionIndex >= 0) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val nowIso = sdf.format(Date())
+
+        val answersList = if (!allAnswers.isNullOrEmpty()) {
+            allAnswers.mapNotNull { (qId, idx) ->
+                if (idx >= 0) {
+                    val letter = when (idx) {
+                        0 -> "A"
+                        1 -> "B"
+                        2 -> "C"
+                        3 -> "D"
+                        else -> ('A' + idx).toString()
+                    }
+                    mapOf(
+                        "id" to qId,
+                        "given_ans" to letter,
+                        "submit_time" to nowIso
+                    )
+                } else null
+            }
+        } else if (!questionId.isNullOrBlank() && selectedOptionIndex != null && selectedOptionIndex >= 0) {
             val letter = when (selectedOptionIndex) {
                 0 -> "A"
                 1 -> "B"
@@ -580,15 +603,11 @@ class ModelTestRepository(
                 3 -> "D"
                 else -> "A"
             }
-
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
             listOf(
                 mapOf(
                     "id" to questionId,
                     "given_ans" to letter,
-                    "submit_time" to sdf.format(Date())
+                    "submit_time" to nowIso
                 )
             )
         } else {
@@ -903,16 +922,22 @@ class ModelTestRepository(
                     val givenLetter = ans?.given_ans
                     val descs = rawQ.mcq_options?.map { it.description }
                     val directCorrect = rawQ.correct_option ?: ans?.correct_ans
-                    val correctIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(directCorrect)
-                        ?: com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(rawQ.solution, descs)
-                        ?: 0
 
                     val userIdx = if (!givenLetter.isNullOrBlank()) {
                         com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenLetter)
                             ?: rawQ.mcq_options?.indexOfFirst { it.no.equals(givenLetter, ignoreCase = true) }?.takeIf { it >= 0 }
                     } else null
 
-                    val isCorrect = ans?.is_correct ?: (userIdx != null && userIdx == correctIdx)
+                    val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+                        directCorrectOption = directCorrect,
+                        ansCorrectOption = ans?.correct_ans,
+                        solutionText = rawQ.solution,
+                        optionsDescriptions = descs,
+                        userSelectedOptionIndex = userIdx,
+                        isUserMarkedCorrectByServer = ans?.is_correct
+                    )
+
+                    val isCorrect = (userIdx != null && userIdx == correctIdx) || (ans?.is_correct == true)
                     val correctLetterBengali = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
 
                     val options = rawQ.mcq_options?.mapIndexed { optIdx, opt ->
@@ -963,8 +988,17 @@ class ModelTestRepository(
                 val questions = mcqResult.questions
                 val items = questions.mapIndexed { qIdx, q ->
                     val userIdx = q.user_selected_option
-                    val correctIdx = 0
-                    val isCorrect = userIdx == correctIdx
+                    val optDescs = q.options?.map { it.text }
+                    val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
+                        directCorrectOption = null,
+                        ansCorrectOption = null,
+                        solutionText = null,
+                        optionsDescriptions = optDescs,
+                        userSelectedOptionIndex = userIdx,
+                        isUserMarkedCorrectByServer = null
+                    )
+                    val isCorrect = userIdx != null && userIdx == correctIdx
+                    val correctLetterBengali = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
                     FeedbackQuestionItem(
                         id = q.id,
                         question_text = q.question ?: "প্রশ্ন ${qIdx + 1}",
@@ -973,7 +1007,7 @@ class ModelTestRepository(
                         user_selected_option = userIdx,
                         correct_option = correctIdx,
                         is_correct = isCorrect,
-                        solution = "সঠিক উত্তরটি পরীক্ষায় নির্ধারিত মানদণ্ড অনুযায়ী যাচাই করা হয়েছে।",
+                        solution = "সঠিক উত্তর: ($correctLetterBengali)",
                         solution_image = null
                     )
                 }

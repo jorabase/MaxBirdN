@@ -1086,11 +1086,14 @@ fun ExamSolutionsContent(
             val options = q?.mcq_options ?: emptyList()
             val optionDescs = options.map { it.description }
             val rawCorrectOpt = q?.correct_option
+            val userGivenIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenAns)
             val resolvedCorrectBengali = com.example.utils.McqAnswerUtils.resolveCorrectOptionBengali(
                 directCorrectOption = rawCorrectOpt,
                 ansCorrectOption = null,
                 solutionText = q?.solution,
-                optionsDescriptions = optionDescs
+                optionsDescriptions = optionDescs,
+                userSelectedOptionIndex = userGivenIdx,
+                isUserMarkedCorrectByServer = null
             )
             val givenAnsBengali = com.example.utils.McqAnswerUtils.toBengaliLetter(givenAns)
             val isUserCorrect = com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, resolvedCorrectBengali)
