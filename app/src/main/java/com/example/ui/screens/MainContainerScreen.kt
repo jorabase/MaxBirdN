@@ -28,10 +28,13 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.auth.SessionManager
 import com.example.course.CourseViewModel
+import com.example.database.DownloadedItemEntity
+import com.example.download.AppFileDownloadManager
 import com.example.home.HomeViewModel
 import com.example.ui.navigation.NavigationItem
 
@@ -65,6 +68,13 @@ fun MainContainerScreen(
     var lastBackPressedTime by remember { mutableLongStateOf(0L) }
     val birdgramRepository = remember { com.example.birdgram.BirdgramRepository(context, sessionManager) }
 
+    // Observe active downloads count for live bottom dock badge indicator
+    val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
+    val allDownloads by downloadManager.getAllDownloads().collectAsState(initial = emptyList())
+    val activeDownloadsCount = remember(allDownloads) {
+        allDownloads.count { it.status == DownloadedItemEntity.STATUS_DOWNLOADING }
+    }
+
     // Double Back Press to Exit (3 seconds window) & Tab back navigation
     BackHandler {
         if (selectedIndex != 0) {
@@ -85,7 +95,7 @@ fun MainContainerScreen(
             .fillMaxSize()
             .background(
                 if (isDark) {
-                    Brush.verticalGradient(listOf(Color(0xFF0B1120), Color(0xFF0F172A)))
+                    Brush.verticalGradient(listOf(Color(0xFF070D19), Color(0xFF0F172A), Color(0xFF09101D)))
                 } else {
                     Brush.verticalGradient(listOf(Color(0xFFF8FAFC), Color(0xFFEFF6FF), Color(0xFFF8FAFC)))
                 }
@@ -94,24 +104,30 @@ fun MainContainerScreen(
         // Soft ambient glows (decorative)
         Box(
             modifier = Modifier
-                .size(320.dp)
-                .offset(x = (-100).dp, y = (-120).dp)
+                .size(340.dp)
+                .offset(x = (-110).dp, y = (-120).dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
-                        listOf(Color(0xFF2D5BFF).copy(alpha = if (isDark) 0.15f else 0.08f), Color.Transparent)
+                        listOf(
+                            Color(0xFF2D5BFF).copy(alpha = if (isDark) 0.16f else 0.08f),
+                            Color.Transparent
+                        )
                     )
                 )
         )
         Box(
             modifier = Modifier
-                .size(280.dp)
+                .size(290.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = 90.dp, y = (-110).dp)
+                .offset(x = 95.dp, y = (-110).dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
-                        listOf(Color(0xFF00BFA6).copy(alpha = if (isDark) 0.12f else 0.07f), Color.Transparent)
+                        listOf(
+                            Color(0xFF00BFA6).copy(alpha = if (isDark) 0.13f else 0.07f),
+                            Color.Transparent
+                        )
                     )
                 )
         )
@@ -122,15 +138,15 @@ fun MainContainerScreen(
             transitionSpec = {
                 val direction = if (targetState > initialState) 1 else -1
                 (fadeIn(tween(260, easing = FastOutSlowInEasing)) +
-                        slideInHorizontally(
-                            animationSpec = tween(280, easing = FastOutSlowInEasing),
-                            initialOffsetX = { it / 14 * direction }
-                        )) togetherWith
-                        (fadeOut(tween(160)) +
-                                slideOutHorizontally(
-                                    tween(200),
-                                    targetOffsetX = { -it / 18 * direction }
-                                ))
+                    slideInHorizontally(
+                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                        initialOffsetX = { it / 14 * direction }
+                    )) togetherWith
+                    (fadeOut(tween(160)) +
+                        slideOutHorizontally(
+                            tween(200),
+                            targetOffsetX = { -it / 18 * direction }
+                        ))
             },
             label = "TabContentTransition",
             modifier = Modifier.fillMaxSize()
@@ -145,7 +161,11 @@ fun MainContainerScreen(
                         onCourseSelected = { program ->
                             homeViewModel.switchActiveCourse(program)
                             courseViewModel.openCourse(program)
-                            Toast.makeText(context, "${program.title_bn ?: "কোর্স"} নির্বাচিত হয়েছে ✨", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                "${program.title_bn ?: "কোর্স"} নির্বাচিত হয়েছে ✨",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         onOpenCourse = { phaseId ->
                             val activeProg = homeViewModel.uiState.value.activeProgram
@@ -208,7 +228,9 @@ fun MainContainerScreen(
                     )
                 }
                 else -> {
-                    ComingSoonScreen(tabItem = NavigationItem.items.getOrElse(tabIndex) { NavigationItem.items[0] })
+                    ComingSoonScreen(
+                        tabItem = NavigationItem.items.getOrElse(tabIndex) { NavigationItem.items[0] }
+                    )
                 }
             }
         }
@@ -232,29 +254,31 @@ fun MainContainerScreen(
                             courseViewModel.loadSubjects()
                         }
                     }
-                }
+                },
+                activeDownloadsCount = activeDownloadsCount
             )
         }
     }
 }
 
 /**
- * Premium Floating Dock — glow shadow, icon bounce spring, gradient shine border
+ * Premium Floating Dock — glow shadow, icon bounce spring, gradient shine border, and live download indicator
  */
 private data class TabTheme(val pillBg: Color, val border: Color, val icon: Color)
 
 @Composable
 fun ElementalFloatingBottomBar(
     selectedIndex: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    activeDownloadsCount: Int = 0
 ) {
     val themes = remember {
         listOf(
-            TabTheme(Color(0xFF261908), Color(0xFFF59E0B), Color(0xFFFBBF24)), // Amber (Home)
-            TabTheme(Color(0xFF082744), Color(0xFF0284C7), Color(0xFF38BDF8)), // Azure (Courses)
-            TabTheme(Color(0xFF042F2E), Color(0xFF06B6D4), Color(0xFF22D3EE)), // Telegram Cyan (Birdgram)
-            TabTheme(Color(0xFF0C243D), Color(0xFF38BDF8), Color(0xFF7DD3FC)), // Sky (Downloads)
-            TabTheme(Color(0xFF201338), Color(0xFFA855F7), Color(0xFFC084FC))  // Violet (Settings)
+            TabTheme(Color(0xFF281A07), Color(0xFFF59E0B), Color(0xFFFBBF24)), // Amber (Home)
+            TabTheme(Color(0xFF072541), Color(0xFF0284C7), Color(0xFF38BDF8)), // Azure (Courses)
+            TabTheme(Color(0xFF042D2C), Color(0xFF06B6D4), Color(0xFF22D3EE)), // Cyan (Birdgram)
+            TabTheme(Color(0xFF0B243E), Color(0xFF38BDF8), Color(0xFF7DD3FC)), // Sky (Downloads)
+            TabTheme(Color(0xFF21123A), Color(0xFFA855F7), Color(0xFFC084FC))  // Violet (Settings)
         )
     }
 
@@ -262,33 +286,37 @@ fun ElementalFloatingBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 5.dp)
-            .height(59.dp)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .height(62.dp)
             .shadow(
-                elevation = 20.dp,
-                shape = RoundedCornerShape(30.dp),
-                spotColor = Color.Black.copy(alpha = 0.5f)
+                elevation = 22.dp,
+                shape = RoundedCornerShape(31.dp),
+                spotColor = Color.Black.copy(alpha = 0.55f)
             ),
-        shape = RoundedCornerShape(30.dp),
-        color = Color(0xFF07152B),
+        shape = RoundedCornerShape(31.dp),
+        color = Color(0xFF071428),
         border = BorderStroke(
             1.dp,
             Brush.horizontalGradient(
-                listOf(Color(0xFF1E3A5F).copy(alpha = 0.9f), Color(0xFF2D5BFF).copy(alpha = 0.45f), Color(0xFF1E3A5F).copy(alpha = 0.9f))
+                listOf(
+                    Color(0xFF1E3A5F).copy(alpha = 0.9f),
+                    Color(0xFF38BDF8).copy(alpha = 0.45f),
+                    Color(0xFF1E3A5F).copy(alpha = 0.9f)
+                )
             )
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Top shine line
+            // Top specular highlight line
             Box(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(horizontal = 32.dp)
+                    .padding(horizontal = 36.dp)
                     .height(1.dp)
-                    .width(120.dp)
+                    .width(130.dp)
                     .background(
                         Brush.horizontalGradient(
-                            listOf(Color.Transparent, Color.White.copy(alpha = 0.25f), Color.Transparent)
+                            listOf(Color.Transparent, Color.White.copy(alpha = 0.28f), Color.Transparent)
                         )
                     )
             )
@@ -300,110 +328,143 @@ fun ElementalFloatingBottomBar(
                 horizontalArrangement = Arrangement.SpaceAround,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-            NavigationItem.items.forEachIndexed { index, item ->
-                val isSelected = selectedIndex == index
-                val theme = themes.getOrElse(index) { themes.last() }
+                NavigationItem.items.forEachIndexed { index, item ->
+                    val isSelected = selectedIndex == index
+                    val theme = themes.getOrElse(index) { themes.last() }
+                    val showDownloadBadge = index == 3 && activeDownloadsCount > 0
 
-                // Icon bounce on selection
-                val iconScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.15f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "iconScale$index"
-                )
+                    val iconScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.15f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "iconScale$index"
+                    )
 
-                // Unselected → selected color transition
-                val iconTint by animateColorAsState(
-                    targetValue = if (isSelected) theme.icon else Color(0xFF94A3B8),
-                    animationSpec = tween(250),
-                    label = "iconTint$index"
-                )
+                    val iconTint by animateColorAsState(
+                        targetValue = if (isSelected) theme.icon else Color(0xFF94A3B8),
+                        animationSpec = tween(250),
+                        label = "iconTint$index"
+                    )
 
-                // Press feedback
-                val interaction = remember { MutableInteractionSource() }
-                val isPressed by interaction.collectIsPressedAsState()
-                val itemScale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.92f else 1f,
-                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                    label = "itemScale$index"
-                )
+                    val interaction = remember { MutableInteractionSource() }
+                    val isPressed by interaction.collectIsPressedAsState()
+                    val itemScale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.92f else 1f,
+                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        label = "itemScale$index"
+                    )
 
-                AnimatedContent(
-                    targetState = isSelected,
-                    transitionSpec = {
-                        (fadeIn(tween(200)) + scaleIn(initialScale = 0.9f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)))
-                            .togetherWith(fadeOut(tween(140)))
-                    },
-                    label = "TabPillTransition$index"
-                ) { selected ->
-                    if (selected) {
-                        Surface(
-                            shape = RoundedCornerShape(21.dp),
-                            color = theme.pillBg,
-                            border = BorderStroke(
-                                1.2.dp,
-                                Brush.horizontalGradient(listOf(theme.border, theme.border.copy(alpha = 0.5f), theme.border))
-                            ),
-                            shadowElevation = 6.dp,
-                            modifier = Modifier
-                                .height(41.dp)
-                                .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
-                                .clickable(interactionSource = interaction, indication = null) { onTabSelected(index) }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    AnimatedContent(
+                        targetState = isSelected,
+                        transitionSpec = {
+                            (fadeIn(tween(200)) + scaleIn(
+                                initialScale = 0.9f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                            )).togetherWith(fadeOut(tween(140)))
+                        },
+                        label = "TabPillTransition$index"
+                    ) { selected ->
+                        if (selected) {
+                            Surface(
+                                shape = RoundedCornerShape(22.dp),
+                                color = theme.pillBg,
+                                border = BorderStroke(
+                                    1.2.dp,
+                                    Brush.horizontalGradient(
+                                        listOf(theme.border, theme.border.copy(alpha = 0.55f), theme.border)
+                                    )
+                                ),
+                                shadowElevation = 6.dp,
+                                modifier = Modifier
+                                    .height(42.dp)
+                                    .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
+                                    .clickable(interactionSource = interaction, indication = null) {
+                                        onTabSelected(index)
+                                    }
                             ) {
-                                Icon(
-                                    imageVector = item.selectedIcon,
-                                    contentDescription = item.title,
-                                    tint = theme.icon,
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.dp)
+                                ) {
+                                    Box {
+                                        Icon(
+                                            imageVector = item.selectedIcon,
+                                            contentDescription = item.title,
+                                            tint = theme.icon,
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+                                        )
+                                        if (showDownloadBadge) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(7.dp)
+                                                    .align(Alignment.TopEnd)
+                                                    .offset(x = 2.dp, y = (-2).dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFF10B981))
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = item.title,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
+                                    .clickable(interactionSource = interaction, indication = null) {
+                                        onTabSelected(index)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Box {
+                                    Icon(
+                                        imageVector = item.unselectedIcon,
+                                        contentDescription = item.title,
+                                        tint = iconTint,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+                                    )
+                                    if (showDownloadBadge) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(7.dp)
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = 3.dp, y = (-2).dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF38BDF8))
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = item.title,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = iconTint,
+                                    maxLines = 1
                                 )
                             }
-                        }
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
-                                .clickable(interactionSource = interaction, indication = null) { onTabSelected(index) }
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = item.unselectedIcon,
-                                contentDescription = item.title,
-                                tint = iconTint,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = item.title,
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = iconTint
-                            )
                         }
                     }
                 }
             }
         }
     }
-}
 }

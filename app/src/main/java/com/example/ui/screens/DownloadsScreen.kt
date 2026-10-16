@@ -5,12 +5,18 @@ import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -20,12 +26,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -38,9 +46,59 @@ import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.ui.components.SlideViewerDialog
 import com.example.utils.NetworkUtils
-import kotlinx.coroutines.launch
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+
+private fun Int.toBengaliDigits(): String = this.toString().toBengaliDigits()
+
+private fun String.toBengaliDigits(): String {
+    val bnDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
+    val sb = StringBuilder(this.length)
+    for (ch in this) {
+        if (ch in '0'..'9') {
+            sb.append(bnDigits[ch - '0'])
+        } else {
+            sb.append(ch)
+        }
+    }
+    return sb.toString()
+}
+
+private fun formatDownloadDateBangla(timestampMs: Long): String {
+    if (timestampMs <= 0L) return ""
+    return try {
+        val sdf = SimpleDateFormat("dd MMM, yyyy", Locale.US)
+        val formatted = sdf.format(Date(timestampMs))
+        formatted
+            .replace("Jan", "জানু")
+            .replace("Feb", "ফেব্রু")
+            .replace("Mar", "মার্চ")
+            .replace("Apr", "এপ্রিল")
+            .replace("May", "মে")
+            .replace("Jun", "জুন")
+            .replace("Jul", "জুলাই")
+            .replace("Aug", "আগস্ট")
+            .replace("Sep", "সেপ্টে")
+            .replace("Oct", "অক্টো")
+            .replace("Nov", "নভে")
+            .replace("Dec", "ডিসে")
+            .toBengaliDigits()
+    } catch (_: Exception) {
+        ""
+    }
+}
+
+private fun formatSpeedChipBangla(speedMBs: Float): String {
+    if (speedMBs <= 0.005f) return "সংযোগ হচ্ছে..."
+    return if (speedMBs >= 1.0f) {
+        String.format(Locale.US, "%.1f মেগাবাইট/সে.", speedMBs).toBengaliDigits()
+    } else {
+        val kb = (speedMBs * 1024f).coerceAtLeast(1f)
+        String.format(Locale.US, "%.0f কেবি/সে.", kb).toBengaliDigits()
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,14 +111,17 @@ fun DownloadsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val isDark = isSystemInDarkTheme()
 
     val allDownloads by downloadManager.getAllDownloads().collectAsState(initial = emptyList())
+    val activeSpeeds by downloadManager.activeSpeedsFlow.collectAsState()
 
-    var selectedCategoryIndex by remember { mutableIntStateOf(0) } // 0: All, 1: Videos, 2: PDFs
-    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategoryIndex by rememberSaveable { mutableIntStateOf(0) } // 0: All, 1: Videos, 2: PDFs
+    var selectedSortOrder by rememberSaveable { mutableIntStateOf(0) } // 0: Newest, 1: Largest, 2: Title
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var itemToDelete by remember { mutableStateOf<DownloadedItemEntity?>(null) }
     var activePdfViewerItem by remember { mutableStateOf<DownloadedItemEntity?>(null) }
 
@@ -93,25 +154,47 @@ fun DownloadsScreen(
 
     val activeDownloads = remember(allDownloads) {
         allDownloads.filter {
-            it.status == DownloadedItemEntity.STATUS_DOWNLOADING || it.status == DownloadedItemEntity.STATUS_PAUSED
+            it.status == DownloadedItemEntity.STATUS_DOWNLOADING ||
+                it.status == DownloadedItemEntity.STATUS_PAUSED
         }
     }
 
-    val completedDownloads = remember(allDownloads) {
-        allDownloads.filter { it.status == DownloadedItemEntity.STATUS_COMPLETED }
+    val completedAndFailedDownloads = remember(allDownloads) {
+        allDownloads.filter {
+            it.status == DownloadedItemEntity.STATUS_COMPLETED ||
+                it.status == DownloadedItemEntity.STATUS_FAILED
+        }
     }
 
-    val filteredList = remember(allDownloads, selectedCategoryIndex, searchQuery) {
-        allDownloads.filter { item ->
+    val completedCount = remember(allDownloads) {
+        allDownloads.count { it.status == DownloadedItemEntity.STATUS_COMPLETED }
+    }
+
+    val videoCount = remember(completedAndFailedDownloads) {
+        completedAndFailedDownloads.count { it.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true) }
+    }
+
+    val pdfCount = remember(completedAndFailedDownloads) {
+        completedAndFailedDownloads.count { it.fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true) }
+    }
+
+    // Filter only Completed & Failed items in main library so active items are not duplicated below!
+    val filteredList = remember(completedAndFailedDownloads, selectedCategoryIndex, selectedSortOrder, searchQuery) {
+        val base = completedAndFailedDownloads.filter { item ->
             val matchesCategory = when (selectedCategoryIndex) {
                 1 -> item.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true)
                 2 -> item.fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true)
                 else -> true
             }
             val matchesQuery = searchQuery.isBlank() ||
-                    item.title.contains(searchQuery, ignoreCase = true) ||
-                    (item.subtitle?.contains(searchQuery, ignoreCase = true) == true)
+                item.title.contains(searchQuery.trim(), ignoreCase = true) ||
+                (item.subtitle?.contains(searchQuery.trim(), ignoreCase = true) == true)
             matchesCategory && matchesQuery
+        }
+        when (selectedSortOrder) {
+            1 -> base.sortedByDescending { it.totalBytes }
+            2 -> base.sortedBy { it.title }
+            else -> base.sortedByDescending { it.createdAt }
         }
     }
 
@@ -119,7 +202,7 @@ fun DownloadsScreen(
     val appUsedBytes = remember(allDownloads) {
         allDownloads.sumOf { it.downloadedBytes.coerceAtLeast(0L) }
     }
-    val deviceFreeBytes = remember {
+    val deviceFreeBytes = remember(allDownloads.size) {
         try { Environment.getDataDirectory().freeSpace } catch (_: Exception) { 0L }
     }
     val deviceTotalBytes = remember {
@@ -137,7 +220,7 @@ fun DownloadsScreen(
         )
     }
 
-    // Deletion Modal
+    // Deletion Confirmation Dialog
     if (itemToDelete != null) {
         val item = itemToDelete!!
         AlertDialog(
@@ -145,25 +228,30 @@ fun DownloadsScreen(
             icon = {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(52.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFFEE2E2)),
+                        .background(Color(0xFFEF4444).copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Delete, null, tint = Color(0xFFDC2626), modifier = Modifier.size(24.dp))
+                    Icon(
+                        imageVector = Icons.Default.DeleteForever,
+                        contentDescription = null,
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             },
             title = {
                 Text(
                     text = "ডাউনলোড মুছে ফেলবেন?",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
+                    fontSize = 17.5.sp,
                     textAlign = TextAlign.Center
                 )
             },
             text = {
                 Text(
-                    text = "\"${item.title}\" ফাইলটি আপনার অফলাইন ডিভাইস মেমোরি থেকে মুছে ফেলা হবে।",
+                    text = "\"${item.title}\" ফাইলটি আপনার অফলাইন মেমোরি থেকে স্থায়ীভাবে মুছে ফেলা হবে।",
                     fontSize = 13.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -177,16 +265,20 @@ fun DownloadsScreen(
                         Toast.makeText(context, "ফাইলটি মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("মুছে ফেলুন", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { itemToDelete = null }) {
-                    Text("বাতিল")
+                OutlinedButton(
+                    onClick = { itemToDelete = null },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("বাতিল", fontWeight = FontWeight.SemiBold)
                 }
-            }
+            },
+            shape = RoundedCornerShape(22.dp)
         )
     }
 
@@ -204,21 +296,21 @@ fun DownloadsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isOfflineOnly) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFFEE2E2)),
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.14f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CloudOff,
                                     contentDescription = "Offline Mode",
-                                    tint = Color(0xFFDC2626),
+                                    tint = Color(0xFFEF4444),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -228,6 +320,7 @@ fun DownloadsScreen(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
                                     .testTag("downloads_back_button")
                             ) {
                                 Icon(
@@ -238,34 +331,54 @@ fun DownloadsScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "অফলাইন ডাউনলোড সেন্টার",
                                 fontSize = 17.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "হাই-স্পিড ভিডিও ও ই-বুক ম্যানেজার",
+                                text = if (isOfflineOnly) {
+                                    "অফলাইন মোড • ইন্টারনেট ছাড়াই ক্লাস ও নোট দেখুন"
+                                } else {
+                                    "হাই-স্পিড ভিডিও ও লেকচার শিট ম্যানেজার"
+                                },
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFF0284C7).copy(alpha = 0.12f)
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color(0xFF0284C7).copy(alpha = 0.14f),
+                            border = BorderStroke(1.dp, Color(0xFF0284C7).copy(alpha = 0.3f))
                         ) {
-                            Text(
-                                text = "${completedDownloads.size} টি ফাইল",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0284C7),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0284C7),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "${completedCount.toBengaliDigits()} টি ফাইল",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0284C7)
+                                )
+                            }
                         }
                     }
                 }
@@ -281,54 +394,74 @@ fun DownloadsScreen(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                contentPadding = PaddingValues(bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Network restored banner
+                // Network restored banner in offline mode
                 if (isOfflineOnly && autoDetectedOnline) {
                     item {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
-                                .padding(top = 8.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color(0xFFDCFCE7),
-                            border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                                .padding(top = 10.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7),
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
                             shadowElevation = 2.dp
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(12.dp),
+                                    .padding(13.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.Wifi, null, tint = Color(0xFF16A34A), modifier = Modifier.size(22.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Wifi,
+                                    contentDescription = null,
+                                    tint = if (isDark) Color(0xFF34D399) else Color(0xFF16A34A),
+                                    modifier = Modifier.size(24.dp)
+                                )
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text("ইন্টারনেট সংযোগ চালু হয়েছে!", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF14532D))
-                                    Text("অনলাইন মোডে ফিরে যেতে ট্যাপ করুন", fontSize = 11.sp, color = Color(0xFF166534))
+                                    Text(
+                                        text = "ইন্টারনেট সংযোগ সচল হয়েছে!",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isDark) Color.White else Color(0xFF14532D)
+                                    )
+                                    Text(
+                                        text = "সম্পূর্ণ অনলাইন অ্যাপে ফিরে যেতে ট্যাপ করুন",
+                                        fontSize = 11.5.sp,
+                                        color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF166534)
+                                    )
                                 }
                                 Button(
                                     onClick = { onNavigateOnline?.invoke() },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                    modifier = Modifier.height(32.dp)
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(34.dp)
                                 ) {
-                                    Text("অনলাইনে যান", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(
+                                        text = "অনলাইনে যান",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
                                 }
                             }
                         }
                     }
                 }
 
-                // Top Storage Gauge Meter Card
+                // Storage Gauge Meter Card
                 item {
                     StorageGaugeCard(
                         appUsedBytes = appUsedBytes,
                         deviceFreeBytes = deviceFreeBytes,
                         deviceTotalBytes = deviceTotalBytes,
+                        completedCount = completedCount,
                         downloadManager = downloadManager,
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
@@ -339,33 +472,70 @@ fun DownloadsScreen(
                 // Active Downloading / Paused Section
                 if (activeDownloads.isNotEmpty()) {
                     item {
+                        val anyDownloading = activeDownloads.any { it.status == DownloadedItemEntity.STATUS_DOWNLOADING }
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp)
                         ) {
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF0284C7))
-                                )
-                                Text(
-                                    text = "চলমান ডাউনলোডসমূহ (${activeDownloads.size})",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(9.dp)
+                                            .clip(CircleShape)
+                                            .background(if (anyDownloading) Color(0xFF0284C7) else Color(0xFFF59E0B))
+                                    )
+                                    Text(
+                                        text = "চলমান ডাউনলোড (${activeDownloads.size.toBengaliDigits()})",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
+
+                                if (activeDownloads.size > 1) {
+                                    TextButton(
+                                        onClick = {
+                                            if (anyDownloading) {
+                                                downloadManager.pauseAllDownloads()
+                                            } else {
+                                                downloadManager.resumeAllDownloads()
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (anyDownloading) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp),
+                                            tint = Color(0xFF0284C7)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (anyDownloading) "সব পজ করুন" else "সব চালু করুন",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0284C7)
+                                        )
+                                    }
+                                }
                             }
+
                             Spacer(modifier = Modifier.height(8.dp))
 
                             activeDownloads.forEach { activeItem ->
                                 ActiveDownloadProgressCard(
                                     item = activeItem,
+                                    speedMBs = activeSpeeds[activeItem.id] ?: 0f,
                                     downloadManager = downloadManager,
                                     modifier = Modifier.padding(bottom = 8.dp)
                                 )
@@ -374,47 +544,159 @@ fun DownloadsScreen(
                     }
                 }
 
-                // Category Tabs & Search Bar
+                // Search Bar + Category Filter Chips + Sort Options
                 item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Category Filter Chips
+                        // Search Bar
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = {
+                                Text(
+                                    text = "ডাউনলোডকৃত ভিডিও বা নোট খুঁজুন...",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = Color(0xFF0284C7),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            searchQuery = ""
+                                            focusManager.clearFocus()
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                }
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF0284C7),
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                        )
+
+                        // Scrollable Filter Chips & Sort Button Row
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val categories = listOf("সবগুলো (${allDownloads.size})", "ভিডিও (${allDownloads.count { it.fileType == DownloadedItemEntity.FILE_TYPE_VIDEO }})", "নোট/পিডিএফ (${allDownloads.count { it.fileType == DownloadedItemEntity.FILE_TYPE_PDF }})")
-                            categories.forEachIndexed { index, label ->
+                            val categories = listOf(
+                                "সবগুলো (${completedAndFailedDownloads.size.toBengaliDigits()})" to Icons.Default.Folder,
+                                "ভিডিও (${videoCount.toBengaliDigits()})" to Icons.Default.PlayCircleFilled,
+                                "নোট/পিডিএফ (${pdfCount.toBengaliDigits()})" to Icons.Default.PictureAsPdf
+                            )
+                            categories.forEachIndexed { index, (label, icon) ->
                                 val isSelected = selectedCategoryIndex == index
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { selectedCategoryIndex = index },
-                                    label = { Text(label, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = label,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    },
                                     shape = RoundedCornerShape(20.dp),
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Color(0xFF0284C7),
                                         selectedLabelColor = Color.White,
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        containerColor = MaterialTheme.colorScheme.surface,
                                         labelColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        enabled = true,
+                                        selected = isSelected,
+                                        borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                        selectedBorderColor = Color(0xFF0284C7)
                                     )
                                 )
                             }
+
+                            // Cycle Sort Order Chip
+                            val sortLabel = when (selectedSortOrder) {
+                                1 -> "সাইজ অনুযায়ী"
+                                2 -> "নাম অনুযায়ী"
+                                else -> "নতুন প্রথমে"
+                            }
+                            AssistChip(
+                                onClick = { selectedSortOrder = (selectedSortOrder + 1) % 3 },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Sort,
+                                        contentDescription = "Sort",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = Color(0xFF0284C7)
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = sortLabel,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp)
+                            )
                         }
                     }
                 }
 
                 // File List or Empty View
                 if (filteredList.isEmpty()) {
-                    item {
-                        EmptyDownloadsView(
-                            isVideosTab = selectedCategoryIndex != 2,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 40.dp)
-                        )
+                    if (activeDownloads.isEmpty()) {
+                        item {
+                            EmptyDownloadsView(
+                                isVideosTab = selectedCategoryIndex != 2,
+                                isSearching = searchQuery.isNotBlank(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 36.dp)
+                            )
+                        }
                     }
                 } else {
                     items(filteredList, key = { it.id }) { item ->
@@ -422,6 +704,27 @@ fun DownloadsScreen(
                             item = item,
                             downloadManager = downloadManager,
                             onClick = {
+                                if (item.status != DownloadedItemEntity.STATUS_COMPLETED) {
+                                    downloadManager.resumeDownload(item.id)
+                                    Toast.makeText(
+                                        context,
+                                        "ডাউনলোড পুনরায় শুরু করা হচ্ছে...",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    return@DownloadedItemCard
+                                }
+
+                                val localFile = File(item.localFilePath)
+                                if (!localFile.exists() || localFile.length() == 0L) {
+                                    Toast.makeText(
+                                        context,
+                                        "ফাইলটি ডিভাইসে পাওয়া যায়নি, পুনরায় ডাউনলোড করা হচ্ছে",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    downloadManager.resumeDownload(item.id)
+                                    return@DownloadedItemCard
+                                }
+
                                 if (item.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true)) {
                                     onPlayVideo(
                                         item.localFilePath,
@@ -453,27 +756,38 @@ private fun StorageGaugeCard(
     appUsedBytes: Long,
     deviceFreeBytes: Long,
     deviceTotalBytes: Long,
+    completedCount: Int,
     downloadManager: AppFileDownloadManager,
     modifier: Modifier = Modifier
 ) {
     val appUsedStr = remember(appUsedBytes) { downloadManager.formatFileSize(appUsedBytes, inBengali = true) }
     val freeStr = remember(deviceFreeBytes) { downloadManager.formatFileSize(deviceFreeBytes, inBengali = true) }
+    val isLowStorage = deviceFreeBytes in 1L..(500L * 1024L * 1024L) // < 500 MB free
 
-    val usedFraction = remember(appUsedBytes, deviceTotalBytes) {
-        if (deviceTotalBytes > 0) (appUsedBytes.toFloat() / deviceTotalBytes.toFloat()).coerceIn(0.01f, 1f) else 0.05f
+    val targetFraction = remember(appUsedBytes, deviceTotalBytes) {
+        if (deviceTotalBytes > 0L) {
+            (appUsedBytes.toFloat() / deviceTotalBytes.toFloat()).coerceIn(0.02f, 1f)
+        } else {
+            0.05f
+        }
     }
+    val animatedFraction by animateFloatAsState(
+        targetValue = targetFraction,
+        animationSpec = tween(600, easing = FastOutSlowInEasing),
+        label = "storageFraction"
+    )
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        shadowElevation = 2.dp,
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp)
+                .padding(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -483,59 +797,82 @@ private fun StorageGaugeCard(
                 Row(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(30.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF0284C7).copy(alpha = 0.12f)),
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFF0284C7).copy(alpha = 0.18f),
+                                        Color(0xFF38BDF8).copy(alpha = 0.10f)
+                                    )
+                                )
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.SdStorage, null, tint = Color(0xFF0284C7), modifier = Modifier.size(16.dp))
+                        Icon(
+                            imageVector = Icons.Default.SdStorage,
+                            contentDescription = null,
+                            tint = Color(0xFF0284C7),
+                            modifier = Modifier.size(19.dp)
+                        )
                     }
-                    Text(
-                        text = "স্টোরেজ মেজারমেন্ট",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
+                    Column {
+                        Text(
+                            text = "অফলাইন স্টোরেজ মিটার",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "সর্বমোট সংরক্ষিত ফাইল: ${completedCount.toBengaliDigits()} টি",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(0xFF10B981).copy(alpha = 0.12f)
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isLowStorage) {
+                        Color(0xFFEF4444).copy(alpha = 0.14f)
+                    } else {
+                        Color(0xFF10B981).copy(alpha = 0.14f)
+                    }
                 ) {
                     Text(
-                        text = "মেমোরি ঠিক আছে",
-                        fontSize = 10.sp,
+                        text = if (isLowStorage) "মেমোরি কম" else "মেমোরি ঠিক আছে",
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF059669),
+                        color = if (isLowStorage) Color(0xFFDC2626) else Color(0xFF059669),
                         maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Dual Storage Meter Progress Bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .fillMaxWidth(usedFraction)
-                        .clip(RoundedCornerShape(3.dp))
+                        .fillMaxWidth(animatedFraction)
+                        .clip(RoundedCornerShape(4.dp))
                         .background(
                             Brush.horizontalGradient(
-                                listOf(Color(0xFF0284C7), Color(0xFF38BDF8))
+                                listOf(Color(0xFF0284C7), Color(0xFF38BDF8), Color(0xFF06B6D4))
                             )
                         )
                 )
@@ -553,9 +890,14 @@ private fun StorageGaugeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF0284C7)))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0284C7))
+                    )
                     Text(
-                        text = "শিখো অ্যাপ ভিডিও: $appUsedStr",
+                        text = "অ্যাপ ডাউনলোড: $appUsedStr",
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -564,13 +906,18 @@ private fun StorageGaugeCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF10B981)))
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (isLowStorage) Color(0xFFEF4444) else Color(0xFF10B981))
+                    )
                     Text(
                         text = "খালি জায়গা: $freeStr",
                         fontSize = 11.5.sp,
@@ -587,19 +934,45 @@ private fun StorageGaugeCard(
 @Composable
 private fun ActiveDownloadProgressCard(
     item: DownloadedItemEntity,
+    speedMBs: Float,
     downloadManager: AppFileDownloadManager,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isSystemInDarkTheme()
     val isPaused = item.status == DownloadedItemEntity.STATUS_PAUSED
-    val isFailed = item.status == DownloadedItemEntity.STATUS_FAILED
 
-    val downloadedStr = remember(item.downloadedBytes) { downloadManager.formatFileSize(item.downloadedBytes, inBengali = true) }
-    val totalStr = remember(item.totalBytes) { downloadManager.formatFileSize(item.totalBytes, inBengali = true) }
+    val downloadedStr = remember(item.downloadedBytes) {
+        downloadManager.formatFileSize(item.downloadedBytes, inBengali = true)
+    }
+    val totalStr = remember(item.totalBytes) {
+        if (item.totalBytes > 0L) downloadManager.formatFileSize(item.totalBytes, inBengali = true) else "..."
+    }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = item.progressFraction,
+        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        label = "activeDownloadProgress"
+    )
+
+    val cardBg = when {
+        isPaused && isDark -> Color(0xFF291D0A)
+        isPaused && !isDark -> Color(0xFFFFFBEB)
+        !isPaused && isDark -> Color(0xFF0C223B)
+        else -> Color(0xFFF0F9FF)
+    }
+
+    val borderCol = when {
+        isPaused -> Color(0xFFF59E0B).copy(alpha = if (isDark) 0.55f else 0.7f)
+        else -> Color(0xFF38BDF8).copy(alpha = if (isDark) 0.45f else 0.7f)
+    }
+
+    val primaryTextCol = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val secondaryTextCol = if (isDark) Color(0xFF94A3B8) else Color(0xFF334155)
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (isPaused) Color(0xFFFFFBEB) else Color(0xFFF0F9FF),
-        border = BorderStroke(1.dp, if (isPaused) Color(0xFFFCD34D) else Color(0xFFBAE6FD)),
+        color = cardBg,
+        border = BorderStroke(1.dp, borderCol),
         shadowElevation = 2.dp,
         modifier = modifier.fillMaxWidth()
     ) {
@@ -610,15 +983,21 @@ private fun ActiveDownloadProgressCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (isPaused) Color(0xFFFEF3C7) else Color(0xFFE0F2FE)),
+                        .background(
+                            if (isPaused) {
+                                Color(0xFFF59E0B).copy(alpha = 0.18f)
+                            } else {
+                                Color(0xFF0284C7).copy(alpha = 0.18f)
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (isPaused) Icons.Default.PauseCircleFilled else Icons.Default.CloudDownload,
                         contentDescription = null,
-                        tint = if (isPaused) Color(0xFFD97706) else Color(0xFF0284C7),
+                        tint = if (isPaused) Color(0xFFF59E0B) else Color(0xFF38BDF8),
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -628,38 +1007,66 @@ private fun ActiveDownloadProgressCard(
                         text = item.title,
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = primaryTextCol,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
+                    val statusLine = if (isPaused) {
+                        "পজ করা রয়েছে • $downloadedStr / $totalStr (${item.progressPercent.toBengaliDigits()}%)"
+                    } else {
+                        val speedText = formatSpeedChipBangla(speedMBs)
+                        "$downloadedStr / $totalStr • $speedText (${item.progressPercent.toBengaliDigits()}%)"
+                    }
                     Text(
-                        text = if (isPaused) "পজ করা রয়েছে • $downloadedStr" else "$downloadedStr / $totalStr (${item.progressPercent}%)",
+                        text = statusLine,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF334155)
+                        color = secondaryTextCol,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilledTonalIconButton(
                         onClick = {
-                            if (isPaused) downloadManager.resumeDownload(item.id) else downloadManager.pauseDownload(item.id)
+                            if (isPaused) {
+                                downloadManager.resumeDownload(item.id)
+                            } else {
+                                downloadManager.pauseDownload(item.id)
+                            }
                         },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (isPaused) {
+                                Color(0xFF10B981).copy(alpha = 0.18f)
+                            } else {
+                                Color(0xFF0284C7).copy(alpha = 0.18f)
+                            }
+                        )
                     ) {
                         Icon(
                             imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                             contentDescription = if (isPaused) "Resume" else "Pause",
-                            tint = Color(0xFF0284C7)
+                            tint = if (isPaused) Color(0xFF10B981) else Color(0xFF0284C7),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = { downloadManager.cancelDownload(item.id) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(34.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color(0xFFEF4444).copy(alpha = 0.15f)
+                        )
                     ) {
-                        Icon(Icons.Default.Close, "Cancel", tint = Color(0xFFEF4444))
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel",
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 }
             }
@@ -667,13 +1074,13 @@ private fun ActiveDownloadProgressCard(
             Spacer(modifier = Modifier.height(10.dp))
 
             LinearProgressIndicator(
-                progress = { item.progressFraction },
+                progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
                 color = if (isPaused) Color(0xFFF59E0B) else Color(0xFF0284C7),
-                trackColor = Color(0xFFE2E8F0)
+                trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
             )
         }
     }
@@ -687,13 +1094,27 @@ fun DownloadedItemCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isSystemInDarkTheme()
     val isVideo = item.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true)
     val isFailed = item.status == DownloadedItemEntity.STATUS_FAILED
     val isPaused = item.status == DownloadedItemEntity.STATUS_PAUSED
 
-    val subjectLabel = item.subtitle?.takeIf { it.isNotBlank() } ?: if (isVideo) "ভিডিও লেকচার" else "লেকচার শিট"
-    val sizeText = remember(item.totalBytes) {
-        if (item.totalBytes > 0) downloadManager.formatFileSize(item.totalBytes, inBengali = true) else ""
+    val subjectLabel = item.subtitle?.takeIf { it.isNotBlank() }
+        ?: if (isVideo) "ভিডিও লেকচার" else "লেকচার শিট"
+
+    val sizeText = remember(item.totalBytes, item.downloadedBytes) {
+        val bytesToShow = if (item.totalBytes > 0L) item.totalBytes else item.downloadedBytes
+        if (bytesToShow > 0L) downloadManager.formatFileSize(bytesToShow, inBengali = true) else ""
+    }
+
+    val dateText = remember(item.createdAt) {
+        formatDownloadDateBangla(item.createdAt)
+    }
+
+    val accentColor = when {
+        isFailed -> Color(0xFFEF4444)
+        isVideo -> Color(0xFF0284C7)
+        else -> Color(0xFF7C3AED)
     }
 
     Surface(
@@ -701,10 +1122,13 @@ fun DownloadedItemCard(
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(
             1.dp,
-            if (isFailed) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
-            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            if (isFailed) {
+                Color(0xFFEF4444).copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)
+            }
         ),
-        shadowElevation = 1.dp,
+        shadowElevation = 1.5.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
@@ -717,20 +1141,22 @@ fun DownloadedItemCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Type Icon / Status Icon
+            // Type / Status Icon Container
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (isVideo) Color(0xFFE0F2FE) else Color(0xFFEDE9FE)
-                    ),
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(accentColor.copy(alpha = if (isDark) 0.18f else 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isVideo) Icons.Default.PlayCircleFilled else Icons.Default.PictureAsPdf,
+                    imageVector = when {
+                        isFailed -> Icons.Default.ErrorOutline
+                        isVideo -> Icons.Default.PlayCircleFilled
+                        else -> Icons.Default.PictureAsPdf
+                    },
                     contentDescription = null,
-                    tint = if (isVideo) Color(0xFF0284C7) else Color(0xFF7C3AED),
+                    tint = accentColor,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -743,23 +1169,34 @@ fun DownloadedItemCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = if (isVideo) Color(0xFF0284C7).copy(alpha = 0.12f) else Color(0xFF7C3AED).copy(alpha = 0.12f)
+                        color = accentColor.copy(alpha = 0.14f)
                     ) {
                         Text(
-                            text = subjectLabel,
+                            text = if (isFailed) "ডাউনলোড ব্যর্থ" else subjectLabel,
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isVideo) Color(0xFF0284C7) else Color(0xFF7C3AED),
+                            color = accentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
 
                     if (sizeText.isNotBlank()) {
                         Text(
-                            text = "•  $sizeText",
+                            text = "• $sizeText",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (dateText.isNotBlank() && !isFailed) {
+                        Text(
+                            text = "• $dateText",
+                            fontSize = 10.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1
                         )
                     }
                 }
@@ -774,19 +1211,37 @@ fun DownloadedItemCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                if (isFailed) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "পুনরায় ডাউনলোড শুরু করতে ট্যাপ করুন",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFFEF4444)
+                    )
+                }
             }
 
-            // Actions (Play/View + Delete)
+            // Actions (Retry / Delete)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (isFailed || isPaused) {
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = { downloadManager.resumeDownload(item.id) },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(36.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color(0xFF0284C7).copy(alpha = 0.15f)
+                        )
                     ) {
-                        Icon(Icons.Default.Refresh, "Retry", tint = Color(0xFF0284C7))
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Retry",
+                            tint = Color(0xFF0284C7),
+                            modifier = Modifier.size(19.dp)
+                        )
                     }
                 }
 
@@ -797,7 +1252,7 @@ fun DownloadedItemCard(
                     Icon(
                         imageVector = Icons.Default.DeleteOutline,
                         contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.75f),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -809,7 +1264,8 @@ fun DownloadedItemCard(
 @Composable
 fun EmptyDownloadsView(
     isVideosTab: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSearching: Boolean = false
 ) {
     Column(
         modifier = modifier.padding(32.dp),
@@ -818,15 +1274,26 @@ fun EmptyDownloadsView(
     ) {
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(76.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            Color(0xFF0284C7).copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                    )
+                ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isVideosTab) Icons.Default.CloudDownload else Icons.Default.PictureAsPdf,
+                imageVector = when {
+                    isSearching -> Icons.Default.SearchOff
+                    isVideosTab -> Icons.Default.CloudDownload
+                    else -> Icons.Default.PictureAsPdf
+                },
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                tint = Color(0xFF0284C7).copy(alpha = 0.8f),
                 modifier = Modifier.size(36.dp)
             )
         }
@@ -834,16 +1301,25 @@ fun EmptyDownloadsView(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = if (isVideosTab) "কোনো ডাউনলোডকৃত ভিডিও নেই" else "কোনো ডাউনলোডকৃত নোট নেই",
+            text = when {
+                isSearching -> "কোনো ফাইল খুঁজে পাওয়া যায়নি"
+                isVideosTab -> "কোনো ডাউনলোডকৃত ভিডিও নেই"
+                else -> "কোনো ডাউনলোডকৃত নোট বা পিডিএফ নেই"
+            },
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "সংরক্ষিত ফাইল এখানে অফলাইনে দেখার জন্য জমা থাকবে",
+            text = if (isSearching) {
+                "অনুগ্রহ করে অন্য কোনো নাম বা কি-ওয়ার্ড দিয়ে খুঁজে দেখুন"
+            } else {
+                "ডাউনলোড করা ক্লাস ও নোট এখানে ইন্টারনেট ছাড়াই অফলাইনে দেখার জন্য জমা থাকবে"
+            },
             fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
