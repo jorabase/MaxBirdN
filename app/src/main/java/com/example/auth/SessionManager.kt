@@ -296,6 +296,18 @@ class SessionManager(context: Context) {
 
     fun getUserAvatar(): String? = sharedPreferences.getString("user_avatar", null)
 
+    fun getLiveCustomStudentName(): String? {
+        val custom = sharedPreferences.getString("live_custom_student_name", null) ?: fallbackPrefs.getString("live_custom_student_name", null)
+        if (!custom.isNullOrBlank()) return custom
+        return getUserFullName()
+    }
+
+    fun setLiveCustomStudentName(name: String) {
+        val clean = name.trim()
+        sharedPreferences.edit().putString("live_custom_student_name", clean).apply()
+        fallbackPrefs.edit().putString("live_custom_student_name", clean).apply()
+    }
+
     fun saveSelectedSubjectCodes(programId: String, subjectCodes: Set<String>) {
         sharedPreferences.edit()
             .putStringSet("priority_subjects_$programId", subjectCodes)

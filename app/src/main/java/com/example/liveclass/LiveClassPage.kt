@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.util.Log
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -14,9 +15,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -138,8 +145,22 @@ fun LiveClassPage(
 
     var uiState by remember { mutableStateOf<LiveClassState>(LiveClassState.Loading) }
     var studentName by remember {
-        mutableStateOf(sessionManager.getUserFullName() ?: "শিক্ষার্থী")
+        mutableStateOf(sessionManager.getLiveCustomStudentName() ?: sessionManager.getUserFullName() ?: "শিক্ষার্থী")
     }
+    var showNameChangeDialog by remember { mutableStateOf(false) }
+    var showJoinNameDialog by rememberSaveable {
+        mutableStateOf(sessionManager.getLiveCustomStudentName().isNullOrBlank())
+    }
+
+    // Live Delay state & Sync Trigger
+    var liveDelaySeconds by remember { mutableIntStateOf(0) }
+    var syncToLiveTrigger by remember { mutableLongStateOf(0L) }
+
+    // Video aspect ratio, zoom scale, and pan
+    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var videoScale by remember { mutableFloatStateOf(1.0f) }
+    var videoPan by remember { mutableStateOf(Offset.Zero) }
+
     var selectedRole by remember { mutableStateOf("student") } // "teacher", "student", "all"
 
     var lectureSlideUrls by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -433,6 +454,11 @@ fun LiveClassPage(
                 candidateUrls = candidateUrls,
                 selectedResolution = selectedResolution,
                 isPipActive = true,
+                resizeMode = resizeMode,
+                videoScale = 1.0f,
+                videoPan = Offset.Zero,
+                syncToLiveTrigger = syncToLiveTrigger,
+                onLiveDelayChanged = { liveDelaySeconds = it },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -523,6 +549,11 @@ fun LiveClassPage(
                                     candidateUrls = candidateUrls,
                                     selectedResolution = selectedResolution,
                                     isPipActive = false,
+                                    resizeMode = resizeMode,
+                                    videoScale = videoScale,
+                                    videoPan = videoPan,
+                                    syncToLiveTrigger = syncToLiveTrigger,
+                                    onLiveDelayChanged = { liveDelaySeconds = it },
                                     modifier = Modifier.fillMaxSize(),
                                     onBack = {
                                         if (isLandscape) toggleScreenOrientation()
@@ -534,20 +565,85 @@ fun LiveClassPage(
                                 )
                             }
 
-                            // Touch Interceptor covering the video surface
+                            val currentScaleState = rememberUpdatedState(videoScale)
+
+                            // Touch & Gesture Interceptor covering the video surface (Pinch to zoom, pan, double tap, single tap)
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        showPlayerControls = !showPlayerControls
-                                        if (showPlayerControls) {
-                                            lastUserInteractionTime = System.currentTimeMillis()
+                                    .pointerInput(Unit) {
+                                        detectTransformGestures { _, pan, zoom, _ ->
+                                            val newScale = (currentScaleState.value * zoom).coerceIn(1.0f, 4.0f)
+                                            videoScale = newScale
+                                            if (newScale > 1.02f) {
+                                                val maxPanX = (newScale - 1f) * 600f
+                                                val maxPanY = (newScale - 1f) * 400f
+                                                videoPan = Offset(
+                                                    x = (videoPan.x + pan.x).coerceIn(-maxPanX, maxPanX),
+                                                    y = (videoPan.y + pan.y).coerceIn(-maxPanY, maxPanY)
+                                                )
+                                            } else {
+                                                videoScale = 1.0f
+                                                videoPan = Offset.Zero
+                                            }
                                         }
                                     }
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onDoubleTap = {
+                                                if (videoScale > 1.05f) {
+                                                    videoScale = 1.0f
+                                                    videoPan = Offset.Zero
+                                                    Toast.makeText(context, "জুম রিসেট (১.০x)", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    videoScale = 1.5f
+                                                    Toast.makeText(context, "১.৫x জুম করা হয়েছে ✨", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            onTap = {
+                                                showPlayerControls = !showPlayerControls
+                                                if (showPlayerControls) {
+                                                    lastUserInteractionTime = System.currentTimeMillis()
+                                                }
+                                            }
+                                        )
+                                    }
                             )
+
+                            // Quick Reset Pill when video is zoomed in
+                            if (videoScale > 1.05f) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = Color.Black.copy(alpha = 0.75f),
+                                    border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .clickable {
+                                            videoScale = 1.0f
+                                            videoPan = Offset.Zero
+                                            Toast.makeText(context, "জুম রিসেট করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                        }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ZoomIn,
+                                            contentDescription = null,
+                                            tint = Color(0xFF38BDF8),
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Text(
+                                            text = "${(videoScale * 100).toInt()}% জুম • রিসেট",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
 
                             // ----------------------------------------------------
                             // TOP CONTROLS OVERLAY (Back, LIVE, Viewers, Resolution, Poll)
@@ -599,13 +695,23 @@ fun LiveClassPage(
 
                                         Spacer(modifier = Modifier.width(6.dp))
 
-                                        // 2. LIVE / RECORDING Badge
+                                        // 2. LIVE / RECORDING Badge (Clickable to sync to live edge!)
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
-                                            color = if (isLiveOnGoing) Color(0xFFE11D48) else Color(0xFF10B981)
+                                            color = if (isLiveOnGoing) {
+                                                if (liveDelaySeconds > 3) Color(0xFFE11D48) else Color(0xFF059669)
+                                            } else Color(0xFF10B981),
+                                            modifier = Modifier.clickable {
+                                                if (isLiveOnGoing) {
+                                                    lastUserInteractionTime = System.currentTimeMillis()
+                                                    syncToLiveTrigger = System.currentTimeMillis()
+                                                }
+                                            }
                                         ) {
                                             Text(
-                                                text = if (isLiveOnGoing) "🔴 LIVE" else "📺 RECORDING",
+                                                text = if (isLiveOnGoing) {
+                                                    if (liveDelaySeconds > 3) "🔴 LIVE (-${liveDelaySeconds}s)" else "🔴 LIVE"
+                                                } else "📺 RECORDING",
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color.White,
@@ -641,6 +747,46 @@ fun LiveClassPage(
                                         }
 
                                         Spacer(modifier = Modifier.weight(1f))
+
+                                        // Student Display Name Chip in Player Top Bar (Click to change name anytime)
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color.Black.copy(alpha = 0.6f),
+                                            border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)),
+                                            modifier = Modifier.clickable {
+                                                lastUserInteractionTime = System.currentTimeMillis()
+                                                showNameChangeDialog = true
+                                            }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Person,
+                                                    contentDescription = "Student Name",
+                                                    tint = Color(0xFF38BDF8),
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = studentName,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF38BDF8),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = "Edit Name",
+                                                    tint = Color.White.copy(alpha = 0.65f),
+                                                    modifier = Modifier.size(10.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(6.dp))
 
                                         // 4. Resolution Switcher Button (Clean Pill)
                                         Surface(
@@ -712,8 +858,8 @@ fun LiveClassPage(
                             }
 
                             // ----------------------------------------------------
-                            // BOTTOM CONTROLS OVERLAY (Fullscreen, PiP, Slides, Landscape Chat)
-                            // Positioned at Bottom of video, exactly where users look!
+                            // BOTTOM CONTROLS OVERLAY (Live Sync, Fit/Zoom, PiP, Slides, Fullscreen)
+                            // Positioned at Bottom of video
                             // ----------------------------------------------------
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = showPlayerControls,
@@ -738,25 +884,288 @@ fun LiveClassPage(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         if (isLandscape) {
-                                            Text(
-                                                text = effectiveLessonTitle,
-                                                fontSize = 12.5.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = Color.White.copy(alpha = 0.9f),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                 modifier = Modifier.weight(1f, fill = false)
-                                            )
+                                            ) {
+                                                // Clickable LIVE Sync Button in Landscape
+                                                Surface(
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (liveDelaySeconds > 3) Color(0xFFE11D48).copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.55f),
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        if (liveDelaySeconds > 3) Color(0xFFF43F5E).copy(alpha = 0.85f) else Color(0xFF10B981).copy(alpha = 0.6f)
+                                                    ),
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            lastUserInteractionTime = System.currentTimeMillis()
+                                                            syncToLiveTrigger = System.currentTimeMillis()
+                                                        }
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(6.dp)
+                                                                .clip(CircleShape)
+                                                                .background(if (liveDelaySeconds > 3) Color(0xFFF43F5E) else Color(0xFF10B981))
+                                                        )
+                                                        Text(
+                                                            text = if (liveDelaySeconds > 3) "🔴 লাইভ (${liveDelaySeconds}s)" else "🔴 লাইভ",
+                                                            fontSize = 10.5.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White
+                                                        )
+                                                    }
+                                                }
+
+                                                Text(
+                                                    text = effectiveLessonTitle,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.White.copy(alpha = 0.9f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         } else {
-                                            Text(
-                                                text = "🔴 লাইভ ক্লাস প্লেয়ার",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF38BDF8)
-                                            )
+                                            // Clickable LIVE Sync Button in Portrait (Tapping reduces delay to 0)
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = if (liveDelaySeconds > 3) Color(0xFFE11D48).copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.55f),
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (liveDelaySeconds > 3) Color(0xFFF43F5E).copy(alpha = 0.85f) else Color(0xFF10B981).copy(alpha = 0.6f)
+                                                ),
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        lastUserInteractionTime = System.currentTimeMillis()
+                                                        syncToLiveTrigger = System.currentTimeMillis()
+                                                    }
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(7.dp)
+                                                            .clip(CircleShape)
+                                                            .background(if (liveDelaySeconds > 3) Color(0xFFF43F5E) else Color(0xFF10B981))
+                                                    )
+                                                    Text(
+                                                        text = if (liveDelaySeconds > 3) "🔴 লাইভ (${liveDelaySeconds}s পেছনে • ট্যাপ করুন)" else "🔴 লাইভ",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
+                                                    )
+                                                }
+                                            }
                                         }
 
                                         Spacer(modifier = Modifier.weight(1f))
+
+                                        if (isLandscape) {
+                                            // Landscape Aspect Ratio Segmented Bar (Fit | Zoom | Full)
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color.Black.copy(alpha = 0.65f),
+                                                border = BorderStroke(0.8.dp, Color(0xFF334155))
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.padding(2.dp)
+                                                ) {
+                                                    // Fit Option
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT && videoScale <= 1.05f) Color(0xFF0284C7) else Color.Transparent,
+                                                        modifier = Modifier.clickable {
+                                                            lastUserInteractionTime = System.currentTimeMillis()
+                                                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                            videoScale = 1.0f
+                                                            videoPan = Offset.Zero
+                                                            Toast.makeText(context, "ভিডিও: ফিট স্ক্রিন (Fit)", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    ) {
+                                                        Text(
+                                                            text = "ফিট",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+
+                                                    // Zoom Option (Fill / Crop)
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_ZOOM) Color(0xFF0284C7) else Color.Transparent,
+                                                        modifier = Modifier.clickable {
+                                                            lastUserInteractionTime = System.currentTimeMillis()
+                                                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                                            videoScale = 1.0f
+                                                            videoPan = Offset.Zero
+                                                            Toast.makeText(context, "ভিডিও: জুম ও ফিল স্ক্রিন (Zoom & Fill)", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    ) {
+                                                        Text(
+                                                            text = "জুম",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+
+                                                    // Full Stretch Option
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = if (resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FILL) Color(0xFF0284C7) else Color.Transparent,
+                                                        modifier = Modifier.clickable {
+                                                            lastUserInteractionTime = System.currentTimeMillis()
+                                                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                                            videoScale = 1.0f
+                                                            videoPan = Offset.Zero
+                                                            Toast.makeText(context, "ভিডিও: পূর্ণ পর্দা (Stretch Full)", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    ) {
+                                                        Text(
+                                                            text = "ফুল",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.width(6.dp))
+
+                                            // Landscape Zoom Stepper Controls: [-] 100% [+]
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color.Black.copy(alpha = 0.65f),
+                                                border = BorderStroke(0.8.dp, if (videoScale > 1.05f) Color(0xFF38BDF8) else Color(0xFF334155))
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                                                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 1.dp)
+                                                ) {
+                                                    // Zoom Out Button
+                                                    IconButton(
+                                                        onClick = {
+                                                            lastUserInteractionTime = System.currentTimeMillis()
+                                                            val newScale = (videoScale - 0.25f).coerceAtLeast(1.0f)
+                                                            videoScale = newScale
+                                                            if (newScale <= 1.02f) {
+                                                                videoPan = Offset.Zero
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(26.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ZoomOut,
+                                                            contentDescription = "Zoom Out",
+                                                            tint = if (videoScale > 1.02f) Color(0xFF38BDF8) else Color.Gray,
+                                                            modifier = Modifier.size(15.dp)
+                                                        )
+                                                    }
+
+                                                    Text(
+                                                        text = "${(videoScale * 100).toInt()}%",
+                                                        fontSize = 10.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (videoScale > 1.05f) Color(0xFF38BDF8) else Color.White,
+                                                        modifier = Modifier.padding(horizontal = 3.dp)
+                                                    )
+
+                                                    // Zoom In Button
+                                                    IconButton(
+                                                        onClick = {
+                                                            lastUserInteractionTime = System.currentTimeMillis()
+                                                            val newScale = (videoScale + 0.25f).coerceAtMost(4.0f)
+                                                            videoScale = newScale
+                                                        },
+                                                        modifier = Modifier.size(26.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ZoomIn,
+                                                            contentDescription = "Zoom In",
+                                                            tint = if (videoScale < 4.0f) Color(0xFF38BDF8) else Color.Gray,
+                                                            modifier = Modifier.size(15.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // Portrait Aspect Ratio / Fit / Zoom / Fill button
+                                            Surface(
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color.Black.copy(alpha = 0.6f),
+                                                border = BorderStroke(
+                                                    0.8.dp,
+                                                    if (resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT || videoScale > 1.05f) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.35f)
+                                                ),
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        lastUserInteractionTime = System.currentTimeMillis()
+                                                        videoScale = 1.0f
+                                                        videoPan = Offset.Zero
+                                                        resizeMode = when (resizeMode) {
+                                                            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                                            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                                        }
+                                                        val label = when (resizeMode) {
+                                                            AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ভিডিও সাইজ: ফিট স্ক্রিন (Fit)"
+                                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন (Zoom & Fill)"
+                                                            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ভিডিও সাইজ: ফুল স্ক্রিন (Stretch)"
+                                                            else -> "ফিট স্ক্রিন"
+                                                        }
+                                                        Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
+                                                    }
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = when (resizeMode) {
+                                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> Icons.Default.ZoomOutMap
+                                                            AspectRatioFrameLayout.RESIZE_MODE_FILL -> Icons.Default.FitScreen
+                                                            else -> Icons.Default.AspectRatio
+                                                        },
+                                                        contentDescription = "Aspect Ratio",
+                                                        tint = if (resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT || videoScale > 1.05f) Color(0xFF38BDF8) else Color.White,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                    Text(
+                                                        text = when (resizeMode) {
+                                                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "জুম"
+                                                            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ফুল"
+                                                            else -> "ফিট"
+                                                        },
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT || videoScale > 1.05f) Color(0xFF38BDF8) else Color.White
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(6.dp))
 
                                         // Slide Notes
                                         if (lectureSlideUrls.isNotEmpty()) {
@@ -895,6 +1304,23 @@ fun LiveClassPage(
                                             Spacer(Modifier.width(6.dp))
                                             Text("লাইভ চ্যাট", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             Spacer(Modifier.weight(1f))
+                                            // Student name chip in landscape drawer
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color(0xFF1E293B),
+                                                border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)),
+                                                modifier = Modifier.clickable { showNameChangeDialog = true }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Edit, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(10.dp))
+                                                    Text(studentName, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8), maxLines = 1)
+                                                }
+                                            }
+                                            Spacer(Modifier.width(4.dp))
                                             IconButton(
                                                 onClick = { showLandscapeChat = false },
                                                 modifier = Modifier.size(26.dp)
@@ -1151,6 +1577,36 @@ fun LiveClassPage(
                                                     color = if (isSelected) Color.White else Color(0xFF94A3B8)
                                                 )
                                             }
+                                    }
+
+                                    Spacer(modifier = Modifier.weight(1f))
+
+                                    // Custom Student Name Chip & Edit Trigger
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0xFF1E293B),
+                                        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.65f)),
+                                        modifier = Modifier.clickable { showNameChangeDialog = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit Name",
+                                                tint = Color(0xFF38BDF8),
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                            Text(
+                                                text = studentName,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF38BDF8),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
                                 }
@@ -1349,8 +1805,9 @@ fun LiveClassPage(
                         }
                     }
                 }
+            }
 
-                is LiveClassState.Error -> {
+            is LiveClassState.Error -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -1503,6 +1960,143 @@ fun LiveClassPage(
             confirmButton = {
                 TextButton(onClick = { showResolutionDialog = false }) {
                     Text("বাতিল", color = Color(0xFF94A3B8))
+                }
+            }
+        )
+    }
+
+    // Custom Student Display Name Dialog (for joining or editing anytime)
+    if (showNameChangeDialog || showJoinNameDialog) {
+        val isFirstJoin = showJoinNameDialog
+        var nameInput by remember(studentName) { mutableStateOf(studentName) }
+        val defaultProfileName = sessionManager.getUserFullName() ?: "শিক্ষার্থী"
+
+        AlertDialog(
+            onDismissRequest = {
+                showNameChangeDialog = false
+                showJoinNameDialog = false
+            },
+            containerColor = Color(0xFF1E293B),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isFirstJoin) Icons.Default.Badge else Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = if (isFirstJoin) "লাইভ ক্লাসে যোগদানের নাম" else "প্রদর্শন নাম পরিবর্তন করুন",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "লাইভ চ্যাটে বার্তা পাঠানোর সময় এবং শিক্ষক ও অন্য শিক্ষার্থীদের কাছে আপনার এই নামটি প্রদর্শিত হবে:",
+                        fontSize = 12.5.sp,
+                        color = Color(0xFF94A3B8),
+                        lineHeight = 17.sp
+                    )
+
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        singleLine = true,
+                        placeholder = { Text("আপনার নাম লিখুন...", color = Color.Gray, fontSize = 13.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
+                        },
+                        trailingIcon = {
+                            if (nameInput.isNotBlank()) {
+                                IconButton(onClick = { nameInput = "" }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF38BDF8),
+                            unfocusedBorderColor = Color(0xFF334155),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedContainerColor = Color(0xFF0F172A),
+                            unfocusedContainerColor = Color(0xFF0F172A)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Quick suggestion chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "পরামর্শ:",
+                            fontSize = 11.sp,
+                            color = Color(0xFF64748B)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0F172A),
+                            border = BorderStroke(0.8.dp, Color(0xFF334155)),
+                            modifier = Modifier.clickable { nameInput = defaultProfileName }
+                        ) {
+                            Text(
+                                text = "প্রোফাইল নাম",
+                                fontSize = 10.5.sp,
+                                color = Color(0xFF38BDF8),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val clean = nameInput.trim().ifBlank { defaultProfileName }
+                        studentName = clean
+                        sessionManager.setLiveCustomStudentName(clean)
+                        wsManager.updateStudentName(clean)
+                        showNameChangeDialog = false
+                        showJoinNameDialog = false
+                        Toast.makeText(context, "নাম '$clean' হিসেবে সেট করা হয়েছে ✨", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = if (isFirstJoin) "এই নামে যোগ দিন" else "সংরক্ষণ করুন",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 12.5.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showNameChangeDialog = false
+                        showJoinNameDialog = false
+                    }
+                ) {
+                    Text(
+                        text = if (isFirstJoin) "ডিফল্ট নাম রাখুন" else "বাতিল",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp
+                    )
                 }
             }
         )

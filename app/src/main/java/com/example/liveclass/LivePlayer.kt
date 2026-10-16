@@ -31,7 +31,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.source.BehindLiveWindowException
 import androidx.media3.ui.PlayerView
+import android.widget.Toast
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.media3.common.C
+import androidx.media3.ui.AspectRatioFrameLayout
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val TAG = "LivePlayer"
@@ -43,6 +49,11 @@ fun LivePlayer(
     candidateUrls: List<String> = emptyList(),
     selectedResolution: String = "auto",
     isPipActive: Boolean = false,
+    resizeMode: Int = AspectRatioFrameLayout.RESIZE_MODE_FIT,
+    videoScale: Float = 1.0f,
+    videoPan: Offset = Offset.Zero,
+    syncToLiveTrigger: Long = 0L,
+    onLiveDelayChanged: ((seconds: Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     onError: ((String) -> Unit)? = null
@@ -230,30 +241,89 @@ fun LivePlayer(
     // Connect PiP Controller
     com.example.util.SetupPipController(player = exoPlayer, isPlaying = isPlaying)
 
+    // Sync to live edge trigger
+    LaunchedEffect(syncToLiveTrigger) {
+        if (syncToLiveTrigger > 0L) {
+            try {
+                if (exoPlayer.isCurrentMediaItemLive) {
+                    val duration = exoPlayer.duration
+                    if (duration != C.TIME_UNSET && duration > 0L) {
+                        exoPlayer.seekTo(duration)
+                    } else {
+                        exoPlayer.seekToDefaultPosition()
+                    }
+                } else {
+                    exoPlayer.seekToDefaultPosition()
+                }
+                exoPlayer.setPlaybackSpeed(1.0f)
+                exoPlayer.playWhenReady = true
+                exoPlayer.play()
+                Toast.makeText(context, "লাইভ স্ট্রিমে সিঙ্ক করা হয়েছে (০ সেকেন্ড বিলম্ব) ✨", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error seeking to live: ${e.message}")
+            }
+        }
+    }
+
+    // Monitor live delay offset periodically
+    LaunchedEffect(exoPlayer) {
+        while (isActive) {
+            try {
+                val offsetMs = exoPlayer.currentLiveOffset
+                val delaySec = if (offsetMs != C.TIME_UNSET && offsetMs > 0L) {
+                    (offsetMs / 1000L).toInt().coerceAtLeast(0)
+                } else {
+                    val dur = exoPlayer.duration
+                    val pos = exoPlayer.currentPosition
+                    if (dur != C.TIME_UNSET && dur > pos && exoPlayer.isCurrentMediaItemLive) {
+                        ((dur - pos) / 1000L).toInt().coerceAtLeast(0)
+                    } else {
+                        0
+                    }
+                }
+                onLiveDelayChanged?.invoke(delaySec)
+            } catch (_: Exception) {}
+            delay(1000L)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Core Video Surface
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false
-                    setShowBuffering(if (isPipActive) PlayerView.SHOW_BUFFERING_NEVER else PlayerView.SHOW_BUFFERING_ALWAYS)
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
+        // Core Video Surface with Zoom, Pan & Aspect Ratio
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = videoScale
+                    scaleY = videoScale
+                    translationX = videoPan.x
+                    translationY = videoPan.y
                 }
-            },
-            update = { playerView ->
-                playerView.player = exoPlayer
-                playerView.useController = false
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false
+                        this.resizeMode = resizeMode
+                        setShowBuffering(if (isPipActive) PlayerView.SHOW_BUFFERING_NEVER else PlayerView.SHOW_BUFFERING_ALWAYS)
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                update = { playerView ->
+                    playerView.player = exoPlayer
+                    playerView.useController = false
+                    playerView.resizeMode = resizeMode
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Buffering Indicator Overlay
         if (isBuffering && !isEnded && !isPlayerError) {

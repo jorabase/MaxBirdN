@@ -1204,6 +1204,8 @@ class LiveClassWebSocketManager {
                     ?: infoRaw.optString("msg").takeIf { it.isNotBlank() }
                     ?: infoRaw.optString("text").takeIf { it.isNotBlank() }
                 sender = infoRaw.optString("sender").takeIf { it.isNotBlank() }
+                    ?: infoRaw.optString("senderName").takeIf { it.isNotBlank() }
+                    ?: infoRaw.optString("sender_name").takeIf { it.isNotBlank() }
                     ?: infoRaw.optString("name").takeIf { it.isNotBlank() }
                 role = infoRaw.optString("role").takeIf { it.isNotBlank() }
                 if (infoRaw.has("time")) timestampMillis = infoRaw.optLong("time", timestampMillis)
@@ -1216,6 +1218,8 @@ class LiveClassWebSocketManager {
                             ?: infoJson.optString("msg").takeIf { it.isNotBlank() }
                             ?: infoJson.optString("text").takeIf { it.isNotBlank() }
                         sender = infoJson.optString("sender").takeIf { it.isNotBlank() }
+                            ?: infoJson.optString("senderName").takeIf { it.isNotBlank() }
+                            ?: infoJson.optString("sender_name").takeIf { it.isNotBlank() }
                             ?: infoJson.optString("name").takeIf { it.isNotBlank() }
                         role = infoJson.optString("role").takeIf { it.isNotBlank() }
                         if (infoJson.has("time")) timestampMillis = infoJson.optLong("time", timestampMillis)
@@ -1314,6 +1318,7 @@ class LiveClassWebSocketManager {
                 }
             }
 
+            val effectiveSenderName = studentName.ifBlank { currentStudentName }
             val broadcastMsg = JSONObject().apply {
                 put("id", reqId)
                 put("method", "broadcast")
@@ -1321,6 +1326,10 @@ class LiveClassWebSocketManager {
                     put("info", JSONObject().apply {
                         put("message", text)
                         put("type", "chat")
+                        put("sender", effectiveSenderName)
+                        put("name", effectiveSenderName)
+                        put("senderName", effectiveSenderName)
+                        put("sender_name", effectiveSenderName)
                     })
                     put("roles", targetRolesArray)
                 })
@@ -1337,6 +1346,30 @@ class LiveClassWebSocketManager {
 
     fun dismissActivePoll() {
         _activePoll.value = null
+    }
+
+    fun updateStudentName(newName: String) {
+        val cleanName = newName.trim().ifBlank { "শিক্ষার্থী" }
+        currentStudentName = cleanName
+        val ws = webSocket
+        if (ws != null && _isConnected.value) {
+            try {
+                val reqId = UUID.randomUUID().toString()
+                pendingRpcRequests[reqId] = RpcRequestMeta("change-name")
+                val changeNameMsg = JSONObject().apply {
+                    put("id", reqId)
+                    put("method", "change-name")
+                    put("params", JSONObject().apply {
+                        put("name", cleanName)
+                    })
+                    put("jsonrpc", "2.0")
+                }
+                ws.send(changeNameMsg.toString())
+                Log.d(TAG, "Sent change-name to WebSocket: $cleanName")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to update peer name over WebSocket: ${e.message}")
+            }
+        }
     }
 
     fun setDirectMasterUrl(url: String) {
