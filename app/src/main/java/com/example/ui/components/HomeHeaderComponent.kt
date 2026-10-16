@@ -202,13 +202,8 @@ fun HomeHeader(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     val fallbackInitial = remember(userName) {
                         userName.trim().firstOrNull()?.toString()?.uppercase() ?: "U"
                     }
@@ -303,81 +298,6 @@ fun HomeHeader(
                             )
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Right Actions: PRO Badge + Glass Notification Bell
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (isPremium) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = Color(0xFFF59E0B).copy(alpha = 0.22f),
-                            border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.65f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFBBF24),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "PRO",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFFFDE68A)
-                                )
-                            }
-                        }
-                    }
-
-                    // Glassmorphic Notification Button
-                    Box(contentAlignment = Alignment.TopEnd) {
-                        Surface(
-                            onClick = onNotificationClick,
-                            shape = CircleShape,
-                            color = Color(0xFF07152B).copy(alpha = 0.6f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = "নোটিফিকেশন",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(19.dp)
-                                )
-                            }
-                        }
-
-                        if (unreadNotificationCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = 2.dp, y = (-2).dp)
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFEF4444))
-                                    .border(1.5.dp, Color(0xFF07152B), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (unreadNotificationCount > 9) "৯+" else unreadNotificationCount.toString(),
-                                    fontSize = 8.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             // Sleek, Compact Glassmorphic Course Switcher Pill
