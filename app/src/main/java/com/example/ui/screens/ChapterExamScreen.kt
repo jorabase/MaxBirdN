@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -682,14 +683,19 @@ fun ExamQuestionsContent(
                         val selectedAns = uiState.userAnswers[currentQuestion.id] ?: ""
                         val options = currentQuestion.mcq_options ?: emptyList()
 
-                        options.forEach { option ->
+                        options.forEachIndexed { optIdx, option ->
                             val optionNo = option.no ?: ""
-                            val isSelected = selectedAns.equals(optionNo, ignoreCase = true)
+                            val isSelected = selectedAns.isNotBlank() && (
+                                selectedAns.equals(optionNo, ignoreCase = true) ||
+                                com.example.utils.McqAnswerUtils.isAnswerCorrect(selectedAns, optionNo) ||
+                                com.example.utils.McqAnswerUtils.normalizeToOptionIndex(selectedAns) == optIdx
+                            )
 
                             McqOptionCard(
+                                index = optIdx,
                                 option = option,
                                 isSelected = isSelected,
-                                onClick = { onSelectOption(optionNo) }
+                                onClick = { onSelectOption(optionNo.ifBlank { ('A' + optIdx).toString() }) }
                             )
 
                             Spacer(modifier = Modifier.height(10.dp))
@@ -740,10 +746,15 @@ fun ExamQuestionsContent(
 
 @Composable
 fun McqOptionCard(
+    index: Int,
     option: McqOptionItem,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val optionLetter = com.example.utils.McqAnswerUtils.toBengaliLetter(option.no).ifBlank {
+        com.example.utils.McqAnswerUtils.indexToBengaliLetter(index)
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -762,6 +773,23 @@ fun McqOptionCard(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Surface(
+                shape = CircleShape,
+                color = if (isSelected) Color(0xFF0072EC) else Color(0xFFF1F5F9),
+                modifier = Modifier.size(30.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = optionLetter,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color.White else Color(0xFF475569)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
             QuizRichContent(
                 text = option.description ?: "",
                 textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
@@ -1055,9 +1083,17 @@ fun ExamSolutionsContent(
         if (currentSolution != null) {
             val q = currentSolution.question
             val givenAns = currentSolution.given_ans ?: ""
-            val correctOpt = q?.correct_option ?: "B"
-
-            val isUserCorrect = givenAns.equals(correctOpt, ignoreCase = true)
+            val options = q?.mcq_options ?: emptyList()
+            val optionDescs = options.map { it.description }
+            val rawCorrectOpt = q?.correct_option
+            val resolvedCorrectBengali = com.example.utils.McqAnswerUtils.resolveCorrectOptionBengali(
+                directCorrectOption = rawCorrectOpt,
+                ansCorrectOption = null,
+                solutionText = q?.solution,
+                optionsDescriptions = optionDescs
+            )
+            val givenAnsBengali = com.example.utils.McqAnswerUtils.toBengaliLetter(givenAns)
+            val isUserCorrect = com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, resolvedCorrectBengali)
             val isUserUnanswered = givenAns.isBlank()
 
             Column(
@@ -1115,8 +1151,8 @@ fun ExamSolutionsContent(
                             Text(
                                 text = when {
                                     isUserUnanswered -> "তুমি কোনো উত্তর দেওনি!"
-                                    isUserCorrect -> "তোমার উত্তর সঠিক: $givenAns"
-                                    else -> "তোমার উত্তর: $givenAns"
+                                    isUserCorrect -> "তোমার উত্তর সঠিক: ($givenAnsBengali)"
+                                    else -> "তোমার উত্তর: ($givenAnsBengali)"
                                 },
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1147,11 +1183,81 @@ fun ExamSolutionsContent(
 
                     // Correct Option Banner
                     Text(
-                        text = "সঠিক উত্তর: $correctOpt",
+                        text = "সঠিক উত্তর: ($resolvedCorrectBengali)",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF059669)
                     )
+
+                    // Options List in Solution
+                    if (options.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        options.forEachIndexed { optIdx, opt ->
+                            val optLetter = com.example.utils.McqAnswerUtils.toBengaliLetter(opt.no).ifBlank {
+                                com.example.utils.McqAnswerUtils.indexToBengaliLetter(optIdx)
+                            }
+                            val isThisCorrect = com.example.utils.McqAnswerUtils.isAnswerCorrect(opt.no ?: optLetter, resolvedCorrectBengali) ||
+                                    com.example.utils.McqAnswerUtils.normalizeToOptionIndex(opt.no) == com.example.utils.McqAnswerUtils.normalizeToOptionIndex(resolvedCorrectBengali)
+                            val isThisUserAns = !isUserUnanswered && (
+                                com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, opt.no ?: optLetter) ||
+                                com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenAns) == optIdx
+                            )
+
+                            val (bgColor, borderColor, badgeColor) = when {
+                                isThisCorrect -> Triple(Color(0xFFDCFCE7), Color(0xFF10B981), Color(0xFF059669))
+                                isThisUserAns && !isThisCorrect -> Triple(Color(0xFFFEE2E2), Color(0xFFEF4444), Color(0xFFDC2626))
+                                else -> Triple(Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFF64748B))
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = bgColor,
+                                border = BorderStroke(if (isThisCorrect || isThisUserAns) 1.5.dp else 1.dp, borderColor),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = badgeColor.copy(alpha = 0.15f),
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = optLetter,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = badgeColor
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    QuizRichContent(
+                                        text = opt.description ?: "",
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                        textColor = Color(0xFF1E293B),
+                                        fontWeight = if (isThisCorrect || isThisUserAns) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxImageHeight = 120.dp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    if (isThisCorrect) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(Icons.Default.CheckCircle, contentDescription = "Correct", tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                                    } else if (isThisUserAns) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(Icons.Default.Cancel, contentDescription = "Wrong", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -1164,7 +1270,7 @@ fun ExamSolutionsContent(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             QuizRichContent(
-                                text = q?.solution ?: "সঠিক উত্তর: $correctOpt",
+                                text = q?.solution ?: "সঠিক উত্তর: ($resolvedCorrectBengali)",
                                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 22.sp),
                                 textColor = Color(0xFF334155),
                                 maxImageHeight = 220.dp

@@ -524,13 +524,8 @@ class ModelTestRepository(
 
                     val userAnsLetter = answeredMap[rawQ.id]
                     val userSelectedIndex = if (!userAnsLetter.isNullOrBlank()) {
-                        when (userAnsLetter.uppercase().trim()) {
-                            "A", "ক" -> 0
-                            "B", "খ" -> 1
-                            "C", "গ" -> 2
-                            "D", "ঘ" -> 3
-                            else -> null
-                        }
+                        com.example.utils.McqAnswerUtils.normalizeToOptionIndex(userAnsLetter)
+                            ?: rawQ.mcq_options?.indexOfFirst { it.no.equals(userAnsLetter, ignoreCase = true) }?.takeIf { it >= 0 }
                     } else null
 
                     ModelTestMcqQuestion(
@@ -905,28 +900,20 @@ class ModelTestRepository(
                 val answersMap = session.question_answer?.associateBy { it.id } ?: emptyMap()
                 val items = session.questions.mapIndexed { qIdx, rawQ ->
                     val ans = answersMap[rawQ.id]
-                    val correctLetter = rawQ.correct_option ?: ans?.correct_ans ?: "A"
                     val givenLetter = ans?.given_ans
-
-                    val correctIdx = when (correctLetter.uppercase().trim()) {
-                        "A", "ক" -> 0
-                        "B", "খ" -> 1
-                        "C", "গ" -> 2
-                        "D", "ঘ" -> 3
-                        else -> 0
-                    }
+                    val descs = rawQ.mcq_options?.map { it.description }
+                    val directCorrect = rawQ.correct_option ?: ans?.correct_ans
+                    val correctIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(directCorrect)
+                        ?: com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(rawQ.solution, descs)
+                        ?: 0
 
                     val userIdx = if (!givenLetter.isNullOrBlank()) {
-                        when (givenLetter.uppercase().trim()) {
-                            "A", "ক" -> 0
-                            "B", "খ" -> 1
-                            "C", "গ" -> 2
-                            "D", "ঘ" -> 3
-                            else -> null
-                        }
+                        com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenLetter)
+                            ?: rawQ.mcq_options?.indexOfFirst { it.no.equals(givenLetter, ignoreCase = true) }?.takeIf { it >= 0 }
                     } else null
 
                     val isCorrect = ans?.is_correct ?: (userIdx != null && userIdx == correctIdx)
+                    val correctLetterBengali = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
 
                     val options = rawQ.mcq_options?.mapIndexed { optIdx, opt ->
                         ModelTestMcqOption(
@@ -950,7 +937,7 @@ class ModelTestRepository(
                         user_selected_option = userIdx,
                         correct_option = correctIdx,
                         is_correct = isCorrect,
-                        solution = rawQ.solution ?: "সঠিক উত্তর: $correctLetter",
+                        solution = rawQ.solution ?: "সঠিক উত্তর: ($correctLetterBengali)",
                         solution_image = rawQ.solution_img
                     )
                 }

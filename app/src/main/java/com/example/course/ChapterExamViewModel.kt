@@ -436,7 +436,7 @@ class ChapterExamViewModel(
                     val correctOpt = q.correct_option ?: deduceCorrectOption(sol, q.mcq_options)
                     if (given.isBlank()) {
                         unanswered++
-                    } else if (given.equals(correctOpt, ignoreCase = true)) {
+                    } else if (com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correctOpt)) {
                         correct++
                     } else {
                         incorrect++
@@ -579,40 +579,25 @@ class ChapterExamViewModel(
     }
 
     private fun deduceCorrectOption(solutionText: String, options: List<McqOptionItem>?): String {
-        if (options.isNullOrEmpty()) return "A"
+        val descs = options?.map { it.description }
+        val extractedIdx = com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(solutionText, descs)
+        if (extractedIdx != null) {
+            val matchedOpt = options?.getOrNull(extractedIdx)
+            return matchedOpt?.no ?: com.example.utils.McqAnswerUtils.indexToBengaliLetter(extractedIdx)
+        }
 
-        // 1. Check full description match first if description has meaningful text
-        options.forEach { opt ->
-            val desc = opt.description?.trim().orEmpty()
-            if (desc.length > 3 && solutionText.contains(desc, ignoreCase = true)) {
-                return opt.no ?: "A"
+        // Secondary check: If solution unambiguously matches only one long option description
+        if (!options.isNullOrEmpty() && solutionText.isNotBlank()) {
+            val matchingOptions = options.filter { opt ->
+                val desc = opt.description?.trim().orEmpty()
+                desc.length >= 8 && solutionText.contains(desc, ignoreCase = true)
+            }
+            if (matchingOptions.size == 1) {
+                return matchingOptions.first().no ?: "A"
             }
         }
 
-        // 2. Regex matching for explicit answer labels like "সঠিক উত্তর: (ক/A)", "Ans: B", "Option: C"
-        val answerRegexes = listOf(
-            Regex("""(?:সঠিক\s*উত্তর|উত্তর|Ans(?:wer)?)\s*[:=–-]?\s*[\(]?([A-Da-dক-ঘ])[\)]?""", RegexOption.IGNORE_CASE),
-            Regex("""\b([A-Da-d])\s*[\)\.:]""", RegexOption.IGNORE_CASE)
-        )
-
-        for (regex in answerRegexes) {
-            val match = regex.find(solutionText)
-            if (match != null) {
-                val matchedLetter = match.groupValues[1].uppercase()
-                val converted = when (matchedLetter) {
-                    "ক", "A" -> "A"
-                    "খ", "B" -> "B"
-                    "গ", "C" -> "C"
-                    "ঘ", "D" -> "D"
-                    else -> matchedLetter
-                }
-                if (options.any { it.no.equals(converted, ignoreCase = true) }) {
-                    return converted
-                }
-            }
-        }
-
-        return options.firstOrNull()?.no ?: "A"
+        return options?.firstOrNull()?.no ?: "A"
     }
 
     override fun onCleared() {

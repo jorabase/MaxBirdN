@@ -51,13 +51,7 @@ private fun toBengaliDigits(number: Any): String {
 }
 
 private fun toBengaliOptionLetter(optionNo: String?): String {
-    return when (optionNo?.trim()?.uppercase()) {
-        "A", "1" -> "ক"
-        "B", "2" -> "খ"
-        "C", "3" -> "গ"
-        "D", "4" -> "ঘ"
-        else -> optionNo ?: ""
-    }
+    return com.example.utils.McqAnswerUtils.toBengaliLetter(optionNo)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,10 +94,13 @@ fun PracticeQuizFeedbackScreen(
     questions.forEach { q ->
         val ans = answersMap[q.id]
         val givenAns = ans?.given_ans ?: q.given_ans
-        val correctOpt = q.correct_option ?: ans?.correct_ans
+        val descs = q.mcq_options?.map { it.description }
+        val rawCorrect = q.correct_option ?: ans?.correct_ans
+        val correctOpt = if (!rawCorrect.isNullOrBlank()) rawCorrect
+            else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(q.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
         when {
             givenAns.isNullOrBlank() -> unansweredCount++
-            givenAns.equals(correctOpt, ignoreCase = true) -> correctCount++
+            com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, correctOpt) -> correctCount++
             else -> incorrectCount++
         }
     }
@@ -115,14 +112,20 @@ fun PracticeQuizFeedbackScreen(
             FeedbackFilter.CORRECT -> questions.filter { q ->
                 val ans = answersMap[q.id]
                 val given = ans?.given_ans ?: q.given_ans
-                val correct = q.correct_option ?: ans?.correct_ans
-                !given.isNullOrBlank() && given.equals(correct, ignoreCase = true)
+                val descs = q.mcq_options?.map { it.description }
+                val rawCorrect = q.correct_option ?: ans?.correct_ans
+                val correct = if (!rawCorrect.isNullOrBlank()) rawCorrect
+                    else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(q.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
+                !given.isNullOrBlank() && com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correct)
             }
             FeedbackFilter.INCORRECT -> questions.filter { q ->
                 val ans = answersMap[q.id]
                 val given = ans?.given_ans ?: q.given_ans
-                val correct = q.correct_option ?: ans?.correct_ans
-                !given.isNullOrBlank() && !given.equals(correct, ignoreCase = true)
+                val descs = q.mcq_options?.map { it.description }
+                val rawCorrect = q.correct_option ?: ans?.correct_ans
+                val correct = if (!rawCorrect.isNullOrBlank()) rawCorrect
+                    else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(q.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
+                !given.isNullOrBlank() && !com.example.utils.McqAnswerUtils.isAnswerCorrect(given, correct)
             }
             FeedbackFilter.UNANSWERED -> questions.filter { q ->
                 val ans = answersMap[q.id]
@@ -359,7 +362,10 @@ fun PracticeQuizFeedbackScreen(
                         ) { index, question ->
                             val ans = answersMap[question.id]
                             val userGivenAns = ans?.given_ans ?: question.given_ans
-                            val correctOpt = question.correct_option ?: ans?.correct_ans
+                            val descs = question.mcq_options?.map { it.description }
+                            val rawCorrect = question.correct_option ?: ans?.correct_ans
+                            val correctOpt = if (!rawCorrect.isNullOrBlank()) rawCorrect
+                                else com.example.utils.McqAnswerUtils.extractCorrectIndexFromSolution(question.description, descs)?.let { com.example.utils.McqAnswerUtils.indexToBengaliLetter(it) }
                             val isBookmarked = uiState.bookmarkedQuestionIds.contains(question.id)
 
                             QuestionFeedbackCard(
@@ -500,9 +506,16 @@ private fun QuestionFeedbackCard(
 
             // 4 Options
             val options = question.mcq_options ?: emptyList()
-            options.forEach { opt ->
-                val isUserSelection = userGivenAns != null && userGivenAns.equals(opt.no, ignoreCase = true)
-                val isCorrectOption = correctOpt != null && correctOpt.equals(opt.no, ignoreCase = true)
+            options.forEachIndexed { optIdx, opt ->
+                val optLetter = opt.no ?: com.example.utils.McqAnswerUtils.indexToBengaliLetter(optIdx)
+                val isUserSelection = !userGivenAns.isNullOrBlank() && (
+                    com.example.utils.McqAnswerUtils.isAnswerCorrect(userGivenAns, opt.no) ||
+                    com.example.utils.McqAnswerUtils.normalizeToOptionIndex(userGivenAns) == optIdx
+                )
+                val isCorrectOption = !correctOpt.isNullOrBlank() && (
+                    com.example.utils.McqAnswerUtils.isAnswerCorrect(correctOpt, opt.no) ||
+                    com.example.utils.McqAnswerUtils.normalizeToOptionIndex(correctOpt) == optIdx
+                )
 
                 FeedbackOptionRow(
                     option = opt,

@@ -54,13 +54,7 @@ private fun toBengaliDigits(number: Any): String {
 }
 
 private fun toBengaliOptionLetter(optionNo: String?): String {
-    return when (optionNo?.trim()?.uppercase()) {
-        "A", "1" -> "ক"
-        "B", "2" -> "খ"
-        "C", "3" -> "গ"
-        "D", "4" -> "ঘ"
-        else -> optionNo ?: ""
-    }
+    return com.example.utils.McqAnswerUtils.toBengaliLetter(optionNo)
 }
 
 @Composable
@@ -445,14 +439,19 @@ fun PracticeQuizPlayerScreen(
                     val selectedAnswer = uiState.userAnswers[currentQuestion.id]
                     val options = currentQuestion.mcq_options ?: emptyList()
 
-                    options.forEach { option ->
-                        val isOptionSelected = selectedAnswer == option.no
+                    options.forEachIndexed { optIdx, option ->
+                        val optNo = option.no ?: ('A' + optIdx).toString()
+                        val isOptionSelected = selectedAnswer != null && (
+                            selectedAnswer == optNo ||
+                            com.example.utils.McqAnswerUtils.isAnswerCorrect(selectedAnswer, optNo) ||
+                            com.example.utils.McqAnswerUtils.normalizeToOptionIndex(selectedAnswer) == optIdx
+                        )
                         McqOptionCard(
                             option = option,
                             isSelected = isOptionSelected,
                             subjectColor = subjectColor,
                             onClick = {
-                                viewModel.selectOption(currentQuestion.id, option.no ?: "")
+                                viewModel.selectOption(currentQuestion.id, optNo)
                             }
                         )
                     }

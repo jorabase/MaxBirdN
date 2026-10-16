@@ -38,13 +38,7 @@ import java.util.Date
 import java.util.Locale
 
 private fun toBengaliOptionLetter(optionNo: String?): String {
-    return when (optionNo?.trim()?.uppercase()) {
-        "A", "1" -> "ক"
-        "B", "2" -> "খ"
-        "C", "3" -> "গ"
-        "D", "4" -> "ঘ"
-        else -> optionNo ?: ""
-    }
+    return com.example.utils.McqAnswerUtils.toBengaliLetter(optionNo)
 }
 
 private fun formatTimestamp(millis: Long): String {
@@ -293,8 +287,8 @@ fun SavedItemCard(
                     parsedContent.options.forEach { opt ->
                         SavedOptionRow(
                             option = opt,
-                            isCorrect = parsedContent.correctOption?.equals(opt.no, ignoreCase = true) == true,
-                            isUserGiven = parsedContent.userGivenAns?.equals(opt.no, ignoreCase = true) == true
+                            isCorrect = com.example.utils.McqAnswerUtils.isAnswerCorrect(parsedContent.correctOption, opt.no),
+                            isUserGiven = com.example.utils.McqAnswerUtils.isAnswerCorrect(parsedContent.userGivenAns, opt.no)
                         )
                     }
                 }
