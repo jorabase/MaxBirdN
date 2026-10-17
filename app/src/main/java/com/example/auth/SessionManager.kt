@@ -6,13 +6,18 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.UUID
 
 class SessionManager(context: Context) {
     val appContext: Context = context.applicationContext
-    private val fallbackPrefs: SharedPreferences = context.getSharedPreferences("shikho_prefs_fallback", Context.MODE_PRIVATE)
+    private val fallbackPrefs: SharedPreferences =
+        context.getSharedPreferences("shikho_prefs_fallback", Context.MODE_PRIVATE)
 
     private val sharedPreferences: SharedPreferences = try {
         val masterKey = MasterKey.Builder(context)
@@ -27,7 +32,11 @@ class SessionManager(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
     } catch (e: Throwable) {
-        android.util.Log.e("SessionManager", "Failed to initialize EncryptedSharedPreferences, falling back to standard SharedPreferences: ${e.message}", e)
+        android.util.Log.e(
+            "SessionManager",
+            "Failed to initialize EncryptedSharedPreferences, falling back to standard SharedPreferences: ${e.message}",
+            e
+        )
         fallbackPrefs
     }
 
@@ -49,7 +58,8 @@ class SessionManager(context: Context) {
                     .putString("user_id", sharedPreferences.getString("user_id", null))
                     .apply()
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     fun getDeviceId(): String {
@@ -57,8 +67,9 @@ class SessionManager(context: Context) {
         if (!fcm.isNullOrBlank()) {
             return fcm
         }
-        var deviceId = sharedPreferences.getString("device_id", null) ?: fallbackPrefs.getString("device_id", null)
-        if (deviceId == null) {
+        var deviceId = sharedPreferences.getString("device_id", null)
+            ?: fallbackPrefs.getString("device_id", null)
+        if (deviceId.isNullOrBlank()) {
             deviceId = UUID.randomUUID().toString()
             sharedPreferences.edit().putString("device_id", deviceId).apply()
             fallbackPrefs.edit().putString("device_id", deviceId).apply()
@@ -67,8 +78,9 @@ class SessionManager(context: Context) {
     }
 
     fun getGoogleAdsId(): String {
-        var adsId = sharedPreferences.getString("google_ads_id", null) ?: fallbackPrefs.getString("google_ads_id", null)
-        if (adsId == null) {
+        var adsId = sharedPreferences.getString("google_ads_id", null)
+            ?: fallbackPrefs.getString("google_ads_id", null)
+        if (adsId.isNullOrBlank()) {
             adsId = UUID.randomUUID().toString()
             sharedPreferences.edit().putString("google_ads_id", adsId).apply()
             fallbackPrefs.edit().putString("google_ads_id", adsId).apply()
@@ -123,31 +135,41 @@ class SessionManager(context: Context) {
     }
 
     fun getUserId(): String? {
-        val stored = sharedPreferences.getString("user_id", null) ?: fallbackPrefs.getString("user_id", null)
+        val stored = sharedPreferences.getString("user_id", null)
+            ?: fallbackPrefs.getString("user_id", null)
         if (!stored.isNullOrBlank()) return stored
         val token = getAccessToken()
         if (!token.isNullOrBlank()) {
             try {
                 val parts = token.split(".")
                 if (parts.size >= 2) {
-                    val decoded = String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP))
-                    val json = org.json.JSONObject(decoded)
-                    val aud = json.optString("aud", "")
-                    if (aud.isNotBlank()) {
-                        sharedPreferences.edit().putString("user_id", aud).apply()
-                        fallbackPrefs.edit().putString("user_id", aud).apply()
-                        return aud
+                    val decoded = String(
+                        android.util.Base64.decode(
+                            parts[1],
+                            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP
+                        )
+                    )
+                    val json = JSONObject(decoded)
+                    val resolvedId = json.optString("user_id", "").ifBlank {
+                        json.optString("sub", "").ifBlank { json.optString("aud", "") }
+                    }
+                    if (resolvedId.isNotBlank()) {
+                        sharedPreferences.edit().putString("user_id", resolvedId).apply()
+                        fallbackPrefs.edit().putString("user_id", resolvedId).apply()
+                        return resolvedId
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
         return null
     }
 
     fun markModelTestCompleted(modelTestId: String) {
+        if (modelTestId.isBlank()) return
         val completed = getCompletedModelTests().toMutableSet()
         completed.add(modelTestId)
-        sharedPreferences.edit().putStringSet("completed_model_tests", completed).apply()
+        sharedPreferences.edit().putStringSet("completed_model_tests", HashSet(completed)).apply()
     }
 
     fun isModelTestCompleted(modelTestId: String): Boolean {
@@ -158,15 +180,19 @@ class SessionManager(context: Context) {
         return sharedPreferences.getStringSet("completed_model_tests", emptySet()) ?: emptySet()
     }
 
-
     fun setFcmToken(token: String) {
         sharedPreferences.edit()
             .putString("fcm_token", token)
             .putString("device_id", token)
             .apply()
+        fallbackPrefs.edit()
+            .putString("fcm_token", token)
+            .putString("device_id", token)
+            .apply()
     }
 
-    fun getFcmToken(): String? = sharedPreferences.getString("fcm_token", null)
+    fun getFcmToken(): String? =
+        sharedPreferences.getString("fcm_token", null) ?: fallbackPrefs.getString("fcm_token", null)
 
     fun saveActiveProgram(
         programId: String,
@@ -220,14 +246,16 @@ class SessionManager(context: Context) {
         batchId: String?,
         className: String?,
         group: String?,
-        vendor: String? = "BD",
+        vendor: String? = null,
         passingYear: String? = null
     ) {
         val editor = sharedPreferences.edit()
             .putString("academic_batch_id", batchId)
             .putString("academic_class_name", className)
             .putString("academic_group", group)
-            .putString("academic_vendor", vendor ?: "BD")
+        if (!vendor.isNullOrBlank()) {
+            editor.putString("academic_vendor", vendor)
+        }
         if (!passingYear.isNullOrBlank()) {
             editor.putString("academic_passing_year", passingYear)
         }
@@ -239,15 +267,15 @@ class SessionManager(context: Context) {
         sharedPreferences.getString("academic_passing_year", null)
 
     fun getUserBatchId(): String? = sharedPreferences.getString("academic_batch_id", null)
-    fun getUserClassName(): String? = sharedPreferences.getString("academic_class_name", "C11")
-    fun getUserGroup(): String? = sharedPreferences.getString("academic_group", "Humanities")
-    fun getUserVendor(): String? = sharedPreferences.getString("academic_vendor", "BD")
+    fun getUserClassName(): String? = sharedPreferences.getString("academic_class_name", null)
+    fun getUserGroup(): String? = sharedPreferences.getString("academic_group", null)
+    fun getUserVendor(): String? = sharedPreferences.getString("academic_vendor", null)
 
-    private val _userAvatarFlow = kotlinx.coroutines.flow.MutableStateFlow(getUserAvatar())
-    val userAvatarFlow: kotlinx.coroutines.flow.StateFlow<String?> = _userAvatarFlow
+    private val _userAvatarFlow = MutableStateFlow(getUserAvatar())
+    val userAvatarFlow: StateFlow<String?> = _userAvatarFlow
 
-    private val _userProfileUpdateFlow = kotlinx.coroutines.flow.MutableStateFlow(System.currentTimeMillis())
-    val userProfileUpdateFlow: kotlinx.coroutines.flow.StateFlow<Long> = _userProfileUpdateFlow
+    private val _userProfileUpdateFlow = MutableStateFlow(System.currentTimeMillis())
+    val userProfileUpdateFlow: StateFlow<Long> = _userProfileUpdateFlow
 
     fun saveUserProfile(
         firstName: String?,
@@ -263,10 +291,15 @@ class SessionManager(context: Context) {
             .putString("user_avatar", avatar)
             .putString("user_school_name", schoolName)
             .putString("user_class_display", classDisplay)
+        val fallbackEditor = fallbackPrefs.edit()
+            .putString("user_first_name", firstName)
+            .putString("user_last_name", lastName)
         if (!phone.isNullOrBlank()) {
             editor.putString("user_phone", phone)
+            fallbackEditor.putString("user_phone", phone)
         }
         editor.apply()
+        fallbackEditor.apply()
         _userAvatarFlow.value = avatar
         _userProfileUpdateFlow.value = System.currentTimeMillis()
     }
@@ -274,43 +307,76 @@ class SessionManager(context: Context) {
     fun saveUserPhone(phone: String?) {
         if (!phone.isNullOrBlank()) {
             sharedPreferences.edit().putString("user_phone", phone).apply()
+            fallbackPrefs.edit().putString("user_phone", phone).apply()
         }
     }
 
-    fun getUserPhone(): String? = sharedPreferences.getString("user_phone", null)
+    fun getUserPhone(): String? =
+        sharedPreferences.getString("user_phone", null) ?: fallbackPrefs.getString("user_phone", null)
 
-    fun getUserFirstName(): String? = sharedPreferences.getString("user_first_name", null)
+    fun getUserFirstName(): String? =
+        sharedPreferences.getString("user_first_name", null) ?: fallbackPrefs.getString("user_first_name", null)
+
     fun getUserSchoolName(): String? = sharedPreferences.getString("user_school_name", null)
     fun getUserClassDisplay(): String? = sharedPreferences.getString("user_class_display", null)
 
     fun getUserFullName(): String? {
         val first = sharedPreferences.getString("user_first_name", null)
+            ?: fallbackPrefs.getString("user_first_name", null)
         val last = sharedPreferences.getString("user_last_name", null)
+            ?: fallbackPrefs.getString("user_last_name", null)
         return when {
-            !first.isNullOrBlank() && !last.isNullOrBlank() -> "$first $last"
-            !first.isNullOrBlank() -> first
-            !last.isNullOrBlank() -> last
+            !first.isNullOrBlank() && !last.isNullOrBlank() -> "${first.trim()} ${last.trim()}"
+            !first.isNullOrBlank() -> first.trim()
+            !last.isNullOrBlank() -> last.trim()
             else -> null
         }
     }
 
     fun getUserAvatar(): String? = sharedPreferences.getString("user_avatar", null)
 
+    /**
+     * Returns the user's saved custom Live Class display name, or falls back to their profile full name.
+     */
     fun getLiveCustomStudentName(): String? {
-        val custom = sharedPreferences.getString("live_custom_student_name", null) ?: fallbackPrefs.getString("live_custom_student_name", null)
-        if (!custom.isNullOrBlank()) return custom
+        val custom = sharedPreferences.getString("live_custom_student_name", null)
+            ?: fallbackPrefs.getString("live_custom_student_name", null)
+        if (!custom.isNullOrBlank()) return custom.trim()
         return getUserFullName()
     }
 
+    /**
+     * Saves the student's chosen display name for Live Classes.
+     */
     fun setLiveCustomStudentName(name: String) {
         val clean = name.trim()
         sharedPreferences.edit().putString("live_custom_student_name", clean).apply()
         fallbackPrefs.edit().putString("live_custom_student_name", clean).apply()
     }
 
+    /**
+     * Stores and retrieves class-specific student display name if set for a particular live class session.
+     */
+    fun getLiveStudentNameForClass(classId: String): String? {
+        if (classId.isBlank()) return getLiveCustomStudentName()
+        val perClass = sharedPreferences.getString("live_student_name_$classId", null)
+            ?: fallbackPrefs.getString("live_student_name_$classId", null)
+        if (!perClass.isNullOrBlank()) return perClass.trim()
+        return getLiveCustomStudentName()
+    }
+
+    fun setLiveStudentNameForClass(classId: String, name: String) {
+        val clean = name.trim()
+        setLiveCustomStudentName(clean)
+        if (classId.isNotBlank()) {
+            sharedPreferences.edit().putString("live_student_name_$classId", clean).apply()
+            fallbackPrefs.edit().putString("live_student_name_$classId", clean).apply()
+        }
+    }
+
     fun saveSelectedSubjectCodes(programId: String, subjectCodes: Set<String>) {
         sharedPreferences.edit()
-            .putStringSet("priority_subjects_$programId", subjectCodes)
+            .putStringSet("priority_subjects_$programId", HashSet(subjectCodes))
             .apply()
     }
 
@@ -319,8 +385,8 @@ class SessionManager(context: Context) {
     }
 
     // Theme Mode Management ("system", "light", "dark")
-    private val _themeModeFlow = kotlinx.coroutines.flow.MutableStateFlow(getThemeMode())
-    val themeModeFlow: kotlinx.coroutines.flow.StateFlow<String> = _themeModeFlow
+    private val _themeModeFlow = MutableStateFlow(getThemeMode())
+    val themeModeFlow: StateFlow<String> = _themeModeFlow
 
     fun getThemeMode(): String {
         return sharedPreferences.getString("app_theme_mode", "system") ?: "system"
@@ -332,11 +398,14 @@ class SessionManager(context: Context) {
     }
 
     // Header Wallpaper & Live Theme Management
-    private val _headerWallpaperFlow = kotlinx.coroutines.flow.MutableStateFlow(getHeaderWallpaperConfig())
-    val headerWallpaperFlow: kotlinx.coroutines.flow.StateFlow<com.example.ui.theme.HeaderWallpaperConfig> = _headerWallpaperFlow
+    private val _headerWallpaperFlow = MutableStateFlow(getHeaderWallpaperConfig())
+    val headerWallpaperFlow: StateFlow<com.example.ui.theme.HeaderWallpaperConfig> = _headerWallpaperFlow
 
     fun getHeaderWallpaperConfig(): com.example.ui.theme.HeaderWallpaperConfig {
-        val type = sharedPreferences.getString("header_wallpaper_type", com.example.ui.theme.HeaderWallpaperConfig.PRESET_COSMIC) ?: com.example.ui.theme.HeaderWallpaperConfig.PRESET_COSMIC
+        val type = sharedPreferences.getString(
+            "header_wallpaper_type",
+            com.example.ui.theme.HeaderWallpaperConfig.PRESET_COSMIC
+        ) ?: com.example.ui.theme.HeaderWallpaperConfig.PRESET_COSMIC
         val uri = sharedPreferences.getString("header_wallpaper_custom_uri", null)
         val title = sharedPreferences.getString("header_wallpaper_custom_title", null)
         val anim = sharedPreferences.getBoolean("header_wallpaper_anim_enabled", true)
@@ -361,9 +430,9 @@ class SessionManager(context: Context) {
         _headerWallpaperFlow.value = config
     }
 
-    // Class Notification Lead Time (Default 25 minutes)
-    private val _classNotificationLeadTimeFlow = kotlinx.coroutines.flow.MutableStateFlow(getClassNotificationLeadTimeMinutes())
-    val classNotificationLeadTimeFlow: kotlinx.coroutines.flow.StateFlow<Int> = _classNotificationLeadTimeFlow
+    // Class Notification Lead Time (Default 30 minutes)
+    private val _classNotificationLeadTimeFlow = MutableStateFlow(getClassNotificationLeadTimeMinutes())
+    val classNotificationLeadTimeFlow: StateFlow<Int> = _classNotificationLeadTimeFlow
 
     fun getClassNotificationLeadTimeMinutes(): Int {
         return sharedPreferences.getInt("class_notification_lead_time_minutes", 30)
@@ -423,7 +492,7 @@ class SessionManager(context: Context) {
     fun setAlarmDisabled(id: String, disabled: Boolean) {
         val current = getDisabledAlarmIds().toMutableSet()
         if (disabled) current.add(id) else current.remove(id)
-        sharedPreferences.edit().putStringSet("disabled_alarm_ids", current).apply()
+        sharedPreferences.edit().putStringSet("disabled_alarm_ids", HashSet(current)).apply()
     }
 
     // Custom Alarms Persistence
@@ -431,7 +500,7 @@ class SessionManager(context: Context) {
         val json = sharedPreferences.getString("custom_alarms_list", "[]") ?: "[]"
         val list = mutableListOf<CustomAlarmData>()
         try {
-            val array = org.json.JSONArray(json)
+            val array = JSONArray(json)
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 list.add(
@@ -444,14 +513,15 @@ class SessionManager(context: Context) {
                     )
                 )
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         return list
     }
 
     fun saveCustomAlarms(list: List<CustomAlarmData>) {
-        val array = org.json.JSONArray()
+        val array = JSONArray()
         for (item in list) {
-            val obj = org.json.JSONObject().apply {
+            val obj = JSONObject().apply {
                 put("id", item.id)
                 put("title", item.title)
                 put("message", item.message)
@@ -525,17 +595,20 @@ class SessionManager(context: Context) {
 
     fun setSubscribedTopics(topics: Set<String>) {
         sharedPreferences.edit()
-            .putStringSet("subscribed_fcm_topics", topics)
+            .putStringSet("subscribed_fcm_topics", HashSet(topics))
             .apply()
     }
 
     fun clearSession() {
         val keys = listOf(
-            "access_token", "refresh_token", "user_id",
+            "access_token", "refresh_token", "id_token", "user_id",
             "active_program_id", "active_program_title_bn",
+            "active_program_batch_id", "active_program_class_code", "active_program_phase_id",
             "academic_batch_id", "academic_class_name", "academic_group",
             "academic_vendor", "academic_passing_year",
-            "user_first_name", "user_last_name", "user_avatar", "just_signed_up"
+            "user_first_name", "user_last_name", "user_avatar",
+            "user_school_name", "user_class_display", "user_phone",
+            "live_custom_student_name", "just_signed_up"
         )
         val editor = sharedPreferences.edit()
         val fallbackEditor = fallbackPrefs.edit()
@@ -551,7 +624,7 @@ class SessionManager(context: Context) {
 }
 
 data class CustomAlarmData(
-    val id: String = java.util.UUID.randomUUID().toString(),
+    val id: String = UUID.randomUUID().toString(),
     val title: String,
     val message: String,
     val triggerTimeMs: Long,

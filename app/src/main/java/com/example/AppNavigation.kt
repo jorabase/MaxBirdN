@@ -174,9 +174,11 @@ object Routes {
     }
     const val LIVE_CLASS = "live_class/{classId}/{lessonId}?lessonTitle={lessonTitle}&subjectName={subjectName}"
     fun liveClassRoute(classId: String, lessonId: String, lessonTitle: String = "", subjectName: String = ""): String {
+        val cleanClassId = classId.trim()
+        val cleanLessonId = lessonId.trim().ifBlank { cleanClassId }
         val encTitle = safeUrlEncode(lessonTitle)
         val encSubject = safeUrlEncode(subjectName)
-        return "live_class/$classId/$lessonId?lessonTitle=$encTitle&subjectName=$encSubject"
+        return "live_class/$cleanClassId/$cleanLessonId?lessonTitle=$encTitle&subjectName=$encSubject"
     }
 
     const val PDF_VIEWER = "pdf_viewer?url={url}&title={title}&initialRemoteUrl={initialRemoteUrl}&subject={subject}"
@@ -387,8 +389,17 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             "live", "live-class" -> {
                                 val classId = uri.getQueryParameter("class_id") ?: uri.getQueryParameter("id") ?: ""
                                 val lessonId = uri.getQueryParameter("lesson_id") ?: classId
+                                val title = uri.getQueryParameter("title") ?: ""
+                                val subject = uri.getQueryParameter("subject") ?: ""
                                 if (classId.isNotBlank()) {
-                                    navController.navigate(Routes.liveClassRoute(classId, lessonId)) { launchSingleTop = true }
+                                    navController.navigate(
+                                        Routes.liveClassRoute(
+                                            classId = classId,
+                                            lessonId = lessonId,
+                                            lessonTitle = title,
+                                            subjectName = subject
+                                        )
+                                    ) { launchSingleTop = true }
                                 }
                             }
                             "downloads" -> {
@@ -458,7 +469,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 ?: lesson.id ?: ""
             val lessonId = lesson.id ?: classId
             val title = lesson.title ?: "লাইভ ক্লাস"
-            val subject = lesson.subject_name ?: "সাধারণ"
+            val subject = lesson.subject_name ?: "বিষয়"
             courseViewModel.selectLesson(lesson)
             navController.navigate(
                 Routes.liveClassRoute(
@@ -1244,7 +1255,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val chapterId = lesson?.chapter_id?.takeIf { it.isNotBlank() }
                         ?: lesson?.live_class?.chapter_id
                         ?: ""
-                    val sCode = lesson?.subject_code ?: "DEFAULT"
+                    val sCode = lesson?.subject_code?.takeIf { it.isNotBlank() }
+                        ?: courseUiState.selectedSubjectCode
                     val encodedTitle = safeUrlEncode(courseUiState.selectedSubjectTitle.ifBlank { "রিসোর্স" })
                     val encodedColor = safeUrlEncode(courseUiState.selectedSubjectColor.ifBlank { "#0072EC" })
                     val encodedPhase = safeUrlEncode(lesson?.phase_id)
@@ -1254,17 +1266,20 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             lesson?.chapter_name?.takeIf { it.isNotBlank() } ?: courseUiState.selectedSubjectTitle
                         )
                         navController.navigate("chapter_resources/$chapterId?name=$encodedName&subjectCode=$sCode&phaseId=$encodedPhase")
-                    } else {
+                    } else if (sCode.isNotBlank()) {
                         navController.navigate("smart_notes/$sCode?title=$encodedTitle&color=$encodedColor&phaseId=$encodedPhase")
                     }
                 },
                 onOpenSubjectResources = {
                     val lesson = courseUiState.selectedLesson
-                    val sCode = lesson?.subject_code ?: "DEFAULT"
+                    val sCode = lesson?.subject_code?.takeIf { it.isNotBlank() }
+                        ?: courseUiState.selectedSubjectCode
                     val encodedTitle = safeUrlEncode(courseUiState.selectedSubjectTitle.ifBlank { "রিসোর্স" })
                     val encodedColor = safeUrlEncode(courseUiState.selectedSubjectColor.ifBlank { "#0072EC" })
                     val encodedPhase = safeUrlEncode(lesson?.phase_id)
-                    navController.navigate("smart_notes/$sCode?title=$encodedTitle&color=$encodedColor&phaseId=$encodedPhase")
+                    if (sCode.isNotBlank()) {
+                        navController.navigate("smart_notes/$sCode?title=$encodedTitle&color=$encodedColor&phaseId=$encodedPhase")
+                    }
                 },
                 onNavigateToPdfViewer = { url, title ->
                     navController.navigate(
@@ -1765,14 +1780,16 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val lessonTitle = safeUrlDecode(backStackEntry.arguments?.getString("lessonTitle"))
             val subjectName = safeUrlDecode(backStackEntry.arguments?.getString("subjectName"))
 
-            val candidateUrls: List<String> =
-                courseViewModel.uiState.value.selectedLesson?.candidateStreamUrls ?: emptyList()
+            val selectedLesson = courseViewModel.uiState.value.selectedLesson
+            val candidateUrls: List<String> = selectedLesson?.candidateStreamUrls ?: emptyList()
+            val fallbackSubject = courseViewModel.uiState.value.selectedSubjectTitle
+                .ifBlank { selectedLesson?.subject_name.orEmpty() }
 
             com.example.liveclass.LiveClassPage(
                 classId = classId,
                 lessonId = lessonId,
-                lessonTitle = lessonTitle.ifBlank { "লাইভ ক্লাস" },
-                subjectName = subjectName.ifBlank { "সাধারণ" },
+                lessonTitle = lessonTitle.ifBlank { selectedLesson?.title ?: "লাইভ ক্লাস" },
+                subjectName = subjectName.ifBlank { fallbackSubject.ifBlank { "বিষয়" } },
                 initialCandidateUrls = candidateUrls,
                 sessionManager = sessionManager,
                 onBack = {

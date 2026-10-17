@@ -40,6 +40,13 @@ data class LivePollItem(
 
     val isLive: Boolean
         get() = state.equals("started", ignoreCase = true)
+
+    val isQuiz: Boolean
+        get() = type.equals("quiz", ignoreCase = true)
+
+    val hasUserVoted: Boolean
+        get() = userResponse != null &&
+            (userResponse.selectedOptionIndex > 0 || userResponse.selectedOptionIndices.isNotEmpty())
 }
 
 data class LivePollQuestion(
@@ -53,11 +60,15 @@ data class LivePollQuestion(
     val durationSeconds: Int = 0,
     val options: List<LivePollOption> = emptyList(),
     val correctOptionIndex: Int? = null, // 1-based (1 = A, 2 = B, 3 = C, 4 = D)
+    val correctOptionIndices: List<Int> = emptyList(),
     val answerHidden: Boolean = false,
     val totalVotes: Int = 0,
     val correctVotes: Int = 0,
     val skippedVotes: Int = 0
-)
+) {
+    val isMultipleChoice: Boolean
+        get() = type.contains("multiple", ignoreCase = true)
+}
 
 data class LivePollOption(
     val index: Int, // 1-based index
@@ -71,6 +82,7 @@ data class LivePollUserResponse(
     val pollId: String,
     val questionIndex: Int = 1,
     val selectedOptionIndex: Int, // 1-based index
+    val selectedOptionIndices: List<Int> = emptyList(),
     val durationMs: Long = 0L,
     val isCorrect: Boolean = false,
     val skipped: Boolean = false,
