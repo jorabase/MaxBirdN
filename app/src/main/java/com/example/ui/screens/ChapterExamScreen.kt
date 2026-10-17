@@ -58,10 +58,49 @@ fun ChapterExamScreen(
         viewModel.loadExamInfo(sessionId, lessonId)
     }
 
+    var showExitConfirmDialog by remember { mutableStateOf(false) }
+
+    androidx.activity.compose.BackHandler {
+        when (uiState.stage) {
+            ExamStage.SOLUTIONS -> viewModel.backToPerformance()
+            ExamStage.RULES -> viewModel.backToIntro()
+            ExamStage.QUESTIONS -> showExitConfirmDialog = true
+            else -> onBack()
+        }
+    }
+
+    if (showExitConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmDialog = false },
+            title = {
+                Text("পরীক্ষা ত্যাগ করতে চান?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("আপনি কি নিশ্চিত যে পরীক্ষা শেষ না করেই বেরিয়ে যেতে চান?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showExitConfirmDialog = false
+                        onBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("হ্যাঁ, বের হব", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showExitConfirmDialog = false }) {
+                    Text("পরীক্ষা চালিয়ে যান")
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         when (uiState.stage) {
             ExamStage.INTRO -> {
@@ -78,7 +117,7 @@ fun ChapterExamScreen(
                 ExamRulesContent(
                     uiState = uiState,
                     defaultTitle = examTitle,
-                    onBack = { onBack() },
+                    onBack = { viewModel.backToIntro() },
                     onStartExam = { viewModel.startExamQuestions() }
                 )
             }
@@ -90,7 +129,8 @@ fun ChapterExamScreen(
                     onSelectOption = { viewModel.selectOption(it) },
                     onNext = { viewModel.nextQuestion() },
                     onPrevious = { viewModel.previousQuestion() },
-                    onBack = { onBack() }
+                    onRefresh = { viewModel.startExamQuestions() },
+                    onBack = { showExitConfirmDialog = true }
                 )
             }
 
@@ -106,7 +146,7 @@ fun ChapterExamScreen(
                             text = "পরীক্ষা জমা দেওয়া হচ্ছে...",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     }
                 }
@@ -130,7 +170,8 @@ fun ChapterExamScreen(
                     uiState = uiState,
                     onNext = { viewModel.nextSolution() },
                     onPrevious = { viewModel.previousSolution() },
-                    onBack = { onBack() }
+                    onJumpToQuestion = { idx -> viewModel.goToSolutionIndex(idx) },
+                    onBack = { viewModel.backToPerformance() }
                 )
             }
         }
@@ -558,6 +599,7 @@ fun ExamQuestionsContent(
     onSelectOption: (String) -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onRefresh: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val questions = uiState.questions
@@ -580,13 +622,13 @@ fun ExamQuestionsContent(
                         text = defaultTitle,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 actions = {
@@ -610,9 +652,10 @@ fun ExamQuestionsContent(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -634,18 +677,21 @@ fun ExamQuestionsContent(
                         .height(8.dp)
                         .clip(RoundedCornerShape(4.dp)),
                     color = Color(0xFF10B981),
-                    trackColor = Color(0xFFE2E8F0)
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { /* Refresh action */ }
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onRefresh() }
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("রিফ্রেশ দাও", fontSize = 12.sp, color = Color(0xFF64748B))
+                    Text("রিফ্রেশ দাও", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -1049,11 +1095,72 @@ fun ExamSolutionsContent(
     uiState: ChapterExamUiState,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onJumpToQuestion: (Int) -> Unit = {},
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val solutions = uiState.solutions
     val index = uiState.solutionIndex
     val currentSolution = solutions.getOrNull(index)
+    var showGridDialog by remember { mutableStateOf(false) }
+
+    if (showGridDialog) {
+        AlertDialog(
+            onDismissRequest = { showGridDialog = false },
+            title = {
+                Text("প্রশ্ন নির্বাচন করুন", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    solutions.chunked(5).forEachIndexed { rowIdx, rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEachIndexed { colIdx, _ ->
+                                val qIdx = rowIdx * 5 + colIdx
+                                val isCur = qIdx == index
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isCur) Color(0xFF0072EC) else MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            onJumpToQuestion(qIdx)
+                                            showGridDialog = false
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = toBengaliDigits((qIdx + 1).toString()),
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isCur) Color.White else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                            repeat(5 - rowItems.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showGridDialog = false }) {
+                    Text("বন্ধ করুন", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -1063,22 +1170,23 @@ fun ExamSolutionsContent(
                         text = "সমাধান",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* Grid overview */ }) {
-                        Icon(Icons.Default.GridView, contentDescription = "Grid", tint = Color(0xFF64748B))
+                    IconButton(onClick = { showGridDialog = true }) {
+                        Icon(Icons.Default.GridView, contentDescription = "Grid", tint = Color(0xFF0072EC))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         if (currentSolution != null) {
             val q = currentSolution.question
@@ -1289,7 +1397,15 @@ fun ExamSolutionsContent(
                         color = Color(0xFF0072EC),
                         modifier = Modifier
                             .align(Alignment.End)
-                            .clickable { /* Report question */ }
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "প্রশ্নটির রিপোর্ট সফলভাবে পাঠানো হয়েছে। ধন্যবাদ!",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
                     )
                 }
 

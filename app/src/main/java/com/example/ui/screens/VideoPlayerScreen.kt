@@ -65,8 +65,8 @@ import com.example.ui.components.PlayerControlsOverlay
 import com.example.ui.components.VideoDownloadQualityDialog
 import com.example.ui.components.VideoQualityDialog
 import com.example.player.EqualizerManager
-import com.example.util.PipHelper
-import com.example.util.SetupPipController
+import com.example.utils.PipHelper
+import com.example.utils.SetupPipController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -201,6 +201,16 @@ fun VideoPlayerScreen(
             }
             prepare()
             playWhenReady = true
+        }
+    }
+
+    // Probe real HLS master playlist or stream siblings when playing online HLS streams
+    LaunchedEffect(effectivePlaybackUrl) {
+        if (!isPlayingOffline && (effectivePlaybackUrl.contains(".m3u8", ignoreCase = true) || effectivePlaybackUrl.contains("/stream_"))) {
+            val probed = ShikhoPlayerManager.probeRealStreamQualities(effectivePlaybackUrl)
+            if (probed.size > 1 && availableQualities.size <= 1) {
+                availableQualities = probed
+            }
         }
     }
 
@@ -371,32 +381,12 @@ fun VideoPlayerScreen(
             }
 
             override fun onTracksChanged(tracks: Tracks) {
-                val qualities = mutableListOf<VideoTrackQuality>()
-                qualities.add(VideoTrackQuality(id = "auto", label = "অটো (Auto)", height = 0, bitrate = 0))
-
-                for (group in tracks.groups) {
-                    if (group.type == C.TRACK_TYPE_VIDEO) {
-                        for (i in 0 until group.length) {
-                            val format = group.getTrackFormat(i)
-                            val height = format.height
-                            val bitrate = format.bitrate
-                            if (height > 0) {
-                                val label = "${height}p" + if (bitrate > 0) " (${bitrate / 1000} kbps)" else ""
-                                qualities.add(
-                                    VideoTrackQuality(
-                                        id = "${height}_${bitrate}",
-                                        label = label,
-                                        height = height,
-                                        bitrate = bitrate,
-                                        trackGroup = group,
-                                        trackIndex = i
-                                    )
-                                )
-                            }
-                        }
-                    }
+                val extracted = ShikhoPlayerManager.extractQualitiesFromTracks(tracks)
+                if (extracted.size > 1) {
+                    availableQualities = extracted
+                } else if (availableQualities.isEmpty()) {
+                    availableQualities = extracted
                 }
-                availableQualities = qualities.distinctBy { it.label }
             }
         }
 
@@ -799,13 +789,28 @@ fun VideoPlayerScreen(
                 availableQualities = availableQualities,
                 selectedQualityLabel = selectedQualityLabel,
                 onSelectQuality = { quality ->
-                    selectedQualityLabel = quality.label
-                    if (quality.id == "auto") {
+                    selectedQualityLabel = if (quality.id == "auto") "অটো" else quality.label
+                    if (!quality.targetStreamUrl.isNullOrBlank() && quality.targetStreamUrl != effectivePlaybackUrl) {
+                        val resumePos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                        lastPlaybackPositionMs = resumePos
+                        val newSource = ShikhoPlayerManager.createMediaSource(
+                            url = quality.targetStreamUrl,
+                            isLive = isLive && !isPlayingOffline,
+                            context = context
+                        )
+                        if (resumePos > 1000L) {
+                            exoPlayer.setMediaSource(newSource, resumePos)
+                        } else {
+                            exoPlayer.setMediaSource(newSource)
+                        }
+                        exoPlayer.prepare()
+                        exoPlayer.playWhenReady = true
+                    } else if (quality.id == "auto" || quality.trackGroup == null) {
                         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
                             .buildUpon()
                             .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                             .build()
-                    } else if (quality.trackGroup != null) {
+                    } else {
                         val override = TrackSelectionOverride(
                             quality.trackGroup.mediaTrackGroup,
                             listOf(quality.trackIndex)

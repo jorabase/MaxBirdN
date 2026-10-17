@@ -592,6 +592,21 @@ class ChapterExamViewModel(
         }
     }
 
+    fun backToIntro() {
+        _uiState.update { it.copy(stage = ExamStage.INTRO) }
+    }
+
+    fun backToPerformance() {
+        _uiState.update { it.copy(stage = ExamStage.PERFORMANCE) }
+    }
+
+    fun goToSolutionIndex(index: Int) {
+        val state = _uiState.value
+        if (index in state.questions.indices) {
+            _uiState.update { it.copy(solutionIndex = index) }
+        }
+    }
+
     private fun deduceCorrectOption(
         solutionText: String,
         options: List<McqOptionItem>?,

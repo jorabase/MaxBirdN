@@ -366,7 +366,7 @@ fun PlayerControlsOverlay(
                     // Left: Back Button + Lesson Title ONLY (Subject Name Removed)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(if (isFullscreen) 0.45f else 0.40f)
                     ) {
                         Surface(
                             shape = CircleShape,
@@ -395,7 +395,8 @@ fun PlayerControlsOverlay(
                             fontSize = if (isFullscreen) 14.5.sp else 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                     }
 
@@ -403,7 +404,9 @@ fun PlayerControlsOverlay(
 
                     // Right: Modern Action Pills Strip (No duplicate sound/audio buttons!)
                     Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        modifier = Modifier
+                            .weight(if (isFullscreen) 0.55f else 0.60f, fill = false)
+                            .horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {

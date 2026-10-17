@@ -72,7 +72,10 @@ data class VideoTrackQuality(
     val bitrate: Int,
     val trackGroup: Tracks.Group? = null,
     val trackIndex: Int = 0,
-    val targetStreamUrl: String? = null
+    val targetStreamUrl: String? = null,
+    val subtitle: String = "",
+    val badgeText: String = "",
+    val width: Int = 0
 )
 
 @OptIn(UnstableApi::class)
@@ -418,4 +421,258 @@ object ShikhoPlayerManager {
         }
         return sb.toString()
     }
+
+    /**
+     * Converts raw video track height, width, and bitrate into a rich [VideoTrackQuality] with real metadata.
+     */
+    fun createRealVideoTrackQuality(
+        rawHeight: Int,
+        width: Int = 0,
+        bitrate: Int = 0,
+        trackGroup: Tracks.Group? = null,
+        trackIndex: Int = 0,
+        targetStreamUrl: String? = null
+    ): VideoTrackQuality {
+        val cleanHeight = when {
+            rawHeight in 120..165 -> 144
+            rawHeight in 220..265 -> 240
+            rawHeight in 340..385 -> 360
+            rawHeight in 460..505 -> 480
+            rawHeight in 520..565 -> 540
+            rawHeight in 700..745 -> 720
+            rawHeight in 1060..1105 -> 1080
+            rawHeight in 1400..1485 -> 1440
+            else -> rawHeight
+        }
+        val effectiveWidth = if (width > 0) width else (cleanHeight * 16) / 9
+        val badge = when {
+            cleanHeight >= 1440 -> "QHD"
+            cleanHeight >= 1080 -> "FHD"
+            cleanHeight >= 720 -> "HD"
+            cleanHeight >= 480 -> "SD"
+            else -> "Low"
+        }
+        val qualityDesc = when {
+            cleanHeight >= 1080 -> "সর্বোচ্চ ক্লিয়ারিটি"
+            cleanHeight >= 720 -> "পরিষ্কার এইচডি ভিডিও"
+            cleanHeight >= 480 -> "মাঝারি মান"
+            cleanHeight >= 360 -> "কম ডেটা খরচ"
+            else -> "ডেটা সেভার"
+        }
+        val bitrateStr = when {
+            bitrate >= 1_000_000 -> String.format(Locale.US, "%.1f Mbps", bitrate / 1_000_000.0)
+            bitrate > 0 -> "${bitrate / 1000} kbps"
+            else -> ""
+        }
+        val subtitleParts = mutableListOf<String>()
+        subtitleParts.add("${effectiveWidth}×${rawHeight}")
+        if (bitrateStr.isNotEmpty()) subtitleParts.add(bitrateStr)
+        subtitleParts.add(qualityDesc)
+
+        return VideoTrackQuality(
+            id = if (targetStreamUrl != null) "${cleanHeight}p" else "${cleanHeight}_${bitrate}",
+            label = "${cleanHeight}p",
+            height = cleanHeight,
+            bitrate = bitrate,
+            trackGroup = trackGroup,
+            trackIndex = trackIndex,
+            targetStreamUrl = targetStreamUrl,
+            subtitle = subtitleParts.joinToString(" • "),
+            badgeText = badge,
+            width = effectiveWidth
+        )
+    }
+
+    /**
+     * Extracts real available video qualities from ExoPlayer [Tracks].
+     */
+    fun extractQualitiesFromTracks(tracks: Tracks): List<VideoTrackQuality> {
+        val detected = mutableListOf<VideoTrackQuality>()
+        for (group in tracks.groups) {
+            if (group.type == C.TRACK_TYPE_VIDEO) {
+                for (i in 0 until group.length) {
+                    val format = group.getTrackFormat(i)
+                    val h = format.height
+                    val w = format.width
+                    val br = if (format.bitrate > 0) format.bitrate else 0
+                    val shortSide = if (w > 0 && h > 0) minOf(w, h) else h
+                    if (shortSide > 0) {
+                        detected.add(
+                            createRealVideoTrackQuality(
+                                rawHeight = shortSide,
+                                width = maxOf(w, h),
+                                bitrate = br,
+                                trackGroup = group,
+                                trackIndex = i
+                            )
+                        )
+                    }
+                }
+            }
+        }
+        val sorted = detected
+            .distinctBy { it.height }
+            .sortedByDescending { it.height }
+
+        val result = mutableListOf(
+            VideoTrackQuality(
+                id = "auto",
+                label = "অটো (Auto)",
+                height = 0,
+                bitrate = 0,
+                subtitle = "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন",
+                badgeText = "AUTO"
+            )
+        )
+        result.addAll(sorted)
+        return result
+    }
+
+    /**
+     * Probes the real HLS master playlist or stream siblings when a direct stream_X URL is passed,
+     * so we never show fake hardcoded resolutions that don't exist on the server.
+     */
+    suspend fun probeRealStreamQualities(streamUrl: String): List<VideoTrackQuality> =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val client = OkHttpClient.Builder()
+                .connectTimeout(8, TimeUnit.SECONDS)
+                .readTimeout(8, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .build()
+
+            val defaultHeaders = okhttp3.Headers.Builder()
+                .add("Origin", "https://app.shikho.com")
+                .add("Referer", DEFAULT_REFERER)
+                .add("User-Agent", DEFAULT_USER_AGENT)
+                .build()
+
+            val candidateMasterUrls = mutableListOf<String>()
+            if (streamUrl.contains("/stream_")) {
+                candidateMasterUrls.add(
+                    streamUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/master.m3u8")
+                )
+                candidateMasterUrls.add(
+                    streamUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/playlist.m3u8")
+                )
+            } else if (streamUrl.contains(".m3u8", ignoreCase = true)) {
+                candidateMasterUrls.add(streamUrl)
+            }
+
+            for (masterCandidate in candidateMasterUrls.distinct()) {
+                try {
+                    val req = okhttp3.Request.Builder()
+                        .url(masterCandidate)
+                        .headers(defaultHeaders)
+                        .get()
+                        .build()
+                    client.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val body = resp.body?.string().orEmpty()
+                            if (body.contains("#EXT-X-STREAM-INF")) {
+                                val parsed = mutableListOf<VideoTrackQuality>()
+                                val lines = body.lines()
+                                for (i in lines.indices) {
+                                    val line = lines[i].trim()
+                                    if (line.startsWith("#EXT-X-STREAM-INF", ignoreCase = true)) {
+                                        val resMatch = Regex("RESOLUTION=(\\d+)x(\\d+)", RegexOption.IGNORE_CASE).find(line)
+                                        val bwMatch = Regex("(?:AVERAGE-)?BANDWIDTH=(\\d+)", RegexOption.IGNORE_CASE).find(line)
+                                        val w = resMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                                        val h = resMatch?.groupValues?.getOrNull(2)?.toIntOrNull() ?: 0
+                                        val bw = bwMatch?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+                                        val shortSide = if (w > 0 && h > 0) minOf(w, h) else h
+
+                                        var variantUri: String? = null
+                                        for (j in (i + 1) until lines.size) {
+                                            val nextLine = lines[j].trim()
+                                            if (nextLine.isNotEmpty() && !nextLine.startsWith("#")) {
+                                                variantUri = if (nextLine.startsWith("http")) {
+                                                    nextLine
+                                                } else {
+                                                    val baseDir = masterCandidate.substringBeforeLast("/")
+                                                    "$baseDir/$nextLine"
+                                                }
+                                                break
+                                            }
+                                        }
+
+                                        if (shortSide > 0) {
+                                            parsed.add(
+                                                createRealVideoTrackQuality(
+                                                    rawHeight = shortSide,
+                                                    width = maxOf(w, h),
+                                                    bitrate = bw,
+                                                    targetStreamUrl = variantUri
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                                if (parsed.isNotEmpty()) {
+                                    val sorted = parsed.distinctBy { it.height }.sortedByDescending { it.height }
+                                    val bestUrl = sorted.firstOrNull()?.targetStreamUrl ?: streamUrl
+                                    return@withContext listOf(
+                                        VideoTrackQuality(
+                                            id = "auto",
+                                            label = "অটো (Auto)",
+                                            height = 0,
+                                            bitrate = 0,
+                                            targetStreamUrl = bestUrl,
+                                            subtitle = "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন",
+                                            badgeText = "AUTO"
+                                        )
+                                    ) + sorted
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+
+            if (streamUrl.contains("/stream_")) {
+                val tierStandardHeights = listOf(1080, 720, 480, 360, 240)
+                val verified = mutableListOf<VideoTrackQuality>()
+                for (idx in 0..4) {
+                    val candidateUrl = streamUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/stream_$idx/stream.m3u8")
+                    try {
+                        val req = okhttp3.Request.Builder()
+                            .url(candidateUrl)
+                            .headers(defaultHeaders)
+                            .get()
+                            .build()
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful) {
+                                val h = tierStandardHeights.getOrElse(idx) { 360 }
+                                verified.add(
+                                    createRealVideoTrackQuality(
+                                        rawHeight = h,
+                                        width = (h * 16) / 9,
+                                        bitrate = 0,
+                                        targetStreamUrl = candidateUrl
+                                    )
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+                if (verified.isNotEmpty()) {
+                    val sorted = verified.distinctBy { it.height }.sortedByDescending { it.height }
+                    val bestUrl = sorted.firstOrNull()?.targetStreamUrl ?: streamUrl
+                    return@withContext listOf(
+                        VideoTrackQuality(
+                            id = "auto",
+                            label = "অটো (Auto)",
+                            height = 0,
+                            bitrate = 0,
+                            targetStreamUrl = bestUrl,
+                            subtitle = "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন",
+                            badgeText = "AUTO"
+                        )
+                    ) + sorted
+                }
+            }
+
+            return@withContext emptyList()
+        }
 }

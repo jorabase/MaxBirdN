@@ -225,7 +225,14 @@ fun VideoQualityDialog(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Text("ভিডিও রেজোলিউশন / কোয়ালিটি", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Column {
+                    Text("ভিডিও রেজোলিউশন / কোয়ালিটি", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        text = "স্ট্রিমিং কোয়ালিটি নির্বাচন করুন",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         },
         text = {
@@ -244,7 +251,27 @@ fun VideoQualityDialog(
                     )
                 } else {
                     availableQualities.forEach { quality ->
-                        val isSelected = selectedQualityLabel == quality.label
+                        val isSelected = selectedQualityLabel == quality.label ||
+                            selectedQualityLabel == quality.id ||
+                            (quality.height == 0 && selectedQualityLabel.startsWith("অটো")) ||
+                            (quality.height > 0 && selectedQualityLabel.startsWith("${quality.height}p"))
+                        val badge = quality.badgeText.ifBlank {
+                            when {
+                                quality.height == 0 -> "AUTO"
+                                quality.height >= 1080 -> "FHD"
+                                quality.height >= 720 -> "HD"
+                                quality.height >= 480 -> "SD"
+                                else -> "Low"
+                            }
+                        }
+                        val subText = quality.subtitle.ifBlank {
+                            when {
+                                quality.height == 0 -> "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন"
+                                quality.bitrate > 0 -> "${quality.bitrate / 1000} kbps"
+                                else -> ""
+                            }
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
@@ -263,13 +290,14 @@ fun VideoQualityDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    .padding(horizontal = 14.dp, vertical = 11.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
                                         imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
@@ -277,12 +305,45 @@ fun VideoQualityDialog(
                                         tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Text(
-                                        text = quality.label,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 14.sp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Column {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = quality.label,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                fontSize = 14.5.sp,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (isSelected) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                                }
+                                            ) {
+                                                Text(
+                                                    text = badge,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = if (isSelected) {
+                                                        MaterialTheme.colorScheme.onPrimary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.primary
+                                                    },
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (subText.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = subText,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
                                 if (isSelected) {
                                     Surface(

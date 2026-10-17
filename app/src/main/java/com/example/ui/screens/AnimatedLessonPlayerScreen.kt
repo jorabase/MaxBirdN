@@ -69,8 +69,8 @@ import com.example.player.VideoProgressManager
 import com.example.player.EqualizerManager
 import com.example.ui.components.EqualizerBottomSheet
 import com.example.ui.components.VideoDownloadQualityDialog
-import com.example.util.PipHelper
-import com.example.util.SetupPipController
+import com.example.utils.PipHelper
+import com.example.utils.SetupPipController
 import com.example.utils.toBengaliDigits
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

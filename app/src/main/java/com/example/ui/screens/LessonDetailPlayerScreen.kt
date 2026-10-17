@@ -4,8 +4,8 @@ import com.example.R
 import android.app.Activity
 import android.app.DownloadManager
 import android.app.PictureInPictureParams
-import com.example.util.PipHelper
-import com.example.util.SetupPipController
+import com.example.utils.PipHelper
+import com.example.utils.SetupPipController
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -481,22 +481,14 @@ fun LessonDetailPlayerScreen(
         if (activeStreamUrl.isNotBlank()) {
             val urlToPlay = activeStreamUrl
 
-            // If activeStreamUrl is a master.m3u8, ExoPlayer's onTracksChanged will parse tracks dynamically.
-            // If it's a direct stream_X URL, fallback to pre-populating availableQualities.
-            if (urlToPlay.contains("/stream_")) {
-                val baseUrl = urlToPlay
-                val s0 = baseUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/stream_0/stream.m3u8")
-                val s1 = baseUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/stream_1/stream.m3u8")
-                val s2 = baseUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/stream_2/stream.m3u8")
-                val s3 = baseUrl.replace(Regex("/stream_\\d+/stream\\.m3u8"), "/stream_3/stream.m3u8")
-
-                availableQualities = listOf(
-                    VideoTrackQuality("auto", "অটো (Auto)", 0, 0, null, 0, s0),
-                    VideoTrackQuality("1080p", "1080p (উচ্চ মান)", 1080, 0, null, 0, s0),
-                    VideoTrackQuality("720p", "720p (এইচডি)", 720, 0, null, 0, s1),
-                    VideoTrackQuality("480p", "480p (মাঝারি)", 480, 0, null, 0, s2),
-                    VideoTrackQuality("360p", "360p (সাধারণ)", 360, 0, null, 0, s3)
-                )
+            // Probe real HLS master playlist or existing stream tiers on background thread
+            if (urlToPlay.contains(".m3u8", ignoreCase = true) || urlToPlay.contains("/stream_")) {
+                coroutineScope.launch {
+                    val probed = ShikhoPlayerManager.probeRealStreamQualities(urlToPlay)
+                    if (probed.size > 1 && availableQualities.size <= 1) {
+                        availableQualities = probed
+                    }
+                }
             }
 
             isBuffering = true
@@ -545,32 +537,12 @@ fun LessonDetailPlayerScreen(
             }
 
             override fun onTracksChanged(tracks: Tracks) {
-                val qualities = mutableListOf<VideoTrackQuality>()
-                qualities.add(VideoTrackQuality(id = "auto", label = "অটো (Auto)", height = 0, bitrate = 0))
-
-                for (group in tracks.groups) {
-                    if (group.type == C.TRACK_TYPE_VIDEO) {
-                        for (i in 0 until group.length) {
-                            val format = group.getTrackFormat(i)
-                            val height = format.height
-                            val bitrate = format.bitrate
-                            if (height > 0) {
-                                val label = "${height}p" + if (bitrate > 0) " (${bitrate / 1000} kbps)" else ""
-                                qualities.add(
-                                    VideoTrackQuality(
-                                        id = "${height}_${bitrate}",
-                                        label = label,
-                                        height = height,
-                                        bitrate = bitrate,
-                                        trackGroup = group,
-                                        trackIndex = i
-                                    )
-                                )
-                            }
-                        }
-                    }
+                val extracted = ShikhoPlayerManager.extractQualitiesFromTracks(tracks)
+                if (extracted.size > 1) {
+                    availableQualities = extracted
+                } else if (availableQualities.isEmpty()) {
+                    availableQualities = extracted
                 }
-                availableQualities = qualities.distinctBy { it.label }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
