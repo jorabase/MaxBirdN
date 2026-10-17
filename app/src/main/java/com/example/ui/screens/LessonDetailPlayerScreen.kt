@@ -457,11 +457,11 @@ fun LessonDetailPlayerScreen(
     }
 
     // Initialize media source when activeStreamUrl or mode changes
-    LaunchedEffect(activeStreamUrl, livePlayerMode, isUpcomingLesson) {
-        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl, isUpcoming: $isUpcomingLesson")
+    LaunchedEffect(activeStreamUrl, livePlayerMode, isUpcomingLesson, isLiveOngoing, isRecordingProcessing) {
+        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl, isUpcoming: $isUpcomingLesson, isLiveOngoing: $isLiveOngoing")
         playbackError = null
         playbackErrorDetails = null
-        if (isUpcomingLesson) {
+        if (isUpcomingLesson || isLiveOngoing || isRecordingProcessing) {
             try {
                 exoPlayer.stop()
                 exoPlayer.clearMediaItems()
@@ -1134,6 +1134,7 @@ fun LessonDetailPlayerScreen(
                             subjectColor = subjectThemeColor,
                             onBack = onBack,
                             onJoinLive = {
+                                try { exoPlayer.pause(); exoPlayer.stop() } catch (_: Exception) {}
                                 val classId = lesson?.live_class?.id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.content_id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.id ?: ""
@@ -1149,6 +1150,7 @@ fun LessonDetailPlayerScreen(
                             onBack = onBack,
                             onRefreshLesson = onRefreshLesson,
                             onJoinLive = {
+                                try { exoPlayer.pause(); exoPlayer.stop() } catch (_: Exception) {}
                                 val classId = lesson?.live_class?.id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.content_id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.id ?: ""
@@ -1378,6 +1380,7 @@ fun LessonDetailPlayerScreen(
                             onViewSlide = handleViewSlide,
                             onBack = onBack,
                             onJoinLive = {
+                                try { exoPlayer.pause(); exoPlayer.stop() } catch (_: Exception) {}
                                 val classId = lesson?.live_class?.id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.content_id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.id ?: ""
@@ -1447,6 +1450,7 @@ fun LessonDetailPlayerScreen(
                     repository = courseRepository,
                     themeColor = subjectThemeColor,
                     onPlayAnimatedLesson = { vUrl, vTitle ->
+                        try { exoPlayer.pause() } catch (_: Exception) {}
                         onPlayAnimatedLesson?.invoke(vUrl, vTitle)
                     }
                 )

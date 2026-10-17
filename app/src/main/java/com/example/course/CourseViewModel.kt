@@ -306,30 +306,8 @@ class CourseViewModel(
                         ?: liveClassData?.url?.takeIf { it.isNotBlank() && it != "null" }
                         ?: liveClassData?.hls_url?.takeIf { it.isNotBlank() && it != "null" }
 
-                    // If liveClassData didn't have playback_url directly, check topics videos
-                    if (pbUrl.isNullOrBlank()) {
-                        val topicIds = liveClassData?.topics?.mapNotNull { it.id }?.filter { it.isNotBlank() }
-                            ?: lesson.topics?.mapNotNull { it.id }?.filter { it.isNotBlank() }
-                            ?: emptyList()
-                        val chapterId = lesson.chapter_id ?: _uiState.value.selectedChapterId
-                        if (topicIds.isNotEmpty() || chapterId.isNotBlank()) {
-                            try {
-                                val topicsWithVideos = repository.getTopics(chapterId, topicIds.ifEmpty { null })
-                                val topicVideoUrl = topicsWithVideos.firstNotNullOfOrNull { top ->
-                                    top.videos?.data?.firstNotNullOfOrNull { v ->
-                                        v.playback_url?.takeIf { it.isNotBlank() && it != "null" }
-                                    }
-                                }
-                                if (!topicVideoUrl.isNullOrBlank()) {
-                                    pbUrl = topicVideoUrl
-                                    android.util.Log.d("LectureDebug", "Found playback_url from topics: $pbUrl")
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.w("LectureDebug", "Failed to fetch topic videos: ${e.message}")
-                            }
-                        }
-                    }
-
+                    // IMPORTANT: Never use animated topic videos (getTopics) as playback_url for a lesson in selectLesson!
+                    // Topic videos are separate animated lessons shown in the bottom section, not the live class stream.
                     if (liveClassData != null || !pbUrl.isNullOrBlank()) {
                         val newAttachments = mutableListOf<LessonAttachmentItem>()
                         liveClassData?.study_materials?.forEach { mat ->

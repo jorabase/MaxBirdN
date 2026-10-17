@@ -1780,7 +1780,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val lessonTitle = safeUrlDecode(backStackEntry.arguments?.getString("lessonTitle"))
             val subjectName = safeUrlDecode(backStackEntry.arguments?.getString("subjectName"))
 
-            val selectedLesson = courseViewModel.uiState.value.selectedLesson
+            val selectedLesson = courseViewModel.uiState.value.selectedLesson?.takeIf {
+                it.id == lessonId || it.id == classId || it.content_id == classId || it.live_class?.id == classId
+            }
             val candidateUrls: List<String> = selectedLesson?.candidateStreamUrls ?: emptyList()
             val fallbackSubject = courseViewModel.uiState.value.selectedSubjectTitle
                 .ifBlank { selectedLesson?.subject_name.orEmpty() }

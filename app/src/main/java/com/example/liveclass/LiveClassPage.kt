@@ -148,8 +148,8 @@ fun LiveClassPage(
         mutableStateOf(sessionManager.getLiveCustomStudentName() ?: sessionManager.getUserFullName() ?: "শিক্ষার্থী")
     }
     var showNameChangeDialog by remember { mutableStateOf(false) }
-    var showJoinNameDialog by rememberSaveable {
-        mutableStateOf(sessionManager.getLiveCustomStudentName().isNullOrBlank())
+    var showJoinNameDialog by rememberSaveable(classId, lessonId) {
+        mutableStateOf(true)
     }
 
     // Live Delay state & Sync Trigger
@@ -279,31 +279,38 @@ fun LiveClassPage(
 
             wsManager.addCandidateUrls(cleanDiscovered)
 
-            var directPlaybackSet = false
-            if (!academicInfo?.playbackUrl.isNullOrBlank()) {
-                wsManager.setMasterUrl(academicInfo!!.playbackUrl!!)
-                uiState = LiveClassState.Playing
-                directPlaybackSet = true
-            } else if (cleanDiscovered.isNotEmpty()) {
-                wsManager.setMasterUrl(cleanDiscovered.first())
-                uiState = LiveClassState.Playing
-                directPlaybackSet = true
-            }
-
+            // 1. Prioritize 100ms WebSocket Live Room Connection so no fallback/animated video plays before live stream!
             if (!roomId.isNullOrBlank()) {
                 val tokenResult = service.getHmsToken(roomId, userToken)
                 val hmsToken = tokenResult.getOrNull()
                 if (!hmsToken.isNullOrBlank()) {
                     wsManager.connect(hmsToken, studentName)
+                    // If the class is already finished and has a direct recorded playbackUrl, set it;
+                    // otherwise wait for the live HLS URL from the 100ms WebSocket!
+                    if (academicInfo?.isOnGoing == false && !academicInfo.playbackUrl.isNullOrBlank()) {
+                        wsManager.setMasterUrl(academicInfo.playbackUrl)
+                        uiState = LiveClassState.Playing
+                    } else {
+                        // Safety fallback if WebSocket does not deliver a stream URL within 5 seconds
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(5000L)
+                            if (wsManager.masterUrl.value.isNullOrBlank()) {
+                                val fallback = academicInfo?.playbackUrl?.takeIf { it.isNotBlank() }
+                                    ?: cleanDiscovered.firstOrNull()
+                                if (!fallback.isNullOrBlank()) {
+                                    wsManager.setMasterUrl(fallback)
+                                    uiState = LiveClassState.Playing
+                                }
+                            }
+                        }
+                    }
                     return@launch
                 }
             }
 
-            if (directPlaybackSet) {
-                return@launch
-            }
-
-            val fallbackUrl = academicInfo?.playbackUrl ?: cleanDiscovered.firstOrNull()
+            // 2. If 100ms room/token is not active, use direct live/recorded stream URL if available
+            val fallbackUrl = academicInfo?.playbackUrl?.takeIf { it.isNotBlank() }
+                ?: cleanDiscovered.firstOrNull()
             if (!fallbackUrl.isNullOrBlank()) {
                 wsManager.setMasterUrl(fallbackUrl)
                 uiState = LiveClassState.Playing
@@ -321,17 +328,15 @@ fun LiveClassPage(
     }
 
     LaunchedEffect(masterUrl, wsError) {
-        if (uiState is LiveClassState.Loading) {
-            if (!masterUrl.isNullOrBlank()) {
+        if (!masterUrl.isNullOrBlank()) {
+            uiState = LiveClassState.Playing
+        } else if (uiState is LiveClassState.Loading && !wsError.isNullOrBlank()) {
+            val fallback = candidateUrls.firstOrNull { it.isNotBlank() }
+            if (!fallback.isNullOrBlank()) {
+                wsManager.setMasterUrl(fallback)
                 uiState = LiveClassState.Playing
-            } else if (!wsError.isNullOrBlank()) {
-                val fallback = candidateUrls.firstOrNull { it.isNotBlank() }
-                if (!fallback.isNullOrBlank()) {
-                    wsManager.setMasterUrl(fallback)
-                    uiState = LiveClassState.Playing
-                } else {
-                    uiState = LiveClassState.Error("কানেকশন ত্রুটি: $wsError")
-                }
+            } else {
+                uiState = LiveClassState.Error("কানেকশন ত্রুটি: $wsError")
             }
         }
     }
@@ -775,7 +780,8 @@ fun LiveClassPage(
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color(0xFF38BDF8),
                                                     maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.widthIn(max = if (isLandscape) 160.dp else 95.dp)
                                                 )
                                                 Icon(
                                                     imageVector = Icons.Default.Edit,
@@ -916,7 +922,7 @@ fun LiveClassPage(
                                                                 .background(if (liveDelaySeconds > 3) Color(0xFFF43F5E) else Color(0xFF10B981))
                                                         )
                                                         Text(
-                                                            text = if (liveDelaySeconds > 3) "🔴 লাইভ (${liveDelaySeconds}s)" else "🔴 লাইভ",
+                                                            text = if (liveDelaySeconds > 3) "🔴 লাইভ (-${liveDelaySeconds}s • সিঙ্ক)" else "🔴 লাইভ",
                                                             fontSize = 10.5.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = Color.White
@@ -961,7 +967,7 @@ fun LiveClassPage(
                                                             .background(if (liveDelaySeconds > 3) Color(0xFFF43F5E) else Color(0xFF10B981))
                                                     )
                                                     Text(
-                                                        text = if (liveDelaySeconds > 3) "🔴 লাইভ (${liveDelaySeconds}s পেছনে • ট্যাপ করুন)" else "🔴 লাইভ",
+                                                        text = if (liveDelaySeconds > 3) "🔴 লাইভ (-${liveDelaySeconds}s • সিঙ্ক)" else "🔴 লাইভ",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color.White
@@ -1317,7 +1323,15 @@ fun LiveClassPage(
                                                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                                                 ) {
                                                     Icon(Icons.Default.Edit, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(10.dp))
-                                                    Text(studentName, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8), maxLines = 1)
+                                                    Text(
+                                                        text = studentName,
+                                                        fontSize = 10.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF38BDF8),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.widthIn(max = 110.dp)
+                                                    )
                                                 }
                                             }
                                             Spacer(Modifier.width(4.dp))
@@ -1529,7 +1543,7 @@ fun LiveClassPage(
                                     }
                                 }
 
-                                // 4. Role selector chips: Teacher, Student, * All
+                                // 4. Role selector chips: Teacher, Student, * All + Custom Student Name Chip
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -1577,6 +1591,7 @@ fun LiveClassPage(
                                                     color = if (isSelected) Color.White else Color(0xFF94A3B8)
                                                 )
                                             }
+                                        }
                                     }
 
                                     Spacer(modifier = Modifier.weight(1f))
@@ -1605,7 +1620,8 @@ fun LiveClassPage(
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFF38BDF8),
                                                 maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.widthIn(max = 110.dp)
                                             )
                                         }
                                     }
@@ -1689,15 +1705,16 @@ fun LiveClassPage(
 
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                // 7. Quick Comment Chips
+                                // 7. Quick Comment Chips (Horizontally scrollable so they never wrap or break!)
                                 if (isChatEnabled) {
-                                    Row(
+                                    androidx.compose.foundation.lazy.LazyRow(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(bottom = 6.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        quickReplyChips.forEach { chipText ->
+                                        items(quickReplyChips) { chipText ->
                                             Surface(
                                                 shape = RoundedCornerShape(12.dp),
                                                 color = Color(0xFF1E293B),
@@ -1706,9 +1723,10 @@ fun LiveClassPage(
                                             ) {
                                                 Text(
                                                     text = chipText,
-                                                    fontSize = 10.5.sp,
+                                                    fontSize = 11.sp,
                                                     color = Color(0xFFE2E8F0),
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    maxLines = 1,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                                 )
                                             }
                                         }
@@ -1805,9 +1823,8 @@ fun LiveClassPage(
                         }
                     }
                 }
-            }
 
-            is LiveClassState.Error -> {
+                is LiveClassState.Error -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
