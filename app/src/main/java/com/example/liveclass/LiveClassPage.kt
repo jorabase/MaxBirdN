@@ -323,10 +323,15 @@ fun LiveClassPage(
 
             // 1. Prioritize 100ms WebSocket Live Room Connection so no fallback/animated video plays before live stream!
             if (!roomId.isNullOrBlank()) {
-                val tokenResult = service.getHmsToken(roomId, userToken)
-                val hmsToken = tokenResult.getOrNull()
+                val tokensResult = service.getHmsRoomTokens(roomId, userToken)
+                val roomTokens = tokensResult.getOrNull()
+                val hmsToken = roomTokens?.primaryToken
                 if (!hmsToken.isNullOrBlank()) {
-                    wsManager.connect(hmsToken, studentName)
+                    wsManager.connect(
+                        token = hmsToken,
+                        studentName = studentName,
+                        teacherToken = roomTokens.teacherToken
+                    )
                     if (academicInfo?.isOnGoing == false && !academicInfo.playbackUrl.isNullOrBlank()) {
                         wsManager.setMasterUrl(academicInfo.playbackUrl)
                         uiState = LiveClassState.Playing
@@ -406,7 +411,6 @@ fun LiveClassPage(
             return
         }
         val myName = studentName.ifBlank { "আপনি" }
-        val isTeacher = selectedRole == "teacher"
         val formattedTime = try {
             java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
         } catch (_: Exception) {
@@ -420,8 +424,8 @@ fun LiveClassPage(
                 senderName = myName,
                 message = cleanText,
                 timestamp = formattedTime,
-                isTeacher = isTeacher,
-                role = selectedRole,
+                isTeacher = false,
+                role = "student",
                 targetRole = selectedRole,
                 senderPeerId = wsManager.getCurrentPeerId(),
                 status = ChatDeliveryStatus.SENDING,
@@ -439,7 +443,7 @@ fun LiveClassPage(
         wsManager.sendChatMessage(
             text = cleanText,
             studentName = myName,
-            role = selectedRole,
+            role = "student",
             targetRole = selectedRole
         ) { isSuccess ->
             coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
@@ -2615,9 +2619,9 @@ fun LiveViewMessagesDialog(
     ) {
         messages.filter { msg ->
             val isMyMsg = msg.isMine || msg.senderName == "আপনি"
-            val isTeacherMsg = msg.isTeacher || (msg.role == "teacher" && !isMyMsg)
+            val isTeacherMsg = msg.isTeacher && !isMyMsg
             val matchesCategory = when (selectedCategory) {
-                "student" -> !isTeacherMsg && (msg.targetRole == "student" || msg.role == "student" || msg.targetRole == "all")
+                "student" -> !isTeacherMsg
                 "teacher" -> isTeacherMsg || msg.targetRole == "teacher"
                 "mine" -> isMyMsg
                 else -> true
@@ -2714,12 +2718,12 @@ fun LiveViewMessagesDialog(
                     Triple("all", "সব (${messages.size})", Icons.Default.AllInbox),
                     Triple(
                         "student",
-                        "স্টুডেন্ট (${messages.count { !it.isTeacher && (it.targetRole == "student" || it.role == "student" || it.targetRole == "all") }})",
+                        "স্টুডেন্ট (${messages.count { !(it.isTeacher && !it.isMine) }})",
                         Icons.Default.Groups
                     ),
                     Triple(
                         "teacher",
-                        "শিক্ষক (${messages.count { it.isTeacher || it.targetRole == "teacher" }})",
+                        "শিক্ষক (${messages.count { (it.isTeacher && !it.isMine) || it.targetRole == "teacher" }})",
                         Icons.Default.School
                     ),
                     Triple(

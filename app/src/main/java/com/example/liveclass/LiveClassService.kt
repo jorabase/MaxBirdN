@@ -1,7 +1,10 @@
 package com.example.liveclass
 
+import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -9,6 +12,11 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+
+data class HmsRoomTokens(
+    val primaryToken: String,
+    val teacherToken: String? = null
+)
 
 data class LiveStudyMaterial(
     val id: String,
@@ -158,19 +166,27 @@ class LiveClassService(
         }
     }
 
-    /**
-     * Step 2: HMS Token API call to get 100ms token
-     */
-    suspend fun getHmsToken(
-        roomId: String,
-        userToken: String
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val jsonBody = JSONObject().apply {
-                put("room_id", roomId.trim())
-                put("type", "android")
-            }
+    private fun extractJwtRole(token: String?): String {
+        if (token.isNullOrBlank()) return ""
+        return try {
+            val parts = token.split(".")
+            if (parts.size >= 2) {
+                val decoded = Base64.decode(
+                    parts[1],
+                    Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+                )
+                JSONObject(String(decoded, Charsets.UTF_8)).optString("role").trim()
+            } else ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
 
+    private fun requestHmsTokenInternal(
+        jsonBody: JSONObject,
+        userToken: String
+    ): Result<String> {
+        return try {
             val request = Request.Builder()
                 .url(HMS_TOKEN_URL)
                 .post(jsonBody.toString().toRequestBody(JSON_MEDIA_TYPE))
@@ -181,10 +197,8 @@ class LiveClassService(
 
             client.newCall(request).execute().use { response ->
                 val responseBody = response.body?.string().orEmpty()
-
                 if (!response.isSuccessful) {
-                    Log.e(TAG, "HMS Token request failed (${response.code}): $responseBody")
-                    return@withContext Result.failure(
+                    return Result.failure(
                         Exception("লাইভ ক্লাস টোকেন সংগ্রহে ত্রুটি হয়েছে (কোড ${response.code})")
                     )
                 }
@@ -195,15 +209,106 @@ class LiveClassService(
                 }
 
                 if (token.isNotBlank() && !token.equals("null", ignoreCase = true)) {
-                    Log.d(TAG, "Successfully retrieved 100ms token")
                     Result.success(token)
                 } else {
                     Result.failure(Exception("100ms token not found in response"))
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching HMS token: ${e.message}", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Step 2: HMS Token API call to get 100ms token
+     */
+    suspend fun getHmsToken(
+        roomId: String,
+        userToken: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val cleanRoomId = roomId.trim()
+        val standardBody = JSONObject().apply {
+            put("room_id", cleanRoomId)
+            put("type", "android")
+        }
+        requestHmsTokenInternal(standardBody, userToken)
+    }
+
+    /**
+     * Fetches both the standard student 100ms token and attempts to obtain a teacher-role token
+     * so the app can receive messages sent by other students who select "teacher" as recipient.
+     */
+    suspend fun getHmsRoomTokens(
+        roomId: String,
+        userToken: String
+    ): Result<HmsRoomTokens> = withContext(Dispatchers.IO) {
+        coroutineScope {
+            val cleanRoomId = roomId.trim()
+
+            val primaryDeferred = async {
+                val standardBody = JSONObject().apply {
+                    put("room_id", cleanRoomId)
+                    put("type", "android")
+                }
+                requestHmsTokenInternal(standardBody, userToken)
+            }
+
+            val teacherDeferred = async {
+                val candidatePayloads = listOf(
+                    JSONObject().apply {
+                        put("room_id", cleanRoomId)
+                        put("type", "android")
+                        put("role", "teacher")
+                    },
+                    JSONObject().apply {
+                        put("room_id", cleanRoomId)
+                        put("type", "teacher")
+                        put("role", "teacher")
+                    },
+                    JSONObject().apply {
+                        put("room_id", cleanRoomId)
+                        put("type", "web")
+                        put("role", "teacher")
+                        put("user_role", "teacher")
+                    }
+                )
+
+                var fallbackToken: String? = null
+                for (payload in candidatePayloads) {
+                    val res = requestHmsTokenInternal(payload, userToken).getOrNull()
+                    if (!res.isNullOrBlank()) {
+                        val jwtRole = extractJwtRole(res)
+                        if (jwtRole.contains("teacher", ignoreCase = true) ||
+                            jwtRole.contains("host", ignoreCase = true) ||
+                            jwtRole.contains("moderator", ignoreCase = true)
+                        ) {
+                            return@async res
+                        }
+                        if (fallbackToken == null) {
+                            fallbackToken = res
+                        }
+                    }
+                }
+                fallbackToken
+            }
+
+            val primaryRes = primaryDeferred.await()
+            val teacherToken = teacherDeferred.await()
+
+            val primaryToken = primaryRes.getOrNull() ?: teacherToken
+            if (!primaryToken.isNullOrBlank()) {
+                Result.success(
+                    HmsRoomTokens(
+                        primaryToken = primaryToken,
+                        teacherToken = teacherToken ?: primaryToken
+                    )
+                )
+            } else {
+                Result.failure(
+                    primaryRes.exceptionOrNull()
+                        ?: Exception("লাইভ ক্লাস টোকেন সংগ্রহে ত্রুটি হয়েছে")
+                )
+            }
         }
     }
 

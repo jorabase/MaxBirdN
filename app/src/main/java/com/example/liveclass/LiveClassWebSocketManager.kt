@@ -35,18 +35,23 @@ class LiveClassWebSocketManager {
         .build()
 
     private var webSocket: WebSocket? = null
+    private var teacherWebSocket: WebSocket? = null
     private var hlsPollWatcherJob: Job? = null
     private var reconnectJob: Job? = null
+    private var teacherReconnectJob: Job? = null
 
     @Volatile
     private var shouldAutoReconnect: Boolean = false
     private var reconnectAttempts: Int = 0
     private var lastAuthToken: String = ""
+    private var lastTeacherAuthToken: String = ""
 
     private var currentPeerId: String = ""
+    private var teacherListenerPeerId: String = ""
     private var currentUserId: String = ""
     private var currentStudentName: String = ""
     private var currentPeerRole: String = "student"
+    private var teacherListenerRole: String = ""
     private var handRaisedAtTimestamp: Long = 0L
 
     private data class RpcRequestMeta(
@@ -60,7 +65,9 @@ class LiveClassWebSocketManager {
     private val pendingChatCallbacks = ConcurrentHashMap<String, (Boolean) -> Unit>()
     private val peerNamesMap = ConcurrentHashMap<String, String>()
     private val peerRolesMap = ConcurrentHashMap<String, String>()
+    private val studentClientPeerIds = ConcurrentHashMap.newKeySet<String>()
     private val recentlySentClientMsgIds = ConcurrentHashMap<String, Long>()
+    private val processedIncomingMsgIds = ConcurrentHashMap<String, Long>()
 
     private val _masterUrl = MutableStateFlow<String?>(null)
     val masterUrl: StateFlow<String?> = _masterUrl.asStateFlow()
@@ -185,22 +192,98 @@ class LiveClassWebSocketManager {
         }
     }
 
+    private fun isPeerMarkedAsStudentClient(peerObj: JSONObject?, infoObj: JSONObject?): Boolean {
+        val dataStr = infoObj?.optString("data").orEmpty()
+            .ifBlank { peerObj?.optString("data").orEmpty() }
+            .trim()
+        if (dataStr.startsWith("{") && dataStr.endsWith("}")) {
+            try {
+                val dataJson = JSONObject(dataStr)
+                if (dataJson.optBoolean("isStudentClient", false)) return true
+            } catch (_: Exception) {
+            }
+        }
+        return false
+    }
+
+    private fun requestTeacherRoleSubscription(ws: WebSocket, peerId: String) {
+        try {
+            // 1. Join "teacher" and "student" broadcast groups
+            for (groupName in listOf("teacher", "student")) {
+                val groupReqId = UUID.randomUUID().toString()
+                pendingRpcRequests[groupReqId] = RpcRequestMeta("group-join", extra = groupName)
+                val groupMsg = JSONObject().apply {
+                    put("id", groupReqId)
+                    put("method", "group-join")
+                    put("params", JSONObject().apply {
+                        put("name", groupName)
+                    })
+                    put("jsonrpc", "2.0")
+                }
+                ws.send(groupMsg.toString())
+            }
+
+            // 2. Request 100ms role change to "teacher" so messages sent by students to "teacher" arrive
+            if (peerId.isNotBlank()) {
+                val roleReqId = UUID.randomUUID().toString()
+                pendingRpcRequests[roleReqId] = RpcRequestMeta("change-role", extra = "teacher")
+                val changeRoleWithPeerMsg = JSONObject().apply {
+                    put("id", roleReqId)
+                    put("method", "change-role")
+                    put("params", JSONObject().apply {
+                        put("peer_id", peerId)
+                        put("role", "teacher")
+                        put("force", true)
+                    })
+                    put("jsonrpc", "2.0")
+                }
+                ws.send(changeRoleWithPeerMsg.toString())
+            }
+
+            val selfRoleReqId = UUID.randomUUID().toString()
+            pendingRpcRequests[selfRoleReqId] = RpcRequestMeta("change-role", extra = "teacher")
+            val selfChangeRoleMsg = JSONObject().apply {
+                put("id", selfRoleReqId)
+                put("method", "change-role")
+                put("params", JSONObject().apply {
+                    put("role", "teacher")
+                    put("force", true)
+                })
+                put("jsonrpc", "2.0")
+            }
+            ws.send(selfChangeRoleMsg.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to request teacher role subscription: ${e.message}")
+        }
+    }
+
     fun connect(
         token: String,
-        studentName: String = ""
+        studentName: String = "",
+        teacherToken: String? = null
     ) {
         if (token.isBlank()) return
         reconnectJob?.cancel()
+        teacherReconnectJob?.cancel()
         try {
             webSocket?.close(1000, "Reconnecting")
         } catch (_: Exception) {
         }
+        try {
+            teacherWebSocket?.close(1000, "Reconnecting")
+        } catch (_: Exception) {
+        }
         webSocket = null
+        teacherWebSocket = null
 
         shouldAutoReconnect = true
         reconnectAttempts = 0
         lastAuthToken = token
+        lastTeacherAuthToken = teacherToken?.takeIf { it.isNotBlank() } ?: token
         currentPeerId = UUID.randomUUID().toString()
+        teacherListenerPeerId = UUID.randomUUID().toString()
+        studentClientPeerIds.add(currentPeerId)
+        studentClientPeerIds.add(teacherListenerPeerId)
         currentStudentName = studentName.trim()
 
         val jwtJson = parseJwtPayload(token)
@@ -214,10 +297,12 @@ class LiveClassWebSocketManager {
 
         if (currentStudentName.isNotBlank()) {
             if (currentPeerId.isNotBlank()) peerNamesMap[currentPeerId] = currentStudentName
+            if (teacherListenerPeerId.isNotBlank()) peerNamesMap[teacherListenerPeerId] = currentStudentName
             if (currentUserId.isNotBlank()) peerNamesMap[currentUserId] = currentStudentName
         }
 
         openSocketInternal(token)
+        openTeacherListenerSocketInternal(lastTeacherAuthToken)
     }
 
     private fun openSocketInternal(token: String) {
@@ -253,6 +338,7 @@ class LiveClassWebSocketManager {
                             put("data", JSONObject().apply {
                                 put("isBRBOn", false)
                                 put("name", effectiveName)
+                                put("isStudentClient", true)
                                 if (_isHandRaised.value && handRaisedAtTimestamp > 0L) {
                                     put("handRaisedAt", handRaisedAtTimestamp)
                                 }
@@ -264,12 +350,13 @@ class LiveClassWebSocketManager {
                     }
                     ws.send(joinMessage.toString())
 
+                    requestTeacherRoleSubscription(ws, currentPeerId)
                     requestPollList("started")
                     requestPollList("stopped")
                 }
 
                 override fun onMessage(ws: WebSocket, text: String) {
-                    handleWebSocketMessage(text)
+                    handleWebSocketMessage(text, isTeacherListenerSocket = false)
                 }
 
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
@@ -296,6 +383,76 @@ class LiveClassWebSocketManager {
                     _isConnected.value = false
                 }
             })
+        }
+    }
+
+    /**
+     * Secondary Teacher-Role Listener WebSocket:
+     * Joins the 100ms room requesting the "teacher" role & group so that messages sent by
+     * other students who select "teacher" (the default in Shikho) are received in real time.
+     */
+    private fun openTeacherListenerSocketInternal(token: String) {
+        if (token.isBlank()) return
+        scope.launch {
+            try {
+                val rawUa = buildUserAgentV2()
+                val encodedUa = URLEncoder.encode(rawUa, "UTF-8")
+                val baseWsEndpoint = fetchWsEndpointFromInit(token, encodedUa)
+
+                val wsUrl =
+                    "$baseWsEndpoint?peer=$teacherListenerPeerId&token=$token&user_agent_v2=$encodedUa&protocol_version=2.5&protocol_spec=20240720"
+                Log.d(TAG, "Connecting 100ms Teacher-Role Listener WebSocket")
+
+                val request = Request.Builder()
+                    .url(wsUrl)
+                    .addHeader("User-Agent", "okhttp/5.3.2")
+                    .build()
+
+                teacherWebSocket = client.newWebSocket(request, object : WebSocketListener() {
+                    override fun onOpen(ws: WebSocket, response: Response) {
+                        val effectiveName = currentStudentName.trim().ifBlank { "Student" }
+                        val joinId = UUID.randomUUID().toString()
+                        pendingRpcRequests[joinId] = RpcRequestMeta("join", extra = "teacher_listener")
+                        val joinMessage = JSONObject().apply {
+                            put("id", joinId)
+                            put("method", "join")
+                            put("params", JSONObject().apply {
+                                put("name", effectiveName)
+                                put("role", "teacher")
+                                put("data", JSONObject().apply {
+                                    put("isBRBOn", false)
+                                    put("name", effectiveName)
+                                    put("role", "teacher")
+                                    put("isStudentClient", true)
+                                }.toString())
+                                put("disableVidAutoSub", true)
+                                put("simulcast", true)
+                            })
+                            put("jsonrpc", "2.0")
+                        }
+                        ws.send(joinMessage.toString())
+                        requestTeacherRoleSubscription(ws, teacherListenerPeerId)
+                    }
+
+                    override fun onMessage(ws: WebSocket, text: String) {
+                        handleWebSocketMessage(text, isTeacherListenerSocket = true)
+                    }
+
+                    override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                        if (shouldAutoReconnect && lastTeacherAuthToken.isNotBlank()) {
+                            teacherReconnectJob?.cancel()
+                            teacherReconnectJob = scope.launch {
+                                delay(3500L)
+                                if (shouldAutoReconnect) {
+                                    openTeacherListenerSocketInternal(lastTeacherAuthToken)
+                                }
+                            }
+                        }
+                    }
+                })
+            } catch (e: Exception) {
+                Log.w(TAG, "Teacher listener socket init error: ${e.message}")
+            }
         }
     }
 
@@ -410,7 +567,7 @@ class LiveClassWebSocketManager {
         fetchPollLeaderboard(pollId)
     }
 
-    private fun handleWebSocketMessage(text: String) {
+    private fun handleWebSocketMessage(text: String, isTeacherListenerSocket: Boolean = false) {
         try {
             val msg = JSONObject(text)
             val method = msg.optString("method")
@@ -421,11 +578,28 @@ class LiveClassWebSocketManager {
                     val params = msg.optJSONObject("params")
                     val peer = params?.optJSONObject("peer")
                     val peerId = peer?.optString("peer_id").orEmpty()
-                    if (peerId.isNotBlank()) currentPeerId = peerId
                     val peerRole = peer?.optString("role").orEmpty().trim()
+                    if (isTeacherListenerSocket) {
+                        if (peerId.isNotBlank()) {
+                            teacherListenerPeerId = peerId
+                            studentClientPeerIds.add(peerId)
+                        }
+                        if (peerRole.isNotBlank() && !peerRole.equals("null", ignoreCase = true)) {
+                            teacherListenerRole = peerRole
+                        }
+                        if (!teacherListenerRole.equals("teacher", ignoreCase = true)) {
+                            teacherWebSocket?.let { requestTeacherRoleSubscription(it, teacherListenerPeerId) }
+                        }
+                        return
+                    }
+
+                    if (peerId.isNotBlank()) {
+                        currentPeerId = peerId
+                        studentClientPeerIds.add(peerId)
+                    }
                     if (peerRole.isNotBlank() && !peerRole.equals("null", ignoreCase = true)) {
                         currentPeerRole = peerRole
-                        if (currentPeerId.isNotBlank()) peerRolesMap[currentPeerId] = peerRole
+                        if (currentPeerId.isNotBlank()) peerRolesMap[currentPeerId] = "student"
                     }
                     val info = peer?.optJSONObject("info")
                     val uid = info?.optString("user_id").orEmpty()
@@ -434,6 +608,10 @@ class LiveClassWebSocketManager {
                     if (currentStudentName.isNotBlank()) {
                         if (currentPeerId.isNotBlank()) peerNamesMap[currentPeerId] = currentStudentName
                         if (currentUserId.isNotBlank()) peerNamesMap[currentUserId] = currentStudentName
+                    }
+
+                    if (!currentPeerRole.equals("teacher", ignoreCase = true)) {
+                        webSocket?.let { requestTeacherRoleSubscription(it, currentPeerId) }
                     }
 
                     val groupsArr = peer?.optJSONArray("groups")
@@ -450,18 +628,28 @@ class LiveClassWebSocketManager {
                 }
 
                 "on-peer-update" -> {
+                    if (isTeacherListenerSocket) return
                     val params = msg.optJSONObject("params")
                     val pId = params?.optString("peer_id").orEmpty()
                     val pRole = params?.optString("role").orEmpty()
                     val info = params?.optJSONObject("info")
                     val pName = info?.optString("name").orEmpty()
                     val uId = info?.optString("user_id").orEmpty()
+                    val isStudentClient = isPeerMarkedAsStudentClient(params, info) ||
+                        pId == currentPeerId ||
+                        pId == teacherListenerPeerId ||
+                        (uId.isNotBlank() && uId == currentUserId)
+
+                    if (isStudentClient && pId.isNotBlank()) {
+                        studentClientPeerIds.add(pId)
+                    }
+
                     if (pName.isNotBlank()) {
                         if (pId.isNotBlank()) peerNamesMap[pId] = pName
                         if (uId.isNotBlank()) peerNamesMap[uId] = pName
                     }
                     if (pRole.isNotBlank() && pId.isNotBlank()) {
-                        peerRolesMap[pId] = pRole
+                        peerRolesMap[pId] = if (isStudentClient) "student" else pRole
                     }
 
                     val groupsArr = params?.optJSONArray("groups")
@@ -478,6 +666,7 @@ class LiveClassWebSocketManager {
                 }
 
                 "on-peer-join" -> {
+                    if (isTeacherListenerSocket) return
                     val params = msg.optJSONObject("params")
                     val peerObj = params?.optJSONObject("peer") ?: params
                     val pId = peerObj?.optString("peer_id").orEmpty()
@@ -485,23 +674,33 @@ class LiveClassWebSocketManager {
                     val info = peerObj?.optJSONObject("info")
                     val pName = info?.optString("name").orEmpty()
                     val uId = info?.optString("user_id").orEmpty()
+                    val isStudentClient = isPeerMarkedAsStudentClient(peerObj, info) ||
+                        pId == currentPeerId ||
+                        pId == teacherListenerPeerId ||
+                        (uId.isNotBlank() && uId == currentUserId)
+
+                    if (isStudentClient && pId.isNotBlank()) {
+                        studentClientPeerIds.add(pId)
+                    }
+
                     if (pName.isNotBlank()) {
                         if (pId.isNotBlank()) peerNamesMap[pId] = pName
                         if (uId.isNotBlank()) peerNamesMap[uId] = pName
                     }
                     if (pRole.isNotBlank() && pId.isNotBlank()) {
-                        peerRolesMap[pId] = pRole
+                        peerRolesMap[pId] = if (isStudentClient) "student" else pRole
                     }
-                    if (pRole.equals("teacher", ignoreCase = true) && pName.isNotBlank()) {
+                    if (!isStudentClient && pRole.equals("teacher", ignoreCase = true) && pName.isNotBlank()) {
                         _teacherName.value = pName
                         updatePollsTeacherName(pId, pName)
                     }
-                    if (_viewerCount.value > 0) {
+                    if (_viewerCount.value > 0 && pId != teacherListenerPeerId) {
                         _viewerCount.value += 1
                     }
                 }
 
                 "on-peer-leave" -> {
+                    if (isTeacherListenerSocket) return
                     if (_viewerCount.value > 1) {
                         _viewerCount.value -= 1
                     }
@@ -533,6 +732,13 @@ class LiveClassWebSocketManager {
                         }
                     }
 
+                    if (isTeacherListenerSocket) {
+                        if (!teacherListenerRole.equals("teacher", ignoreCase = true)) {
+                            teacherWebSocket?.let { requestTeacherRoleSubscription(it, teacherListenerPeerId) }
+                        }
+                        return
+                    }
+
                     val peersObj = params?.optJSONObject("peers")
                     if (peersObj != null) {
                         val keys = peersObj.keys()
@@ -540,13 +746,22 @@ class LiveClassWebSocketManager {
                         var handRaiseCount = 0
                         while (keys.hasNext()) {
                             val key = keys.next()
-                            count++
                             val pObj = peersObj.optJSONObject(key) ?: continue
                             val pId = pObj.optString("peer_id", key)
+                            if (pId == teacherListenerPeerId) continue
+                            count++
                             val pRole = pObj.optString("role")
                             val info = pObj.optJSONObject("info")
                             val pName = info?.optString("name").orEmpty()
                             val uId = info?.optString("user_id").orEmpty()
+                            val isStudentClient = isPeerMarkedAsStudentClient(pObj, info) ||
+                                pId == currentPeerId ||
+                                pId == teacherListenerPeerId ||
+                                (uId.isNotBlank() && uId == currentUserId)
+
+                            if (isStudentClient && pId.isNotBlank()) {
+                                studentClientPeerIds.add(pId)
+                            }
 
                             val groups = pObj.optJSONArray("groups")
                             if (groups != null) {
@@ -563,9 +778,9 @@ class LiveClassWebSocketManager {
                                 if (uId.isNotBlank()) peerNamesMap[uId] = pName
                             }
                             if (pRole.isNotBlank() && pId.isNotBlank()) {
-                                peerRolesMap[pId] = pRole
+                                peerRolesMap[pId] = if (isStudentClient) "student" else pRole
                             }
-                            if (pRole.equals("teacher", ignoreCase = true) && pName.isNotBlank()) {
+                            if (!isStudentClient && pRole.equals("teacher", ignoreCase = true) && pName.isNotBlank()) {
                                 _teacherName.value = pName
                                 updatePollsTeacherName(pId, pName)
                             }
@@ -1402,17 +1617,21 @@ class LiveClassWebSocketManager {
             .ifBlank { if (peerObj == null) params.optString("peer") else "" }
             .trim()
 
-        // Ignore our own echoed broadcast messages so we don't duplicate local optimistic messages
-        if (peerIdFromParams.isNotBlank() && peerIdFromParams == currentPeerId) {
+        // Ignore our own echoed broadcast messages from either primary or teacher-listener socket
+        if (peerIdFromParams.isNotBlank() &&
+            (peerIdFromParams == currentPeerId || peerIdFromParams == teacherListenerPeerId)
+        ) {
             return
         }
 
         var chatText: String? = null
         var sender: String? = null
         var role: String? = null
+        var senderRoleFromInfo: String? = null
         var targetRole: String? = null
         var clientMsgId: String? = null
         var senderPeerIdFromInfo: String? = null
+        var isStudentClientFromInfo = false
         var timestampMillis = System.currentTimeMillis()
 
         val infoRaw = params.opt("info") ?: params.opt("data")
@@ -1420,6 +1639,8 @@ class LiveClassWebSocketManager {
             is JSONObject -> {
                 clientMsgId = infoRaw.optString("clientMsgId").takeIf { it.isNotBlank() }
                 senderPeerIdFromInfo = infoRaw.optString("senderPeerId").takeIf { it.isNotBlank() }
+                isStudentClientFromInfo = infoRaw.optBoolean("isStudentClient", false)
+                senderRoleFromInfo = infoRaw.optString("senderRole").takeIf { it.isNotBlank() }
                 chatText = infoRaw.optString("message").takeIf { it.isNotBlank() }
                     ?: infoRaw.optString("msg").takeIf { it.isNotBlank() }
                     ?: infoRaw.optString("text").takeIf { it.isNotBlank() }
@@ -1438,6 +1659,8 @@ class LiveClassWebSocketManager {
                         val infoJson = JSONObject(infoRaw)
                         clientMsgId = infoJson.optString("clientMsgId").takeIf { it.isNotBlank() }
                         senderPeerIdFromInfo = infoJson.optString("senderPeerId").takeIf { it.isNotBlank() }
+                        isStudentClientFromInfo = infoJson.optBoolean("isStudentClient", false)
+                        senderRoleFromInfo = infoJson.optString("senderRole").takeIf { it.isNotBlank() }
                         chatText = infoJson.optString("message").takeIf { it.isNotBlank() }
                             ?: infoJson.optString("msg").takeIf { it.isNotBlank() }
                             ?: infoJson.optString("text").takeIf { it.isNotBlank() }
@@ -1458,7 +1681,9 @@ class LiveClassWebSocketManager {
             }
         }
 
-        if (!senderPeerIdFromInfo.isNullOrBlank() && senderPeerIdFromInfo == currentPeerId) {
+        if (!senderPeerIdFromInfo.isNullOrBlank() &&
+            (senderPeerIdFromInfo == currentPeerId || senderPeerIdFromInfo == teacherListenerPeerId)
+        ) {
             return
         }
 
@@ -1472,10 +1697,19 @@ class LiveClassWebSocketManager {
                 ?: params.optString("text").takeIf { it.isNotBlank() }
         }
 
+        if (chatText.isNullOrBlank()) return
+
         val resolvedPeerId = peerIdFromParams.ifBlank { senderPeerIdFromInfo.orEmpty() }
+        if (isStudentClientFromInfo && resolvedPeerId.isNotBlank()) {
+            studentClientPeerIds.add(resolvedPeerId)
+        }
+
+        val peerInfoObj = peerObj?.optJSONObject("info")
+        if (isPeerMarkedAsStudentClient(peerObj, peerInfoObj) && resolvedPeerId.isNotBlank()) {
+            studentClientPeerIds.add(resolvedPeerId)
+        }
 
         if (sender.isNullOrBlank()) {
-            val peerInfoObj = peerObj?.optJSONObject("info")
             sender = peerObj?.optString("name")?.takeIf { it.isNotBlank() }
                 ?: peerInfoObj?.optString("name")?.takeIf { it.isNotBlank() }
                 ?: peerNamesMap[resolvedPeerId]
@@ -1486,8 +1720,13 @@ class LiveClassWebSocketManager {
             peerNamesMap[resolvedPeerId] = sender
         }
 
-        val peerActualRole = peerObj?.optString("role")?.takeIf { it.isNotBlank() }
+        val isKnownStudentPeer = isStudentClientFromInfo ||
+            senderRoleFromInfo.equals("student", ignoreCase = true) ||
+            (resolvedPeerId.isNotBlank() && studentClientPeerIds.contains(resolvedPeerId))
+
+        val rawPeerRole = peerObj?.optString("role")?.takeIf { it.isNotBlank() }
             ?: peerRolesMap[resolvedPeerId]
+        val peerActualRole = if (isKnownStudentPeer) "student" else rawPeerRole
 
         val rolesArr = params.optJSONArray("roles")
         val rolesFromParams = if (rolesArr != null && rolesArr.length() > 0) {
@@ -1506,68 +1745,77 @@ class LiveClassWebSocketManager {
             null
         }
 
-        if (role.isNullOrBlank()) {
-            role = peerActualRole ?: rolesFromParams ?: params.optString("role").takeIf { it.isNotBlank() }
-        }
+        // Only treat sender as the real teacher if they are NOT a student client AND their actual room role is teacher (or matches room teacherName)
+        val isSenderActualTeacher = !isKnownStudentPeer && (
+            peerActualRole?.contains("teacher", ignoreCase = true) == true ||
+                (_teacherName.value.isNotBlank() && sender?.equals(_teacherName.value, ignoreCase = true) == true)
+            )
 
-        val isSenderActualTeacher = peerActualRole?.contains("teacher", ignoreCase = true) == true ||
-            (_teacherName.value.isNotBlank() && sender?.equals(_teacherName.value, ignoreCase = true) == true)
-
+        // When another student selects "teacher" to send a message, rolesFromParams or role in info is "teacher"
         val resolvedTargetRole = when {
             !targetRole.isNullOrBlank() -> when {
                 targetRole.contains("teacher", ignoreCase = true) -> "teacher"
                 targetRole.equals("*") || targetRole.contains("all", ignoreCase = true) -> "all"
                 else -> "student"
             }
-            !rolesFromParams.isNullOrBlank() -> rolesFromParams
+            rolesFromParams == "teacher" && !isSenderActualTeacher -> "teacher"
             role?.contains("teacher", ignoreCase = true) == true && !isSenderActualTeacher -> "teacher"
+            !rolesFromParams.isNullOrBlank() -> rolesFromParams
             role?.equals("*") == true || role?.contains("all", ignoreCase = true) == true -> "all"
             isSenderActualTeacher -> "all"
-            else -> "student"
+            else -> "teacher" // Default in Shikho when students send messages without explicit targetRole
         }
 
-        val normalizedRole = when {
+        val normalizedSenderRole = when {
             isSenderActualTeacher -> "teacher"
-            role?.equals("*") == true || role?.contains("all", ignoreCase = true) == true -> "all"
             else -> "student"
         }
 
-        if (!chatText.isNullOrBlank()) {
-            val formattedTime = try {
-                val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-                sdf.format(java.util.Date(timestampMillis))
-            } catch (_: Exception) {
-                "এখন"
-            }
-
-            val incomingMsg = LiveChatMessage(
-                id = clientMsgId ?: UUID.randomUUID().toString(),
-                senderName = sender ?: "শিক্ষার্থী",
-                message = chatText,
-                timestamp = formattedTime,
-                isTeacher = isSenderActualTeacher,
-                role = normalizedRole,
-                targetRole = resolvedTargetRole,
-                senderPeerId = resolvedPeerId,
-                isMine = false
-            )
-            appendIncomingMessage(incomingMsg)
+        val dedupId = clientMsgId ?: run {
+            val timeBucket = timestampMillis / 2500L
+            val senderKey = resolvedPeerId.ifBlank { sender.orEmpty().trim().lowercase() }
+            "msg_${senderKey}_${chatText.trim().hashCode()}_$timeBucket"
         }
+
+        if (processedIncomingMsgIds.putIfAbsent(dedupId, timestampMillis) != null) {
+            return
+        }
+
+        val formattedTime = try {
+            val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+            sdf.format(java.util.Date(timestampMillis))
+        } catch (_: Exception) {
+            "এখন"
+        }
+
+        val incomingMsg = LiveChatMessage(
+            id = dedupId,
+            senderName = sender ?: "শিক্ষার্থী",
+            message = chatText,
+            timestamp = formattedTime,
+            isTeacher = isSenderActualTeacher,
+            role = normalizedSenderRole,
+            targetRole = resolvedTargetRole,
+            senderPeerId = resolvedPeerId,
+            isMine = false
+        )
+        appendIncomingMessage(incomingMsg)
     }
 
     /**
      * Sends broadcast message using the 100ms JSON-RPC protocol.
-     * Supports targeting "teacher", "student", or "all" participants.
-     * Uses exact valid room role names ("teacher", "student") so 100ms never rejects the broadcast!
+     * Includes both "teacher" and "student" in 100ms target roles so that even when
+     * a student selects "teacher" (the default), both the teacher AND other students receive it,
+     * while preserving the exact targetRole ("teacher", "student", "all") in metadata.
      */
     fun sendChatMessage(
         text: String,
         studentName: String,
-        role: String = "teacher",
+        role: String = "student",
         targetRole: String = "teacher",
         onComplete: ((Boolean) -> Unit)? = null
     ) {
-        val ws = webSocket
+        val ws = webSocket ?: teacherWebSocket
         if (ws == null || !_isConnected.value) {
             Log.w(TAG, "Cannot send chat: WebSocket is null or not connected")
             onComplete?.invoke(false)
@@ -1578,6 +1826,7 @@ class LiveClassWebSocketManager {
             val clientMsgId = UUID.randomUUID().toString()
             val nowMs = System.currentTimeMillis()
             recentlySentClientMsgIds[clientMsgId] = nowMs
+            processedIncomingMsgIds[clientMsgId] = nowMs
 
             val effectiveSenderName = studentName.trim().ifBlank { currentStudentName.ifBlank { "Student" } }
             currentStudentName = effectiveSenderName
@@ -1586,28 +1835,33 @@ class LiveClassWebSocketManager {
                 if (it.equals("teacher", ignoreCase = true)) "student" else it
             }
 
-            val targetRolesArray = JSONArray().apply {
-                when (targetRole.lowercase().trim()) {
-                    "teacher" -> {
-                        put("teacher")
-                    }
-                    "student", "students" -> {
-                        put(activeStudentRole)
-                        if (!activeStudentRole.equals("student", ignoreCase = true)) {
-                            put("student")
-                        }
-                    }
-                    "all", "*" -> {
-                        put("teacher")
-                        put(activeStudentRole)
-                        if (!activeStudentRole.equals("student", ignoreCase = true)) {
-                            put("student")
-                        }
-                    }
-                    else -> {
-                        put("teacher")
-                    }
+            // Always include both "teacher" and "student" in 100ms broadcast roles so messages sent
+            // with "teacher" selected ALSO arrive at all student peers in real time!
+            val targetRolesSet = linkedSetOf<String>()
+            when (targetRole.lowercase().trim()) {
+                "teacher" -> {
+                    targetRolesSet.add("teacher")
+                    targetRolesSet.add(activeStudentRole)
+                    targetRolesSet.add("student")
                 }
+                "student", "students" -> {
+                    targetRolesSet.add(activeStudentRole)
+                    targetRolesSet.add("student")
+                    targetRolesSet.add("teacher")
+                }
+                "all", "*" -> {
+                    targetRolesSet.add("teacher")
+                    targetRolesSet.add(activeStudentRole)
+                    targetRolesSet.add("student")
+                }
+                else -> {
+                    targetRolesSet.add("teacher")
+                    targetRolesSet.add(activeStudentRole)
+                    targetRolesSet.add("student")
+                }
+            }
+            val targetRolesArray = JSONArray().apply {
+                targetRolesSet.filter { it.isNotBlank() }.forEach { put(it) }
             }
 
             val infoJson = JSONObject().apply {
@@ -1620,8 +1874,10 @@ class LiveClassWebSocketManager {
                 put("name", effectiveSenderName)
                 put("senderName", effectiveSenderName)
                 put("sender_name", effectiveSenderName)
-                put("role", role)
+                put("role", "student")
+                put("senderRole", "student")
                 put("targetRole", targetRole)
+                put("isStudentClient", true)
                 put("senderPeerId", currentPeerId)
                 put("senderUserId", currentUserId)
                 put("time", nowMs)
@@ -1665,7 +1921,7 @@ class LiveClassWebSocketManager {
                 // Confirm delivery after server ack or 900ms if no RPC error was returned
                 scope.launch {
                     delay(900L)
-                    pendingChatCallbacks.remove(reqId)?.invoke( _isConnected.value )
+                    pendingChatCallbacks.remove(reqId)?.invoke(_isConnected.value)
                 }
             }
         } catch (e: Exception) {
@@ -1722,6 +1978,7 @@ class LiveClassWebSocketManager {
                     }
                     put("isBRBOn", false)
                     put("name", cleanName)
+                    put("isStudentClient", true)
                 }.toString()
 
                 val peerUpdateMsg = JSONObject().apply {
@@ -1734,6 +1991,7 @@ class LiveClassWebSocketManager {
                     put("jsonrpc", "2.0")
                 }
                 ws.send(peerUpdateMsg.toString())
+                teacherWebSocket?.send(changeNameMsg.toString())
                 Log.d(TAG, "Synchronized student name to WebSocket: $cleanName")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to update peer name over WebSocket: ${e.message}")
@@ -1765,12 +2023,18 @@ class LiveClassWebSocketManager {
             reconnectAttempts = 0
             reconnectJob?.cancel()
             reconnectJob = null
+            teacherReconnectJob?.cancel()
+            teacherReconnectJob = null
             hlsPollWatcherJob?.cancel()
             hlsPollWatcherJob = null
             webSocket?.close(1000, "Leaving Live Class")
             webSocket = null
+            teacherWebSocket?.close(1000, "Leaving Live Class")
+            teacherWebSocket = null
             pendingRpcRequests.clear()
             recentlySentClientMsgIds.clear()
+            processedIncomingMsgIds.clear()
+            studentClientPeerIds.clear()
             _isConnected.value = false
             _masterUrl.value = null
             _candidateUrls.value = emptyList()
