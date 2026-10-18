@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,8 +87,11 @@ data class LiveChatMessage(
     val timestamp: String = "এখন",
     val isTeacher: Boolean = false,
     val role: String = "student",
+    val targetRole: String = "student",
+    val senderPeerId: String = "",
     val status: ChatDeliveryStatus = ChatDeliveryStatus.SENT,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val isMine: Boolean = false
 )
 
 data class LiveResolutionOption(
@@ -229,6 +233,7 @@ fun LiveClassPage(
     var selectedPollIdForQuestion by remember { mutableStateOf<String?>(null) }
     var selectedPollIdForResult by remember { mutableStateOf<String?>(null) }
     var showPreviousPollsDialog by remember { mutableStateOf(false) }
+    var showViewMessagesDialog by remember { mutableStateOf(false) }
 
     val currentQuestionDialogPoll = remember(selectedPollIdForQuestion, activePoll, previousPolls) {
         val targetId = selectedPollIdForQuestion ?: return@remember null
@@ -376,16 +381,19 @@ fun LiveClassPage(
         }
     }
 
-    val incomingMsg by wsManager.incomingChatMessages.collectAsState()
-    LaunchedEffect(incomingMsg) {
-        incomingMsg?.let { msg ->
-            if (chatMessages.none { it.id == msg.id || (it.message == msg.message && it.senderName == msg.senderName) }) {
+    val incomingHistory by wsManager.receivedMessagesHistory.collectAsState()
+    LaunchedEffect(incomingHistory) {
+        var addedNew = false
+        for (msg in incomingHistory) {
+            val existingIdx = chatMessages.indexOfFirst { it.id == msg.id }
+            if (existingIdx < 0) {
                 chatMessages.add(msg)
-                coroutineScope.launch {
-                    if (chatMessages.isNotEmpty()) {
-                        chatListState.animateScrollToItem(chatMessages.size - 1)
-                    }
-                }
+                addedNew = true
+            }
+        }
+        if (addedNew && chatMessages.isNotEmpty()) {
+            coroutineScope.launch {
+                chatListState.animateScrollToItem(chatMessages.size - 1)
             }
         }
     }
@@ -414,7 +422,10 @@ fun LiveClassPage(
                 timestamp = formattedTime,
                 isTeacher = isTeacher,
                 role = selectedRole,
-                status = ChatDeliveryStatus.SENDING
+                targetRole = selectedRole,
+                senderPeerId = wsManager.getCurrentPeerId(),
+                status = ChatDeliveryStatus.SENDING,
+                isMine = true
             )
         )
         chatMessageInput = ""
@@ -431,14 +442,14 @@ fun LiveClassPage(
             role = selectedRole,
             targetRole = selectedRole
         ) { isSuccess ->
-            val idx = chatMessages.indexOfFirst { it.id == msgId }
-            if (idx >= 0) {
-                chatMessages[idx] = chatMessages[idx].copy(
-                    status = if (isSuccess) ChatDeliveryStatus.SENT else ChatDeliveryStatus.FAILED
-                )
-            }
-            if (!isSuccess) {
-                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                val idx = chatMessages.indexOfFirst { it.id == msgId }
+                if (idx >= 0) {
+                    chatMessages[idx] = chatMessages[idx].copy(
+                        status = if (isSuccess) ChatDeliveryStatus.SENT else ChatDeliveryStatus.FAILED
+                    )
+                }
+                if (!isSuccess) {
                     Toast.makeText(context, "বার্তা পাঠানো যায়নি! অনুগ্রহ করে পুনরায় চেষ্টা করুন।", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -458,13 +469,15 @@ fun LiveClassPage(
             text = msg.message,
             studentName = msg.senderName,
             role = msg.role,
-            targetRole = msg.role
+            targetRole = msg.targetRole.ifBlank { msg.role }
         ) { isSuccess ->
-            val currentIdx = chatMessages.indexOfFirst { it.id == msgId }
-            if (currentIdx >= 0) {
-                chatMessages[currentIdx] = chatMessages[currentIdx].copy(
-                    status = if (isSuccess) ChatDeliveryStatus.SENT else ChatDeliveryStatus.FAILED
-                )
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                val currentIdx = chatMessages.indexOfFirst { it.id == msgId }
+                if (currentIdx >= 0) {
+                    chatMessages[currentIdx] = chatMessages[currentIdx].copy(
+                        status = if (isSuccess) ChatDeliveryStatus.SENT else ChatDeliveryStatus.FAILED
+                    )
+                }
             }
         }
     }
@@ -1349,6 +1362,28 @@ fun LiveClassPage(
                                             Spacer(Modifier.width(6.dp))
                                             Text("লাইভ চ্যাট", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             Spacer(Modifier.weight(1f))
+                                            // View Messages button in landscape drawer
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color(0xFF0284C7).copy(alpha = 0.25f),
+                                                border = BorderStroke(0.8.dp, Color(0xFF38BDF8)),
+                                                modifier = Modifier.clickable { showViewMessagesDialog = true }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Forum, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(10.dp))
+                                                    Text(
+                                                        text = "ভিউ (${chatMessages.size})",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF38BDF8)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.width(4.dp))
                                             // Student name chip in landscape drawer
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
@@ -1564,10 +1599,12 @@ fun LiveClassPage(
 
                                         Spacer(modifier = Modifier.height(8.dp))
 
-                                        // Interactive Action Bar: Hand Raise | Poll/Quiz | Resolution | Student Name
-                                        // Horizontally scrollable or balanced so nothing ever gets cut off!
+                                        // Interactive Action Bar: Hand Raise | Poll/Quiz | View Messages | Resolution | Student Name
+                                        // Horizontally scrollable so nothing ever gets cut off on any screen width!
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
@@ -1650,7 +1687,39 @@ fun LiveClassPage(
                                                 }
                                             }
 
-                                            // 3. Always-Accessible Resolution Pill (Right in the Action Bar too!)
+                                            // 3. View Messages Pill ("ভিউ ম্যাসেজ" — see who is messaging what)
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color(0xFF0284C7).copy(alpha = 0.22f),
+                                                border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+                                                modifier = Modifier.clickable { showViewMessagesDialog = true }
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.MarkChatRead,
+                                                        contentDescription = "View Messages",
+                                                        tint = Color(0xFF38BDF8),
+                                                        modifier = Modifier.size(13.dp)
+                                                    )
+                                                    Text(
+                                                        text = if (chatMessages.isNotEmpty()) {
+                                                            "ভিউ ম্যাসেজ (${chatMessages.size})"
+                                                        } else {
+                                                            "ভিউ ম্যাসেজ"
+                                                        },
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFFE0F2FE),
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+
+                                            // 4. Always-Accessible Resolution Pill (Right in the Action Bar too!)
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
                                                 color = Color(0xFF1E293B),
@@ -1678,13 +1747,13 @@ fun LiveClassPage(
                                                 }
                                             }
 
-                                            // 4. Student Display Name Chip (Weighted with Ellipsis so long names never overflow!)
+                                            // 5. Student Display Name Chip
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
                                                 color = Color(0xFF1E293B),
                                                 border = BorderStroke(1.dp, Color(0xFF334155)),
                                                 modifier = Modifier
-                                                    .weight(1f, fill = false)
+                                                    .widthIn(max = 150.dp)
                                                     .clickable { showNameChangeDialog = true }
                                             ) {
                                                 Row(
@@ -1723,23 +1792,23 @@ fun LiveClassPage(
                                         .fillMaxWidth()
                                         .padding(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    // Chat Role Target Selector Bar
+                                    // Chat Role Target Selector Bar + "ভিউ ম্যাসেজ" Button
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(bottom = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Forum,
                                             contentDescription = null,
                                             tint = Color(0xFF38BDF8),
-                                            modifier = Modifier.size(15.dp)
+                                            modifier = Modifier.size(14.dp)
                                         )
                                         Text(
                                             text = "রোল:",
-                                            fontSize = 11.5.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color(0xFF94A3B8)
                                         )
@@ -1761,19 +1830,19 @@ fun LiveClassPage(
                                                 modifier = Modifier.clickable { selectedRole = roleKey }
                                             ) {
                                                 Row(
-                                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                                                 ) {
                                                     Icon(
                                                         imageVector = roleIcon,
                                                         contentDescription = null,
                                                         tint = if (isSelected) Color.White else Color(0xFF94A3B8),
-                                                        modifier = Modifier.size(12.dp)
+                                                        modifier = Modifier.size(11.dp)
                                                     )
                                                     Text(
                                                         text = roleLabel,
-                                                        fontSize = 11.sp,
+                                                        fontSize = 10.5.sp,
                                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                         color = if (isSelected) Color.White else Color(0xFF94A3B8)
                                                     )
@@ -1783,13 +1852,36 @@ fun LiveClassPage(
 
                                         Spacer(modifier = Modifier.weight(1f))
 
-                                        if (chatMessages.isNotEmpty()) {
-                                            Text(
-                                                text = "${chatMessages.size} বার্তা",
-                                                fontSize = 10.5.sp,
-                                                color = Color(0xFF64748B),
-                                                fontWeight = FontWeight.Medium
-                                            )
+                                        // Prominent "ভিউ ম্যাসেজ" (View Messages) Button
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFF0C2440),
+                                            border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+                                            modifier = Modifier.clickable { showViewMessagesDialog = true }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Visibility,
+                                                    contentDescription = "ভিউ ম্যাসেজ",
+                                                    tint = Color(0xFF38BDF8),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Text(
+                                                    text = if (chatMessages.isNotEmpty()) {
+                                                        "ভিউ ম্যাসেজ (${chatMessages.size})"
+                                                    } else {
+                                                        "ভিউ ম্যাসেজ"
+                                                    },
+                                                    fontSize = 10.5.sp,
+                                                    color = Color(0xFF38BDF8),
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
                                     }
 
@@ -2469,6 +2561,495 @@ fun LiveClassPage(
             }
         )
     }
+
+    // 4. "ভিউ ম্যাসেজ" (View All Messages & Who Messaged What) Dialog
+    if (showViewMessagesDialog) {
+        LiveViewMessagesDialog(
+            messages = chatMessages,
+            myName = studentName,
+            selectedRole = selectedRole,
+            isChatEnabled = isChatEnabled,
+            onSelectRole = { selectedRole = it },
+            onSendMessage = { text -> sendUserChat(text) },
+            onRetryMessage = { msgId -> retryChatMessage(msgId) },
+            onDismiss = { showViewMessagesDialog = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LiveViewMessagesDialog(
+    messages: List<LiveChatMessage>,
+    myName: String,
+    selectedRole: String,
+    isChatEnabled: Boolean,
+    onSelectRole: (String) -> Unit,
+    onSendMessage: (String) -> Unit,
+    onRetryMessage: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf("all") } // "all", "student", "teacher", "mine"
+    var selectedSenderFilter by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var dialogMessageInput by remember { mutableStateOf("") }
+
+    // Compute unique senders and how many messages each person sent
+    val senderSummaryList = remember(messages.size, messages.toList()) {
+        messages
+            .groupBy { it.senderName.trim().ifBlank { "শিক্ষার্থী" } }
+            .map { (name, list) ->
+                val isTeacherSender = list.any { it.isTeacher && !it.isMine }
+                Triple(name, list.size, isTeacherSender)
+            }
+            .sortedByDescending { it.second }
+    }
+
+    val filteredMessages = remember(
+        messages.size,
+        messages.toList(),
+        selectedCategory,
+        selectedSenderFilter,
+        searchQuery,
+        myName
+    ) {
+        messages.filter { msg ->
+            val isMyMsg = msg.isMine || msg.senderName == "আপনি"
+            val isTeacherMsg = msg.isTeacher || (msg.role == "teacher" && !isMyMsg)
+            val matchesCategory = when (selectedCategory) {
+                "student" -> !isTeacherMsg && (msg.targetRole == "student" || msg.role == "student" || msg.targetRole == "all")
+                "teacher" -> isTeacherMsg || msg.targetRole == "teacher"
+                "mine" -> isMyMsg
+                else -> true
+            }
+            val matchesSender = selectedSenderFilter == null ||
+                msg.senderName.trim().equals(selectedSenderFilter, ignoreCase = true)
+            val matchesSearch = searchQuery.isBlank() ||
+                msg.senderName.contains(searchQuery.trim(), ignoreCase = true) ||
+                msg.message.contains(searchQuery.trim(), ignoreCase = true)
+
+            matchesCategory && matchesSender && matchesSearch
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF0B1120),
+            border = BorderStroke(1.2.dp, Color(0xFF1E293B)),
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.86f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+            ) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFF0284C7).copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, Color(0xFF38BDF8)),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Forum,
+                                    contentDescription = null,
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                text = "ভিউ ম্যাসেজ (কে কী মেসেজ করছে)",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "মোট ${messages.size}টি মেসেজ • ${senderSummaryList.size} জন অংশগ্রহণকারী",
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1E293B))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Category Filter Tabs: সব | স্টুডেন্ট | শিক্ষক | আমার মেসেজ
+                val categoryTabs = listOf(
+                    Triple("all", "সব (${messages.size})", Icons.Default.AllInbox),
+                    Triple(
+                        "student",
+                        "স্টুডেন্ট (${messages.count { !it.isTeacher && (it.targetRole == "student" || it.role == "student" || it.targetRole == "all") }})",
+                        Icons.Default.Groups
+                    ),
+                    Triple(
+                        "teacher",
+                        "শিক্ষক (${messages.count { it.isTeacher || it.targetRole == "teacher" }})",
+                        Icons.Default.School
+                    ),
+                    Triple(
+                        "mine",
+                        "আমার (${messages.count { it.isMine }})",
+                        Icons.Default.Person
+                    )
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    categoryTabs.forEach { (key, label, icon) ->
+                        val isSelected = selectedCategory == key
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF0284C7) else Color(0xFF162032),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) Color(0xFF38BDF8) else Color(0xFF26354D)
+                            ),
+                            modifier = Modifier.clickable { selectedCategory = key }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color.White else Color(0xFF94A3B8),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else Color(0xFFCBD5E1)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Active Senders Breakdown Strip ("কে কয়টি মেসেজ করেছে — নামের ওপর ক্লিক করে ফিল্টার করুন")
+                if (senderSummaryList.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "কে মেসেজ করেছে (নামের ওপর ট্যাপ করে তার সব মেসেজ দেখুন):",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF94A3B8)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        item {
+                            val allSendersSelected = selectedSenderFilter == null
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (allSendersSelected) Color(0xFF0284C7).copy(alpha = 0.3f) else Color(0xFF162032),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (allSendersSelected) Color(0xFF38BDF8) else Color(0xFF26354D)
+                                ),
+                                modifier = Modifier.clickable { selectedSenderFilter = null }
+                            ) {
+                                Text(
+                                    text = "সকল প্রেরক (${senderSummaryList.size})",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (allSendersSelected) Color(0xFF38BDF8) else Color(0xFFCBD5E1),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.5.dp)
+                                )
+                            }
+                        }
+
+                        items(senderSummaryList) { (sender, count, isTeacherSender) ->
+                            val isSelected = selectedSenderFilter?.equals(sender, ignoreCase = true) == true
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSelected) {
+                                    Color(0xFF0284C7)
+                                } else if (isTeacherSender) {
+                                    Color(0xFF0C2440)
+                                } else {
+                                    Color(0xFF162032)
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected || isTeacherSender) Color(0xFF38BDF8) else Color(0xFF26354D)
+                                ),
+                                modifier = Modifier.clickable {
+                                    selectedSenderFilter = if (isSelected) null else sender
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isTeacherSender) Icons.Default.School else Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = if (isSelected) Color.White else Color(0xFF38BDF8),
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Text(
+                                        text = "$sender ($count)",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Search Input
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            "নাম বা মেসেজ লিখে খুঁজুন...",
+                            fontSize = 11.5.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF38BDF8),
+                        unfocusedBorderColor = Color(0xFF26354D),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color(0xFF111C33),
+                        unfocusedContainerColor = Color(0xFF111C33)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Messages Feed inside Dialog
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (filteredMessages.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 40.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChatBubbleOutline,
+                                        contentDescription = null,
+                                        tint = Color(0xFF475569),
+                                        modifier = Modifier.size(34.dp)
+                                    )
+                                    Text(
+                                        text = "কোনো মেসেজ পাওয়া যায়নি",
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                    Text(
+                                        text = "ক্লাসে কেউ মেসেজ পাঠালে তা সাথে সাথে এখানে দেখা যাবে",
+                                        fontSize = 11.5.sp,
+                                        color = Color(0xFF64748B),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(filteredMessages, key = { "view_${it.id}" }) { item ->
+                            ChatMessageCard(
+                                item = item,
+                                myName = myName,
+                                onRetry = { onRetryMessage(item.id) }
+                            )
+                        }
+                    }
+                }
+
+                // Quick Send Bar inside View Messages Dialog
+                if (isChatEnabled) {
+                    HorizontalDivider(
+                        color = Color(0xFF1E293B),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "পাঠান:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF94A3B8)
+                        )
+                        val roles = listOf(
+                            Pair("teacher", "Teacher"),
+                            Pair("student", "Student"),
+                            Pair("all", "* All")
+                        )
+                        roles.forEach { (rKey, rLabel) ->
+                            val active = selectedRole == rKey
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (active) Color(0xFF0284C7) else Color(0xFF162032),
+                                border = BorderStroke(
+                                    0.8.dp,
+                                    if (active) Color(0xFF38BDF8) else Color(0xFF26354D)
+                                ),
+                                modifier = Modifier.clickable { onSelectRole(rKey) }
+                            ) {
+                                Text(
+                                    text = rLabel,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (active) Color.White else Color(0xFF94A3B8),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = dialogMessageInput,
+                            onValueChange = { dialogMessageInput = it },
+                            placeholder = {
+                                Text(
+                                    "মেসেজ লিখুন...",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B)
+                                )
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF38BDF8),
+                                unfocusedBorderColor = Color(0xFF26354D),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = Color(0xFF162032),
+                                unfocusedContainerColor = Color(0xFF162032)
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                if (dialogMessageInput.isNotBlank()) {
+                                    onSendMessage(dialogMessageInput)
+                                    dialogMessageInput = ""
+                                }
+                            },
+                            enabled = dialogMessageInput.isNotBlank(),
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (dialogMessageInput.isNotBlank()) Color(0xFF0284C7) else Color(0xFF162032)
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = if (dialogMessageInput.isNotBlank()) Color.White else Color(0xFF64748B),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2478,10 +3059,16 @@ fun ChatMessageCard(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isTeacherMsg = item.isTeacher || item.role == "teacher"
-    val isMyMsg = item.senderName.equals(myName, ignoreCase = true) || item.senderName == "আপনি"
+    val isMyMsg = item.isMine || item.senderName == "আপনি"
+    val isActualTeacherMsg = (item.isTeacher && !isMyMsg) || (item.role == "teacher" && !isMyMsg && item.isPinned)
 
-    if (isTeacherMsg) {
+    val targetAudienceLabel = when (item.targetRole.lowercase().trim()) {
+        "teacher" -> "➔ শিক্ষক"
+        "all", "*" -> "➔ সবাইকে (* All)"
+        else -> "➔ সকল স্টুডেন্ট"
+    }
+
+    if (isActualTeacherMsg) {
         // ==========================================
         // TEACHER MESSAGE: GLOWING, HIGH-CONTRAST CARD
         // ==========================================
@@ -2572,7 +3159,7 @@ fun ChatMessageCard(
         }
     } else {
         // ==========================================
-        // STUDENT MESSAGE (WITH AVATAR & DELIVERY STATUS)
+        // STUDENT / PARTICIPANT MESSAGE (WITH SENDER, TARGET AUDIENCE & DELIVERY STATUS)
         // ==========================================
         Surface(
             shape = RoundedCornerShape(12.dp),
@@ -2598,7 +3185,7 @@ fun ChatMessageCard(
                         .clip(CircleShape)
                         .background(
                             if (isMyMsg) Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF38BDF8)))
-                            else Brush.linearGradient(listOf(Color(0xFF334155), Color(0xFF475569)))
+                            else Brush.linearGradient(listOf(Color(0xFF059669), Color(0xFF10B981)))
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -2613,7 +3200,7 @@ fun ChatMessageCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         val (badgeLabel, badgeBg) = if (isMyMsg) {
                             Pair("আপনি", Color(0xFF0284C7))
@@ -2646,9 +3233,24 @@ fun ChatMessageCard(
                             modifier = Modifier.weight(1f, fill = false)
                         )
 
+                        // Target Audience Chip (shows whether sent to Teacher, Students, or All)
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF1E293B),
+                            border = BorderStroke(0.6.dp, Color(0xFF334155))
+                        ) {
+                            Text(
+                                text = targetAudienceLabel,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF94A3B8),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+
                         Text(
                             text = "• ${item.timestamp}",
-                            fontSize = 10.sp,
+                            fontSize = 9.5.sp,
                             color = Color.White.copy(alpha = 0.5f)
                         )
 
