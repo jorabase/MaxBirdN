@@ -297,6 +297,18 @@ fun LessonDetailPlayerScreen(
     // Audio-Only Listening Mode State ("শোনার বাটন" / Screen-off Audio)
     var isAudioOnlyMode by remember { mutableStateOf(false) }
 
+    // Bookmark / Save Class State
+    val savedDao: com.example.database.SavedItemDao = remember { com.example.database.AppDatabase.getDatabase(context).savedItemDao() }
+    val lessonIdForSave = lesson?.id ?: ""
+    var isLessonSaved by remember { mutableStateOf(false) }
+    LaunchedEffect(lessonIdForSave) {
+        if (lessonIdForSave.isNotBlank()) {
+            savedDao.isItemSaved(lessonIdForSave).collect {
+                isLessonSaved = it
+            }
+        }
+    }
+
     // Manual Pinch-to-Zoom & Pan state
     var videoScale by remember { mutableFloatStateOf(1.0f) }
     var videoPan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
@@ -1365,7 +1377,39 @@ fun LessonDetailPlayerScreen(
                 }
 
                 // 2. Class Header & Info Section
-                LessonDetailHeader(lesson = lesson)
+                LessonDetailHeader(
+                    lesson = lesson,
+                    isSaved = isLessonSaved,
+                    onToggleSave = {
+                        if (lessonIdForSave.isNotBlank()) {
+                            coroutineScope.launch {
+                                if (isLessonSaved) {
+                                    savedDao.deleteSavedItemById(lessonIdForSave)
+                                    Toast.makeText(context, "সংরক্ষণ থেকে সরানো হয়েছে", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val teacherName = lesson?.live_class?.teacher?.displayName
+                                        ?: lesson?.live_class?.instructor?.displayName
+                                    val entity = com.example.database.SavedItemEntity(
+                                        id = lessonIdForSave,
+                                        type = com.example.database.SavedItemEntity.TYPE_CLASS,
+                                        title = lesson?.title ?: "ক্লাস লেকচার",
+                                        subtitle = listOfNotNull(subjectName, lesson?.chapter_name).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { null },
+                                        contentJson = com.example.database.SavedItemEntity.buildClassContentJson(
+                                            lessonId = lessonIdForSave,
+                                            streamUrl = activeStreamUrl,
+                                            teacherName = teacherName,
+                                            chapterName = lesson?.chapter_name,
+                                            subjectName = subjectName
+                                        ),
+                                        timestamp = System.currentTimeMillis()
+                                    )
+                                    savedDao.insertSavedItem(entity)
+                                    Toast.makeText(context, "ক্লাসটি সফলভাবে সংরক্ষিত হয়েছে", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                )
 
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),

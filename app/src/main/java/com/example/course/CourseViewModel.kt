@@ -449,6 +449,15 @@ class CourseViewModel(
     }
 
     /**
+     * Selects and loads a lesson by its ID directly.
+     */
+    fun selectLessonById(lessonId: String) {
+        val existing = _uiState.value.lessons.find { it.id == lessonId }
+            ?: StudentLessonItem(id = lessonId, title = "ক্লাস লেকচার")
+        selectLesson(existing)
+    }
+
+    /**
      * Switches the active program, clears stale cached data, and reloads subjects fresh.
      */
     fun switchProgram(

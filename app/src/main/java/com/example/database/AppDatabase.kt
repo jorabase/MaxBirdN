@@ -42,6 +42,8 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        fun getInstance(context: Context): AppDatabase = getDatabase(context)
+
         private fun buildDatabase(appContext: Context): AppDatabase {
             return Room.databaseBuilder(
                 appContext,

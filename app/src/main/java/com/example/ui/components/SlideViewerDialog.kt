@@ -63,7 +63,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.graphics.drawable.ColorDrawable
 import android.view.WindowManager
+import com.example.database.AppDatabase
 import com.example.database.DownloadedItemEntity
+import com.example.database.SavedItemDao
+import com.example.database.SavedItemEntity
 import com.example.download.AppFileDownloadManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -408,6 +411,15 @@ fun PdfViewerContent(
     val isOfflineAvailable = (isDirectLocal && targetPdfFile != null) ||
             (effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED)
 
+    val savedDao: SavedItemDao = remember { AppDatabase.getDatabase(context).savedItemDao() }
+    var isSlideBookmarked by remember { mutableStateOf(false) }
+    val bookmarkItemId = remember(downloadId) { "note_$downloadId" }
+    LaunchedEffect(bookmarkItemId) {
+        savedDao.isItemSaved(bookmarkItemId).collect {
+            isSlideBookmarked = it
+        }
+    }
+
     LaunchedEffect(isLandscapeMode, isFullscreen) {
         activity?.window?.let { actWin ->
             WindowCompat.setDecorFitsSystemWindows(actWin, false)
@@ -473,6 +485,30 @@ fun PdfViewerContent(
                         },
                         onToggleFullscreen = {
                             isFullscreen = !isFullscreen
+                        },
+                        isBookmarked = isSlideBookmarked,
+                        onBookmarkClick = {
+                            coroutineScope.launch {
+                                if (isSlideBookmarked) {
+                                    savedDao.deleteSavedItemById(bookmarkItemId)
+                                    Toast.makeText(context, "সংরক্ষণ থেকে সরানো হয়েছে", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    val targetUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl ?: slideUrl
+                                    val entity = SavedItemEntity(
+                                        id = bookmarkItemId,
+                                        type = SavedItemEntity.TYPE_NOTE,
+                                        title = title.ifBlank { "লেকচার স্লাইড ও নোট" },
+                                        subtitle = "লেকচার নোট ও স্লাইড",
+                                        contentJson = SavedItemEntity.buildNoteContentJson(
+                                            url = targetUrl,
+                                            pdfTitle = title
+                                        ),
+                                        timestamp = System.currentTimeMillis()
+                                    )
+                                    savedDao.insertSavedItem(entity)
+                                    Toast.makeText(context, "লেকচার নোটটি সফলভাবে সংরক্ষিত হয়েছে", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         },
                         onDownloadClick = {
                             val urlToDownload = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl
@@ -631,6 +667,8 @@ private fun PdfViewerTopBar(
     readingTheme: ReadingTheme,
     isLandscape: Boolean,
     downloadedItem: DownloadedItemEntity?,
+    isBookmarked: Boolean = false,
+    onBookmarkClick: () -> Unit = {},
     onDismiss: () -> Unit,
     onToggleOrientation: () -> Unit,
     onShareClick: () -> Unit,
@@ -811,6 +849,19 @@ private fun PdfViewerTopBar(
                         )
                     }
                 }
+            }
+
+            // 6. Bookmark / Save Slide Note Button
+            IconButton(
+                onClick = onBookmarkClick,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    contentDescription = if (isBookmarked) "সংরক্ষণ থেকে সরান" else "নোট সংরক্ষণ করুন",
+                    tint = if (isBookmarked) Color(0xFFF59E0B) else Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }

@@ -51,6 +51,8 @@ private fun formatTimestamp(millis: Long): String {
 fun SavedItemsScreen(
     viewModel: SavedViewModel,
     onBack: () -> Unit,
+    onOpenPdf: ((url: String, title: String) -> Unit)? = null,
+    onPlayLesson: ((lessonId: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -163,7 +165,9 @@ fun SavedItemsScreen(
                     ) { item ->
                         SavedItemCard(
                             item = item,
-                            onDelete = { viewModel.deleteSavedItem(item.id) }
+                            onDelete = { viewModel.deleteSavedItem(item.id) },
+                            onOpenPdf = onOpenPdf,
+                            onPlayLesson = onPlayLesson
                         )
                     }
                 }
@@ -176,11 +180,19 @@ fun SavedItemsScreen(
 fun SavedItemCard(
     item: SavedItemEntity,
     onDelete: () -> Unit,
+    onOpenPdf: ((url: String, title: String) -> Unit)? = null,
+    onPlayLesson: ((lessonId: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val parsedContent = remember(item.contentJson) {
         SavedItemEntity.parseQuestionContent(item.contentJson)
+    }
+    val extractedUrl = remember(item.contentJson) {
+        SavedItemEntity.extractUrl(item.contentJson)
+    }
+    val extractedLessonId = remember(item.contentJson) {
+        SavedItemEntity.extractLessonId(item.contentJson)
     }
 
     Card(
@@ -359,6 +371,68 @@ fun SavedItemCard(
                             maxImageHeight = 180.dp
                         )
                     }
+                }
+            }
+
+            // Action button for NOTE / PDF
+            if ((item.type == SavedItemEntity.TYPE_NOTE || !extractedUrl.isNullOrBlank()) && item.type != SavedItemEntity.TYPE_CLASS) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        val targetUrl = extractedUrl ?: ""
+                        onOpenPdf?.invoke(targetUrl, item.title)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "লেকচার নোট / পিডিএফ ওপেন করুন",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+
+            // Action button for CLASS
+            if (item.type == SavedItemEntity.TYPE_CLASS || (!extractedLessonId.isNullOrBlank() && item.type != SavedItemEntity.TYPE_QUESTION)) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        val targetLessonId = extractedLessonId ?: item.id
+                        onPlayLesson?.invoke(targetLessonId)
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0072EC)),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayCircle,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "ক্লাসটি দেখুন",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             }
 

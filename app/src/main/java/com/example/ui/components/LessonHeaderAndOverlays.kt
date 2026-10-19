@@ -271,6 +271,8 @@ fun LessonStreamPlaceholder(
 @Composable
 fun LessonDetailHeader(
     lesson: StudentLessonItem?,
+    isSaved: Boolean = false,
+    onToggleSave: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val teacher = lesson?.live_class?.teacher 
@@ -360,14 +362,35 @@ fun LessonDetailHeader(
             }
         }
 
-        // Title
-        Text(
-            text = lesson?.title ?: "ক্লাস লেকচার",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            lineHeight = 28.sp
-        )
+        // Title & Bookmark
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = lesson?.title ?: "ক্লাস লেকচার",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                lineHeight = 28.sp,
+                modifier = Modifier.weight(1f)
+            )
+
+            if (onToggleSave != null) {
+                IconButton(
+                    onClick = onToggleSave,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = if (isSaved) "সংরক্ষণ থেকে সরান" else "ক্লাসটি সংরক্ষণ করুন",
+                        tint = if (isSaved) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(6.dp))
 

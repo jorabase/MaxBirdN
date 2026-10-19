@@ -21,6 +21,69 @@ data class SavedItemEntity(
         const val TYPE_CLASS = "CLASS"
 
         /**
+         * Helper to serialize note details into contentJson
+         */
+        fun buildNoteContentJson(
+            url: String,
+            pdfTitle: String? = null,
+            chapterName: String? = null,
+            subjectName: String? = null
+        ): String {
+            val json = JSONObject()
+            json.put("url", url)
+            json.put("title", pdfTitle ?: "")
+            json.put("chapter_name", chapterName ?: "")
+            json.put("subject_name", subjectName ?: "")
+            return json.toString()
+        }
+
+        /**
+         * Helper to serialize class details into contentJson
+         */
+        fun buildClassContentJson(
+            lessonId: String,
+            streamUrl: String? = null,
+            teacherName: String? = null,
+            chapterName: String? = null,
+            subjectName: String? = null
+        ): String {
+            val json = JSONObject()
+            json.put("lesson_id", lessonId)
+            json.put("stream_url", streamUrl ?: "")
+            json.put("teacher_name", teacherName ?: "")
+            json.put("chapter_name", chapterName ?: "")
+            json.put("subject_name", subjectName ?: "")
+            return json.toString()
+        }
+
+        fun extractUrl(contentJson: String?): String? {
+            if (contentJson.isNullOrBlank()) return null
+            return try {
+                val json = JSONObject(contentJson)
+                val u = json.optString("url")
+                if (u.isNotBlank()) return u
+                val s = json.optString("stream_url")
+                if (s.isNotBlank()) return s
+                val d = json.optString("download_url")
+                if (d.isNotBlank()) return d
+                null
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        fun extractLessonId(contentJson: String?): String? {
+            if (contentJson.isNullOrBlank()) return null
+            return try {
+                val json = JSONObject(contentJson)
+                val lid = json.optString("lesson_id")
+                if (lid.isNotBlank()) lid else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        /**
          * Helper to serialize question details into contentJson
          */
         fun buildQuestionContentJson(

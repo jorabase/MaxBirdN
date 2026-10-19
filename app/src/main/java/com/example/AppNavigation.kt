@@ -1592,6 +1592,17 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         animatedComposable(Routes.SAVED_ITEMS, anim = NavAnim.forward) {
             SavedItemsScreen(
                 viewModel = savedViewModel,
+                onOpenPdf = { url, title ->
+                    if (url.isNotBlank()) {
+                        navController.navigate(Routes.pdfViewerRoute(url = url, title = title))
+                    }
+                },
+                onPlayLesson = { lessonId ->
+                    if (lessonId.isNotBlank()) {
+                        courseViewModel.selectLessonById(lessonId)
+                        navController.navigate(Routes.LESSON_DETAIL_PLAYER)
+                    }
+                },
                 onBack = {
                     navController.safePopBackStack()
                 }

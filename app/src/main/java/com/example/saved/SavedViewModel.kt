@@ -17,6 +17,8 @@ import kotlinx.coroutines.launch
 enum class SavedItemFilter(val label: String, val typeKey: String?) {
     ALL("সব (All)", null),
     QUESTIONS("প্রশ্ন (Questions)", SavedItemEntity.TYPE_QUESTION),
+    NOTES("নোট (Notes)", SavedItemEntity.TYPE_NOTE),
+    CLASSES("ক্লাস (Classes)", SavedItemEntity.TYPE_CLASS),
     OTHERS("অন্যান্য (Others)", "OTHERS")
 }
 
@@ -41,7 +43,13 @@ class SavedViewModel(
         val filteredList = when (filter) {
             SavedItemFilter.ALL -> allItems
             SavedItemFilter.QUESTIONS -> allItems.filter { it.type == SavedItemEntity.TYPE_QUESTION }
-            SavedItemFilter.OTHERS -> allItems.filter { it.type != SavedItemEntity.TYPE_QUESTION }
+            SavedItemFilter.NOTES -> allItems.filter { it.type == SavedItemEntity.TYPE_NOTE }
+            SavedItemFilter.CLASSES -> allItems.filter { it.type == SavedItemEntity.TYPE_CLASS }
+            SavedItemFilter.OTHERS -> allItems.filter { 
+                it.type != SavedItemEntity.TYPE_QUESTION && 
+                it.type != SavedItemEntity.TYPE_NOTE && 
+                it.type != SavedItemEntity.TYPE_CLASS 
+            }
         }
         SavedUiState(
             items = filteredList,
@@ -56,6 +64,17 @@ class SavedViewModel(
 
     fun setFilter(filter: SavedItemFilter) {
         _currentFilter.value = filter
+    }
+
+    fun saveItem(item: SavedItemEntity) {
+        viewModelScope.launch {
+            try {
+                repository.saveItem(item)
+                _message.value = "আইটেমটি সংরক্ষিত হয়েছে"
+            } catch (e: Exception) {
+                _message.value = "সংরক্ষণ করতে সমস্যা হয়েছে: ${e.message}"
+            }
+        }
     }
 
     fun deleteSavedItem(id: String) {

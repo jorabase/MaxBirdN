@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
@@ -111,7 +113,16 @@ fun PracticeQuizPlayerScreen(
         label = "pulseScale"
     )
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(uiState.bookmarkMessage) {
+        uiState.bookmarkMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearBookmarkMessage()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -403,14 +414,34 @@ fun PracticeQuizPlayerScreen(
                                     )
                                 }
 
-                                val marks = currentQuestion.allocated_marks?.toDoubleOrNull()?.toInt()
-                                    ?: currentQuestion.allocated_marks?.toIntOrNull()
-                                if (marks != null) {
-                                    Text(
-                                        text = "মান: ${toBengaliDigits(marks)}",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    val marks = currentQuestion.allocated_marks?.toDoubleOrNull()?.toInt()
+                                        ?: currentQuestion.allocated_marks?.toIntOrNull()
+                                    if (marks != null) {
+                                        Text(
+                                            text = "মান: ${toBengaliDigits(marks)}",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    val isBookmarked = uiState.bookmarkedQuestionIds.contains(currentQuestion.id)
+                                    IconButton(
+                                        onClick = { viewModel.toggleBookmark(currentQuestion.id) },
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .testTag("quiz_bookmark_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                            contentDescription = if (isBookmarked) "বুকমার্ক সরান" else "বুকমার্ক করুন",
+                                            tint = if (isBookmarked) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
 
