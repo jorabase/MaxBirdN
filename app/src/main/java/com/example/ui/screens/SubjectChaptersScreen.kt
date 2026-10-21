@@ -297,20 +297,42 @@ fun SubjectChaptersScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "অধ্যায় তালিকা (${toBengaliDigits(uiState.chapters.size)}টি)",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = subjectColor.copy(alpha = 0.14f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Explore,
+                                            contentDescription = null,
+                                            tint = subjectColor,
+                                            modifier = Modifier.padding(5.dp).size(16.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "অধ্যায় মিশন ম্যাপ (${toBengaliDigits(uiState.chapters.size)}টি)",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
 
                                 if (uiState.activePhaseTitle.isNotBlank()) {
-                                    Text(
-                                        text = uiState.activePhaseTitle,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = subjectColor
-                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = subjectColor.copy(alpha = 0.12f)
+                                    ) {
+                                        Text(
+                                            text = uiState.activePhaseTitle,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = subjectColor,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -632,7 +654,7 @@ fun ChapterCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Counters: Class & Exam count
+                // Counters: Class, Exam count & XP Reward
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -677,18 +699,50 @@ fun ChapterCard(
                             )
                         }
                     }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFF59E0B).copy(alpha = 0.14f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "+১০০ XP",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFD97706)
+                            )
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
             // Right Arrow
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier.size(14.dp)
-            )
+            Surface(
+                shape = CircleShape,
+                color = subjectColor.copy(alpha = 0.12f),
+                modifier = Modifier.size(30.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = null,
+                        tint = subjectColor,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
         }
     }
 }

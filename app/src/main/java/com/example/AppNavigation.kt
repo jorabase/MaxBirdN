@@ -1219,6 +1219,13 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             LessonDetailPlayerScreen(
                 lesson = courseUiState.selectedLesson,
                 isLessonLoading = courseUiState.isLessonDetailLoading,
+                chapterLessons = courseUiState.lessons,
+                onSelectAnotherLesson = { nextLesson ->
+                    courseViewModel.selectLesson(nextLesson)
+                },
+                onAnimatedPlaylistLoaded = { topics ->
+                    courseViewModel.setAnimatedPlaylist(topics)
+                },
                 subjectName = courseUiState.selectedSubjectTitle,
                 subjectColorHex = courseUiState.selectedSubjectColor,
                 onRefreshLesson = {
@@ -1379,12 +1386,20 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val title = safeUrlDecode(backStackEntry.arguments?.getString("title"))
             val subject = safeUrlDecode(backStackEntry.arguments?.getString("subject"))
             val chapter = safeUrlDecode(backStackEntry.arguments?.getString("chapter"))
+            val courseUiState by courseViewModel.uiState.collectAsState()
+
+            LaunchedEffect(courseUiState.selectedChapterId, courseUiState.animatedPlaylist.isEmpty()) {
+                if (courseUiState.animatedPlaylist.isEmpty() && courseUiState.selectedChapterId.isNotBlank()) {
+                    courseViewModel.getTopics(courseUiState.selectedChapterId)
+                }
+            }
 
             AnimatedLessonPlayerScreen(
                 videoUrl = url,
                 title = title,
-                subjectName = subject,
-                chapterName = chapter,
+                subjectName = subject.ifBlank { courseUiState.selectedSubjectTitle },
+                chapterName = chapter.ifBlank { courseUiState.selectedChapterName },
+                playlist = courseUiState.animatedPlaylist,
                 onBack = { navController.safePopBackStack() }
             )
         }
@@ -1449,6 +1464,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 viewModel = authViewModel,
                 authState = authState,
                 sessionManager = sessionManager,
+                onBack = {
+                    navController.safePopBackStack()
+                },
                 onNavigateToEditProfile = {
                     navController.navigate(Routes.EDIT_PROFILE)
                 },

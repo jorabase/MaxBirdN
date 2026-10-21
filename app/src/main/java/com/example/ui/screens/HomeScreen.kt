@@ -23,13 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.example.gamification.GamificationStats
+import com.example.gamification.rememberGamificationStats
+import com.example.utils.toBengaliDigits
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -298,6 +296,18 @@ fun HomeScreen(
                                 )
                             }
 
+                            // Gamified Player HUD & Daily Quest Arena Card
+                            val gamificationStats = rememberGamificationStats(context)
+                            GamifiedQuestArenaCard(
+                                stats = gamificationStats,
+                                onStartQuestClick = {
+                                    val phase = uiState.programPhases.find { it.is_current == true }
+                                        ?: uiState.programPhases.firstOrNull()
+                                    onOpenCourse(phase?.id)
+                                },
+                                onProfileClick = onNavigateToProfile
+                            )
+
                             WeeklyRoutineSection(
                                 lessons = uiState.filteredWeeklyRoutine,
                                 isLoading = uiState.isRoutineLoading,
@@ -331,6 +341,344 @@ fun HomeScreen(
 
             // Bottom spacing for floating nav bar
             Spacer(modifier = Modifier.height(110.dp))
+        }
+    }
+}
+
+@Composable
+private fun GamifiedQuestArenaCard(
+    stats: GamificationStats,
+    onStartQuestClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    var showQuestsExpanded by remember { mutableStateOf(true) }
+    val infiniteTransition = rememberInfiniteTransition(label = "questArenaAnim")
+    val flameScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "flameScale"
+    )
+    val animatedXpProgress by animateFloatAsState(
+        targetValue = stats.levelProgressFraction,
+        animationSpec = tween(900, easing = FastOutSlowInEasing),
+        label = "xpBarAnim"
+    )
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(
+            width = 1.3.dp,
+            brush = Brush.horizontalGradient(
+                listOf(
+                    Color(0xFF8B5CF6).copy(alpha = 0.65f),
+                    Color(0xFFF59E0B).copy(alpha = 0.55f),
+                    Color(0xFF38BDF8).copy(alpha = 0.65f)
+                )
+            )
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(10.dp, RoundedCornerShape(24.dp), spotColor = Color(0xFF6366F1).copy(alpha = 0.4f))
+            .clip(RoundedCornerShape(24.dp))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF0B132B),
+                            Color(0xFF1E1B4B),
+                            Color(0xFF172554)
+                        )
+                    )
+                )
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Top Row: Level Shield + Rank Title + Streak Pill + XP Badge
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onProfileClick() }
+                    ) {
+                        // Glowing Level Shield
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .shadow(6.dp, RoundedCornerShape(14.dp), spotColor = Color(0xFF8B5CF6))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF7C3AED), Color(0xFF4F46E5))
+                                    )
+                                )
+                                .border(1.2.dp, Color(0xFFC4B5FD), RoundedCornerShape(14.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "LV",
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFDDD6FE),
+                                    lineHeight = 9.sp
+                                )
+                                Text(
+                                    text = toBengaliDigits(stats.level),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    text = stats.rankTitleBn,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.WorkspacePremium,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFBBF24),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Text(
+                                text = "মোট অর্জিত: ${toBengaliDigits(stats.totalXp)} XP",
+                                color = Color(0xFF93C5FD),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Daily Streak Flame Badge
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFF97316).copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, Color(0xFFFB923C).copy(alpha = 0.7f)),
+                        modifier = Modifier.clickable {
+                            showQuestsExpanded = !showQuestsExpanded
+                        }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocalFireDepartment,
+                                contentDescription = "Streak",
+                                tint = Color(0xFFFB923C),
+                                modifier = Modifier
+                                    .size(17.dp)
+                                    .graphicsLayer {
+                                        scaleX = flameScale
+                                        scaleY = flameScale
+                                    }
+                            )
+                            Text(
+                                text = "${toBengaliDigits(stats.streakDays)} দিন স্ট্রিক",
+                                color = Color(0xFFFED7AA),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Animated XP Progress Bar
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "লেভেল ${toBengaliDigits(stats.level + 1)}-এ যেতে আরও ${toBengaliDigits((stats.nextLevelXpThreshold - stats.currentLevelXp).coerceAtLeast(10))} XP প্রয়োজন",
+                            color = Color(0xFFCBD5E1),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "${toBengaliDigits((stats.levelProgressFraction * 100).toInt())}%",
+                            color = Color(0xFFFDE047),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.14f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(animatedXpProgress)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFF8B5CF6), Color(0xFFEC4899), Color(0xFFF59E0B))
+                                    )
+                                )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Daily Quests Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showQuestsExpanded = !showQuestsExpanded },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SportsEsports,
+                            contentDescription = null,
+                            tint = Color(0xFFA78BFA),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "আজকের ডেইলি স্টাডি মিশন",
+                            color = Color.White,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+
+                    val completedCount = stats.dailyQuests.count { it.isCompleted }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (completedCount == stats.dailyQuests.size) {
+                            Color(0xFF10B981).copy(alpha = 0.25f)
+                        } else {
+                            Color.White.copy(alpha = 0.1f)
+                        }
+                    ) {
+                        Text(
+                            text = "${toBengaliDigits(completedCount)}/${toBengaliDigits(stats.dailyQuests.size)} সম্পন্ন",
+                            color = if (completedCount == stats.dailyQuests.size) Color(0xFF34D399) else Color(0xFFE2E8F0),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = showQuestsExpanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        stats.dailyQuests.forEach { quest ->
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (quest.isCompleted) {
+                                    Color(0xFF064E3B).copy(alpha = 0.45f)
+                                } else {
+                                    Color.White.copy(alpha = 0.07f)
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (quest.isCompleted) Color(0xFF10B981).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.12f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable { onStartQuestClick() }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (quest.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (quest.isCompleted) Color(0xFF34D399) else Color(0xFFA78BFA),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = quest.titleBn,
+                                            color = if (quest.isCompleted) Color(0xFFD1FAE5) else Color.White,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = quest.subtitleBn,
+                                            color = Color(0xFF94A3B8),
+                                            fontSize = 10.5.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (quest.isCompleted) {
+                                            Color(0xFF10B981).copy(alpha = 0.25f)
+                                        } else {
+                                            Color(0xFFF59E0B).copy(alpha = 0.2f)
+                                        }
+                                    ) {
+                                        Text(
+                                            text = if (quest.isCompleted) "✓ +${toBengaliDigits(quest.xpReward)} XP" else "+${toBengaliDigits(quest.xpReward)} XP",
+                                            color = if (quest.isCompleted) Color(0xFF34D399) else Color(0xFFFDE047),
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

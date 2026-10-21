@@ -64,5 +64,6 @@ data class CourseUiState(
     // Tier 4: Selected Lesson Detail
     val selectedLesson: StudentLessonItem? = null,
     val isLessonDetailLoading: Boolean = false,
-    val selectedLessonTopicVideos: List<com.example.api.TopicFullItem> = emptyList()
+    val selectedLessonTopicVideos: List<com.example.api.TopicFullItem> = emptyList(),
+    val animatedPlaylist: List<com.example.api.TopicFullItem> = emptyList()
 )

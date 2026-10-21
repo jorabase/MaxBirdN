@@ -120,6 +120,9 @@ fun LessonDetailPlayerScreen(
     subjectName: String,
     subjectColorHex: String?,
     isLessonLoading: Boolean = false,
+    chapterLessons: List<StudentLessonItem> = emptyList(),
+    onSelectAnotherLesson: ((StudentLessonItem) -> Unit)? = null,
+    onAnimatedPlaylistLoaded: ((List<TopicFullItem>) -> Unit)? = null,
     onRefreshLesson: (() -> Unit)? = null,
     onNavigateToLiveClass: ((classId: String, lessonId: String, title: String, subjectName: String) -> Unit)? = null,
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
@@ -1455,7 +1458,10 @@ fun LessonDetailPlayerScreen(
                         ?: ""
                 }
 
-                LaunchedEffect(lesson) {
+                LaunchedEffect(lesson?.id) {
+                    if (lesson != null) {
+                        com.example.gamification.StudentGamificationManager.recordLessonActivity(context)
+                    }
                     android.util.Log.d("AnimatedBug", "topics: ${lesson?.topics ?: lesson?.live_class?.topics}")
                     android.util.Log.d("AnimatedBug", "topicIds: $topicIdsForAnimated")
                 }
@@ -1465,11 +1471,27 @@ fun LessonDetailPlayerScreen(
                     topicIds = topicIdsForAnimated,
                     repository = courseRepository,
                     themeColor = subjectThemeColor,
+                    onAnimatedPlaylistLoaded = onAnimatedPlaylistLoaded,
                     onPlayAnimatedLesson = { vUrl, vTitle ->
                         try { exoPlayer.pause() } catch (_: Exception) {}
                         onPlayAnimatedLesson?.invoke(vUrl, vTitle)
                     }
                 )
+
+                // 6. "এই অধ্যায়ের অন্যান্য ক্লাস" (Seamless In-Player Class Switcher)
+                if (chapterLessons.size > 1 && onSelectAnotherLesson != null) {
+                    ChapterOtherClassesSection(
+                        currentLessonId = lesson?.id ?: "",
+                        lessons = chapterLessons,
+                        themeColor = subjectThemeColor,
+                        onSelectLesson = { nextLesson ->
+                            if (nextLesson.id != lesson?.id) {
+                                try { exoPlayer.pause() } catch (_: Exception) {}
+                                onSelectAnotherLesson(nextLesson)
+                            }
+                        }
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(40.dp))
             }
@@ -1558,6 +1580,7 @@ fun LessonAnimatedLessonsSection(
     topicIds: List<String>,
     repository: CourseRepository,
     themeColor: Color,
+    onAnimatedPlaylistLoaded: ((List<TopicFullItem>) -> Unit)? = null,
     onPlayAnimatedLesson: (videoUrl: String, title: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1578,6 +1601,9 @@ fun LessonAnimatedLessonsSection(
             animatedTopics = res.filter { topic ->
                 val vList = topic.videos?.data
                 !vList.isNullOrEmpty() && vList.any { !it.playback_url.isNullOrBlank() }
+            }
+            if (animatedTopics.isNotEmpty()) {
+                onAnimatedPlaylistLoaded?.invoke(animatedTopics)
             }
         } catch (e: Exception) {
             android.util.Log.e("AnimatedBug", "Error fetching animated lessons", e)
@@ -2184,6 +2210,291 @@ fun RecordingProcessingHeader(
                     Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("লেকচার স্লাইড ও ক্লাস নোটস পড়ুন", fontSize = 11.5.sp)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Gamified In-Player Chapter Class Switcher ("এই অধ্যায়ের অন্যান্য ক্লাস")
+ * Allows switching to any other recorded/live class in the same chapter without pressing Back.
+ */
+@Composable
+fun ChapterOtherClassesSection(
+    currentLessonId: String,
+    lessons: List<StudentLessonItem>,
+    themeColor: Color,
+    onSelectLesson: (StudentLessonItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val classLessons = remember(lessons) {
+        lessons.filter { !it.isExam }
+    }
+    if (classLessons.size <= 1) return
+
+    val currentIndex = remember(currentLessonId, classLessons) {
+        classLessons.indexOfFirst { it.id == currentLessonId }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        // Quick Prev / Next Bar if current lesson is in the list
+        if (currentIndex >= 0) {
+            val prevLesson = classLessons.getOrNull(currentIndex - 1)
+            val nextLesson = classLessons.getOrNull(currentIndex + 1)
+            if (prevLesson != null || nextLesson != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (prevLesson != null) {
+                        OutlinedButton(
+                            onClick = { onSelectLesson(prevLesson) },
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, themeColor.copy(alpha = 0.45f)),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = themeColor, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "পূর্ববর্তী ক্লাস",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = themeColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (nextLesson != null) {
+                        Button(
+                            onClick = { onSelectLesson(nextLesson) },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = themeColor),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "পরবর্তী ক্লাস",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Header Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = themeColor.copy(alpha = 0.14f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VideoLibrary,
+                        contentDescription = null,
+                        tint = themeColor,
+                        modifier = Modifier
+                            .padding(6.dp)
+                            .size(18.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "এই অধ্যায়ের সকল ক্লাস প্লেলিস্ট",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "ব্যাক না করেই যেকোনো ক্লাসে সরাসরি সুইচ করুন",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = themeColor.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, themeColor.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = "${toBengaliDigits(classLessons.size)}টি ক্লাস",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = themeColor,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Vertical list of chapter classes
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            classLessons.forEachIndexed { idx, item ->
+                val isCurrent = item.id == currentLessonId
+                val cleanTitle = ClassTypeUtils.formatLessonTitle(item.title ?: "ক্লাস ${toBengaliDigits(idx + 1)}")
+                val teacher = item.live_class?.teacher?.displayName ?: item.live_class?.instructor?.displayName ?: ""
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isCurrent) {
+                        themeColor.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.surface
+                    },
+                    border = BorderStroke(
+                        width = if (isCurrent) 1.6.dp else 1.dp,
+                        color = if (isCurrent) themeColor else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                    ),
+                    shadowElevation = if (isCurrent) 4.dp else 1.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { onSelectLesson(item) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Number or Playing Indicator Badge
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isCurrent) themeColor else themeColor.copy(alpha = 0.12f),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                if (isCurrent) {
+                                    Icon(
+                                        imageVector = Icons.Default.GraphicEq,
+                                        contentDescription = "চলছে",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = toBengaliDigits(idx + 1),
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = themeColor
+                                    )
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (isCurrent) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = themeColor
+                                    ) {
+                                        Text(
+                                            text = "এখন চলছে",
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFF59E0B).copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "+১০০ XP",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFD97706),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
+                                    )
+                                }
+                                val isItemCompleted = item.user_activity_state.equals("COMPLETED", ignoreCase = true) ||
+                                    item.user_activity_state.equals("ATTENDED", ignoreCase = true)
+                                if (isItemCompleted) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "সম্পন্ন ✓",
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF10B981),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = cleanTitle,
+                                fontSize = 14.sp,
+                                fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                color = if (isCurrent) themeColor else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            if (teacher.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = teacher,
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isCurrent) themeColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isCurrent) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = if (isCurrent) themeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

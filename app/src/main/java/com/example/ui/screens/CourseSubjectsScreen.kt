@@ -74,7 +74,7 @@ fun CourseSubjectsScreen(
         topBar = {
             if (selectedProgram != null) {
                 Surface(
-                    color = Color(0xFFF8FAFC),
+                    color = MaterialTheme.colorScheme.background,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -90,13 +90,13 @@ fun CourseSubjectsScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color.White)
-                                .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back to my courses",
-                                tint = Color(0xFF1E293B)
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
 
@@ -105,21 +105,21 @@ fun CourseSubjectsScreen(
                                 text = selectedProgram.title_bn ?: "কোর্স",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "বিষয়সমূহ ও অধ্যায়সূচি",
+                                text = "বিষয়সমূহ ও কুয়েস্ট ম্যাপ",
                                 fontSize = 12.sp,
-                                color = Color(0xFF64748B)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC),
+        containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier.testTag("course_subjects_screen")
     ) { paddingValues ->
         val isRefreshing = uiState.isProgramsLoading || uiState.isSubjectsLoading
@@ -194,8 +194,11 @@ private fun CourseFilterChip(
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = if (selected) Color(0xFF0F172A) else Color.White,
-        border = BorderStroke(1.dp, if (selected) Color(0xFF0F172A) else Color(0xFFE2E8F0)),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        ),
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
@@ -204,7 +207,7 @@ private fun CourseFilterChip(
             text = label,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) Color.White else Color(0xFF475569),
+            color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             softWrap = false,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
@@ -246,24 +249,24 @@ private fun MyCoursesListView(
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "আমার কোর্স",
-                        fontSize = 24.sp,
+                        text = "আমার কোর্স ও মিশন",
+                        fontSize = 23.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A),
+                        color = MaterialTheme.colorScheme.onSurface,
                         letterSpacing = (-0.5).sp
                     )
                     if (enrolled.isNotEmpty()) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFDCFCE7),
-                            border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                            color = Color(0xFF10B981).copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f))
                         ) {
                             Text(
                                 text = "${toBengaliDigits(enrolled.size)}টি সক্রিয়",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF15803D),
+                                color = Color(0xFF10B981),
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
@@ -274,7 +277,7 @@ private fun MyCoursesListView(
                     text = "চলমান শিক্ষাবর্ষ ও ভর্তি হওয়া কোর্সসমূহ",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF64748B)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -1212,25 +1215,32 @@ fun SubjectGridCard(
     }
 
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .border(
-                width = 1.dp,
-                color = parsedColor.copy(alpha = 0.25f),
-                shape = RoundedCornerShape(18.dp)
+                width = 1.2.dp,
+                color = parsedColor.copy(alpha = 0.32f),
+                shape = RoundedCornerShape(20.dp)
             )
             .clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(parsedColor.copy(alpha = 0.04f))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            parsedColor.copy(alpha = 0.08f),
+                            parsedColor.copy(alpha = 0.02f)
+                        )
+                    )
+                )
                 .padding(14.dp)
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -1248,18 +1258,48 @@ fun SubjectGridCard(
                         iconSize = 24.dp
                     )
 
-                    Surface(
-                        shape = CircleShape,
-                        color = parsedColor.copy(alpha = 0.12f),
-                        modifier = Modifier.size(28.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null,
-                                tint = parsedColor,
-                                modifier = Modifier.size(13.dp)
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.14f),
+                            border = BorderStroke(0.8.dp, Color(0xFFF59E0B).copy(alpha = 0.35f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = Color(0xFFD97706),
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text(
+                                    text = "XP",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFD97706)
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = CircleShape,
+                            color = parsedColor.copy(alpha = 0.14f),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = parsedColor,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1291,7 +1331,7 @@ fun SubjectGridCard(
                             color = parsedColor.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "${toBengaliDigits(item.completedChapters)}/${toBengaliDigits(item.totalChapters)} অধ্যায়",
+                                text = "${toBengaliDigits(item.completedChapters)}/${toBengaliDigits(item.totalChapters)} মিশন",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = parsedColor,
@@ -1303,7 +1343,7 @@ fun SubjectGridCard(
                             text = "${toBengaliDigits(item.progressPercentage)}%",
                             fontSize = 11.sp,
                             color = parsedColor,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.ExtraBold
                         )
                     }
 
@@ -1316,21 +1356,32 @@ fun SubjectGridCard(
                         trackColor = parsedColor.copy(alpha = 0.15f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(5.dp)
+                            .height(6.dp)
                             .clip(RoundedCornerShape(3.dp))
                     )
                 } else {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = parsedColor.copy(alpha = 0.10f)
+                        color = parsedColor.copy(alpha = 0.12f)
                     ) {
-                        Text(
-                            text = "অধ্যায়সমূহ দেখুন",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = parsedColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Explore,
+                                contentDescription = null,
+                                tint = parsedColor,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "অধ্যায় মিশন দেখুন",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = parsedColor
+                            )
+                        }
                     }
                 }
             }

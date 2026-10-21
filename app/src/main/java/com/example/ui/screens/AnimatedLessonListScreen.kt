@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.api.TopicFullItem
 import com.example.course.CourseViewModel
+import com.example.gamification.StudentGamificationManager
 import com.example.utils.toBengaliDigits
 import kotlinx.coroutines.launch
 
@@ -43,10 +46,12 @@ fun AnimatedLessonListScreen(
     onPlayVideo: (videoUrl: String, title: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var topicsList by remember { mutableStateOf<List<TopicFullItem>>(emptyList()) }
+    val watchedUrls = remember(topicsList) { StudentGamificationManager.getWatchedAnimatedUrls(context) }
 
     val themeColor = remember(subjectColorHex) {
         try {
@@ -66,12 +71,14 @@ fun AnimatedLessonListScreen(
             errorMessage = null
             try {
                 val fetched = viewModel.getTopics(chapterId)
-                // Filter out items without valid playback URL as per instructions
+                // Filter out items without valid playback URL
                 topicsList = fetched.filter { topic ->
                     val vList = topic.videos?.data
                     !vList.isNullOrEmpty() && vList.any { !it.playback_url.isNullOrBlank() }
                 }
-                if (topicsList.isEmpty()) {
+                if (topicsList.isNotEmpty()) {
+                    viewModel.setAnimatedPlaylist(topicsList)
+                } else {
                     errorMessage = "এই অধ্যায়ে কোনো অ্যানিমেটেড লেসন পাওয়া যায়নি"
                 }
             } catch (e: Exception) {
@@ -90,7 +97,7 @@ fun AnimatedLessonListScreen(
         topBar = {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 2.dp
+                shadowElevation = 3.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -118,14 +125,14 @@ fun AnimatedLessonListScreen(
                         Text(
                             text = chapterName.ifBlank { "অ্যানিমেটেড লেসনস" },
                             fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SmartDisplay,
@@ -134,11 +141,38 @@ fun AnimatedLessonListScreen(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "অ্যানিমেটেড ভিডিও তালিকা",
+                                text = "থ্রিডি অ্যানিমেটেড কোয়েস্ট প্লেলিস্ট",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                                fontWeight = FontWeight.SemiBold,
                                 color = themeColor
                             )
+                        }
+                    }
+
+                    if (topicsList.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f)),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = Color(0xFFD97706),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "+${toBengaliDigits(topicsList.size * 50)} XP",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFD97706)
+                                )
+                            }
                         }
                     }
                 }
@@ -220,35 +254,95 @@ fun AnimatedLessonListScreen(
                 }
 
                 else -> {
+                    val watchedCount = remember(topicsList, watchedUrls) {
+                        topicsList.count { topic ->
+                            val url = topic.videos?.data?.firstOrNull { !it.playback_url.isNullOrBlank() }?.playback_url
+                            url != null && watchedUrls.contains(url)
+                        }
+                    }
+
                     LazyColumn(
                         contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
                         item {
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = themeColor.copy(alpha = 0.08f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, themeColor.copy(alpha = 0.2f)),
+                            // Gamified Chapter Quest Summary Banner
+                            Card(
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                                border = BorderStroke(1.2.dp, themeColor.copy(alpha = 0.35f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(
+                                            Brush.linearGradient(
+                                                colors = listOf(
+                                                    Color(0xFF0F172A),
+                                                    Color(0xFF1E1B4B)
+                                                )
+                                            )
+                                        )
+                                        .padding(16.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MovieFilter,
-                                        contentDescription = null,
-                                        tint = themeColor,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = "মোট অ্যানিমেটেড ভিডিও: ${toBengaliDigits(topicsList.size)}টি",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = themeColor
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = themeColor.copy(alpha = 0.25f),
+                                                border = BorderStroke(1.dp, themeColor.copy(alpha = 0.6f)),
+                                                modifier = Modifier.size(44.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.MovieFilter,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "অ্যানিমেটেড ভিডিও প্লেলিস্ট: ${toBengaliDigits(topicsList.size)}টি",
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color.White
+                                                )
+                                                Text(
+                                                    text = "একটি প্লে করলে প্লেয়ারের ভেতরেই সব ভিডিও পরপর দেখতে পারবেন!",
+                                                    fontSize = 11.5.sp,
+                                                    color = Color(0xFFCBD5E1)
+                                                )
+                                            }
+                                        }
+
+                                        if (watchedCount > 0) {
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = Color(0xFF10B981).copy(alpha = 0.2f),
+                                                border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.5f))
+                                            ) {
+                                                Text(
+                                                    text = "${toBengaliDigits(watchedCount)}/${toBengaliDigits(topicsList.size)} সম্পন্ন",
+                                                    color = Color(0xFF34D399),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -259,6 +353,7 @@ fun AnimatedLessonListScreen(
                             val thumbnail = videoData?.video_thumbnail_url?.firstOrNull()
                             val topicTitle = topic.name ?: "ভিডিও ${index + 1}"
                             val serialNo = topic.no?.let { toBengaliDigits(it) } ?: toBengaliDigits(index + 1)
+                            val isWatched = watchedUrls.contains(playbackUrl)
 
                             AnimatedVideoCard(
                                 serialNo = serialNo,
@@ -266,8 +361,10 @@ fun AnimatedLessonListScreen(
                                 description = topic.description,
                                 thumbnailUrl = thumbnail,
                                 themeColor = themeColor,
+                                isWatched = isWatched,
                                 onClick = {
                                     if (playbackUrl.isNotBlank()) {
+                                        viewModel.setAnimatedPlaylist(topicsList)
                                         onPlayVideo(playbackUrl, topicTitle)
                                     }
                                 }
@@ -287,16 +384,21 @@ fun AnimatedVideoCard(
     description: String?,
     thumbnailUrl: String?,
     themeColor: Color,
+    isWatched: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isWatched) Color(0xFF10B981).copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -308,7 +410,7 @@ fun AnimatedVideoCard(
                     .background(Color(0xFF1E293B))
             ) {
                 AsyncImage(
-                    model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
                         .data(thumbnailUrl?.takeIf { it.isNotBlank() } ?: com.example.R.drawable.placeholder_animated)
                         .crossfade(true)
                         .error(com.example.R.drawable.placeholder_animated)
@@ -325,33 +427,81 @@ fun AnimatedVideoCard(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
                             )
                         )
                 )
 
                 // Serial No Badge (Top Left)
                 Surface(
-                    shape = RoundedCornerShape(bottomEnd = 12.dp, topStart = 16.dp),
+                    shape = RoundedCornerShape(bottomEnd = 12.dp, topStart = 18.dp),
                     color = themeColor,
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
                     Text(
                         text = "লেসন $serialNo",
                         color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                     )
+                }
+
+                // XP & Watched Badges (Top Right)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isWatched) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                text = "দেখা হয়েছে ✓",
+                                color = Color.White,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF0F172A).copy(alpha = 0.85f),
+                        border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.7f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = Color(0xFFFBBF24),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "+৫০ XP",
+                                color = Color(0xFFFDE68A),
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
                 }
 
                 // Center Play Icon Circle
                 Surface(
                     shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.6f),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(alpha = 0.8f)),
+                    color = themeColor.copy(alpha = 0.85f),
+                    border = BorderStroke(2.dp, Color.White.copy(alpha = 0.9f)),
                     modifier = Modifier
-                        .size(46.dp)
+                        .size(50.dp)
                         .align(Alignment.Center)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -359,7 +509,7 @@ fun AnimatedVideoCard(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Play",
                             tint = Color.White,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                 }
@@ -373,8 +523,8 @@ fun AnimatedVideoCard(
             ) {
                 Text(
                     text = title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

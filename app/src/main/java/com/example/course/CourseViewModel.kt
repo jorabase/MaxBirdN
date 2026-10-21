@@ -21,10 +21,28 @@ class CourseViewModel(
 
     suspend fun getTopics(chapterId: String, topicIds: List<String>? = null): List<TopicFullItem> {
         return try {
-            repository.getTopics(chapterId, topicIds)
+            val list = repository.getTopics(chapterId, topicIds)
+            val validVideoTopics = list.filter { topic ->
+                val vList = topic.videos?.data
+                !vList.isNullOrEmpty() && vList.any { !it.playback_url.isNullOrBlank() }
+            }
+            if (validVideoTopics.isNotEmpty()) {
+                _uiState.update { it.copy(animatedPlaylist = validVideoTopics) }
+            }
+            list
         } catch (e: Exception) {
             android.util.Log.e("CourseViewModel", "Error fetching topics for $chapterId", e)
             emptyList()
+        }
+    }
+
+    fun setAnimatedPlaylist(topics: List<TopicFullItem>) {
+        val valid = topics.filter { topic ->
+            val vList = topic.videos?.data
+            !vList.isNullOrEmpty() && vList.any { !it.playback_url.isNullOrBlank() }
+        }
+        if (valid.isNotEmpty()) {
+            _uiState.update { it.copy(animatedPlaylist = valid) }
         }
     }
 
