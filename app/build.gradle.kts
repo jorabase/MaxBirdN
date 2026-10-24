@@ -76,14 +76,18 @@ android {
         try { load(envFile.inputStream()) } catch (_: Exception) {}
       }
     }
-    val supabaseUrl = System.getenv("SUPABASE_URL")
+    val supabaseUrl = (System.getenv("SUPABASE_URL")
       ?: envProps.getProperty("SUPABASE_URL")
-      ?: ""
-    val supabaseAnonKey = System.getenv("SUPABASE_ANON_KEY")
+      ?: "").trim().removeSurrounding("\"")
+    val supabaseAnonKey = (System.getenv("SUPABASE_ANON_KEY")
       ?: envProps.getProperty("SUPABASE_ANON_KEY")
-      ?: ""
+      ?: "").trim().removeSurrounding("\"")
+    val geminiApiKey = (System.getenv("GEMINI_API_KEY")
+      ?: envProps.getProperty("GEMINI_API_KEY")
+      ?: "").trim().removeSurrounding("\"")
     buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+    buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
   }
 
   signingConfigs {
@@ -157,6 +161,7 @@ secrets {
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
   ignoreList.add("SUPABASE_URL")
   ignoreList.add("SUPABASE_ANON_KEY")
+  ignoreList.add("GEMINI_API_KEY")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.ERROR }

@@ -144,10 +144,11 @@ object GeminiAiStudyRepository {
         val prefs = getPrefs(context)
         val identity = resolveIdentity(context, sessionManager)
 
-        // Check account-specific key first, then active slot, then BuildConfig fallback
+        // Check account-specific key first, then active slot, then BuildConfig fallback (only if valid AIza key)
         val accountSavedKey = prefs.getString("$KEY_ACCOUNT_PREFIX${identity.accountKey}", null)?.trim().orEmpty()
         val activeSlotKey = prefs.getString(KEY_ACTIVE_API_KEY, null)?.trim().orEmpty()
-        val buildConfigKey = runCatching { BuildConfig.GEMINI_API_KEY.trim() }.getOrDefault("")
+        val rawBuildConfigKey = runCatching { BuildConfig.GEMINI_API_KEY.trim() }.getOrDefault("")
+        val buildConfigKey = if (rawBuildConfigKey.startsWith("AIza")) rawBuildConfigKey else ""
 
         val effectiveKey = when {
             accountSavedKey.isNotBlank() -> accountSavedKey
