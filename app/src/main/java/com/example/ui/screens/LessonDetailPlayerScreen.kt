@@ -2427,18 +2427,6 @@ fun ChapterOtherClassesSection(
                                         )
                                     }
                                 }
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFFF59E0B).copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = "+১০০ XP",
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color(0xFFD97706),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
-                                    )
-                                }
                                 val isItemCompleted = item.user_activity_state.equals("COMPLETED", ignoreCase = true) ||
                                     item.user_activity_state.equals("ATTENDED", ignoreCase = true)
                                 if (isItemCompleted) {

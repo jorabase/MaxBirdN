@@ -75,6 +75,14 @@ fun MainContainerScreen(
         allDownloads.count { it.status == DownloadedItemEntity.STATUS_DOWNLOADING }
     }
 
+    // Auto-restore user's personal Gemini API Key from Supabase Cloud when logged in
+    LaunchedEffect(Unit) {
+        runCatching {
+            com.example.ai.GeminiAiStudyRepository.initialize(context, sessionManager)
+            com.example.ai.GeminiAiStudyRepository.syncApiKeyFromCloud(context, sessionManager)
+        }
+    }
+
     // Double Back Press to Exit (3 seconds window) & Tab back navigation
     BackHandler {
         if (selectedIndex != 0) {

@@ -144,6 +144,13 @@ object QrSessionUtils {
             sessionManager.setAccountComplete(true)
             sessionManager.setJustSignedUp(false)
 
+            try {
+                com.example.ai.GeminiAiStudyRepository.triggerBackgroundSync(
+                    context = com.example.ShikhoApp.instance,
+                    sessionManager = sessionManager
+                )
+            } catch (_: Throwable) {}
+
             return true
         } catch (e: Exception) {
             Log.e("QrSessionUtils", "Error parsing session payload", e)

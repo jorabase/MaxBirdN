@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.BuildConfig
+import com.example.ai.GeminiAiStudyRepository
 import com.example.auth.SessionManager
 import com.example.ui.dialogs.FcmLiveTerminalDialog
+import com.example.ui.dialogs.GeminiApiSettingsDialog
 import com.example.ui.dialogs.UpdateDialog
 import com.example.update.AppUpdateInfo
 import com.example.update.AppUpdateRepository
@@ -69,15 +71,24 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var showTerminalDialog by remember { mutableStateOf(false) }
+    var showGeminiApiDialog by remember { mutableStateOf(false) }
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
+
+    val geminiConfig by GeminiAiStudyRepository.configState.collectAsState()
 
     var formattedCacheSize by remember { mutableStateOf("হিসাব করা হচ্ছে...") }
     var isClearingCache by remember { mutableStateOf(false) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var manualUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
 
-    // অফ-থ্রেডে (IO) ক্যাশ মেমোরি সাইজ লোড করা হচ্ছে যাতে UI ল্যাগ না করে
+    // অফ-থ্রেডে (IO) ক্যাশ মেমোরি সাইজ লোড ও ক্লাউড থেকে Gemini API সিঙ্ক করা হচ্ছে যাতে UI ল্যাগ না করে
     LaunchedEffect(Unit) {
+        GeminiAiStudyRepository.initialize(context, sessionManager)
+        launch(Dispatchers.IO) {
+            runCatching {
+                GeminiAiStudyRepository.syncApiKeyFromCloud(context, sessionManager)
+            }
+        }
         formattedCacheSize = withContext(Dispatchers.IO) {
             runCatching { AppCacheManager.getFormattedCacheSize(context) }
                 .getOrDefault("0.0 MB")
@@ -231,6 +242,35 @@ fun SettingsScreen(
                 onNavigateToDownloads = onNavigateToDownloads,
                 onNavigateToReportCard = onNavigateToReportCard
             )
+
+            // ২.৫ AI পড়াশোনা ও Gemini API সেকশন (ক্লাউড সিঙ্কড)
+            SettingsSection(
+                title = "AI দিয়ে পড়াশোনা (NotebookLM স্টাইল)",
+                sectionIcon = Icons.Default.AutoAwesome
+            ) {
+                val hasUserKey = geminiConfig.apiKey.isNotBlank()
+                val maskedKey = remember(geminiConfig.apiKey) {
+                    val k = geminiConfig.apiKey.trim()
+                    if (k.length > 10) "${k.take(6)}••••${k.takeLast(4)}" else "সক্রিয়"
+                }
+                SettingsRowItem(
+                    icon = Icons.Default.AutoAwesome,
+                    iconTint = Color(0xFF4F46E5),
+                    title = "Gemini API",
+                    subtitle = when {
+                        geminiConfig.isSyncing -> "ক্লাউড ডাটাবেজের সাথে API Key সিঙ্ক হচ্ছে..."
+                        hasUserKey && geminiConfig.isCloudSynced ->
+                            "সক্রিয় ($maskedKey) • ক্লাউডে সংরক্ষিত • Model: 3.8 Flash"
+                        hasUserKey ->
+                            "সক্রিয় ($maskedKey) • লেকচার স্লাইড AI টিউটর (3.8 Flash)"
+                        else ->
+                            "লেকচার স্লাইডের যেকোনো কঠিন টপিক AI দিয়ে বুঝতে আপনার Gemini API Key সেট করুন"
+                    },
+                    badge = if (hasUserKey) "3.8 Flash ✓" else "সেট করুন",
+                    isLoading = geminiConfig.isSyncing,
+                    onClick = { showGeminiApiDialog = true }
+                )
+            }
 
             // ৩. একাডেমিক সেটিংস সেকশন
             SettingsSection(
@@ -581,6 +621,14 @@ fun SettingsScreen(
     if (showEqualizerBottomSheet) {
         com.example.ui.components.EqualizerBottomSheet(
             onDismiss = { showEqualizerBottomSheet = false }
+        )
+    }
+
+    // Gemini API সেটিংস ও ক্লাউড সিঙ্ক ডায়ালগ
+    if (showGeminiApiDialog) {
+        GeminiApiSettingsDialog(
+            sessionManager = sessionManager,
+            onDismiss = { showGeminiApiDialog = false }
         )
     }
 }

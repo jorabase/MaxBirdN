@@ -1627,22 +1627,22 @@ fun AnimatedLessonPlayerScreen(
                         verticalArrangement = Arrangement.Center,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // XP Celebration Badge
+                        // Lesson Complete Celebration Badge
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFFF59E0B).copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.7f))
+                            color = Color(0xFF10B981).copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.7f))
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                             ) {
-                                Icon(Icons.Default.EmojiEvents, contentDescription = null, tint = Color(0xFFFBBF24), modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(16.dp))
                                 Text(
-                                    text = "লেসন সম্পন্ন! +৫০ XP অর্জিত",
-                                    color = Color(0xFFFDE68A),
-                                    fontSize = 12.sp,
+                                    text = "লেসন সম্পন্ন হয়েছে! 🎉",
+                                    color = Color(0xFFD1FAE5),
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
@@ -2069,31 +2069,9 @@ fun AnimatedLessonPlayerScreen(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFF59E0B).copy(alpha = 0.18f),
-                                    border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.45f))
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Bolt,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFBBF24),
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Text(
-                                            text = "+৫০ XP",
-                                            color = Color(0xFFFDE68A),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    }
-                                }
                             }
+
+
 
                             // Auto-Play Toggle Chip
                             Surface(
@@ -2378,18 +2356,7 @@ fun AnimatedLessonPlayerScreen(
                                             }
                                         }
 
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = Color(0xFFF59E0B).copy(alpha = 0.15f)
-                                        ) {
-                                            Text(
-                                                text = "+৫০ XP",
-                                                color = Color(0xFFFBBF24),
-                                                fontSize = 9.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
-                                            )
-                                        }
+
                                     }
 
                                     Spacer(modifier = Modifier.height(4.dp))

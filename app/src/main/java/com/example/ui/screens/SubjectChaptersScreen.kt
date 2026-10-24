@@ -700,29 +700,6 @@ fun ChapterCard(
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(0xFFF59E0B).copy(alpha = 0.14f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = Color(0xFFD97706),
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Text(
-                                text = "+১০০ XP",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFD97706)
-                            )
-                        }
-                    }
                 }
             }
 

@@ -16,7 +16,7 @@ BEGIN
     FOR r IN (
         SELECT oid::regprocedure AS func_signature 
         FROM pg_proc 
-        WHERE proname IN ('activate_device', 'check_device_status', 'verify_device_heartbeat', 'admin_toggle_device_ban', 'create_access_code')
+        WHERE proname IN ('activate_device', 'check_device_status', 'verify_device_heartbeat', 'admin_toggle_device_ban', 'create_access_code', 'upsert_user_gemini_api_key', 'get_user_gemini_api_key')
           AND pronamespace = 'public'::regnamespace
     ) LOOP
         EXECUTE 'DROP FUNCTION IF EXISTS ' || r.func_signature || ' CASCADE';
@@ -521,3 +521,150 @@ USING (true)
 WITH CHECK (true);
 
 GRANT ALL ON TABLE public.user_telegram_sessions TO anon, authenticated, service_role;
+
+-- ========================================================
+-- ১৪. GEMINI AI STUDY API KEY CLOUD SYNC TABLE & RPCs
+-- (অ্যাপ ডিলিট বা অন্য ফোনে লগইন করলেও অটোমেটিক API Key চলে আসবে)
+-- ========================================================
+CREATE TABLE IF NOT EXISTS public.user_gemini_api_keys (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    account_key TEXT UNIQUE NOT NULL,     -- প্রাইমারি একাউন্ট কী (user_id / phone / access_code)
+    user_id TEXT DEFAULT '',              -- Shikho একাউন্টের user_id
+    user_phone TEXT DEFAULT '',           -- শিক্ষার্থীর মোবাইল নম্বর (যেমন: 88017...)
+    access_key TEXT DEFAULT '',           -- অ্যাক্টিভেশন এক্সেস কোড
+    student_name TEXT DEFAULT '',         -- শিক্ষার্থীর নাম
+    gemini_api_key TEXT NOT NULL DEFAULT '',
+    preferred_model TEXT DEFAULT 'gemini-3.8-flash',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS user_id TEXT DEFAULT '';
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS user_phone TEXT DEFAULT '';
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS access_key TEXT DEFAULT '';
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS student_name TEXT DEFAULT '';
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS gemini_api_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS preferred_model TEXT DEFAULT 'gemini-3.8-flash';
+ALTER TABLE public.user_gemini_api_keys ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
+CREATE INDEX IF NOT EXISTS idx_gemini_keys_user_id ON public.user_gemini_api_keys(user_id);
+CREATE INDEX IF NOT EXISTS idx_gemini_keys_user_phone ON public.user_gemini_api_keys(user_phone);
+CREATE INDEX IF NOT EXISTS idx_gemini_keys_access_key ON public.user_gemini_api_keys(access_key);
+
+ALTER TABLE public.user_gemini_api_keys ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all access user_gemini_api_keys" ON public.user_gemini_api_keys;
+CREATE POLICY "Allow all access user_gemini_api_keys" ON public.user_gemini_api_keys
+FOR ALL TO anon, authenticated
+USING (true)
+WITH CHECK (true);
+
+GRANT ALL ON TABLE public.user_gemini_api_keys TO anon, authenticated, service_role;
+
+-- ১৪.১ ইউজারের Gemini API Key ডাটাবেজে সেভ বা আপডেট করার RPC
+CREATE OR REPLACE FUNCTION public.upsert_user_gemini_api_key(
+    p_account_key TEXT,
+    p_user_id TEXT,
+    p_user_phone TEXT,
+    p_access_key TEXT,
+    p_student_name TEXT,
+    p_gemini_api_key TEXT,
+    p_preferred_model TEXT DEFAULT 'gemini-3.8-flash'
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_existing_id UUID;
+    v_clean_account_key TEXT := COALESCE(NULLIF(TRIM(p_account_key), ''), NULLIF(TRIM(p_user_id), ''), NULLIF(TRIM(p_user_phone), ''), NULLIF(TRIM(p_access_key), ''), 'default_user');
+BEGIN
+    SELECT id INTO v_existing_id
+    FROM public.user_gemini_api_keys
+    WHERE account_key = v_clean_account_key
+       OR (NULLIF(TRIM(p_user_id), '') IS NOT NULL AND user_id = TRIM(p_user_id))
+       OR (NULLIF(TRIM(p_user_phone), '') IS NOT NULL AND user_phone = TRIM(p_user_phone))
+    ORDER BY updated_at DESC
+    LIMIT 1;
+
+    IF v_existing_id IS NOT NULL THEN
+        UPDATE public.user_gemini_api_keys
+        SET account_key = v_clean_account_key,
+            user_id = COALESCE(NULLIF(TRIM(p_user_id), ''), user_id),
+            user_phone = COALESCE(NULLIF(TRIM(p_user_phone), ''), user_phone),
+            access_key = COALESCE(NULLIF(TRIM(p_access_key), ''), access_key),
+            student_name = COALESCE(NULLIF(TRIM(p_student_name), ''), student_name),
+            gemini_api_key = TRIM(p_gemini_api_key),
+            preferred_model = COALESCE(NULLIF(TRIM(p_preferred_model), ''), 'gemini-3.8-flash'),
+            is_active = true,
+            updated_at = now()
+        WHERE id = v_existing_id;
+    ELSE
+        INSERT INTO public.user_gemini_api_keys (
+            account_key, user_id, user_phone, access_key, student_name, gemini_api_key, preferred_model, is_active, created_at, updated_at
+        ) VALUES (
+            v_clean_account_key,
+            COALESCE(TRIM(p_user_id), ''),
+            COALESCE(TRIM(p_user_phone), ''),
+            COALESCE(TRIM(p_access_key), ''),
+            COALESCE(TRIM(p_student_name), ''),
+            TRIM(p_gemini_api_key),
+            COALESCE(NULLIF(TRIM(p_preferred_model), ''), 'gemini-3.8-flash'),
+            true,
+            now(),
+            now()
+        )
+        ON CONFLICT (account_key) DO UPDATE SET
+            user_id = COALESCE(NULLIF(EXCLUDED.user_id, ''), public.user_gemini_api_keys.user_id),
+            user_phone = COALESCE(NULLIF(EXCLUDED.user_phone, ''), public.user_gemini_api_keys.user_phone),
+            access_key = COALESCE(NULLIF(EXCLUDED.access_key, ''), public.user_gemini_api_keys.access_key),
+            student_name = COALESCE(NULLIF(EXCLUDED.student_name, ''), public.user_gemini_api_keys.student_name),
+            gemini_api_key = EXCLUDED.gemini_api_key,
+            preferred_model = EXCLUDED.preferred_model,
+            updated_at = now();
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'account_key', v_clean_account_key,
+        'message', 'Gemini API Key ক্লাউড ডাটাবেজে সফলভাবে সংরক্ষিত হয়েছে।'
+    );
+END;
+$$;
+
+-- ১৪.২ লগইন করার সাথে সাথে ইউজারের Gemini API Key ডাটাবেজ থেকে নিয়ে আসার RPC
+CREATE OR REPLACE FUNCTION public.get_user_gemini_api_key(
+    p_account_key TEXT,
+    p_user_id TEXT DEFAULT '',
+    p_user_phone TEXT DEFAULT '',
+    p_access_key TEXT DEFAULT ''
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_record RECORD;
+BEGIN
+    SELECT * INTO v_record
+    FROM public.user_gemini_api_keys
+    WHERE is_active = true
+      AND gemini_api_key <> ''
+      AND (
+          (NULLIF(TRIM(p_account_key), '') IS NOT NULL AND account_key = TRIM(p_account_key))
+          OR (NULLIF(TRIM(p_user_id), '') IS NOT NULL AND user_id = TRIM(p_user_id))
+          OR (NULLIF(TRIM(p_user_phone), '') IS NOT NULL AND user_phone = TRIM(p_user_phone))
+          OR (NULLIF(TRIM(p_access_key), '') IS NOT NULL AND access_key = TRIM(p_access_key))
+      )
+    ORDER BY updated_at DESC
+    LIMIT 1;
+
+    IF FOUND THEN
+        RETURN json_build_object(
+            'found', true,
+            'gemini_api_key', v_record.gemini_api_key,
+            'preferred_model', COALESCE(v_record.preferred_model, 'gemini-3.8-flash'),
+            'student_name', COALESCE(v_record.student_name, ''),
+            'updated_at', v_record.updated_at
+        );
+    END IF;
+
+    RETURN json_build_object('found', false);
+END;
+$$;
+
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+

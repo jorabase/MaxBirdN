@@ -299,20 +299,6 @@ fun ProfileContent(
                             )
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFF59E0B),
-                            border = BorderStroke(1.5.dp, Color.White),
-                            modifier = Modifier.offset(y = 8.dp)
-                        ) {
-                            Text(
-                                text = "LV. ${toBengaliDigits(stats.level)}",
-                                color = Color(0xFF0F172A),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
-                            )
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -337,11 +323,11 @@ fun ProfileContent(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Rank Badge
+                    // Student Status Badge
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFF8B5CF6).copy(alpha = 0.25f),
-                        border = BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.6f))
+                        color = Color(0xFF10B981).copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.6f))
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -349,54 +335,23 @@ fun ProfileContent(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.EmojiEvents,
+                                imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = Color(0xFFFBBF24),
-                                modifier = Modifier.size(16.dp)
+                                tint = Color(0xFF34D399),
+                                modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = stats.rankTitleBn,
-                                color = Color(0xFFFDE68A),
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // XP Progress Bar
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "মোট অভিজ্ঞতা: ${toBengaliDigits(stats.totalXp)} XP",
-                                color = Color(0xFFBAE6FD),
+                                text = "সক্রিয় শিক্ষার্থী",
+                                color = Color(0xFFD1FAE5),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = "${toBengaliDigits(stats.currentLevelXp)}/${toBengaliDigits(stats.nextLevelXpThreshold)} XP",
-                                color = Color(0xFFC4B5FD),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LinearProgressIndicator(
-                            progress = { stats.levelProgressFraction },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = Color(0xFFF59E0B),
-                            trackColor = Color.White.copy(alpha = 0.15f)
-                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
+
+
 
                     // 3 Gamified Stat Mini-Pill Cards
                     Row(

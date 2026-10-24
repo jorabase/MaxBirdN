@@ -205,6 +205,9 @@ class AuthViewModel(
                 try {
                     com.example.notification.ShikhoNotificationManager.syncAllTopicSubscriptions(com.example.ShikhoApp.instance)
                 } catch (_: Throwable) {}
+                try {
+                    com.example.ai.GeminiAiStudyRepository.triggerBackgroundSync(com.example.ShikhoApp.instance, sessionManager)
+                } catch (_: Throwable) {}
                 fetchProfile()
             } catch (e: HttpException) {
                 _authState.value = AuthState.Error("Incorrect PIN or OTP.")
@@ -266,6 +269,10 @@ class AuthViewModel(
                         vendor = "BD"
                     )
 
+                    try {
+                        com.example.ai.GeminiAiStudyRepository.triggerBackgroundSync(com.example.ShikhoApp.instance, sessionManager)
+                    } catch (_: Throwable) {}
+
                     _authState.value = AuthState.ProfileLoaded(profile)
                 } else {
                     _authState.value = AuthState.Error("Failed to parse profile data.")
@@ -288,6 +295,9 @@ class AuthViewModel(
             try {
                 apiService.logout()
             } catch (_: Exception) { }
+            try {
+                com.example.ai.GeminiAiStudyRepository.onUserLogout(com.example.ShikhoApp.instance)
+            } catch (_: Throwable) {}
             sessionManager.clearSession()
             _authState.value = AuthState.Idle
         }

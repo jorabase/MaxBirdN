@@ -152,8 +152,8 @@ fun AnimatedLessonListScreen(
                     if (topicsList.isNotEmpty()) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFF59E0B).copy(alpha = 0.16f),
-                            border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f)),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Row(
@@ -161,16 +161,17 @@ fun AnimatedLessonListScreen(
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Bolt,
+                                    imageVector = Icons.Default.SmartDisplay,
                                     contentDescription = null,
-                                    tint = Color(0xFFD97706),
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(14.dp)
                                 )
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "+${toBengaliDigits(topicsList.size * 50)} XP",
+                                    text = "${toBengaliDigits(topicsList.size)}টি অ্যানিমেশন",
                                     fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFFD97706)
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -466,30 +467,6 @@ fun AnimatedVideoCard(
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF0F172A).copy(alpha = 0.85f),
-                        border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.7f))
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = Color(0xFFFBBF24),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = "+৫০ XP",
-                                color = Color(0xFFFDE68A),
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.ExtraBold
                             )
                         }
                     }
