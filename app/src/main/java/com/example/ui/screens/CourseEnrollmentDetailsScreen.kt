@@ -95,7 +95,9 @@ fun CourseEnrollmentDetailsScreen(
 
             val response = apiService.getAcademicProgram(query)
             val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
-            val enrolled = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+            val enrolled = if (!perms.isAccountAuthorized) {
+                emptyList()
+            } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
                 rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
             } else rawEnrolled
 
@@ -163,11 +165,15 @@ fun CourseEnrollmentDetailsScreen(
             // Error handling fallback
         } finally {
             if (programsList.isEmpty()) {
-                val fb = getFallbackEnrollmentPrograms()
-                programsList = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                    fb.filter { perms.isProgramAllowed(it.id, it.titleBn) }
+                if (!perms.isAccountAuthorized) {
+                    programsList = emptyList()
                 } else {
-                    fb
+                    val fb = getFallbackEnrollmentPrograms()
+                    programsList = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                        fb.filter { perms.isProgramAllowed(it.id, it.titleBn) }
+                    } else {
+                        fb
+                    }
                 }
             }
             isLoading = false

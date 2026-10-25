@@ -667,16 +667,20 @@ END;
 $$;
 
 -- ========================================================
--- ১৫. DEVICE-SPECIFIC GRANULAR SYLLABUS & COURSE ACCESS CONTROL
--- (অ্যাডমিন অ্যাপ থেকে যেকোনো ডিভাইস সিলেক্ট করে নির্দিষ্ট শ্রেণি, বিভাগ, ব্যাচ এবং কোর্স লক/এক্সেস দেওয়ার সিস্টেম)
+-- ১৫. DEVICE & SHIKHO ACCOUNT BOUND GRANULAR SYLLABUS & COURSE ACCESS CONTROL
+-- (অ্যাডমিন অ্যাপ থেকে নির্দিষ্ট ডিভাইসের আন্ডারে লগইন করা নির্দিষ্ট শিখো অ্যাকাউন্ট সিলেক্ট করে শ্রেণি, বিভাগ, ব্যাচ এবং কোর্স লক/এক্সেস দেওয়ার সিস্টেম)
 -- ========================================================
 
--- ১৫.১ বিদ্যমান টেবিলগুলোতে নতুন পারমিশন কলাম যুক্ত করা
+-- ১৫.১ বিদ্যমান টেবিলগুলোতে নতুন পারমিশন ও বাউন্ড অ্যাকাউন্ট কলাম যুক্ত করা
 ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS is_access_restricted BOOLEAN DEFAULT false;
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS bound_shikho_user_id TEXT DEFAULT '';
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS bound_user_phone TEXT DEFAULT '';
 ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_classes TEXT[] DEFAULT '{}'::TEXT[];
 ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_groups TEXT[] DEFAULT '{}'::TEXT[];
 ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_batches TEXT[] DEFAULT '{}'::TEXT[];
 ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_programs TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS shikho_access_token TEXT DEFAULT '';
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS shikho_refresh_token TEXT DEFAULT '';
 
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS is_access_restricted BOOLEAN DEFAULT false;
 ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS allowed_classes TEXT[] DEFAULT '{}'::TEXT[];
@@ -690,7 +694,45 @@ ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_groups TEX
 ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_batches TEXT[] DEFAULT '{}'::TEXT[];
 ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_programs TEXT[] DEFAULT '{}'::TEXT[];
 
--- ১৫.২ কোর্স ক্যাটালগ টেবিল (যাতে অ্যাডমিন অ্যাপে ড্রপডাউন/চেকবক্সে সব কোর্সের নাম ও আইডি দেখা যায়)
+-- ১৫.২ প্রতিটি ডিভাইসের আন্ডারে যতগুলো শিখো অ্যাকাউন্ট লগইন করবে তার তালিকা ও পারমিশন টেবিল
+CREATE TABLE IF NOT EXISTS public.device_shikho_accounts (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    device_hash TEXT NOT NULL,
+    display_device_id TEXT DEFAULT '',
+    shikho_user_id TEXT NOT NULL,
+    user_phone TEXT DEFAULT '',
+    student_name TEXT DEFAULT '',
+    user_avatar TEXT DEFAULT '',
+    school_name TEXT DEFAULT '',
+    current_class TEXT DEFAULT '',
+    current_group TEXT DEFAULT '',
+    current_batch TEXT DEFAULT '',
+    is_access_granted BOOLEAN DEFAULT false,
+    is_access_restricted BOOLEAN DEFAULT false,
+    allowed_classes TEXT[] DEFAULT '{}'::TEXT[],
+    allowed_groups TEXT[] DEFAULT '{}'::TEXT[],
+    allowed_batches TEXT[] DEFAULT '{}'::TEXT[],
+    allowed_programs TEXT[] DEFAULT '{}'::TEXT[],
+    first_login_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    UNIQUE(device_hash, shikho_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_shikho_accounts_device_hash ON public.device_shikho_accounts(device_hash);
+CREATE INDEX IF NOT EXISTS idx_device_shikho_accounts_user_id ON public.device_shikho_accounts(shikho_user_id);
+CREATE INDEX IF NOT EXISTS idx_device_shikho_accounts_phone ON public.device_shikho_accounts(user_phone);
+
+ALTER TABLE public.device_shikho_accounts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all access device_shikho_accounts" ON public.device_shikho_accounts;
+CREATE POLICY "Allow all access device_shikho_accounts" ON public.device_shikho_accounts
+FOR ALL TO anon, authenticated
+USING (true)
+WITH CHECK (true);
+
+GRANT ALL ON TABLE public.device_shikho_accounts TO anon, authenticated, service_role;
+
+-- ১৫.৩ কোর্স ক্যাটালগ টেবিল (যাতে অ্যাডমিন অ্যাপে সব কোর্সের নাম ও আইডি ক্যাশ থাকে)
 CREATE TABLE IF NOT EXISTS public.available_courses_catalog (
     program_id TEXT PRIMARY KEY,
     title_bn TEXT NOT NULL,
@@ -712,19 +754,88 @@ WITH CHECK (true);
 
 GRANT ALL ON TABLE public.available_courses_catalog TO anon, authenticated, service_role;
 
--- ১৫.৩ স্টুডেন্ট অ্যাপের জন্য ডিভাইসের কোর্স পারমিশন রিড করার RPC
+-- ১৫.৪ স্টুডেন্ট অ্যাপ থেকে ডিভাইস ও শিখো অ্যাকাউন্টের কোর্স পারমিশন রিড করার RPC
+-- (অন্য কোনো আন-অথরাইজড শিখো অ্যাকাউন্ট দিয়ে একই ফোনে লগইন করলে অটোমেটিক এক্সেস ব্লক করে দেবে)
 CREATE OR REPLACE FUNCTION public.get_device_course_permissions(
     p_device_hash TEXT,
     p_display_device_id TEXT DEFAULT '',
-    p_code TEXT DEFAULT ''
+    p_code TEXT DEFAULT '',
+    p_shikho_user_id TEXT DEFAULT '',
+    p_user_phone TEXT DEFAULT ''
 ) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
+    v_acc RECORD;
+    v_other_acc RECORD;
     v_dev RECORD;
     v_code RECORD;
     v_act RECORD;
+    v_clean_uid TEXT := COALESCE(TRIM(p_shikho_user_id), '');
+    v_clean_phone TEXT := COALESCE(TRIM(p_user_phone), '');
 BEGIN
-    -- ১. প্রথমে public.devices টেবিল চেক করা (ডিভাইস-লেভেল পারমিশন সর্বোচ্চ অগ্রাধিকার পাবে)
-    SELECT is_access_restricted, allowed_classes, allowed_groups, allowed_batches, allowed_programs
+    -- ১. যদি ইউজার কোনো শিখো অ্যাকাউন্টে লগইন থাকে, তবে প্রথমে ওই অ্যাকাউন্টের নির্দিষ্ট পারমিশন চেক করা
+    IF v_clean_uid <> '' OR v_clean_phone <> '' THEN
+        SELECT * INTO v_acc
+        FROM public.device_shikho_accounts
+        WHERE (device_hash = p_device_hash OR (NULLIF(TRIM(p_display_device_id), '') IS NOT NULL AND display_device_id = TRIM(p_display_device_id)))
+          AND (
+              (v_clean_uid <> '' AND shikho_user_id = v_clean_uid)
+              OR (v_clean_phone <> '' AND user_phone <> '' AND user_phone = v_clean_phone)
+          )
+        ORDER BY is_access_granted DESC, is_access_restricted DESC, last_seen_at DESC
+        LIMIT 1;
+
+        IF FOUND AND (
+            v_acc.is_access_granted = true
+            OR v_acc.is_access_restricted = true
+            OR COALESCE(array_length(v_acc.allowed_classes, 1), 0) > 0
+            OR COALESCE(array_length(v_acc.allowed_groups, 1), 0) > 0
+            OR COALESCE(array_length(v_acc.allowed_batches, 1), 0) > 0
+            OR COALESCE(array_length(v_acc.allowed_programs, 1), 0) > 0
+        ) THEN
+            RETURN json_build_object(
+                'is_access_restricted', true,
+                'is_account_authorized', true,
+                'bound_user_id', COALESCE(v_acc.shikho_user_id, v_clean_uid),
+                'bound_user_phone', COALESCE(v_acc.user_phone, v_clean_phone),
+                'allowed_classes', COALESCE(v_acc.allowed_classes, '{}'::TEXT[]),
+                'allowed_groups', COALESCE(v_acc.allowed_groups, '{}'::TEXT[]),
+                'allowed_batches', COALESCE(v_acc.allowed_batches, '{}'::TEXT[]),
+                'allowed_programs', COALESCE(v_acc.allowed_programs, '{}'::TEXT[])
+            );
+        END IF;
+
+        -- ২. চেক করা যে এই একই ডিভাইসে অন্য কোনো শিখো অ্যাকাউন্টকে অ্যাডমিন এক্সেস দিয়েছেন কি না!
+        -- যদি অন্য অ্যাকাউন্টকে এক্সেস দেওয়া থাকে, তাহলে বর্তমান অ্যাকাউন্টটি সম্পূর্ণ আন-অথরাইজড (বাইপাস রোধ)!
+        SELECT * INTO v_other_acc
+        FROM public.device_shikho_accounts
+        WHERE (device_hash = p_device_hash OR (NULLIF(TRIM(p_display_device_id), '') IS NOT NULL AND display_device_id = TRIM(p_display_device_id)))
+          AND (
+              is_access_granted = true
+              OR is_access_restricted = true
+              OR COALESCE(array_length(allowed_classes, 1), 0) > 0
+              OR COALESCE(array_length(allowed_groups, 1), 0) > 0
+              OR COALESCE(array_length(allowed_batches, 1), 0) > 0
+              OR COALESCE(array_length(allowed_programs, 1), 0) > 0
+          )
+        ORDER BY is_access_granted DESC, last_seen_at DESC
+        LIMIT 1;
+
+        IF FOUND THEN
+            RETURN json_build_object(
+                'is_access_restricted', true,
+                'is_account_authorized', false,
+                'bound_user_id', COALESCE(v_other_acc.shikho_user_id, ''),
+                'bound_user_phone', COALESCE(v_other_acc.user_phone, ''),
+                'allowed_classes', '{}'::TEXT[],
+                'allowed_groups', '{}'::TEXT[],
+                'allowed_batches', '{}'::TEXT[],
+                'allowed_programs', ARRAY['__UNAUTHORIZED_ACCOUNT__']::TEXT[]
+            );
+        END IF;
+    END IF;
+
+    -- ৩. public.devices টেবিল চেক করা
+    SELECT is_access_restricted, bound_shikho_user_id, bound_user_phone, allowed_classes, allowed_groups, allowed_batches, allowed_programs
     INTO v_dev
     FROM public.devices
     WHERE device_hash = p_device_hash
@@ -739,8 +850,26 @@ BEGIN
         OR COALESCE(array_length(v_dev.allowed_batches, 1), 0) > 0
         OR COALESCE(array_length(v_dev.allowed_programs, 1), 0) > 0
     ) THEN
+        -- যদি ডিভাইসে নির্দিষ্ট বাউন্ড অ্যাকাউন্ট সেট করা থাকে এবং বর্তমান লগইন করা অ্যাকাউন্ট ভিন্ন হয়:
+        IF (NULLIF(TRIM(v_dev.bound_shikho_user_id), '') IS NOT NULL AND v_clean_uid <> '' AND TRIM(v_dev.bound_shikho_user_id) <> v_clean_uid)
+           AND (NULLIF(TRIM(v_dev.bound_user_phone), '') IS NULL OR v_clean_phone = '' OR TRIM(v_dev.bound_user_phone) <> v_clean_phone) THEN
+            RETURN json_build_object(
+                'is_access_restricted', true,
+                'is_account_authorized', false,
+                'bound_user_id', COALESCE(v_dev.bound_shikho_user_id, ''),
+                'bound_user_phone', COALESCE(v_dev.bound_user_phone, ''),
+                'allowed_classes', '{}'::TEXT[],
+                'allowed_groups', '{}'::TEXT[],
+                'allowed_batches', '{}'::TEXT[],
+                'allowed_programs', ARRAY['__UNAUTHORIZED_ACCOUNT__']::TEXT[]
+            );
+        END IF;
+
         RETURN json_build_object(
             'is_access_restricted', true,
+            'is_account_authorized', true,
+            'bound_user_id', COALESCE(NULLIF(TRIM(v_dev.bound_shikho_user_id), ''), v_clean_uid),
+            'bound_user_phone', COALESCE(NULLIF(TRIM(v_dev.bound_user_phone), ''), v_clean_phone),
             'allowed_classes', COALESCE(v_dev.allowed_classes, '{}'::TEXT[]),
             'allowed_groups', COALESCE(v_dev.allowed_groups, '{}'::TEXT[]),
             'allowed_batches', COALESCE(v_dev.allowed_batches, '{}'::TEXT[]),
@@ -748,7 +877,7 @@ BEGIN
         );
     END IF;
 
-    -- ২. যদি ডিভাইসে না থাকে, তবে ব্যবহৃত access_codes টেবিল চেক করা
+    -- ৪. ব্যবহৃত access_codes টেবিল চেক করা
     IF NULLIF(TRIM(p_code), '') IS NOT NULL THEN
         SELECT is_access_restricted, allowed_classes, allowed_groups, allowed_batches, allowed_programs
         INTO v_code
@@ -765,6 +894,9 @@ BEGIN
         ) THEN
             RETURN json_build_object(
                 'is_access_restricted', true,
+                'is_account_authorized', true,
+                'bound_user_id', v_clean_uid,
+                'bound_user_phone', v_clean_phone,
                 'allowed_classes', COALESCE(v_code.allowed_classes, '{}'::TEXT[]),
                 'allowed_groups', COALESCE(v_code.allowed_groups, '{}'::TEXT[]),
                 'allowed_batches', COALESCE(v_code.allowed_batches, '{}'::TEXT[]),
@@ -773,7 +905,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- ৩. activated_devices টেবিল চেক করা
+    -- ৫. activated_devices টেবিল চেক করা
     SELECT is_access_restricted, allowed_classes, allowed_groups, allowed_batches, allowed_programs
     INTO v_act
     FROM public.activated_devices
@@ -790,6 +922,9 @@ BEGIN
     ) THEN
         RETURN json_build_object(
             'is_access_restricted', true,
+            'is_account_authorized', true,
+            'bound_user_id', v_clean_uid,
+            'bound_user_phone', v_clean_phone,
             'allowed_classes', COALESCE(v_act.allowed_classes, '{}'::TEXT[]),
             'allowed_groups', COALESCE(v_act.allowed_groups, '{}'::TEXT[]),
             'allowed_batches', COALESCE(v_act.allowed_batches, '{}'::TEXT[]),
@@ -799,6 +934,9 @@ BEGIN
 
     RETURN json_build_object(
         'is_access_restricted', false,
+        'is_account_authorized', true,
+        'bound_user_id', v_clean_uid,
+        'bound_user_phone', v_clean_phone,
         'allowed_classes', '{}'::TEXT[],
         'allowed_groups', '{}'::TEXT[],
         'allowed_batches', '{}'::TEXT[],
@@ -807,16 +945,191 @@ BEGIN
 END;
 $$;
 
--- ১৫.৪ অ্যাডমিন অ্যাপ থেকে ডিভাইসের কোর্স পারমিশন সেট/আপডেট করার RPC
+-- ১৫.৫ স্টুডেন্ট অ্যাপে যতগুলো শিখো অ্যাকাউন্ট লগইন হবে তা অটোমেটিক ডিভাইসের আন্ডারে রেজিস্টার করার RPC
+CREATE OR REPLACE FUNCTION public.register_device_shikho_account(
+    p_device_hash TEXT,
+    p_display_device_id TEXT DEFAULT '',
+    p_shikho_user_id TEXT DEFAULT '',
+    p_user_phone TEXT DEFAULT '',
+    p_student_name TEXT DEFAULT '',
+    p_user_avatar TEXT DEFAULT '',
+    p_school_name TEXT DEFAULT '',
+    p_current_class TEXT DEFAULT '',
+    p_current_group TEXT DEFAULT '',
+    p_current_batch TEXT DEFAULT ''
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_uid TEXT := COALESCE(NULLIF(TRIM(p_shikho_user_id), ''), NULLIF(TRIM(p_user_phone), ''));
+    v_dev RECORD;
+    v_has_any_granted BOOLEAN := false;
+BEGIN
+    IF v_uid IS NULL OR v_uid = '' OR COALESCE(TRIM(p_device_hash), '') = '' THEN
+        RETURN public.get_device_course_permissions(p_device_hash, p_display_device_id, '', p_shikho_user_id, p_user_phone);
+    END IF;
+
+    -- ১. ডিভাইসের আন্ডারে এই শিখো অ্যাকাউন্টটি Upsert করা
+    INSERT INTO public.device_shikho_accounts (
+        device_hash,
+        display_device_id,
+        shikho_user_id,
+        user_phone,
+        student_name,
+        user_avatar,
+        school_name,
+        current_class,
+        current_group,
+        current_batch,
+        first_login_at,
+        last_seen_at
+    ) VALUES (
+        TRIM(p_device_hash),
+        COALESCE(TRIM(p_display_device_id), ''),
+        v_uid,
+        COALESCE(TRIM(p_user_phone), ''),
+        COALESCE(TRIM(p_student_name), ''),
+        COALESCE(TRIM(p_user_avatar), ''),
+        COALESCE(TRIM(p_school_name), ''),
+        COALESCE(TRIM(p_current_class), ''),
+        COALESCE(TRIM(p_current_group), ''),
+        COALESCE(TRIM(p_current_batch), ''),
+        now(),
+        now()
+    )
+    ON CONFLICT (device_hash, shikho_user_id) DO UPDATE SET
+        display_device_id = CASE WHEN EXCLUDED.display_device_id <> '' THEN EXCLUDED.display_device_id ELSE public.device_shikho_accounts.display_device_id END,
+        user_phone = CASE WHEN EXCLUDED.user_phone <> '' THEN EXCLUDED.user_phone ELSE public.device_shikho_accounts.user_phone END,
+        student_name = CASE WHEN EXCLUDED.student_name <> '' THEN EXCLUDED.student_name ELSE public.device_shikho_accounts.student_name END,
+        user_avatar = CASE WHEN EXCLUDED.user_avatar <> '' THEN EXCLUDED.user_avatar ELSE public.device_shikho_accounts.user_avatar END,
+        school_name = CASE WHEN EXCLUDED.school_name <> '' THEN EXCLUDED.school_name ELSE public.device_shikho_accounts.school_name END,
+        current_class = CASE WHEN EXCLUDED.current_class <> '' THEN EXCLUDED.current_class ELSE public.device_shikho_accounts.current_class END,
+        current_group = CASE WHEN EXCLUDED.current_group <> '' THEN EXCLUDED.current_group ELSE public.device_shikho_accounts.current_group END,
+        current_batch = CASE WHEN EXCLUDED.current_batch <> '' THEN EXCLUDED.current_batch ELSE public.device_shikho_accounts.current_batch END,
+        last_seen_at = now();
+
+    -- ২. যদি ডিভাইসে আগে থেকেই পারমিশন সেট করা থাকে কিন্তু কোনো বাউন্ড অ্যাকাউন্ট না থাকে, তবে প্রথম লগইন করা অ্যাকাউন্টের সাথে অটো-বাইন্ড করা
+    SELECT EXISTS (
+        SELECT 1 FROM public.device_shikho_accounts
+        WHERE device_hash = TRIM(p_device_hash)
+          AND (is_access_granted = true OR is_access_restricted = true)
+    ) INTO v_has_any_granted;
+
+    IF NOT v_has_any_granted THEN
+        SELECT * INTO v_dev
+        FROM public.devices
+        WHERE device_hash = TRIM(p_device_hash)
+        LIMIT 1;
+
+        IF FOUND AND (
+            v_dev.is_access_restricted = true
+            OR COALESCE(array_length(v_dev.allowed_classes, 1), 0) > 0
+            OR COALESCE(array_length(v_dev.allowed_programs, 1), 0) > 0
+        ) AND COALESCE(TRIM(v_dev.bound_shikho_user_id), '') = '' THEN
+            UPDATE public.device_shikho_accounts
+            SET is_access_granted = true,
+                is_access_restricted = true,
+                allowed_classes = COALESCE(v_dev.allowed_classes, '{}'::TEXT[]),
+                allowed_groups = COALESCE(v_dev.allowed_groups, '{}'::TEXT[]),
+                allowed_batches = COALESCE(v_dev.allowed_batches, '{}'::TEXT[]),
+                allowed_programs = COALESCE(v_dev.allowed_programs, '{}'::TEXT[])
+            WHERE device_hash = TRIM(p_device_hash) AND shikho_user_id = v_uid;
+
+            UPDATE public.devices
+            SET bound_shikho_user_id = v_uid,
+                bound_user_phone = COALESCE(TRIM(p_user_phone), '')
+            WHERE device_hash = TRIM(p_device_hash);
+        END IF;
+    END IF;
+
+    RETURN public.get_device_course_permissions(p_device_hash, p_display_device_id, '', v_uid, p_user_phone);
+END;
+$$;
+
+-- ১৫.৬ অ্যাডমিন অ্যাপ থেকে একটি ডিভাইসের আন্ডারে নির্দিষ্ট শিখো অ্যাকাউন্টে কোর্স ও সিলেবাস পারমিশন সেট করার RPC
+CREATE OR REPLACE FUNCTION public.admin_set_account_course_permissions(
+    p_device_hash TEXT,
+    p_shikho_user_id TEXT,
+    p_user_phone TEXT DEFAULT '',
+    p_is_access_granted BOOLEAN DEFAULT true,
+    p_is_restricted BOOLEAN DEFAULT true,
+    p_allowed_classes TEXT[] DEFAULT '{}'::TEXT[],
+    p_allowed_groups TEXT[] DEFAULT '{}'::TEXT[],
+    p_allowed_batches TEXT[] DEFAULT '{}'::TEXT[],
+    p_allowed_programs TEXT[] DEFAULT '{}'::TEXT[],
+    p_revoke_other_accounts BOOLEAN DEFAULT true
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+    -- যদি অন্য সব অ্যাকাউন্ট থেকে এক্সেস সরিয়ে শুধু এই অ্যাকাউন্টকে এক্সেস দিতে চায়
+    IF p_revoke_other_accounts = true AND p_is_access_granted = true THEN
+        UPDATE public.device_shikho_accounts
+        SET is_access_granted = false,
+            is_access_restricted = false,
+            allowed_classes = '{}'::TEXT[],
+            allowed_groups = '{}'::TEXT[],
+            allowed_batches = '{}'::TEXT[],
+            allowed_programs = '{}'::TEXT[]
+        WHERE (device_hash = p_device_hash OR display_device_id = p_device_hash)
+          AND shikho_user_id <> p_shikho_user_id;
+    END IF;
+
+    -- নির্দিষ্ট শিখো অ্যাকাউন্টের পারমিশন আপডেট করা
+    UPDATE public.device_shikho_accounts
+    SET is_access_granted = COALESCE(p_is_access_granted, true),
+        is_access_restricted = COALESCE(p_is_restricted, true),
+        allowed_classes = COALESCE(p_allowed_classes, '{}'::TEXT[]),
+        allowed_groups = COALESCE(p_allowed_groups, '{}'::TEXT[]),
+        allowed_batches = COALESCE(p_allowed_batches, '{}'::TEXT[]),
+        allowed_programs = COALESCE(p_allowed_programs, '{}'::TEXT[]),
+        last_seen_at = now()
+    WHERE (device_hash = p_device_hash OR display_device_id = p_device_hash)
+      AND (shikho_user_id = p_shikho_user_id OR (NULLIF(TRIM(p_user_phone), '') IS NOT NULL AND user_phone = TRIM(p_user_phone)));
+
+    -- পাশাপাশি public.devices টেবিলেও বাউন্ড অ্যাকাউন্ট হিসেবে সিঙ্ক রাখা
+    IF p_is_access_granted = true THEN
+        UPDATE public.devices
+        SET is_access_restricted = COALESCE(p_is_restricted, true),
+            bound_shikho_user_id = p_shikho_user_id,
+            bound_user_phone = COALESCE(p_user_phone, ''),
+            allowed_classes = COALESCE(p_allowed_classes, '{}'::TEXT[]),
+            allowed_groups = COALESCE(p_allowed_groups, '{}'::TEXT[]),
+            allowed_batches = COALESCE(p_allowed_batches, '{}'::TEXT[]),
+            allowed_programs = COALESCE(p_allowed_programs, '{}'::TEXT[]),
+            updated_at = now()
+        WHERE device_hash = p_device_hash OR display_device_id = p_device_hash;
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'message', 'নির্দিষ্ট শিখো অ্যাকাউন্টের জন্য সিলেবাস ও কোর্স এক্সেস সফলভাবে সেট করা হয়েছে!'
+    );
+END;
+$$;
+
+-- ১৫.৭ অ্যাডমিন অ্যাপ থেকে ডিভাইস-লেভেল পারমিশন আপডেট করার RPC (ব্যাকওয়ার্ড কম্প্যাটিবল)
 CREATE OR REPLACE FUNCTION public.admin_set_device_course_permissions(
     p_device_hash TEXT,
     p_is_restricted BOOLEAN,
     p_allowed_classes TEXT[] DEFAULT '{}'::TEXT[],
     p_allowed_groups TEXT[] DEFAULT '{}'::TEXT[],
     p_allowed_batches TEXT[] DEFAULT '{}'::TEXT[],
-    p_allowed_programs TEXT[] DEFAULT '{}'::TEXT[]
+    p_allowed_programs TEXT[] DEFAULT '{}'::TEXT[],
+    p_shikho_user_id TEXT DEFAULT ''
 ) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
+    IF NULLIF(TRIM(p_shikho_user_id), '') IS NOT NULL THEN
+        RETURN public.admin_set_account_course_permissions(
+            p_device_hash := p_device_hash,
+            p_shikho_user_id := TRIM(p_shikho_user_id),
+            p_user_phone := '',
+            p_is_access_granted := p_is_restricted,
+            p_is_restricted := p_is_restricted,
+            p_allowed_classes := p_allowed_classes,
+            p_allowed_groups := p_allowed_groups,
+            p_allowed_batches := p_allowed_batches,
+            p_allowed_programs := p_allowed_programs,
+            p_revoke_other_accounts := true
+        );
+    END IF;
+
     UPDATE public.devices
     SET is_access_restricted = COALESCE(p_is_restricted, false),
         allowed_classes = COALESCE(p_allowed_classes, '{}'::TEXT[]),
@@ -842,4 +1155,5 @@ END;
 $$;
 
 GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
 

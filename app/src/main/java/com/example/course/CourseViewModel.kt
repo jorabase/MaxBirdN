@@ -166,11 +166,15 @@ class CourseViewModel(
                     )
                 }
 
-                val enrolled = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                val enrolled = if (!perms.isAccountAuthorized) {
+                    emptyList()
+                } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
                     rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
                 } else rawEnrolled
 
-                val otherAll = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                val otherAll = if (!perms.isAccountAuthorized) {
+                    emptyList()
+                } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
                     rawOtherAll.filter { perms.isProgramAllowed(it.id, it.title_bn) }
                 } else rawOtherAll
 
@@ -193,7 +197,14 @@ class CourseViewModel(
                     val userClassName = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
                     val group = if (perms.isGroupAllowed(rawGroup)) rawGroup else (perms.getPrimaryAllowedGroupCode() ?: rawGroup)
 
-                    if (current.enrolledPrograms.isEmpty() && current.freePrograms.isEmpty() && current.otherPrograms.isEmpty()) {
+                    if (!perms.isAccountAuthorized) {
+                        current.copy(
+                            enrolledPrograms = emptyList(),
+                            freePrograms = emptyList(),
+                            otherPrograms = emptyList(),
+                            isProgramsLoading = false
+                        )
+                    } else if (current.enrolledPrograms.isEmpty() && current.freePrograms.isEmpty() && current.otherPrograms.isEmpty()) {
                         val fbEnrolled = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group)
                             .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
                         val fbFree = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group)
@@ -221,8 +232,8 @@ class CourseViewModel(
     ) {
         viewModelScope.launch {
             val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
-            if (perms.isRestricted && perms.allowedPrograms.isNotEmpty() && !perms.isProgramAllowed(program.id, program.title_bn)) {
-                val msg = "অ্যাডমিন থেকে এই কোর্সের এক্সেস দেওয়া হয়নি।"
+            if (!perms.isAccountAuthorized || (perms.isRestricted && perms.allowedPrograms.isNotEmpty() && !perms.isProgramAllowed(program.id, program.title_bn))) {
+                val msg = "অ্যাডমিন থেকে এই অ্যাকাউন্টে কোর্সটির এক্সেস দেওয়া হয়নি।"
                 if (context != null) {
                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
                 }

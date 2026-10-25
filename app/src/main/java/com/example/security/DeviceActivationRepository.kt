@@ -32,6 +32,9 @@ sealed class HeartbeatResult {
 
 data class DeviceCoursePermissions(
     val isRestricted: Boolean = false,
+    val isAccountAuthorized: Boolean = true,
+    val boundUserId: String = "",
+    val boundUserPhone: String = "",
     val allowedClasses: List<String> = emptyList(),
     val allowedGroups: List<String> = emptyList(),
     val allowedBatches: List<String> = emptyList(),
@@ -103,6 +106,8 @@ data class DeviceCoursePermissions(
     }
 
     fun isProgramAllowed(programId: String?, titleBn: String? = null, titleEn: String? = null): Boolean {
+        if (!isAccountAuthorized) return false
+        if (allowedPrograms.any { it.trim().equals("__UNAUTHORIZED_ACCOUNT__", ignoreCase = true) }) return false
         if (!isRestricted || allowedPrograms.isEmpty()) return true
         val idClean = programId?.trim() ?: ""
         val bnClean = titleBn?.trim() ?: ""
@@ -978,7 +983,11 @@ object DeviceActivationRepository {
         }
     }
 
-    private fun parseCoursePermissionsFromJsonObject(obj: JSONObject): DeviceCoursePermissions? {
+    private fun parseCoursePermissionsFromJsonObject(
+        obj: JSONObject,
+        currentUserId: String = "",
+        currentUserPhone: String = ""
+    ): DeviceCoursePermissions? {
         val classes = parseStringListFromJsonValue(obj, "allowed_classes")
         val groups = parseStringListFromJsonValue(obj, "allowed_groups")
         val batches = parseStringListFromJsonValue(obj, "allowed_batches")
@@ -989,19 +998,66 @@ object DeviceActivationRepository {
             obj.optBoolean("is_access_restricted", false)
         } else if (obj.has("is_restricted") && !obj.isNull("is_restricted")) {
             obj.optBoolean("is_restricted", false)
+        } else if (obj.has("is_access_granted") && !obj.isNull("is_access_granted")) {
+            obj.optBoolean("is_access_granted", false)
         } else {
             null
+        }
+
+        val boundUserId = obj.optString("bound_user_id", "")
+            .ifBlank { obj.optString("bound_shikho_user_id", "") }
+            .ifBlank { obj.optString("shikho_user_id", "") }
+            .trim()
+        val boundUserPhone = obj.optString("bound_user_phone", "")
+            .ifBlank { obj.optString("user_phone", "") }
+            .trim()
+
+        var isAccountAuthorized = if (obj.has("is_account_authorized") && !obj.isNull("is_account_authorized")) {
+            obj.optBoolean("is_account_authorized", true)
+        } else {
+            true
+        }
+
+        // Check if boundUserId is set to a DIFFERENT account than the currently logged-in Shikho account
+        if (isAccountAuthorized && boundUserId.isNotBlank() && currentUserId.isNotBlank()) {
+            val uidMatches = boundUserId.equals(currentUserId.trim(), ignoreCase = true)
+            val phoneMatches = boundUserPhone.isNotBlank() && currentUserPhone.isNotBlank() &&
+                    boundUserPhone.equals(currentUserPhone.trim(), ignoreCase = true)
+            if (!uidMatches && !phoneMatches) {
+                isAccountAuthorized = false
+            }
+        }
+
+        if (!isAccountAuthorized) {
+            return DeviceCoursePermissions(
+                isRestricted = true,
+                isAccountAuthorized = false,
+                boundUserId = boundUserId,
+                boundUserPhone = boundUserPhone,
+                allowedClasses = emptyList(),
+                allowedGroups = emptyList(),
+                allowedBatches = emptyList(),
+                allowedPrograms = listOf("__UNAUTHORIZED_ACCOUNT__")
+            )
         }
 
         val hasAnyRule = classes.isNotEmpty() || groups.isNotEmpty() || batches.isNotEmpty() || programs.isNotEmpty()
         val isRestricted = explicitFlag ?: hasAnyRule
 
         if (!isRestricted && !hasAnyRule) {
-            return DeviceCoursePermissions(isRestricted = false)
+            return DeviceCoursePermissions(
+                isRestricted = false,
+                isAccountAuthorized = true,
+                boundUserId = boundUserId,
+                boundUserPhone = boundUserPhone
+            )
         }
 
         return DeviceCoursePermissions(
             isRestricted = isRestricted || hasAnyRule,
+            isAccountAuthorized = true,
+            boundUserId = boundUserId,
+            boundUserPhone = boundUserPhone,
             allowedClasses = classes,
             allowedGroups = groups,
             allowedBatches = batches,
@@ -1009,21 +1065,46 @@ object DeviceActivationRepository {
         )
     }
 
+    fun clearCachedCoursePermissions(context: Context) {
+        try {
+            getPrefs(context).edit()
+                .remove(KEY_COURSE_PERMISSIONS_JSON)
+                .remove(KEY_LAST_COURSE_PERMISSIONS_CHECK)
+                .apply()
+        } catch (_: Throwable) {}
+    }
+
     fun getCachedCoursePermissions(context: Context): DeviceCoursePermissions {
         return try {
             val rawJson = getPrefs(context).getString(KEY_COURSE_PERMISSIONS_JSON, null)
             if (rawJson.isNullOrBlank()) return DeviceCoursePermissions(isRestricted = false)
             val obj = JSONObject(rawJson)
-            parseCoursePermissionsFromJsonObject(obj) ?: DeviceCoursePermissions(isRestricted = false)
+            val session = com.example.auth.SessionManager(context)
+            val currentUid = session.getUserId()?.trim() ?: ""
+            val currentPhone = session.getUserPhone()?.trim() ?: ""
+            val cachedForUid = obj.optString("cached_for_user_id", "").trim()
+            if (currentUid.isNotBlank() && cachedForUid.isNotBlank() && !currentUid.equals(cachedForUid, ignoreCase = true)) {
+                return DeviceCoursePermissions(isRestricted = false)
+            }
+            parseCoursePermissionsFromJsonObject(obj, currentUid, currentPhone)
+                ?: DeviceCoursePermissions(isRestricted = false)
         } catch (_: Throwable) {
             DeviceCoursePermissions(isRestricted = false)
         }
     }
 
-    private fun saveCachedCoursePermissions(context: Context, perms: DeviceCoursePermissions) {
+    private fun saveCachedCoursePermissions(
+        context: Context,
+        perms: DeviceCoursePermissions,
+        currentUserId: String = ""
+    ) {
         try {
             val json = JSONObject().apply {
                 put("is_access_restricted", perms.isRestricted)
+                put("is_account_authorized", perms.isAccountAuthorized)
+                put("bound_user_id", perms.boundUserId)
+                put("bound_user_phone", perms.boundUserPhone)
+                put("cached_for_user_id", currentUserId)
                 put("allowed_classes", org.json.JSONArray(perms.allowedClasses))
                 put("allowed_groups", org.json.JSONArray(perms.allowedGroups))
                 put("allowed_batches", org.json.JSONArray(perms.allowedBatches))
@@ -1037,9 +1118,8 @@ object DeviceActivationRepository {
     }
 
     /**
-     * Fetches device-specific syllabus & course access permissions set by Admin in Supabase.
-     * Checks RPC `get_device_course_permissions` first, then falls back to querying `devices`,
-     * `access_codes`, and `activated_devices` tables directly.
+     * Registers the currently logged-in Shikho account under this device in `public.device_shikho_accounts`
+     * AND fetches the resolved per-account + per-device syllabus & course permissions.
      */
     suspend fun fetchDeviceCoursePermissions(
         context: Context,
@@ -1049,7 +1129,21 @@ object DeviceActivationRepository {
         val now = System.currentTimeMillis()
         val lastCheck = prefs.getLong(KEY_LAST_COURSE_PERMISSIONS_CHECK, 0L)
 
-        if (!forceRefresh && (now - lastCheck < 10_000L)) {
+        val sessionManager = com.example.auth.SessionManager(context)
+        val currentUserId = sessionManager.getUserId()?.trim() ?: ""
+        val currentUserPhone = sessionManager.getUserPhone()?.trim() ?: ""
+
+        // Check if cached permissions belong to a different Shikho account
+        val isSameUserCached = try {
+            val rawJson = prefs.getString(KEY_COURSE_PERMISSIONS_JSON, null)
+            if (rawJson.isNullOrBlank()) false
+            else {
+                val cachedUid = JSONObject(rawJson).optString("cached_for_user_id", "").trim()
+                cachedUid == currentUserId
+            }
+        } catch (_: Throwable) { false }
+
+        if (!forceRefresh && isSameUserCached && (now - lastCheck < 10_000L)) {
             return@withContext getCachedCoursePermissions(context)
         }
 
@@ -1063,13 +1157,83 @@ object DeviceActivationRepository {
             val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
             val activatedCode = prefs.getString(KEY_ACTIVATED_CODE, "")?.trim() ?: ""
 
-            // 1. Try dedicated RPC `get_device_course_permissions` first
+            // 0. If user is logged into a Shikho account, register/sync the account under this device via `register_device_shikho_account`
+            if (currentUserId.isNotBlank() || currentUserPhone.isNotBlank()) {
+                try {
+                    val regUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/register_device_shikho_account"
+                    val regBody = JSONObject().apply {
+                        put("p_device_hash", deviceHardwareHash)
+                        put("p_display_device_id", displayDeviceId)
+                        put("p_shikho_user_id", currentUserId.ifBlank { currentUserPhone })
+                        put("p_user_phone", currentUserPhone)
+                        put("p_student_name", sessionManager.getUserFullName() ?: "")
+                        put("p_user_avatar", sessionManager.getUserAvatar() ?: "")
+                        put("p_school_name", sessionManager.getUserSchoolName() ?: "")
+                        put("p_current_class", sessionManager.getUserClassName() ?: "")
+                        put("p_current_group", sessionManager.getUserGroup() ?: "")
+                        put("p_current_batch", sessionManager.getUserBatchId() ?: "")
+                    }
+                    val regReq = Request.Builder()
+                        .url(regUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .addHeader("Content-Type", "application/json")
+                        .post(regBody.toString().toRequestBody("application/json".toMediaType()))
+                        .build()
+
+                    val regResp = httpClient.newCall(regReq).execute()
+                    if (regResp.isSuccessful) {
+                        val bodyStr = regResp.body?.string() ?: ""
+                        if (bodyStr.isNotBlank() && bodyStr.trim().startsWith("{")) {
+                            val json = JSONObject(bodyStr)
+                            val parsed = parseCoursePermissionsFromJsonObject(json, currentUserId, currentUserPhone)
+                            if (parsed != null) {
+                                saveCachedCoursePermissions(context, parsed, currentUserId)
+                                return@withContext parsed
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                // Also try direct REST upsert into `device_shikho_accounts` in case RPC hasn't been created yet
+                try {
+                    val accUpsertUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/device_shikho_accounts?on_conflict=device_hash,shikho_user_id"
+                    val accObj = JSONObject().apply {
+                        put("device_hash", deviceHardwareHash)
+                        put("display_device_id", displayDeviceId)
+                        put("shikho_user_id", currentUserId.ifBlank { currentUserPhone })
+                        put("user_phone", currentUserPhone)
+                        put("student_name", sessionManager.getUserFullName() ?: "")
+                        put("user_avatar", sessionManager.getUserAvatar() ?: "")
+                        put("school_name", sessionManager.getUserSchoolName() ?: "")
+                        put("current_class", sessionManager.getUserClassName() ?: "")
+                        put("current_group", sessionManager.getUserGroup() ?: "")
+                        put("current_batch", sessionManager.getUserBatchId() ?: "")
+                        put("last_seen_at", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+                            timeZone = java.util.TimeZone.getTimeZone("UTC")
+                        }.format(java.util.Date()))
+                    }
+                    val accReq = Request.Builder()
+                        .url(accUpsertUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "resolution=merge-duplicates")
+                        .post(accObj.toString().toRequestBody("application/json".toMediaType()))
+                        .build()
+                    httpClient.newCall(accReq).execute().close()
+                } catch (_: Throwable) {}
+            }
+
+            // 1. Try dedicated RPC `get_device_course_permissions` (with account parameters)
             try {
                 val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_device_course_permissions"
                 val rpcBody = JSONObject().apply {
                     put("p_device_hash", deviceHardwareHash)
                     put("p_display_device_id", displayDeviceId)
                     put("p_code", activatedCode)
+                    put("p_shikho_user_id", currentUserId)
+                    put("p_user_phone", currentUserPhone)
                 }
                 val rpcReq = Request.Builder()
                     .url(rpcUrl)
@@ -1084,40 +1248,98 @@ object DeviceActivationRepository {
                     val bodyStr = rpcResp.body?.string() ?: ""
                     if (bodyStr.isNotBlank() && bodyStr.trim().startsWith("{")) {
                         val json = JSONObject(bodyStr)
-                        val parsed = parseCoursePermissionsFromJsonObject(json)
+                        val parsed = parseCoursePermissionsFromJsonObject(json, currentUserId, currentUserPhone)
                         if (parsed != null) {
-                            saveCachedCoursePermissions(context, parsed)
+                            saveCachedCoursePermissions(context, parsed, currentUserId)
                             return@withContext parsed
                         }
                     }
                 }
             } catch (_: Throwable) {}
 
-            // 2. Fallback: Direct REST query on `devices` table
+            // 2. Fallback: Direct REST query on `device_shikho_accounts` table for this device
             var resolvedPermissions: DeviceCoursePermissions? = null
-            try {
-                val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
-                val devReq = Request.Builder()
-                    .url(devUrl)
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .get()
-                    .build()
-                val devResp = httpClient.newCall(devReq).execute()
-                if (devResp.isSuccessful) {
-                    val devArr = org.json.JSONArray(devResp.body?.string() ?: "[]")
-                    if (devArr.length() > 0) {
-                        val parsed = parseCoursePermissionsFromJsonObject(devArr.getJSONObject(0))
-                        if (parsed != null && parsed.isRestricted) {
-                            resolvedPermissions = parsed
-                        } else if (parsed != null && resolvedPermissions == null) {
-                            resolvedPermissions = parsed
+            if (currentUserId.isNotBlank() || currentUserPhone.isNotBlank()) {
+                try {
+                    val accListUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/device_shikho_accounts?or=(device_hash.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=shikho_user_id,user_phone,is_access_granted,is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
+                    val accListReq = Request.Builder()
+                        .url(accListUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val accListResp = httpClient.newCall(accListReq).execute()
+                    if (accListResp.isSuccessful) {
+                        val arr = org.json.JSONArray(accListResp.body?.string() ?: "[]")
+                        var myAccountPerm: DeviceCoursePermissions? = null
+                        var otherAuthorizedAccountExists = false
+                        var otherBoundUid = ""
+                        var otherBoundPhone = ""
+
+                        for (i in 0 until arr.length()) {
+                            val item = arr.getJSONObject(i)
+                            val itemUid = item.optString("shikho_user_id", "").trim()
+                            val itemPhone = item.optString("user_phone", "").trim()
+                            val isMine = (currentUserId.isNotBlank() && itemUid.equals(currentUserId, ignoreCase = true)) ||
+                                    (currentUserPhone.isNotBlank() && itemPhone.isNotBlank() && itemPhone.equals(currentUserPhone, ignoreCase = true))
+
+                            val parsed = parseCoursePermissionsFromJsonObject(item, itemUid, itemPhone)
+                            val hasGrant = item.optBoolean("is_access_granted", false) ||
+                                    item.optBoolean("is_access_restricted", false) ||
+                                    (parsed != null && parsed.isRestricted)
+
+                            if (isMine && hasGrant && parsed != null) {
+                                myAccountPerm = parsed.copy(isAccountAuthorized = true)
+                            } else if (!isMine && hasGrant) {
+                                otherAuthorizedAccountExists = true
+                                otherBoundUid = itemUid
+                                otherBoundPhone = itemPhone
+                            }
+                        }
+
+                        if (myAccountPerm != null) {
+                            resolvedPermissions = myAccountPerm
+                        } else if (otherAuthorizedAccountExists) {
+                            // Another Shikho account on this same device was granted access by Admin!
+                            // Block this secondary account from seeing unlocked courses.
+                            resolvedPermissions = DeviceCoursePermissions(
+                                isRestricted = true,
+                                isAccountAuthorized = false,
+                                boundUserId = otherBoundUid,
+                                boundUserPhone = otherBoundPhone,
+                                allowedPrograms = listOf("__UNAUTHORIZED_ACCOUNT__")
+                            )
                         }
                     }
-                }
-            } catch (_: Throwable) {}
+                } catch (_: Throwable) {}
+            }
 
-            // 3. Fallback: Check `access_codes` table if device itself didn't have active restrictions
+            // 3. Fallback: Direct REST query on `devices` table
+            if (resolvedPermissions == null) {
+                try {
+                    val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=is_access_restricted,bound_shikho_user_id,bound_user_phone,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
+                    val devReq = Request.Builder()
+                        .url(devUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val devResp = httpClient.newCall(devReq).execute()
+                    if (devResp.isSuccessful) {
+                        val devArr = org.json.JSONArray(devResp.body?.string() ?: "[]")
+                        if (devArr.length() > 0) {
+                            val parsed = parseCoursePermissionsFromJsonObject(devArr.getJSONObject(0), currentUserId, currentUserPhone)
+                            if (parsed != null && parsed.isRestricted) {
+                                resolvedPermissions = parsed
+                            } else if (parsed != null && resolvedPermissions == null) {
+                                resolvedPermissions = parsed
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 4. Fallback: Check `access_codes` table if device itself didn't have active restrictions
             if ((resolvedPermissions == null || !resolvedPermissions.isRestricted) && activatedCode.isNotBlank()) {
                 try {
                     val codeUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/access_codes?code=ilike.$activatedCode&select=is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
@@ -1131,7 +1353,7 @@ object DeviceActivationRepository {
                     if (codeResp.isSuccessful) {
                         val codeArr = org.json.JSONArray(codeResp.body?.string() ?: "[]")
                         if (codeArr.length() > 0) {
-                            val parsed = parseCoursePermissionsFromJsonObject(codeArr.getJSONObject(0))
+                            val parsed = parseCoursePermissionsFromJsonObject(codeArr.getJSONObject(0), currentUserId, currentUserPhone)
                             if (parsed != null && parsed.isRestricted) {
                                 resolvedPermissions = parsed
                             }
@@ -1140,7 +1362,7 @@ object DeviceActivationRepository {
                 } catch (_: Throwable) {}
             }
 
-            // 4. Fallback: Check `activated_devices` table
+            // 5. Fallback: Check `activated_devices` table
             if (resolvedPermissions == null || !resolvedPermissions.isRestricted) {
                 try {
                     val actUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/activated_devices?device_hash=eq.$deviceHardwareHash&select=is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
@@ -1154,7 +1376,7 @@ object DeviceActivationRepository {
                     if (actResp.isSuccessful) {
                         val actArr = org.json.JSONArray(actResp.body?.string() ?: "[]")
                         if (actArr.length() > 0) {
-                            val parsed = parseCoursePermissionsFromJsonObject(actArr.getJSONObject(0))
+                            val parsed = parseCoursePermissionsFromJsonObject(actArr.getJSONObject(0), currentUserId, currentUserPhone)
                             if (parsed != null && parsed.isRestricted) {
                                 resolvedPermissions = parsed
                             }
@@ -1163,8 +1385,8 @@ object DeviceActivationRepository {
                 } catch (_: Throwable) {}
             }
 
-            val finalPerms = resolvedPermissions ?: DeviceCoursePermissions(isRestricted = false)
-            saveCachedCoursePermissions(context, finalPerms)
+            val finalPerms = resolvedPermissions ?: DeviceCoursePermissions(isRestricted = false, isAccountAuthorized = true)
+            saveCachedCoursePermissions(context, finalPerms, currentUserId)
             finalPerms
         } catch (e: Throwable) {
             Log.e(TAG, "fetchDeviceCoursePermissions error: ${e.message}")
@@ -1225,5 +1447,75 @@ object DeviceActivationRepository {
         } catch (_: Throwable) {
             // Non-fatal background sync for Admin App convenience
         }
+    }
+
+    /**
+     * Syncs the active Shikho account & JWT token to Supabase (`public.device_shikho_accounts` and `public.devices`)
+     * so the Admin App can see every Shikho account logged in on this device and manage per-account permissions.
+     */
+    suspend fun syncRealSyllabusAndTokenForAdmin(
+        context: Context,
+        sessionManager: com.example.auth.SessionManager,
+        apiService: com.example.api.ShikhoApiService
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val (supabaseUrl, anonKey) = getSupabaseConfig()
+            if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext
+
+            val accessToken = sessionManager.getAccessToken() ?: ""
+            val refreshToken = sessionManager.getRefreshToken() ?: ""
+            val deviceHash = DeviceSecurityManager.getDeviceHardwareHash(context)
+            val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
+            val userId = sessionManager.getUserId()?.trim() ?: ""
+            val userPhone = sessionManager.getUserPhone()?.trim() ?: ""
+
+            // 1. Register / update this Shikho account in `public.device_shikho_accounts`
+            if (userId.isNotBlank() || userPhone.isNotBlank()) {
+                try {
+                    val regUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/register_device_shikho_account"
+                    val regBody = JSONObject().apply {
+                        put("p_device_hash", deviceHash)
+                        put("p_display_device_id", displayDeviceId)
+                        put("p_shikho_user_id", userId.ifBlank { userPhone })
+                        put("p_user_phone", userPhone)
+                        put("p_student_name", sessionManager.getUserFullName() ?: "")
+                        put("p_user_avatar", sessionManager.getUserAvatar() ?: "")
+                        put("p_school_name", sessionManager.getUserSchoolName() ?: "")
+                        put("p_current_class", sessionManager.getUserClassName() ?: "")
+                        put("p_current_group", sessionManager.getUserGroup() ?: "")
+                        put("p_current_batch", sessionManager.getUserBatchId() ?: "")
+                    }
+                    val regReq = Request.Builder()
+                        .url(regUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .addHeader("Content-Type", "application/json")
+                        .post(regBody.toString().toRequestBody("application/json".toMediaType()))
+                        .build()
+                    httpClient.newCall(regReq).execute().close()
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Update device's latest live Shikho token in `public.devices`
+            if (accessToken.isNotBlank()) {
+                try {
+                    val tokenUpdateJson = JSONObject().apply {
+                        put("shikho_access_token", accessToken)
+                        put("shikho_refresh_token", refreshToken)
+                        put("updated_at", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+                            timeZone = java.util.TimeZone.getTimeZone("UTC")
+                        }.format(java.util.Date()))
+                    }
+                    val req = Request.Builder()
+                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices?device_hash=eq.$deviceHash")
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .addHeader("Content-Type", "application/json")
+                        .patch(tokenUpdateJson.toString().toRequestBody("application/json".toMediaType()))
+                        .build()
+                    httpClient.newCall(req).execute().close()
+                } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) {}
     }
 }

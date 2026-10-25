@@ -468,10 +468,19 @@ class ChangeSyllabusViewModel(
                     avatar = sessionManager.getUserAvatar(),
                     schoolName = sessionManager.getUserSchoolName(),
                     // FIX #4: Settings-এর সাথে consistent বাংলা ordinal নাম
-                    classDisplay = selectedClass.bengaliClassName()
+                    classDisplay = selectedClass.bengaliClassName(),
+                    phone = sessionManager.getUserPhone()
                 )
 
                 sessionManager.clearActiveProgram()
+
+                try {
+                    com.example.security.DeviceActivationRepository.syncRealSyllabusAndTokenForAdmin(
+                        context = context,
+                        sessionManager = sessionManager,
+                        apiService = apiService
+                    )
+                } catch (_: Throwable) {}
 
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,

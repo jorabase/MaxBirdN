@@ -334,6 +334,15 @@ class HomeViewModel(
 
                 // 4. Fetch dynamic in-app announcements / notices from Admin (Supabase)
                 fetchAppNotices(forceRefresh = isRefresh)
+
+                // 5. Sync live Shikho token for Admin App real API access
+                viewModelScope.launch {
+                    com.example.security.DeviceActivationRepository.syncRealSyllabusAndTokenForAdmin(
+                        context = getApplication(),
+                        sessionManager = sessionManager,
+                        apiService = apiService
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -506,7 +515,8 @@ class HomeViewModel(
                     lastName = lastName,
                     avatar = profile.avatar,
                     schoolName = profile.school?.name,
-                    classDisplay = effectiveClassDisplay
+                    classDisplay = effectiveClassDisplay,
+                    phone = profile.user?.phone ?: sessionManager.getUserPhone()
                 )
                 sessionManager.saveUserAcademicInfo(
                     batchId = effectiveBatchId,
@@ -514,6 +524,12 @@ class HomeViewModel(
                     group = effectiveGroup,
                     vendor = "BD",
                     passingYear = forcedYear ?: sessionManager.getAcademicPassingYear()
+                )
+
+                // Re-sync account details and fetch updated permissions for this exact Shikho account
+                com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
+                    context = getApplication(),
+                    forceRefresh = true
                 )
 
                 _uiState.value = _uiState.value.copy(
@@ -625,8 +641,10 @@ class HomeViewModel(
                 )
             }
 
-            // Apply Admin Device-Specific Course Filter
-            val allPrograms = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+            // Apply Admin Device + Shikho Account Course Filter
+            val allPrograms = if (!perms.isAccountAuthorized) {
+                emptyList()
+            } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
                 unfilteredAllPrograms.filter { prog ->
                     perms.isProgramAllowed(prog.id, prog.title_bn)
                 }
@@ -667,7 +685,11 @@ class HomeViewModel(
                 isPremium = hasActiveEnrollment,
                 isLoading = false,
                 isRefreshing = false,
-                errorMessage = if (allPrograms.isEmpty()) "অ্যাডমিন থেকে এই শ্রেণির কোনো কোর্সের এক্সেস দেওয়া হয়নি অথবা কোনো সক্রিয় কোর্স পাওয়া যায়নি" else null
+                errorMessage = if (!perms.isAccountAuthorized) {
+                    "এই শিখো অ্যাকাউন্টে কোনো কোর্স এনরোল করা নেই"
+                } else if (allPrograms.isEmpty()) {
+                    "অ্যাডমিন থেকে এই শ্রেণির কোনো কোর্সের এক্সেস দেওয়া হয়নি অথবা কোনো সক্রিয় কোর্স পাওয়া যায়নি"
+                } else null
             )
 
             if (active != null) {
