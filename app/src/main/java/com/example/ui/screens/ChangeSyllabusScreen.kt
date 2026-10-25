@@ -389,9 +389,11 @@ fun ChangeSyllabusScreen(
 
             // ===== 2. Group Section =====
             if (uiState.isGroupRequiredForSelectedClass) {
-                val groups = uiState.selectedClass?.groups
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: viewModel.standardStudyGroups
+                val groups = uiState.availableGroups.ifEmpty {
+                    uiState.selectedClass?.groups
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: viewModel.standardStudyGroups
+                }
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(

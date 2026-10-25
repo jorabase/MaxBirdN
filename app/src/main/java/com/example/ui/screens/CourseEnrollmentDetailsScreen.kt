@@ -66,8 +66,13 @@ fun CourseEnrollmentDetailsScreen(
 
     LaunchedEffect(Unit) {
         isLoading = true
+        val perms = com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
+            context = context,
+            forceRefresh = false
+        )
         try {
-            val className = sessionManager.getUserClassName() ?: "C11"
+            val rawClassName = sessionManager.getUserClassName() ?: "C11"
+            val className = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
             val query = GraphQlQuery(
                 operationName = "GetEnrolledAcademicProgram",
                 query = """
@@ -89,7 +94,10 @@ fun CourseEnrollmentDetailsScreen(
             )
 
             val response = apiService.getAcademicProgram(query)
-            val enrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
+            val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
+            val enrolled = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
+            } else rawEnrolled
 
             if (enrolled.isNotEmpty()) {
                 val list = mutableListOf<EnrollmentProgramDisplay>()
@@ -155,8 +163,12 @@ fun CourseEnrollmentDetailsScreen(
             // Error handling fallback
         } finally {
             if (programsList.isEmpty()) {
-                // Fallback default sample data matching user's exact screenshot
-                programsList = getFallbackEnrollmentPrograms()
+                val fb = getFallbackEnrollmentPrograms()
+                programsList = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                    fb.filter { perms.isProgramAllowed(it.id, it.titleBn) }
+                } else {
+                    fb
+                }
             }
             isLoading = false
         }

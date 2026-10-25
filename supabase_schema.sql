@@ -16,7 +16,7 @@ BEGIN
     FOR r IN (
         SELECT oid::regprocedure AS func_signature 
         FROM pg_proc 
-        WHERE proname IN ('activate_device', 'check_device_status', 'verify_device_heartbeat', 'admin_toggle_device_ban', 'create_access_code', 'upsert_user_gemini_api_key', 'get_user_gemini_api_key')
+        WHERE proname IN ('activate_device', 'check_device_status', 'verify_device_heartbeat', 'admin_toggle_device_ban', 'create_access_code', 'upsert_user_gemini_api_key', 'get_user_gemini_api_key', 'get_device_course_permissions', 'admin_set_device_course_permissions')
           AND pronamespace = 'public'::regnamespace
     ) LOOP
         EXECUTE 'DROP FUNCTION IF EXISTS ' || r.func_signature || ' CASCADE';
@@ -663,6 +663,181 @@ BEGIN
     END IF;
 
     RETURN json_build_object('found', false);
+END;
+$$;
+
+-- ========================================================
+-- ১৫. DEVICE-SPECIFIC GRANULAR SYLLABUS & COURSE ACCESS CONTROL
+-- (অ্যাডমিন অ্যাপ থেকে যেকোনো ডিভাইস সিলেক্ট করে নির্দিষ্ট শ্রেণি, বিভাগ, ব্যাচ এবং কোর্স লক/এক্সেস দেওয়ার সিস্টেম)
+-- ========================================================
+
+-- ১৫.১ বিদ্যমান টেবিলগুলোতে নতুন পারমিশন কলাম যুক্ত করা
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS is_access_restricted BOOLEAN DEFAULT false;
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_classes TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_groups TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_batches TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.devices ADD COLUMN IF NOT EXISTS allowed_programs TEXT[] DEFAULT '{}'::TEXT[];
+
+ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS is_access_restricted BOOLEAN DEFAULT false;
+ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS allowed_classes TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS allowed_groups TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS allowed_batches TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.access_codes ADD COLUMN IF NOT EXISTS allowed_programs TEXT[] DEFAULT '{}'::TEXT[];
+
+ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS is_access_restricted BOOLEAN DEFAULT false;
+ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_classes TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_groups TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_batches TEXT[] DEFAULT '{}'::TEXT[];
+ALTER TABLE public.activated_devices ADD COLUMN IF NOT EXISTS allowed_programs TEXT[] DEFAULT '{}'::TEXT[];
+
+-- ১৫.২ কোর্স ক্যাটালগ টেবিল (যাতে অ্যাডমিন অ্যাপে ড্রপডাউন/চেকবক্সে সব কোর্সের নাম ও আইডি দেখা যায়)
+CREATE TABLE IF NOT EXISTS public.available_courses_catalog (
+    program_id TEXT PRIMARY KEY,
+    title_bn TEXT NOT NULL,
+    class_code TEXT DEFAULT '',
+    group_code TEXT DEFAULT 'None',
+    batch_id TEXT DEFAULT '',
+    banner_url TEXT DEFAULT '',
+    is_free BOOLEAN DEFAULT false,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE public.available_courses_catalog ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all access available_courses_catalog" ON public.available_courses_catalog;
+CREATE POLICY "Allow all access available_courses_catalog" ON public.available_courses_catalog
+FOR ALL TO anon, authenticated
+USING (true)
+WITH CHECK (true);
+
+GRANT ALL ON TABLE public.available_courses_catalog TO anon, authenticated, service_role;
+
+-- ১৫.৩ স্টুডেন্ট অ্যাপের জন্য ডিভাইসের কোর্স পারমিশন রিড করার RPC
+CREATE OR REPLACE FUNCTION public.get_device_course_permissions(
+    p_device_hash TEXT,
+    p_display_device_id TEXT DEFAULT '',
+    p_code TEXT DEFAULT ''
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_dev RECORD;
+    v_code RECORD;
+    v_act RECORD;
+BEGIN
+    -- ১. প্রথমে public.devices টেবিল চেক করা (ডিভাইস-লেভেল পারমিশন সর্বোচ্চ অগ্রাধিকার পাবে)
+    SELECT is_access_restricted, allowed_classes, allowed_groups, allowed_batches, allowed_programs
+    INTO v_dev
+    FROM public.devices
+    WHERE device_hash = p_device_hash
+       OR (NULLIF(TRIM(p_display_device_id), '') IS NOT NULL AND display_device_id = TRIM(p_display_device_id))
+    ORDER BY is_access_restricted DESC, updated_at DESC
+    LIMIT 1;
+
+    IF FOUND AND (
+        v_dev.is_access_restricted = true
+        OR COALESCE(array_length(v_dev.allowed_classes, 1), 0) > 0
+        OR COALESCE(array_length(v_dev.allowed_groups, 1), 0) > 0
+        OR COALESCE(array_length(v_dev.allowed_batches, 1), 0) > 0
+        OR COALESCE(array_length(v_dev.allowed_programs, 1), 0) > 0
+    ) THEN
+        RETURN json_build_object(
+            'is_access_restricted', true,
+            'allowed_classes', COALESCE(v_dev.allowed_classes, '{}'::TEXT[]),
+            'allowed_groups', COALESCE(v_dev.allowed_groups, '{}'::TEXT[]),
+            'allowed_batches', COALESCE(v_dev.allowed_batches, '{}'::TEXT[]),
+            'allowed_programs', COALESCE(v_dev.allowed_programs, '{}'::TEXT[])
+        );
+    END IF;
+
+    -- ২. যদি ডিভাইসে না থাকে, তবে ব্যবহৃত access_codes টেবিল চেক করা
+    IF NULLIF(TRIM(p_code), '') IS NOT NULL THEN
+        SELECT is_access_restricted, allowed_classes, allowed_groups, allowed_batches, allowed_programs
+        INTO v_code
+        FROM public.access_codes
+        WHERE UPPER(code) = UPPER(TRIM(p_code))
+        LIMIT 1;
+
+        IF FOUND AND (
+            v_code.is_access_restricted = true
+            OR COALESCE(array_length(v_code.allowed_classes, 1), 0) > 0
+            OR COALESCE(array_length(v_code.allowed_groups, 1), 0) > 0
+            OR COALESCE(array_length(v_code.allowed_batches, 1), 0) > 0
+            OR COALESCE(array_length(v_code.allowed_programs, 1), 0) > 0
+        ) THEN
+            RETURN json_build_object(
+                'is_access_restricted', true,
+                'allowed_classes', COALESCE(v_code.allowed_classes, '{}'::TEXT[]),
+                'allowed_groups', COALESCE(v_code.allowed_groups, '{}'::TEXT[]),
+                'allowed_batches', COALESCE(v_code.allowed_batches, '{}'::TEXT[]),
+                'allowed_programs', COALESCE(v_code.allowed_programs, '{}'::TEXT[])
+            );
+        END IF;
+    END IF;
+
+    -- ৩. activated_devices টেবিল চেক করা
+    SELECT is_access_restricted, allowed_classes, allowed_groups, allowed_batches, allowed_programs
+    INTO v_act
+    FROM public.activated_devices
+    WHERE device_hash = p_device_hash
+    ORDER BY is_access_restricted DESC, activated_at DESC
+    LIMIT 1;
+
+    IF FOUND AND (
+        v_act.is_access_restricted = true
+        OR COALESCE(array_length(v_act.allowed_classes, 1), 0) > 0
+        OR COALESCE(array_length(v_act.allowed_groups, 1), 0) > 0
+        OR COALESCE(array_length(v_act.allowed_batches, 1), 0) > 0
+        OR COALESCE(array_length(v_act.allowed_programs, 1), 0) > 0
+    ) THEN
+        RETURN json_build_object(
+            'is_access_restricted', true,
+            'allowed_classes', COALESCE(v_act.allowed_classes, '{}'::TEXT[]),
+            'allowed_groups', COALESCE(v_act.allowed_groups, '{}'::TEXT[]),
+            'allowed_batches', COALESCE(v_act.allowed_batches, '{}'::TEXT[]),
+            'allowed_programs', COALESCE(v_act.allowed_programs, '{}'::TEXT[])
+        );
+    END IF;
+
+    RETURN json_build_object(
+        'is_access_restricted', false,
+        'allowed_classes', '{}'::TEXT[],
+        'allowed_groups', '{}'::TEXT[],
+        'allowed_batches', '{}'::TEXT[],
+        'allowed_programs', '{}'::TEXT[]
+    );
+END;
+$$;
+
+-- ১৫.৪ অ্যাডমিন অ্যাপ থেকে ডিভাইসের কোর্স পারমিশন সেট/আপডেট করার RPC
+CREATE OR REPLACE FUNCTION public.admin_set_device_course_permissions(
+    p_device_hash TEXT,
+    p_is_restricted BOOLEAN,
+    p_allowed_classes TEXT[] DEFAULT '{}'::TEXT[],
+    p_allowed_groups TEXT[] DEFAULT '{}'::TEXT[],
+    p_allowed_batches TEXT[] DEFAULT '{}'::TEXT[],
+    p_allowed_programs TEXT[] DEFAULT '{}'::TEXT[]
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.devices
+    SET is_access_restricted = COALESCE(p_is_restricted, false),
+        allowed_classes = COALESCE(p_allowed_classes, '{}'::TEXT[]),
+        allowed_groups = COALESCE(p_allowed_groups, '{}'::TEXT[]),
+        allowed_batches = COALESCE(p_allowed_batches, '{}'::TEXT[]),
+        allowed_programs = COALESCE(p_allowed_programs, '{}'::TEXT[]),
+        updated_at = now()
+    WHERE device_hash = p_device_hash OR display_device_id = p_device_hash;
+
+    UPDATE public.activated_devices
+    SET is_access_restricted = COALESCE(p_is_restricted, false),
+        allowed_classes = COALESCE(p_allowed_classes, '{}'::TEXT[]),
+        allowed_groups = COALESCE(p_allowed_groups, '{}'::TEXT[]),
+        allowed_batches = COALESCE(p_allowed_batches, '{}'::TEXT[]),
+        allowed_programs = COALESCE(p_allowed_programs, '{}'::TEXT[])
+    WHERE device_hash = p_device_hash;
+
+    RETURN json_build_object(
+        'success', true,
+        'message', 'ডিভাইসের কোর্স ও সিলেবাস পারমিশন সফলভাবে আপডেট করা হয়েছে!'
+    );
 END;
 $$;
 

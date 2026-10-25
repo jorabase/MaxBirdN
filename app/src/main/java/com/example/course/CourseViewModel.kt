@@ -121,10 +121,30 @@ class CourseViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isProgramsLoading = true) }
             try {
-                val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
-                val userClassName = sessionManager.getUserClassName() ?: "C11"
-                val group = sessionManager.getUserGroup() ?: "Humanities"
+                val perms = com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
+                    context = sessionManager.appContext,
+                    forceRefresh = false
+                )
+
+                val rawBatchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
+                val rawClassName = sessionManager.getUserClassName() ?: "C11"
+                val rawGroup = sessionManager.getUserGroup() ?: "Humanities"
                 val vendor = sessionManager.getUserVendor() ?: "BD"
+
+                val userClassName = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
+                val group = if (perms.isGroupAllowed(rawGroup)) rawGroup else (perms.getPrimaryAllowedGroupCode() ?: rawGroup)
+                val batchId = if (perms.isBatchAllowed(sessionManager.getAcademicPassingYear(), rawBatchId)) {
+                    rawBatchId
+                } else {
+                    val forcedYear = perms.getPrimaryAllowedBatchYear()
+                    if (!forcedYear.isNullOrBlank()) {
+                        when {
+                            userClassName.equals("C11", true) || userClassName.equals("C12", true) -> "HSC $forcedYear"
+                            userClassName.equals("C9", true) || userClassName.equals("C10", true) -> "SSC $forcedYear"
+                            else -> forcedYear
+                        }
+                    } else rawBatchId
+                }
 
                 val response = repository.getAcademicProgramByEnrollment(
                     batchId = batchId,
@@ -132,8 +152,27 @@ class CourseViewModel(
                     group = group,
                     vendor = vendor
                 )
-                val enrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
-                val otherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
+                val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
+                val rawOtherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
+
+                // Sync discovered courses to Supabase catalog for Admin App convenience
+                viewModelScope.launch {
+                    val combinedForCatalog = (rawEnrolled + rawOtherAll.map { it.toEnrolledProgram() }).distinctBy { it.id }
+                    com.example.security.DeviceActivationRepository.syncCourseCatalogToSupabase(
+                        programs = combinedForCatalog,
+                        classCode = userClassName,
+                        groupCode = group,
+                        batchId = batchId
+                    )
+                }
+
+                val enrolled = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                    rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
+                } else rawEnrolled
+
+                val otherAll = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                    rawOtherAll.filter { perms.isProgramAllowed(it.id, it.title_bn) }
+                } else rawOtherAll
 
                 val freeList = otherAll.filter { it.is_free == true }
                 val paidOtherList = otherAll.filter { it.is_free != true }
@@ -147,14 +186,24 @@ class CourseViewModel(
                     )
                 }
             } catch (e: Exception) {
+                val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
                 _uiState.update { current ->
-                    val userClassName = sessionManager.getUserClassName() ?: "C11"
-                    val group = sessionManager.getUserGroup() ?: "Humanities"
+                    val rawClassName = sessionManager.getUserClassName() ?: "C11"
+                    val rawGroup = sessionManager.getUserGroup() ?: "Humanities"
+                    val userClassName = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
+                    val group = if (perms.isGroupAllowed(rawGroup)) rawGroup else (perms.getPrimaryAllowedGroupCode() ?: rawGroup)
+
                     if (current.enrolledPrograms.isEmpty() && current.freePrograms.isEmpty() && current.otherPrograms.isEmpty()) {
+                        val fbEnrolled = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group)
+                            .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
+                        val fbFree = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group)
+                            .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
+                        val fbOther = CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group)
+                            .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
                         current.copy(
-                            enrolledPrograms = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group),
-                            freePrograms = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group),
-                            otherPrograms = CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group),
+                            enrolledPrograms = fbEnrolled,
+                            freePrograms = fbFree,
+                            otherPrograms = fbOther,
                             isProgramsLoading = false
                         )
                     } else {
@@ -171,6 +220,16 @@ class CourseViewModel(
         onEnrollmentSuccess: ((EnrolledProgram) -> Unit)? = null
     ) {
         viewModelScope.launch {
+            val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
+            if (perms.isRestricted && perms.allowedPrograms.isNotEmpty() && !perms.isProgramAllowed(program.id, program.title_bn)) {
+                val msg = "অ্যাডমিন থেকে এই কোর্সের এক্সেস দেওয়া হয়নি।"
+                if (context != null) {
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                _uiState.update { it.copy(enrollingProgramId = null, enrollmentErrorMessage = msg) }
+                return@launch
+            }
+
             _uiState.update {
                 it.copy(
                     enrollingProgramId = program.id,
@@ -219,8 +278,15 @@ class CourseViewModel(
                         group = group,
                         vendor = vendor
                     )
-                    val enrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
-                    val otherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
+                    val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
+                    val rawOtherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
+                    val enrolled = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                        rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
+                    } else rawEnrolled
+                    val otherAll = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                        rawOtherAll.filter { perms.isProgramAllowed(it.id, it.title_bn) }
+                    } else rawOtherAll
+
                     val freeList = otherAll.filter { it.is_free == true }
                     val paidOtherList = otherAll.filter { it.is_free != true }
 

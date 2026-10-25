@@ -315,9 +315,15 @@ class HomeViewModel(
             }
 
             try {
+                // 0. Fetch device-level syllabus & course permissions first so profile & programs adhere to admin rules
+                com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
+                    context = getApplication(),
+                    forceRefresh = true
+                )
+
                 val j1 = viewModelScope.launch { fetchUserProfile() }
-                val j2 = viewModelScope.launch { fetchAcademicPrograms() }
                 j1.join()
+                val j2 = viewModelScope.launch { fetchAcademicPrograms() }
                 j2.join()
 
                 // 3. Fetch Weekly Routine for active program
@@ -363,8 +369,75 @@ class HomeViewModel(
         }
     }
 
+    private fun classCodeToBengaliName(code: String?): String {
+        return when (code?.trim()?.uppercase()) {
+            "C5", "C05" -> "পঞ্চম শ্রেণি"
+            "C6", "C06" -> "ষষ্ঠ শ্রেণি"
+            "C7", "C07" -> "সপ্তম শ্রেণি"
+            "C8", "C08" -> "অষ্টম শ্রেণি"
+            "C9", "C09" -> "নবম শ্রেণি"
+            "C10" -> "দশম শ্রেণি"
+            "C11" -> "একাদশ শ্রেণি"
+            "C12" -> "দ্বাদশ শ্রেণি"
+            else -> code ?: "একাদশ শ্রেণি"
+        }
+    }
+
+    private suspend fun enforceSyllabusLockOnBackendIfNeeded(
+        targetClassCode: String,
+        targetGroupCode: String?,
+        targetPassingYear: String?
+    ) {
+        try {
+            val isGroupRequired = targetClassCode.uppercase() !in listOf("C5", "C6", "C7", "C8", "C05", "C06", "C07", "C08")
+            val variables = mutableMapOf<String, Any?>("userclass" to targetClassCode)
+            if (isGroupRequired && !targetGroupCode.isNullOrBlank() && !targetGroupCode.equals("None", ignoreCase = true)) {
+                variables["study_group"] = targetGroupCode
+            }
+            val changeSyllabusQuery = GraphQlQuery(
+                operationName = "ChangeSyllabus",
+                query = """
+                    mutation ChangeSyllabus(${'$'}study_group: StudyGroupTypeEnum, ${'$'}userclass: ClassEnumCommon) {
+                      changeSyllabus(study_group: ${'$'}study_group, class: ${'$'}userclass) {
+                        access_token
+                        id_token
+                        refresh_token
+                      }
+                    }
+                """.trimIndent(),
+                variables = variables
+            )
+            val changeResponse = apiService.changeSyllabus(changeSyllabusQuery)
+            val tokenPayload = changeResponse.data?.changeSyllabus
+            if (tokenPayload != null && !tokenPayload.access_token.isNullOrBlank()) {
+                sessionManager.updateAuthTokens(
+                    accessToken = tokenPayload.access_token,
+                    refreshToken = tokenPayload.refresh_token,
+                    idToken = tokenPayload.id_token
+                )
+            }
+            if (!targetPassingYear.isNullOrBlank()) {
+                try {
+                    val updateExamQuery = GraphQlQuery(
+                        operationName = "UpdateExamYear",
+                        query = """
+                            mutation UpdateExamYear(${'$'}passing_year: String, ${'$'}type: PrimaryUserTypeEnum!) {
+                              updateProfile(passing_year: ${'$'}passing_year, type: ${'$'}type) {
+                                passing_year
+                              }
+                            }
+                        """.trimIndent(),
+                        variables = mapOf("passing_year" to targetPassingYear, "type" to "student")
+                    )
+                    apiService.updateExamYear(updateExamQuery)
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+    }
+
     private suspend fun fetchUserProfile() {
         try {
+            val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(getApplication())
             val userId = sessionManager.getUserId() ?: ""
             val profileQuery = GraphQlQuery(
                 operationName = "GetProfile",
@@ -392,21 +465,55 @@ class HomeViewModel(
                 }
 
                 val currentBatchId = sessionManager.getUserBatchId()
-                val profileClass = profile.`class`?.code ?: sessionManager.getUserClassName() ?: "C11"
-                val profileGroup = profile.study_group ?: sessionManager.getUserGroup() ?: "Humanities"
+                val rawProfileClass = profile.`class`?.code ?: sessionManager.getUserClassName() ?: "C11"
+                val rawProfileGroup = profile.study_group ?: sessionManager.getUserGroup() ?: "Humanities"
+
+                // Check if device permissions override / lock the student's class, group, or batch
+                val isClassAllowed = perms.isClassAllowed(rawProfileClass, profile.`class`?.display)
+                val isGroupAllowed = perms.isGroupAllowed(rawProfileGroup)
+                val isBatchAllowed = perms.isBatchAllowed(sessionManager.getAcademicPassingYear(), currentBatchId)
+
+                val effectiveClass = if (isClassAllowed) rawProfileClass else (perms.getPrimaryAllowedClassCode() ?: rawProfileClass)
+                val effectiveGroup = if (isGroupAllowed) rawProfileGroup else (perms.getPrimaryAllowedGroupCode() ?: rawProfileGroup)
+                val forcedYear = if (!isBatchAllowed) perms.getPrimaryAllowedBatchYear() else null
+
+                val effectiveBatchId = if (forcedYear != null) {
+                    when {
+                        effectiveClass.equals("C11", true) || effectiveClass.equals("C12", true) -> "HSC $forcedYear"
+                        effectiveClass.equals("C9", true) || effectiveClass.equals("C10", true) -> "SSC $forcedYear"
+                        else -> forcedYear
+                    }
+                } else {
+                    currentBatchId ?: "HSC 2027"
+                }
+
+                if (!isClassAllowed || !isGroupAllowed || forcedYear != null) {
+                    enforceSyllabusLockOnBackendIfNeeded(
+                        targetClassCode = effectiveClass,
+                        targetGroupCode = effectiveGroup,
+                        targetPassingYear = forcedYear
+                    )
+                }
+
+                val effectiveClassDisplay = if (effectiveClass.equals(rawProfileClass, ignoreCase = true)) {
+                    profile.`class`?.display ?: classCodeToBengaliName(effectiveClass)
+                } else {
+                    classCodeToBengaliName(effectiveClass)
+                }
 
                 sessionManager.saveUserProfile(
                     firstName = firstName.ifBlank { first },
                     lastName = lastName,
                     avatar = profile.avatar,
                     schoolName = profile.school?.name,
-                    classDisplay = profile.`class`?.display ?: profile.`class`?.code
+                    classDisplay = effectiveClassDisplay
                 )
                 sessionManager.saveUserAcademicInfo(
-                    batchId = currentBatchId ?: "HSC 2027",
-                    className = profileClass,
-                    group = profileGroup,
-                    vendor = "BD"
+                    batchId = effectiveBatchId,
+                    className = effectiveClass,
+                    group = effectiveGroup,
+                    vendor = "BD",
+                    passingYear = forcedYear ?: sessionManager.getAcademicPassingYear()
                 )
 
                 _uiState.value = _uiState.value.copy(
@@ -414,8 +521,8 @@ class HomeViewModel(
                     userName = fullName.ifBlank { first },
                     userFirstName = first,
                     userAvatar = profile.avatar,
-                    userClass = profile.`class`?.display ?: profile.`class`?.code ?: "একাদশ শ্রেণি",
-                    userGroup = profileGroup,
+                    userClass = effectiveClassDisplay,
+                    userGroup = effectiveGroup,
                     userSchool = profile.school?.name ?: ""
                 )
             }
@@ -425,10 +532,50 @@ class HomeViewModel(
     }
 
     private suspend fun fetchAcademicPrograms() {
-        val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
-        val className = sessionManager.getUserClassName() ?: "C11"
-        val group = sessionManager.getUserGroup() ?: "Humanities"
+        val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(getApplication())
+        val rawClassName = sessionManager.getUserClassName() ?: "C11"
+        val rawGroup = sessionManager.getUserGroup() ?: "Humanities"
+        val rawBatchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
         val vendor = sessionManager.getUserVendor() ?: "BD"
+
+        val className = if (perms.isClassAllowed(rawClassName)) {
+            rawClassName
+        } else {
+            perms.getPrimaryAllowedClassCode() ?: rawClassName
+        }
+
+        val group = if (perms.isGroupAllowed(rawGroup)) {
+            rawGroup
+        } else {
+            perms.getPrimaryAllowedGroupCode() ?: rawGroup
+        }
+
+        val batchId = if (perms.isBatchAllowed(sessionManager.getAcademicPassingYear(), rawBatchId)) {
+            rawBatchId
+        } else {
+            val forcedYear = perms.getPrimaryAllowedBatchYear()
+            if (!forcedYear.isNullOrBlank()) {
+                when {
+                    className.equals("C11", true) || className.equals("C12", true) -> "HSC $forcedYear"
+                    className.equals("C9", true) || className.equals("C10", true) -> "SSC $forcedYear"
+                    else -> forcedYear
+                }
+            } else rawBatchId
+        }
+
+        if (!className.equals(rawClassName, ignoreCase = true) || !group.equals(rawGroup, ignoreCase = true)) {
+            sessionManager.saveUserAcademicInfo(
+                batchId = batchId,
+                className = className,
+                group = group,
+                vendor = vendor,
+                passingYear = perms.getPrimaryAllowedBatchYear() ?: sessionManager.getAcademicPassingYear()
+            )
+            _uiState.value = _uiState.value.copy(
+                userClass = classCodeToBengaliName(className),
+                userGroup = group
+            )
+        }
 
         try {
             val response = apiService.getAcademicProgram(
@@ -452,9 +599,9 @@ class HomeViewModel(
                         "batch_id" to batchId,
                         "className" to className,
                         "group" to (if (className.uppercase() in listOf("C5", "C6", "C7", "C8", "C05", "C06", "C07", "C08")) "None" else when(group.lowercase()) {
-                            "humanities", "arts", "hum" -> "Humanities"
-                            "science", "sci" -> "Science"
-                            "business_studies", "businessstudies", "business", "commerce", "bus" -> "BusinessStudies"
+                            "humanities", "arts", "hum", "মানবিক" -> "Humanities"
+                            "science", "sci", "বিজ্ঞান" -> "Science"
+                            "business_studies", "businessstudies", "business", "commerce", "bus", "ব্যবসায় শিক্ষা", "ব্যবসায় শিক্ষা" -> "BusinessStudies"
                             else -> "None"
                         }),
                         "vendor" to vendor
@@ -466,7 +613,26 @@ class HomeViewModel(
             val others = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
 
             val promotedOthers = others.map { it.toEnrolledProgram() }
-            val allPrograms = (enrolled + promotedOthers).distinctBy { it.id }
+            val unfilteredAllPrograms = (enrolled + promotedOthers).distinctBy { it.id }
+
+            // Background sync all discovered courses to Supabase catalog so Admin App can pick them easily
+            viewModelScope.launch {
+                com.example.security.DeviceActivationRepository.syncCourseCatalogToSupabase(
+                    programs = unfilteredAllPrograms,
+                    classCode = className,
+                    groupCode = group,
+                    batchId = batchId
+                )
+            }
+
+            // Apply Admin Device-Specific Course Filter
+            val allPrograms = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                unfilteredAllPrograms.filter { prog ->
+                    perms.isProgramAllowed(prog.id, prog.title_bn)
+                }
+            } else {
+                unfilteredAllPrograms
+            }
 
             // একটিভ কোর্স নির্ধারণ (ইউজারের সেভ করা কোর্স অথবা প্রথমটি)
             val savedProgramId = sessionManager.getActiveProgramId()
@@ -479,6 +645,8 @@ class HomeViewModel(
                     batchId = active.enrollment_details?.batch_id,
                     classCode = active.classes?.firstOrNull()
                 )
+            } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+                sessionManager.clearActiveProgram()
             }
 
             val hasActiveEnrollment = active?.enrollment_details?.is_active == true ||
@@ -499,7 +667,7 @@ class HomeViewModel(
                 isPremium = hasActiveEnrollment,
                 isLoading = false,
                 isRefreshing = false,
-                errorMessage = if (allPrograms.isEmpty()) "কোনো সক্রিয় কোর্স পাওয়া যায়নি" else null
+                errorMessage = if (allPrograms.isEmpty()) "অ্যাডমিন থেকে এই শ্রেণির কোনো কোর্সের এক্সেস দেওয়া হয়নি অথবা কোনো সক্রিয় কোর্স পাওয়া যায়নি" else null
             )
 
             if (active != null) {

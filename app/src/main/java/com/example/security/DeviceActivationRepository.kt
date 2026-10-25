@@ -30,6 +30,159 @@ sealed class HeartbeatResult {
     data class NetworkError(val message: String) : HeartbeatResult()
 }
 
+data class DeviceCoursePermissions(
+    val isRestricted: Boolean = false,
+    val allowedClasses: List<String> = emptyList(),
+    val allowedGroups: List<String> = emptyList(),
+    val allowedBatches: List<String> = emptyList(),
+    val allowedPrograms: List<String> = emptyList()
+) {
+    fun isClassAllowed(classCode: String?, classNameBn: String? = null, classNameEn: String? = null): Boolean {
+        if (!isRestricted || allowedClasses.isEmpty()) return true
+        val candidates = listOfNotNull(classCode, classNameBn, classNameEn)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (candidates.isEmpty()) return true
+
+        val normalizedCode = normalizeClassCode(classCode)
+        return allowedClasses.any { allowedRaw ->
+            val allowed = allowedRaw.trim()
+            if (allowed.isEmpty() || allowed.equals("ALL", ignoreCase = true) || allowed == "*") return@any true
+            val normalizedAllowed = normalizeClassCode(allowed)
+            if (normalizedCode.isNotEmpty() && normalizedAllowed.isNotEmpty() && normalizedCode.equals(normalizedAllowed, ignoreCase = true)) {
+                return@any true
+            }
+            candidates.any { cand ->
+                cand.equals(allowed, ignoreCase = true) ||
+                        cand.contains(allowed, ignoreCase = true) ||
+                        allowed.contains(cand, ignoreCase = true)
+            }
+        }
+    }
+
+    fun isGroupAllowed(groupCode: String?, groupNameBn: String? = null, groupNameEn: String? = null): Boolean {
+        if (!isRestricted || allowedGroups.isEmpty()) return true
+        val candidates = listOfNotNull(groupCode, groupNameBn, groupNameEn)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (candidates.isEmpty()) return true
+
+        val normalizedGroup = normalizeGroupCode(groupCode ?: groupNameEn ?: groupNameBn)
+        return allowedGroups.any { allowedRaw ->
+            val allowed = allowedRaw.trim()
+            if (allowed.isEmpty() || allowed.equals("ALL", ignoreCase = true) || allowed == "*") return@any true
+            val normalizedAllowed = normalizeGroupCode(allowed)
+            if (normalizedGroup.isNotEmpty() && normalizedAllowed.isNotEmpty() && normalizedGroup.equals(normalizedAllowed, ignoreCase = true)) {
+                return@any true
+            }
+            candidates.any { cand ->
+                cand.equals(allowed, ignoreCase = true) ||
+                        cand.contains(allowed, ignoreCase = true) ||
+                        allowed.contains(cand, ignoreCase = true)
+            }
+        }
+    }
+
+    fun isBatchAllowed(batchYear: String?, batchLabel: String? = null): Boolean {
+        if (!isRestricted || allowedBatches.isEmpty()) return true
+        val cleanYear = convertBengaliToEnglishDigits(batchYear ?: "").trim()
+        val cleanLabel = convertBengaliToEnglishDigits(batchLabel ?: "").trim()
+        val yearDigits = Regex("\\d{4}").find(cleanYear)?.value ?: Regex("\\d{4}").find(cleanLabel)?.value ?: ""
+
+        return allowedBatches.any { allowedRaw ->
+            val allowed = convertBengaliToEnglishDigits(allowedRaw).trim()
+            if (allowed.isEmpty() || allowed.equals("ALL", ignoreCase = true) || allowed == "*") return@any true
+            val allowedYearDigits = Regex("\\d{4}").find(allowed)?.value ?: ""
+
+            if (yearDigits.isNotEmpty() && allowedYearDigits.isNotEmpty() && yearDigits == allowedYearDigits) {
+                return@any true
+            }
+            (cleanYear.isNotEmpty() && (cleanYear.equals(allowed, ignoreCase = true) || allowed.contains(cleanYear, ignoreCase = true))) ||
+                    (cleanLabel.isNotEmpty() && (cleanLabel.equals(allowed, ignoreCase = true) || cleanLabel.contains(allowed, ignoreCase = true) || allowed.contains(cleanLabel, ignoreCase = true)))
+        }
+    }
+
+    fun isProgramAllowed(programId: String?, titleBn: String? = null, titleEn: String? = null): Boolean {
+        if (!isRestricted || allowedPrograms.isEmpty()) return true
+        val idClean = programId?.trim() ?: ""
+        val bnClean = titleBn?.trim() ?: ""
+        val enClean = titleEn?.trim() ?: ""
+
+        return allowedPrograms.any { allowedRaw ->
+            val allowed = allowedRaw.trim()
+            if (allowed.isEmpty() || allowed.equals("ALL", ignoreCase = true) || allowed == "*") return@any true
+            // Support "id|title" format if admin app stores combined strings
+            val parts = allowed.split("|").map { it.trim() }.filter { it.isNotEmpty() }
+            parts.any { part ->
+                (idClean.isNotEmpty() && idClean.equals(part, ignoreCase = true)) ||
+                        (bnClean.isNotEmpty() && (bnClean.equals(part, ignoreCase = true) || bnClean.contains(part, ignoreCase = true) || part.contains(bnClean, ignoreCase = true))) ||
+                        (enClean.isNotEmpty() && (enClean.equals(part, ignoreCase = true) || enClean.contains(part, ignoreCase = true) || part.contains(enClean, ignoreCase = true)))
+            }
+        }
+    }
+
+    fun getPrimaryAllowedClassCode(): String? {
+        if (!isRestricted || allowedClasses.isEmpty()) return null
+        return allowedClasses.firstNotNullOfOrNull { raw ->
+            normalizeClassCode(raw).takeIf { it.isNotBlank() }
+        }
+    }
+
+    fun getPrimaryAllowedGroupCode(): String? {
+        if (!isRestricted || allowedGroups.isEmpty()) return null
+        return allowedGroups.firstNotNullOfOrNull { raw ->
+            normalizeGroupCode(raw).takeIf { it.isNotBlank() }
+        }
+    }
+
+    fun getPrimaryAllowedBatchYear(): String? {
+        if (!isRestricted || allowedBatches.isEmpty()) return null
+        return allowedBatches.firstNotNullOfOrNull { raw ->
+            val clean = convertBengaliToEnglishDigits(raw).trim()
+            Regex("\\d{4}").find(clean)?.value ?: clean.takeIf { it.isNotBlank() }
+        }
+    }
+
+    companion object {
+        fun convertBengaliToEnglishDigits(input: String): String {
+            val bnDigits = "০১২৩৪৫৬৭৮৯"
+            return input.map { ch ->
+                val idx = bnDigits.indexOf(ch)
+                if (idx >= 0) ('0' + idx) else ch
+            }.joinToString("")
+        }
+
+        fun normalizeClassCode(raw: String?): String {
+            if (raw.isNullOrBlank()) return ""
+            val clean = convertBengaliToEnglishDigits(raw).trim().uppercase()
+            return when {
+                clean in listOf("C5", "C05", "5", "CLASS 5", "CLASS-5") || raw.contains("পঞ্চম") -> "C5"
+                clean in listOf("C6", "C06", "6", "CLASS 6", "CLASS-6") || raw.contains("ষষ্ঠ") -> "C6"
+                clean in listOf("C7", "C07", "7", "CLASS 7", "CLASS-7") || raw.contains("সপ্তম") -> "C7"
+                clean in listOf("C8", "C08", "8", "CLASS 8", "CLASS-8") || raw.contains("অষ্টম") -> "C8"
+                clean in listOf("C9", "C09", "9", "CLASS 9", "CLASS-9") || raw.contains("নবম") -> "C9"
+                clean in listOf("C10", "10", "CLASS 10", "CLASS-10", "SSC") || raw.contains("দশম") -> "C10"
+                clean in listOf("C11", "11", "CLASS 11", "CLASS-11", "HSC 1ST") || raw.contains("একাদশ") -> "C11"
+                clean in listOf("C12", "12", "CLASS 12", "CLASS-12", "HSC 2ND") || raw.contains("দ্বাদশ") -> "C12"
+                clean.matches(Regex("C\\d+")) -> clean
+                else -> clean
+            }
+        }
+
+        fun normalizeGroupCode(raw: String?): String {
+            if (raw.isNullOrBlank()) return ""
+            val clean = raw.trim().lowercase()
+            return when {
+                clean in listOf("science", "sci", "বিজ্ঞান") || clean.contains("বিজ্ঞান") || clean.contains("science") -> "Science"
+                clean in listOf("humanities", "hum", "arts", "মানবিক") || clean.contains("মানবিক") || clean.contains("humanities") || clean.contains("arts") -> "Humanities"
+                clean in listOf("businessstudies", "business_studies", "business", "commerce", "bus", "ব্যবসায় শিক্ষা", "ব্যবসায় শিক্ষা") || clean.contains("ব্যবসা") || clean.contains("business") || clean.contains("commerce") -> "BusinessStudies"
+                clean in listOf("none", "all") -> "None"
+                else -> raw.trim()
+            }
+        }
+    }
+}
+
 object DeviceActivationRepository {
 
     private const val TAG = "DeviceActivation"
@@ -40,6 +193,8 @@ object DeviceActivationRepository {
     private const val KEY_LAST_HEARTBEAT_AT = "key_last_heartbeat_at"
     private const val KEY_CAN_VIEW_PROFILES = "key_can_view_profiles"
     private const val KEY_LAST_PROFILE_PERMISSION_CHECK = "key_last_profile_permission_check"
+    private const val KEY_COURSE_PERMISSIONS_JSON = "key_course_permissions_json"
+    private const val KEY_LAST_COURSE_PERMISSIONS_CHECK = "key_last_course_permissions_check"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -772,6 +927,303 @@ object DeviceActivationRepository {
         } catch (e: Throwable) {
             Log.e(TAG, "checkProfileViewPermission error: ${e.message}")
             prefs.getBoolean(KEY_CAN_VIEW_PROFILES, false)
+        }
+    }
+
+    private fun parseStringListFromJsonValue(obj: JSONObject, key: String): List<String> {
+        if (!obj.has(key) || obj.isNull(key)) return emptyList()
+        return try {
+            val rawVal = obj.get(key)
+            when (rawVal) {
+                is org.json.JSONArray -> {
+                    val list = mutableListOf<String>()
+                    for (i in 0 until rawVal.length()) {
+                        val item = rawVal.optString(i, "").trim()
+                        if (item.isNotBlank() && !item.equals("null", ignoreCase = true)) {
+                            list.add(item)
+                        }
+                    }
+                    list
+                }
+                is String -> {
+                    val trimmed = rawVal.trim()
+                    if (trimmed.isEmpty() || trimmed.equals("null", ignoreCase = true) || trimmed == "[]" || trimmed == "{}") {
+                        emptyList()
+                    } else if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                        val arr = org.json.JSONArray(trimmed)
+                        val list = mutableListOf<String>()
+                        for (i in 0 until arr.length()) {
+                            val item = arr.optString(i, "").trim()
+                            if (item.isNotBlank() && !item.equals("null", ignoreCase = true)) {
+                                list.add(item)
+                            }
+                        }
+                        list
+                    } else if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                        // Postgres TEXT[] literal format: {"C9","C10"}
+                        trimmed.removeSurrounding("{", "}")
+                            .split(",")
+                            .map { it.trim().removeSurrounding("\"").removeSurrounding("'").trim() }
+                            .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+                    } else {
+                        trimmed.split(",")
+                            .map { it.trim().removeSurrounding("\"").removeSurrounding("'").trim() }
+                            .filter { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+                    }
+                }
+                else -> emptyList()
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    private fun parseCoursePermissionsFromJsonObject(obj: JSONObject): DeviceCoursePermissions? {
+        val classes = parseStringListFromJsonValue(obj, "allowed_classes")
+        val groups = parseStringListFromJsonValue(obj, "allowed_groups")
+        val batches = parseStringListFromJsonValue(obj, "allowed_batches")
+        val programs = parseStringListFromJsonValue(obj, "allowed_programs")
+            .ifEmpty { parseStringListFromJsonValue(obj, "allowed_courses") }
+
+        val explicitFlag = if (obj.has("is_access_restricted") && !obj.isNull("is_access_restricted")) {
+            obj.optBoolean("is_access_restricted", false)
+        } else if (obj.has("is_restricted") && !obj.isNull("is_restricted")) {
+            obj.optBoolean("is_restricted", false)
+        } else {
+            null
+        }
+
+        val hasAnyRule = classes.isNotEmpty() || groups.isNotEmpty() || batches.isNotEmpty() || programs.isNotEmpty()
+        val isRestricted = explicitFlag ?: hasAnyRule
+
+        if (!isRestricted && !hasAnyRule) {
+            return DeviceCoursePermissions(isRestricted = false)
+        }
+
+        return DeviceCoursePermissions(
+            isRestricted = isRestricted || hasAnyRule,
+            allowedClasses = classes,
+            allowedGroups = groups,
+            allowedBatches = batches,
+            allowedPrograms = programs
+        )
+    }
+
+    fun getCachedCoursePermissions(context: Context): DeviceCoursePermissions {
+        return try {
+            val rawJson = getPrefs(context).getString(KEY_COURSE_PERMISSIONS_JSON, null)
+            if (rawJson.isNullOrBlank()) return DeviceCoursePermissions(isRestricted = false)
+            val obj = JSONObject(rawJson)
+            parseCoursePermissionsFromJsonObject(obj) ?: DeviceCoursePermissions(isRestricted = false)
+        } catch (_: Throwable) {
+            DeviceCoursePermissions(isRestricted = false)
+        }
+    }
+
+    private fun saveCachedCoursePermissions(context: Context, perms: DeviceCoursePermissions) {
+        try {
+            val json = JSONObject().apply {
+                put("is_access_restricted", perms.isRestricted)
+                put("allowed_classes", org.json.JSONArray(perms.allowedClasses))
+                put("allowed_groups", org.json.JSONArray(perms.allowedGroups))
+                put("allowed_batches", org.json.JSONArray(perms.allowedBatches))
+                put("allowed_programs", org.json.JSONArray(perms.allowedPrograms))
+            }
+            getPrefs(context).edit()
+                .putString(KEY_COURSE_PERMISSIONS_JSON, json.toString())
+                .putLong(KEY_LAST_COURSE_PERMISSIONS_CHECK, System.currentTimeMillis())
+                .apply()
+        } catch (_: Throwable) {}
+    }
+
+    /**
+     * Fetches device-specific syllabus & course access permissions set by Admin in Supabase.
+     * Checks RPC `get_device_course_permissions` first, then falls back to querying `devices`,
+     * `access_codes`, and `activated_devices` tables directly.
+     */
+    suspend fun fetchDeviceCoursePermissions(
+        context: Context,
+        forceRefresh: Boolean = false
+    ): DeviceCoursePermissions = withContext(Dispatchers.IO) {
+        val prefs = getPrefs(context)
+        val now = System.currentTimeMillis()
+        val lastCheck = prefs.getLong(KEY_LAST_COURSE_PERMISSIONS_CHECK, 0L)
+
+        if (!forceRefresh && (now - lastCheck < 10_000L)) {
+            return@withContext getCachedCoursePermissions(context)
+        }
+
+        try {
+            val (supabaseUrl, anonKey) = getSupabaseConfig()
+            if (supabaseUrl.isBlank() || anonKey.isBlank()) {
+                return@withContext getCachedCoursePermissions(context)
+            }
+
+            val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
+            val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
+            val activatedCode = prefs.getString(KEY_ACTIVATED_CODE, "")?.trim() ?: ""
+
+            // 1. Try dedicated RPC `get_device_course_permissions` first
+            try {
+                val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_device_course_permissions"
+                val rpcBody = JSONObject().apply {
+                    put("p_device_hash", deviceHardwareHash)
+                    put("p_display_device_id", displayDeviceId)
+                    put("p_code", activatedCode)
+                }
+                val rpcReq = Request.Builder()
+                    .url(rpcUrl)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post(rpcBody.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                val rpcResp = httpClient.newCall(rpcReq).execute()
+                if (rpcResp.isSuccessful) {
+                    val bodyStr = rpcResp.body?.string() ?: ""
+                    if (bodyStr.isNotBlank() && bodyStr.trim().startsWith("{")) {
+                        val json = JSONObject(bodyStr)
+                        val parsed = parseCoursePermissionsFromJsonObject(json)
+                        if (parsed != null) {
+                            saveCachedCoursePermissions(context, parsed)
+                            return@withContext parsed
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+
+            // 2. Fallback: Direct REST query on `devices` table
+            var resolvedPermissions: DeviceCoursePermissions? = null
+            try {
+                val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
+                val devReq = Request.Builder()
+                    .url(devUrl)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .get()
+                    .build()
+                val devResp = httpClient.newCall(devReq).execute()
+                if (devResp.isSuccessful) {
+                    val devArr = org.json.JSONArray(devResp.body?.string() ?: "[]")
+                    if (devArr.length() > 0) {
+                        val parsed = parseCoursePermissionsFromJsonObject(devArr.getJSONObject(0))
+                        if (parsed != null && parsed.isRestricted) {
+                            resolvedPermissions = parsed
+                        } else if (parsed != null && resolvedPermissions == null) {
+                            resolvedPermissions = parsed
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+
+            // 3. Fallback: Check `access_codes` table if device itself didn't have active restrictions
+            if ((resolvedPermissions == null || !resolvedPermissions.isRestricted) && activatedCode.isNotBlank()) {
+                try {
+                    val codeUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/access_codes?code=ilike.$activatedCode&select=is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
+                    val codeReq = Request.Builder()
+                        .url(codeUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val codeResp = httpClient.newCall(codeReq).execute()
+                    if (codeResp.isSuccessful) {
+                        val codeArr = org.json.JSONArray(codeResp.body?.string() ?: "[]")
+                        if (codeArr.length() > 0) {
+                            val parsed = parseCoursePermissionsFromJsonObject(codeArr.getJSONObject(0))
+                            if (parsed != null && parsed.isRestricted) {
+                                resolvedPermissions = parsed
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 4. Fallback: Check `activated_devices` table
+            if (resolvedPermissions == null || !resolvedPermissions.isRestricted) {
+                try {
+                    val actUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/activated_devices?device_hash=eq.$deviceHardwareHash&select=is_access_restricted,allowed_classes,allowed_groups,allowed_batches,allowed_programs"
+                    val actReq = Request.Builder()
+                        .url(actUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val actResp = httpClient.newCall(actReq).execute()
+                    if (actResp.isSuccessful) {
+                        val actArr = org.json.JSONArray(actResp.body?.string() ?: "[]")
+                        if (actArr.length() > 0) {
+                            val parsed = parseCoursePermissionsFromJsonObject(actArr.getJSONObject(0))
+                            if (parsed != null && parsed.isRestricted) {
+                                resolvedPermissions = parsed
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            val finalPerms = resolvedPermissions ?: DeviceCoursePermissions(isRestricted = false)
+            saveCachedCoursePermissions(context, finalPerms)
+            finalPerms
+        } catch (e: Throwable) {
+            Log.e(TAG, "fetchDeviceCoursePermissions error: ${e.message}")
+            getCachedCoursePermissions(context)
+        }
+    }
+
+    /**
+     * Automatically syncs discovered courses/programs to `public.available_courses_catalog` in Supabase
+     * so the Admin App can display a clean checkbox list of courses for each class/group/batch.
+     */
+    suspend fun syncCourseCatalogToSupabase(
+        programs: List<com.example.api.EnrolledProgram>,
+        classCode: String?,
+        groupCode: String?,
+        batchId: String?
+    ) = withContext(Dispatchers.IO) {
+        if (programs.isEmpty()) return@withContext
+        try {
+            val (supabaseUrl, anonKey) = getSupabaseConfig()
+            if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext
+
+            val normalizedClass = DeviceCoursePermissions.normalizeClassCode(classCode).ifBlank { classCode ?: "" }
+            val normalizedGroup = DeviceCoursePermissions.normalizeGroupCode(groupCode).ifBlank { groupCode ?: "None" }
+
+            val jsonArray = org.json.JSONArray()
+            programs.forEach { prog ->
+                if (prog.id.isNotBlank()) {
+                    val progClass = prog.classes?.firstOrNull()?.let { DeviceCoursePermissions.normalizeClassCode(it) }
+                        ?.takeIf { it.isNotBlank() } ?: normalizedClass
+                    val progBatch = prog.enrollment_details?.batch_id?.takeIf { it.isNotBlank() } ?: (batchId ?: "")
+                    val obj = JSONObject().apply {
+                        put("program_id", prog.id)
+                        put("title_bn", prog.title_bn ?: "কোর্স")
+                        put("class_code", progClass)
+                        put("group_code", normalizedGroup)
+                        put("batch_id", progBatch)
+                        put("banner_url", prog.banner_url ?: "")
+                        put("is_free", prog.is_free == true)
+                    }
+                    jsonArray.put(obj)
+                }
+            }
+
+            if (jsonArray.length() == 0) return@withContext
+
+            val catalogUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/available_courses_catalog?on_conflict=program_id"
+            val req = Request.Builder()
+                .url(catalogUrl)
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $anonKey")
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "resolution=merge-duplicates")
+                .post(jsonArray.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+
+            httpClient.newCall(req).execute().close()
+        } catch (_: Throwable) {
+            // Non-fatal background sync for Admin App convenience
         }
     }
 }
