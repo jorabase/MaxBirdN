@@ -264,10 +264,34 @@ class CourseViewModel(
         }
     }
 
+    fun clearForLogout() {
+        chaptersCache.clear()
+        lessonsCache.clear()
+        _uiState.value = CourseUiState()
+    }
+
     fun fetchEnrolledPrograms() {
         viewModelScope.launch {
             _uiState.update { it.copy(isProgramsLoading = true) }
             try {
+                if (sessionManager.getNormalizedUserPhone().isBlank() && !sessionManager.getAccessToken().isNullOrBlank()) {
+                    try {
+                        val uid = sessionManager.getUserId() ?: ""
+                        if (uid.isNotBlank()) {
+                            val profileQuery = GraphQlQuery(
+                                operationName = "GetProfile",
+                                query = "query GetProfile(\$user_id: String, \$type: String!) { profile(user_id: \$user_id, type: \$type) { id first_name last_name avatar study_group class { code display } school { id name } user { phone email } } }",
+                                variables = mapOf("user_id" to uid, "type" to "student")
+                            )
+                            val profResp = apiService.getProfile(profileQuery)
+                            val profPhone = profResp.data?.profile?.user?.phone
+                            if (!profPhone.isNullOrBlank()) {
+                                sessionManager.saveUserPhone(profPhone)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+
                 val commerceSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
 
                 val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()

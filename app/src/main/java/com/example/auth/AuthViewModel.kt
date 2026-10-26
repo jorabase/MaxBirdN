@@ -290,6 +290,14 @@ class AuthViewModel(
     }
 
     fun logout() {
+        try {
+            com.example.course.CourseCommerceRepository.clearCache(sessionManager.appContext)
+        } catch (_: Throwable) {}
+        try {
+            com.example.ai.GeminiAiStudyRepository.onUserLogout(com.example.ShikhoApp.instance)
+        } catch (_: Throwable) {}
+        sessionManager.clearSession()
+        _authState.value = AuthState.Idle
         viewModelScope.launch {
             try {
                 com.example.notification.ShikhoNotificationManager.unsubscribeAll(com.example.ShikhoApp.instance)
@@ -297,11 +305,6 @@ class AuthViewModel(
             try {
                 apiService.logout()
             } catch (_: Exception) { }
-            try {
-                com.example.ai.GeminiAiStudyRepository.onUserLogout(com.example.ShikhoApp.instance)
-            } catch (_: Throwable) {}
-            sessionManager.clearSession()
-            _authState.value = AuthState.Idle
         }
     }
 }

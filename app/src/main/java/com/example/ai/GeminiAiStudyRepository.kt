@@ -115,24 +115,22 @@ object GeminiAiStudyRepository {
     fun resolveIdentity(context: Context, sessionManager: SessionManager? = null): StudentAccountIdentity {
         val mgr = sessionManager ?: SessionManager(context.applicationContext)
         val userId = mgr.getUserId()?.trim().orEmpty()
-        val userPhone = mgr.getUserPhone()?.trim().orEmpty()
-        val accessKey = DeviceActivationRepository.getActivatedCode(context)?.trim()?.uppercase().orEmpty()
+        val userPhone = mgr.getNormalizedUserPhone().ifBlank { mgr.getUserPhone()?.trim().orEmpty() }
         val studentName = mgr.getUserFullName()?.trim()
             ?: mgr.getUserFirstName()?.trim()
             ?: "শিক্ষার্থী"
 
         val primaryKey = when {
-            userId.isNotBlank() -> userId
             userPhone.isNotBlank() -> userPhone
-            accessKey.isNotBlank() -> accessKey
-            else -> "default_student"
+            userId.isNotBlank() -> userId
+            else -> ""
         }
 
         return StudentAccountIdentity(
             accountKey = primaryKey,
             userId = userId,
             userPhone = userPhone,
-            accessKey = accessKey,
+            accessKey = "",
             studentName = studentName
         )
     }
@@ -144,15 +142,18 @@ object GeminiAiStudyRepository {
         val prefs = getPrefs(context)
         val identity = resolveIdentity(context, sessionManager)
 
-        // Check account-specific key first, then active slot, then BuildConfig fallback (only if valid AIza key)
-        val accountSavedKey = prefs.getString("$KEY_ACCOUNT_PREFIX${identity.accountKey}", null)?.trim().orEmpty()
-        val activeSlotKey = prefs.getString(KEY_ACTIVE_API_KEY, null)?.trim().orEmpty()
+        // Check account-specific key first (by phone or userId), then BuildConfig fallback (only if valid AIza key)
+        val accountSavedKey = if (identity.accountKey.isNotBlank()) {
+            prefs.getString("$KEY_ACCOUNT_PREFIX${identity.accountKey}", null)?.trim().orEmpty()
+                .ifBlank {
+                    if (identity.userId.isNotBlank()) prefs.getString("$KEY_ACCOUNT_PREFIX${identity.userId}", null)?.trim().orEmpty() else ""
+                }
+        } else ""
         val rawBuildConfigKey = runCatching { BuildConfig.GEMINI_API_KEY.trim() }.getOrDefault("")
         val buildConfigKey = if (rawBuildConfigKey.startsWith("AIza")) rawBuildConfigKey else ""
 
         val effectiveKey = when {
             accountSavedKey.isNotBlank() -> accountSavedKey
-            activeSlotKey.isNotBlank() -> activeSlotKey
             buildConfigKey.isNotBlank() -> buildConfigKey
             else -> ""
         }

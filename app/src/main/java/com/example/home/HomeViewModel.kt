@@ -306,6 +306,10 @@ class HomeViewModel(
         }
     }
 
+    fun clearForLogout() {
+        _uiState.value = HomeUiState(isLoading = false)
+    }
+
     fun loadData(isRefresh: Boolean = false) {
         viewModelScope.launch {
             if (isRefresh) {

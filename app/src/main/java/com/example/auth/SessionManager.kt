@@ -88,11 +88,66 @@ class SessionManager(context: Context) {
         return adsId
     }
 
+    companion object {
+        /**
+         * Normalizes any Bangladeshi phone number (e.g. "+8801712345678", "8801712345678", "01712345678", or Bengali digits)
+         * into a canonical 11-digit format "01XXXXXXXXX".
+         */
+        fun normalizePhone(raw: String?): String {
+            if (raw.isNullOrBlank()) return ""
+            val bnDigits = "০১২৩৪৫৬৭৮৯"
+            val ascii = raw.map { ch ->
+                val idx = bnDigits.indexOf(ch)
+                if (idx >= 0) ('0' + idx) else ch
+            }.joinToString("")
+            val digits = ascii.filter { it.isDigit() }
+            return when {
+                digits.length == 13 && digits.startsWith("8801") -> digits.substring(2)
+                digits.length == 14 && digits.startsWith("008801") -> digits.substring(4)
+                digits.length == 11 && digits.startsWith("01") -> digits
+                digits.length == 10 && digits.startsWith("1") -> "0$digits"
+                digits.length > 11 && digits.takeLast(11).startsWith("01") -> digits.takeLast(11)
+                else -> digits
+            }
+        }
+
+        /**
+         * Returns all common representations of a phone number ("01XXXXXXXXX", "8801XXXXXXXXX", "+8801XXXXXXXXX")
+         * so database queries and comparisons match regardless of formatting.
+         */
+        fun getPhoneVariants(raw: String?): Set<String> {
+            val norm11 = normalizePhone(raw)
+            if (norm11.isBlank()) return emptySet()
+            val set = linkedSetOf(norm11)
+            if (norm11.length == 11 && norm11.startsWith("01")) {
+                set.add("88$norm11")
+                set.add("+88$norm11")
+            }
+            raw?.trim()?.takeIf { it.isNotBlank() }?.let { set.add(it) }
+            return set
+        }
+
+        fun phonesMatch(phoneA: String?, phoneB: String?): Boolean {
+            val normA = normalizePhone(phoneA)
+            val normB = normalizePhone(phoneB)
+            return normA.isNotBlank() && normA == normB
+        }
+    }
+
     @Volatile
     private var isUnauthorizedNotified = false
 
     fun saveTokens(accessToken: String, refreshToken: String?, userId: String) {
         isUnauthorizedNotified = false
+        val previousUserId = sharedPreferences.getString("user_id", null)
+            ?: fallbackPrefs.getString("user_id", null)
+        if (!previousUserId.isNullOrBlank() && previousUserId != userId) {
+            clearActiveProgram()
+            try {
+                com.example.course.CourseCommerceRepository.clearCache(appContext)
+            } catch (_: Throwable) {}
+        }
+
         sharedPreferences.edit()
             .putString("access_token", accessToken)
             .putString("refresh_token", refreshToken)
@@ -306,13 +361,66 @@ class SessionManager(context: Context) {
 
     fun saveUserPhone(phone: String?) {
         if (!phone.isNullOrBlank()) {
-            sharedPreferences.edit().putString("user_phone", phone).apply()
-            fallbackPrefs.edit().putString("user_phone", phone).apply()
+            val prevPhone = sharedPreferences.getString("user_phone", null)
+                ?: fallbackPrefs.getString("user_phone", null)
+            if (!prevPhone.isNullOrBlank() && !phonesMatch(prevPhone, phone)) {
+                clearActiveProgram()
+                try {
+                    com.example.course.CourseCommerceRepository.clearCache(appContext)
+                } catch (_: Throwable) {}
+            }
+            sharedPreferences.edit().putString("user_phone", phone.trim()).apply()
+            fallbackPrefs.edit().putString("user_phone", phone.trim()).apply()
         }
     }
 
-    fun getUserPhone(): String? =
-        sharedPreferences.getString("user_phone", null) ?: fallbackPrefs.getString("user_phone", null)
+    fun getUserPhone(): String? {
+        val stored = sharedPreferences.getString("user_phone", null)
+            ?: fallbackPrefs.getString("user_phone", null)
+        if (!stored.isNullOrBlank()) return stored
+        val token = getAccessToken()
+        if (!token.isNullOrBlank()) {
+            try {
+                val parts = token.split(".")
+                if (parts.size >= 2) {
+                    val decoded = String(
+                        android.util.Base64.decode(
+                            parts[1],
+                            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP
+                        )
+                    )
+                    val json = JSONObject(decoded)
+                    val resolvedPhone = json.optString("phone", "")
+                        .ifBlank { json.optString("phone_number", "") }
+                        .ifBlank { json.optString("mobile", "") }
+                        .ifBlank { json.optString("username", "") }
+                        .trim()
+                    if (resolvedPhone.isNotBlank() && resolvedPhone.any { it.isDigit() }) {
+                        sharedPreferences.edit().putString("user_phone", resolvedPhone).apply()
+                        fallbackPrefs.edit().putString("user_phone", resolvedPhone).apply()
+                        return resolvedPhone
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
+    /**
+     * Returns the canonical 11-digit Bangladeshi phone number ("01XXXXXXXXX") for the logged-in user.
+     */
+    fun getNormalizedUserPhone(): String = normalizePhone(getUserPhone())
+
+    /**
+     * Returns the canonical account key for this student (normalized phone number first, or Shikho user_id).
+     * Never depends on device_id.
+     */
+    fun getPrimaryAccountKey(): String {
+        val normPhone = getNormalizedUserPhone()
+        if (normPhone.isNotBlank()) return normPhone
+        return getUserId()?.trim().orEmpty()
+    }
 
     fun getUserFirstName(): String? =
         sharedPreferences.getString("user_first_name", null) ?: fallbackPrefs.getString("user_first_name", null)
@@ -608,7 +716,9 @@ class SessionManager(context: Context) {
             "academic_vendor", "academic_passing_year",
             "user_first_name", "user_last_name", "user_avatar",
             "user_school_name", "user_class_display", "user_phone",
-            "live_custom_student_name", "just_signed_up"
+            "live_custom_student_name", "just_signed_up",
+            "completed_lessons", "completed_model_tests",
+            "subscribed_fcm_program_id", "subscribed_fcm_phase_id"
         )
         val editor = sharedPreferences.edit()
         val fallbackEditor = fallbackPrefs.edit()
@@ -618,6 +728,9 @@ class SessionManager(context: Context) {
         }
         editor.apply()
         fallbackEditor.apply()
+        try {
+            com.example.course.CourseCommerceRepository.clearCache(appContext)
+        } catch (_: Throwable) {}
         _userAvatarFlow.value = null
         _userProfileUpdateFlow.value = System.currentTimeMillis()
     }

@@ -552,6 +552,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     navController.navigate("otp/$phone/$authType")
                 },
                 onLoginSuccess = {
+                    homeViewModel.loadData(isRefresh = true)
+                    courseViewModel.fetchEnrolledPrograms()
+                    courseViewModel.loadSubjects(forceRefresh = true)
                     navController.navigate(Routes.HOME) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -571,7 +574,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 viewModel = authViewModel,
                 authState = authState,
                 onLoginSuccess = {
-                    homeViewModel.loadData()
+                    homeViewModel.loadData(isRefresh = true)
+                    courseViewModel.fetchEnrolledPrograms()
                     courseViewModel.loadSubjects(forceRefresh = true)
                     sessionManager.setJustSignedUp(false)
                     sessionManager.setAccountComplete(true)
@@ -713,6 +717,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     navController.navigate(Routes.HEADER_WALLPAPER_SETTINGS)
                 },
                 onLogout = {
+                    homeViewModel.clearForLogout()
+                    courseViewModel.clearForLogout()
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
@@ -1477,6 +1483,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     navController.navigate(Routes.downloadsRoute(false))
                 },
                 onLogout = {
+                    homeViewModel.clearForLogout()
+                    courseViewModel.clearForLogout()
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
@@ -1834,6 +1842,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         com.example.ui.dialogs.SessionExpiredDialog(
             onReLogin = {
                 showSessionExpiredDialog = false
+                homeViewModel.clearForLogout()
+                courseViewModel.clearForLogout()
                 sessionManager.clearSession()
                 sessionManager.resetUnauthorizedNotified()
                 authViewModel.logout()
