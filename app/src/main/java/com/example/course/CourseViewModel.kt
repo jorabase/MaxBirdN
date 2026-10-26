@@ -98,10 +98,9 @@ class CourseViewModel(
     }
 
     fun openCourse(program: EnrolledProgram) {
-        val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
         val snapshot = _uiState.value.commerceSnapshot
-        if (!snapshot.isCourseActivelyUnlocked(program.id, program.title_bn, perms)) {
-            val itemState = snapshot.resolveCourseItemState(program.id, program.title_bn, perms)
+        if (!snapshot.isCourseActivelyUnlocked(program.id, program.title_bn)) {
+            val itemState = snapshot.resolveCourseItemState(program.id, program.title_bn)
             if (itemState.effectiveState == CourseAccessState.INSTALLMENT_OVERDUE ||
                 itemState.effectiveState == CourseAccessState.APPROVED_TO_BUY ||
                 itemState.effectiveState == CourseAccessState.PAYMENT_REJECTED
@@ -269,31 +268,12 @@ class CourseViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isProgramsLoading = true) }
             try {
-                val perms = com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
-                    context = sessionManager.appContext,
-                    forceRefresh = false
-                )
                 val commerceSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
 
-                val rawBatchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
-                val rawClassName = sessionManager.getUserClassName() ?: "C11"
-                val rawGroup = sessionManager.getUserGroup() ?: "Humanities"
+                val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
+                val userClassName = sessionManager.getUserClassName() ?: "C11"
+                val group = sessionManager.getUserGroup() ?: "Humanities"
                 val vendor = sessionManager.getUserVendor() ?: "BD"
-
-                val userClassName = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
-                val group = if (perms.isGroupAllowed(rawGroup)) rawGroup else (perms.getPrimaryAllowedGroupCode() ?: rawGroup)
-                val batchId = if (perms.isBatchAllowed(sessionManager.getAcademicPassingYear(), rawBatchId)) {
-                    rawBatchId
-                } else {
-                    val forcedYear = perms.getPrimaryAllowedBatchYear()
-                    if (!forcedYear.isNullOrBlank()) {
-                        when {
-                            userClassName.equals("C11", true) || userClassName.equals("C12", true) -> "HSC $forcedYear"
-                            userClassName.equals("C9", true) || userClassName.equals("C10", true) -> "SSC $forcedYear"
-                            else -> forcedYear
-                        }
-                    } else rawBatchId
-                }
 
                 val response = repository.getAcademicProgramByEnrollment(
                     batchId = batchId,
@@ -317,40 +297,21 @@ class CourseViewModel(
                     )
                 }).distinctBy { it.id }
 
-                // Sync discovered courses to Supabase catalog for Admin App convenience
-                viewModelScope.launch {
-                    com.example.security.DeviceActivationRepository.syncCourseCatalogToSupabase(
-                        programs = allCombinedEnrolled,
-                        classCode = userClassName,
-                        groupCode = group,
-                        batchId = batchId
-                    )
-                }
-
-                // ১. শুধুমাত্র যেসব কোর্স স্টুডেন্ট কিনেছে (অথবা কিস্তি চালু ও মেয়াদ আছে) বা অ্যাডমিন সরাসরি আনলক করেছে সেগুলোই enrolledPrograms এ থাকবে
-                val activeEnrolledList = if (!perms.isAccountAuthorized) {
-                    emptyList()
-                } else {
-                    allCombinedEnrolled.filter { prog ->
-                        commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn, perms)
-                    }
+                // ১. শুধুমাত্র যেসব কোর্স স্টুডেন্ট কিনেছে (অথবা কিস্তি চালু ও মেয়াদ আছে) সেগুলোই enrolledPrograms এ থাকবে
+                val activeEnrolledList = allCombinedEnrolled.filter { prog ->
+                    commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn)
                 }
 
                 val activeIds = activeEnrolledList.map { it.id }.toSet()
 
                 // ২. বাকি সকল কোর্স লক ও ঝাপসা ক্যাটালগে (otherPrograms) থাকবে যেখান থেকে স্টুডেন্ট 'কোর্সে এক্সেস পান' রিকোয়েস্ট পাঠাতে ও কিস্তিতে কিনতে পারবে
-                val lockedOrPurchasableList = if (!perms.isAccountAuthorized) {
-                    emptyList()
-                } else {
-                    allCombinedOther.filter { it.id !in activeIds }
-                }
+                val lockedOrPurchasableList = allCombinedOther.filter { it.id !in activeIds }
 
                 _uiState.update {
                     val currentSelected = it.selectedCourseProgram
                     val validSelected = if (currentSelected != null && currentSelected.id in activeIds) currentSelected else null
                     it.copy(
                         commerceSnapshot = commerceSnapshot,
-                        deviceCoursePermissions = perms,
                         enrolledPrograms = activeEnrolledList,
                         freePrograms = emptyList(),
                         otherPrograms = lockedOrPurchasableList,
@@ -359,24 +320,12 @@ class CourseViewModel(
                     )
                 }
             } catch (e: Exception) {
-                val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
                 val commerceSnapshot = CourseCommerceRepository.getCachedSnapshot(sessionManager.appContext)
                 _uiState.update { current ->
-                    val rawClassName = sessionManager.getUserClassName() ?: "C11"
-                    val rawGroup = sessionManager.getUserGroup() ?: "Humanities"
-                    val userClassName = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
-                    val group = if (perms.isGroupAllowed(rawGroup)) rawGroup else (perms.getPrimaryAllowedGroupCode() ?: rawGroup)
+                    val userClassName = sessionManager.getUserClassName() ?: "C11"
+                    val group = sessionManager.getUserGroup() ?: "Humanities"
 
-                    if (!perms.isAccountAuthorized) {
-                        current.copy(
-                            commerceSnapshot = commerceSnapshot,
-                            deviceCoursePermissions = perms,
-                            enrolledPrograms = emptyList(),
-                            freePrograms = emptyList(),
-                            otherPrograms = emptyList(),
-                            isProgramsLoading = false
-                        )
-                    } else if (current.enrolledPrograms.isEmpty() && current.otherPrograms.isEmpty()) {
+                    if (current.enrolledPrograms.isEmpty() && current.otherPrograms.isEmpty()) {
                         val fbEnrolled = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group)
                         val fbFree = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group)
                         val fbOther = CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group)
@@ -394,14 +343,13 @@ class CourseViewModel(
                         }).distinctBy { it.id }
 
                         val activeList = allFbEnrolled.filter { prog ->
-                            commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn, perms)
+                            commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn)
                         }
                         val activeIds = activeList.map { it.id }.toSet()
                         val remainingOther = allFbOther.filter { it.id !in activeIds }
 
                         current.copy(
                             commerceSnapshot = commerceSnapshot,
-                            deviceCoursePermissions = perms,
                             enrolledPrograms = activeList,
                             freePrograms = emptyList(),
                             otherPrograms = remainingOther,
@@ -410,7 +358,6 @@ class CourseViewModel(
                     } else {
                         current.copy(
                             commerceSnapshot = commerceSnapshot,
-                            deviceCoursePermissions = perms,
                             isProgramsLoading = false
                         )
                     }
@@ -424,9 +371,8 @@ class CourseViewModel(
         context: android.content.Context? = null,
         onEnrollmentSuccess: ((EnrolledProgram) -> Unit)? = null
     ) {
-        val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
         val snapshot = _uiState.value.commerceSnapshot
-        val itemState = snapshot.resolveCourseItemState(program.id, program.title_bn, perms)
+        val itemState = snapshot.resolveCourseItemState(program.id, program.title_bn)
 
         when (itemState.effectiveState) {
             CourseAccessState.LOCKED_BLURRED -> {

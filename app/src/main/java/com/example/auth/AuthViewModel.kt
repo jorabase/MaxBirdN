@@ -124,7 +124,6 @@ class AuthViewModel(
                     )
                     android.util.Log.d("AuthViewModel", "Logging in with device_id (FCM token): $deviceId")
                     val loginRes = apiService.login(loginReq)
-                    com.example.security.DeviceActivationRepository.clearCachedCoursePermissions(sessionManager.appContext)
                     sessionManager.saveTokens(
                         accessToken = loginRes.tokens.access_token,
                         refreshToken = loginRes.tokens.refresh_token,
@@ -197,7 +196,6 @@ class AuthViewModel(
                 
                 val response = apiService.login(request)
                 
-                com.example.security.DeviceActivationRepository.clearCachedCoursePermissions(sessionManager.appContext)
                 sessionManager.saveTokens(
                     accessToken = response.tokens.access_token,
                     refreshToken = response.tokens.refresh_token,
@@ -277,18 +275,6 @@ class AuthViewModel(
                         com.example.ai.GeminiAiStudyRepository.triggerBackgroundSync(com.example.ShikhoApp.instance, sessionManager)
                     } catch (_: Throwable) {}
 
-                    try {
-                        com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
-                            context = sessionManager.appContext,
-                            forceRefresh = true
-                        )
-                        com.example.security.DeviceActivationRepository.syncRealSyllabusAndTokenForAdmin(
-                            context = sessionManager.appContext,
-                            sessionManager = sessionManager,
-                            apiService = apiService
-                        )
-                    } catch (_: Throwable) {}
-
                     _authState.value = AuthState.ProfileLoaded(profile)
                 } else {
                     _authState.value = AuthState.Error("Failed to parse profile data.")
@@ -314,7 +300,6 @@ class AuthViewModel(
             try {
                 com.example.ai.GeminiAiStudyRepository.onUserLogout(com.example.ShikhoApp.instance)
             } catch (_: Throwable) {}
-            com.example.security.DeviceActivationRepository.clearCachedCoursePermissions(sessionManager.appContext)
             sessionManager.clearSession()
             _authState.value = AuthState.Idle
         }

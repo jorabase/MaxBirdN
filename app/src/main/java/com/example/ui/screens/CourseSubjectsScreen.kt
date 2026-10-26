@@ -79,8 +79,7 @@ fun CourseSubjectsScreen(
         val activePaymentCourseTitle = uiState.activePaymentSheetCourseTitle.ifBlank { "কোর্স" }
         val commerceItem = uiState.commerceSnapshot.resolveCourseItemState(
             programId = activePaymentProgId,
-            titleBn = activePaymentCourseTitle,
-            perms = uiState.deviceCoursePermissions
+            titleBn = activePaymentCourseTitle
         )
         CoursePurchasePaymentBottomSheet(
             courseTitle = activePaymentCourseTitle,
@@ -455,8 +454,7 @@ private fun MyCoursesListView(
                     ) { program ->
                         val commerceItem = uiState.commerceSnapshot.resolveCourseItemState(
                             programId = program.id,
-                            titleBn = program.title_bn,
-                            perms = uiState.deviceCoursePermissions
+                            titleBn = program.title_bn
                         )
                         EnrolledCourseBannerCard(
                             program = program,
@@ -502,8 +500,7 @@ private fun MyCoursesListView(
                     ) { program ->
                         val commerceItem = uiState.commerceSnapshot.resolveCourseItemState(
                             programId = program.id,
-                            titleBn = program.title_bn,
-                            perms = uiState.deviceCoursePermissions
+                            titleBn = program.title_bn
                         )
                         OtherCourseBannerCard(
                             program = program,

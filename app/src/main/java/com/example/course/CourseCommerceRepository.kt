@@ -163,16 +163,12 @@ data class CourseCommerceSnapshot(
 ) {
     /**
      * Checks whether a given program is actively unlocked for this student & device.
-     * A course is unlocked ONLY if:
-     * 1. The student has an ACTIVE (and non-overdue) enrollment in `course_access_enrollments`, OR
-     * 2. The Admin explicitly listed this course ID/title in `perms.allowedPrograms` (and it's not overdue in enrollments).
+     * A course is unlocked ONLY if the student has an ACTIVE (and non-overdue) enrollment in `course_access_enrollments`.
      */
     fun isCourseActivelyUnlocked(
         programId: String,
-        titleBn: String?,
-        perms: com.example.security.DeviceCoursePermissions
+        titleBn: String? = null
     ): Boolean {
-        if (!perms.isAccountAuthorized) return false
         val enr = enrollmentsByProgramId[programId]
             ?: enrollmentsByProgramId.values.firstOrNull {
                 !titleBn.isNullOrBlank() && it.programTitle.equals(titleBn.trim(), ignoreCase = true)
@@ -183,31 +179,13 @@ data class CourseCommerceSnapshot(
             return false
         }
 
-        // ১. যদি স্টুডেন্ট কোর্সটি কিনে থাকে বা কিস্তি চালু থাকে (ACTIVE)
-        if (enr != null && enr.isCurrentlyUnlockedForStudy) {
-            return true
-        }
-
-        // ২. যদি অ্যাডমিন সরাসরি নির্দিষ্ট প্রোগ্রামটিকে allowed_programs এ টিক দিয়ে ফ্রি আনলক করে দিয়ে থাকেন
-        // (কিন্তু যদি allowedPrograms ফাঁকা থাকে, তবে ডিফল্টভাবে কোনো কোর্সই ফ্রি আনলক হবে না — সব কোর্স লক ও ঝাপসা থাকবে!)
-        if (perms.allowedPrograms.isNotEmpty() &&
-            !perms.allowedPrograms.any { it.equals("__UNAUTHORIZED_ACCOUNT__", ignoreCase = true) } &&
-            perms.isProgramAllowed(programId, titleBn)
-        ) {
-            // তবে যদি এই কোর্সের জন্য স্টুডেন্টের একটি পেন্ডিং/ওভারডিউ/অ্যাপ্রুভড-টু-বাই রেকর্ড থাকে যা এখনো পেইড নয়, তবে পেমেন্ট না করা পর্যন্ত আনলক হবে না
-            if (enr != null && enr.effectiveState != CourseAccessState.ACTIVE) {
-                return false
-            }
-            return true
-        }
-
-        return false
+        // স্টুডেন্ট কোর্সটি কিনে থাকলে বা কিস্তি চালু থাকলে (ACTIVE) আনলক হবে
+        return enr != null && enr.isCurrentlyUnlockedForStudy
     }
 
     fun resolveCourseItemState(
         programId: String,
-        titleBn: String?,
-        perms: com.example.security.DeviceCoursePermissions
+        titleBn: String? = null
     ): CourseCommerceItemState {
         val existing = enrollmentsByProgramId[programId]
             ?: enrollmentsByProgramId.values.firstOrNull {
@@ -216,19 +194,6 @@ data class CourseCommerceSnapshot(
 
         if (existing != null) {
             return existing.copy(accessState = existing.effectiveState)
-        }
-
-        // যদি অ্যাডমিন সরাসরি allowed_programs এ এই নির্দিষ্ট কোর্সটি ফ্রি এক্সেস দিয়ে থাকেন
-        if (perms.isAccountAuthorized &&
-            perms.allowedPrograms.isNotEmpty() &&
-            !perms.allowedPrograms.any { it.equals("__UNAUTHORIZED_ACCOUNT__", ignoreCase = true) } &&
-            perms.isProgramAllowed(programId, titleBn)
-        ) {
-            return CourseCommerceItemState(
-                programId = programId,
-                programTitle = titleBn ?: "",
-                accessState = CourseAccessState.ACTIVE
-            )
         }
 
         // ডিফল্টভাবে সকল কোর্স লকড এবং ঝাপসা (LOCKED_BLURRED) থাকবে!

@@ -66,16 +66,11 @@ fun CourseEnrollmentDetailsScreen(
 
     LaunchedEffect(Unit) {
         isLoading = true
-        val perms = com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
-            context = context,
-            forceRefresh = false
-        )
         val commerceSnapshot = com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(
             context = context
         )
         try {
-            val rawClassName = sessionManager.getUserClassName() ?: "C11"
-            val className = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
+            val className = sessionManager.getUserClassName() ?: "C11"
             val query = GraphQlQuery(
                 operationName = "GetEnrolledAcademicProgram",
                 query = """
@@ -101,8 +96,7 @@ fun CourseEnrollmentDetailsScreen(
             val enrolled = rawEnrolled.filter { prog ->
                 commerceSnapshot.isCourseActivelyUnlocked(
                     programId = prog.id,
-                    titleBn = prog.title_bn,
-                    perms = perms
+                    titleBn = prog.title_bn
                 )
             }
 
@@ -170,16 +164,8 @@ fun CourseEnrollmentDetailsScreen(
             // Error handling fallback
         } finally {
             if (programsList.isEmpty()) {
-                if (!perms.isAccountAuthorized) {
-                    programsList = emptyList()
-                } else {
-                    val fb = getFallbackEnrollmentPrograms()
-                    programsList = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                        fb.filter { perms.isProgramAllowed(it.id, it.titleBn) }
-                    } else {
-                        fb
-                    }
-                }
+                val fb = getFallbackEnrollmentPrograms()
+                programsList = fb.filter { commerceSnapshot.isCourseActivelyUnlocked(it.id, it.titleBn) }
             }
             isLoading = false
         }

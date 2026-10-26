@@ -40,8 +40,7 @@ data class ChangeSyllabusUiState(
     val currentPassingYear: String? = null,
     val currentBatchLabel: String? = null,
     val errorMessage: String? = null,
-    val showConfirmBottomSheet: Boolean = false,
-    val isDeviceAccessRestricted: Boolean = false
+    val showConfirmBottomSheet: Boolean = false
 ) {
     val isGroupRequiredForSelectedClass: Boolean
         get() = selectedClass?.isGroupRequired == true
@@ -96,9 +95,6 @@ class ChangeSyllabusViewModel(
     private val _uiState = MutableStateFlow(ChangeSyllabusUiState(isLoadingClasses = true))
     val uiState: StateFlow<ChangeSyllabusUiState> = _uiState.asStateFlow()
 
-    private var devicePermissions: com.example.security.DeviceCoursePermissions =
-        com.example.security.DeviceCoursePermissions(isRestricted = false)
-
     /**
      * Fallback groups — StudyGroupTypeEnum: "Science", "Humanities", "BusinessStudies"
      */
@@ -112,18 +108,7 @@ class ChangeSyllabusViewModel(
 
     private fun resolveFilteredGroupsForClass(classItem: ClassItem?): List<StudyGroupItem> {
         if (classItem == null || !classItem.isGroupRequired) return emptyList()
-        val rawGroups = classItem.groups?.takeIf { it.isNotEmpty() } ?: standardStudyGroups
-        if (!devicePermissions.isRestricted || devicePermissions.allowedGroups.isEmpty()) {
-            return rawGroups
-        }
-        val filtered = rawGroups.filter { grp ->
-            devicePermissions.isGroupAllowed(
-                groupCode = grp.code,
-                groupNameBn = grp.displayNameBn,
-                groupNameEn = grp.name_en ?: grp.title_en
-            )
-        }
-        return filtered.ifEmpty { rawGroups }
+        return classItem.groups?.takeIf { it.isNotEmpty() } ?: standardStudyGroups
     }
 
     /**
@@ -136,36 +121,17 @@ class ChangeSyllabusViewModel(
                 errorMessage = null
             )
             try {
-                // Fetch latest admin-configured device permissions from Supabase
-                devicePermissions = com.example.security.DeviceActivationRepository.fetchDeviceCoursePermissions(
-                    context = sessionManager.appContext,
-                    forceRefresh = true
-                )
-
                 val response = apiService.getClassList(vendor = "BD", type = "syllabus")
 
                 // Regex: C{num} — C9V2 বাদ (শুধু real academic classes)
                 // is_active == false হলে বাদ, কিন্তু null হলে allow (future-proof)
-                val allClasses = (response.classes ?: response.data ?: emptyList())
+                val classes = (response.classes ?: response.data ?: emptyList())
                     .filter { item ->
                         item.code.matches(Regex("(?i)C\\d+")) &&
                                 item.is_active != false &&
                                 item.show_on_boarding != false
                     }
                     .sortedBy { it.serial ?: Int.MAX_VALUE }
-
-                val classes = if (devicePermissions.isRestricted && devicePermissions.allowedClasses.isNotEmpty()) {
-                    val allowedOnly = allClasses.filter { cls ->
-                        devicePermissions.isClassAllowed(
-                            classCode = cls.code,
-                            classNameBn = cls.bengaliClassName(),
-                            classNameEn = cls.name_en ?: cls.title_en
-                        )
-                    }
-                    allowedOnly.ifEmpty { allClasses }
-                } else {
-                    allClasses
-                }
 
                 val storedClassCode = sessionManager.getUserClassName()
                 val storedGroupRaw = sessionManager.getUserGroup()
@@ -193,8 +159,7 @@ class ChangeSyllabusViewModel(
                     currentClassCode = storedClassCode,
                     currentGroupCode = storedGroupRaw,
                     currentPassingYear = storedPassingYear,
-                    currentBatchLabel = storedBatchLabel,
-                    isDeviceAccessRestricted = devicePermissions.isRestricted
+                    currentBatchLabel = storedBatchLabel
                 )
 
                 // FIX #2: exam year + label দিয়ে batch preselection
@@ -273,31 +238,7 @@ class ChangeSyllabusViewModel(
                 )
 
                 val response = apiService.getBatchOptions(query)
-                val rawOptions = response.data?.batchOptions?.options ?: emptyList()
-
-                val options = if (devicePermissions.isRestricted && devicePermissions.allowedBatches.isNotEmpty()) {
-                    val matched = rawOptions.filter { b ->
-                        devicePermissions.isBatchAllowed(b.yearString, b.label)
-                    }
-                    if (matched.isNotEmpty()) {
-                        matched
-                    } else {
-                        // If admin set a custom batch year (e.g. "2028") not yet in API options, synthesize it cleanly
-                        devicePermissions.allowedBatches.mapNotNull { rawAllowed ->
-                            val cleanYear = com.example.security.DeviceCoursePermissions.convertBengaliToEnglishDigits(rawAllowed).trim()
-                            val extractedYear = Regex("\\d{4}").find(cleanYear)?.value ?: cleanYear
-                            val yearInt = extractedYear.toIntOrNull()
-                            if (extractedYear.isNotBlank()) {
-                                BatchOptionItem(
-                                    year = yearInt ?: extractedYear,
-                                    label = if (rawAllowed.contains("SSC", true) || rawAllowed.contains("HSC", true)) rawAllowed.trim() else "Batch $extractedYear"
-                                )
-                            } else null
-                        }.ifEmpty { rawOptions }
-                    }
-                } else {
-                    rawOptions
-                }
+                val options = response.data?.batchOptions?.options ?: emptyList()
 
                 // pickDefaultBatch দিয়ে smart default (SyllabusUtils.kt-এ define করা)
                 val selectedBatch = pickDefaultBatch(
@@ -473,14 +414,6 @@ class ChangeSyllabusViewModel(
                 )
 
                 sessionManager.clearActiveProgram()
-
-                try {
-                    com.example.security.DeviceActivationRepository.syncRealSyllabusAndTokenForAdmin(
-                        context = context,
-                        sessionManager = sessionManager,
-                        apiService = apiService
-                    )
-                } catch (_: Throwable) {}
 
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,

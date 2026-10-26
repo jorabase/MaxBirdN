@@ -3,12 +3,10 @@ package com.example.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -36,14 +34,6 @@ sealed class NavigationItem(
         description = "সকল এনরোল্ড ও অফার করা পাঠক্রম"
     )
 
-    object Birdgram : NavigationItem(
-        route = "tab_birdgram",
-        title = "Birdgram",
-        selectedIcon = Icons.Filled.Forum,
-        unselectedIcon = Icons.Outlined.Forum,
-        description = "টেলিগ্রাম পাওয়ারড স্টাডি চ্যাট ও গ্রুপ"
-    )
-
     object Downloads : NavigationItem(
         route = "tab_downloads",
         title = "ডাউনলোড",
@@ -61,6 +51,6 @@ sealed class NavigationItem(
     )
 
     companion object {
-        val items = listOf(Home, Courses, Birdgram, Downloads, Settings)
+        val items = listOf(Home, Courses, Downloads, Settings)
     }
 }

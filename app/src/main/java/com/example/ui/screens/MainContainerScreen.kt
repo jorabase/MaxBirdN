@@ -66,7 +66,6 @@ fun MainContainerScreen(
     val isDark = isSystemInDarkTheme()
     val context = LocalContext.current
     var lastBackPressedTime by remember { mutableLongStateOf(0L) }
-    val birdgramRepository = remember { com.example.birdgram.BirdgramRepository(context, sessionManager) }
 
     // Observe active downloads count for live bottom dock badge indicator
     val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
@@ -163,7 +162,7 @@ fun MainContainerScreen(
                 0 -> {
                     HomeScreen(
                         viewModel = homeViewModel,
-                        onNavigateToProfile = { selectedIndex = 4 },
+                        onNavigateToProfile = { selectedIndex = 3 },
                         onNavigateToEditProfile = onNavigateToEditProfile,
                         onNavigateToChangeSyllabus = onNavigateToChangeSyllabus,
                         onNavigateToCourseTab = { selectedIndex = 1 },
@@ -209,19 +208,13 @@ fun MainContainerScreen(
                     )
                 }
                 2 -> {
-                    com.example.birdgram.ui.BirdgramScreen(
-                        repository = birdgramRepository,
-                        onNavigateToHome = { selectedIndex = 0 }
-                    )
-                }
-                3 -> {
                     DownloadsScreen(
                         onBack = { selectedIndex = 0 },
                         onPlayVideo = onPlayVideo,
                         onOpenPdf = onOpenPdf
                     )
                 }
-                4 -> {
+                3 -> {
                     SettingsScreen(
                         sessionManager = sessionManager,
                         onNavigateToEditProfile = onNavigateToEditProfile,
@@ -229,7 +222,7 @@ fun MainContainerScreen(
                         onNavigateToProfile = onNavigateToProfile,
                         onNavigateToCourseEnrollment = onNavigateToCourseEnrollment,
                         onNavigateToSavedItems = onNavigateToSavedItems,
-                        onNavigateToDownloads = { selectedIndex = 3 },
+                        onNavigateToDownloads = { selectedIndex = 2 },
                         onNavigateToReportCard = { onNavigateToReportCard(null, null, null) },
                         onNavigateToNotification = onNavigateToNotification,
                         onNavigateToHeaderWallpaper = onNavigateToHeaderWallpaper,
@@ -244,11 +237,8 @@ fun MainContainerScreen(
             }
         }
 
-        // Floating Bottom Bar - Seamlessly hidden when in Birdgram (tab index 2) to give 100% native Telegram screen space
-        AnimatedVisibility(
-            visible = selectedIndex != 2,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+        // Floating Bottom Bar
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -285,7 +275,6 @@ fun ElementalFloatingBottomBar(
         listOf(
             TabTheme(Color(0xFF281A07), Color(0xFFF59E0B), Color(0xFFFBBF24)), // Amber (Home)
             TabTheme(Color(0xFF072541), Color(0xFF0284C7), Color(0xFF38BDF8)), // Azure (Courses)
-            TabTheme(Color(0xFF042D2C), Color(0xFF06B6D4), Color(0xFF22D3EE)), // Cyan (Birdgram)
             TabTheme(Color(0xFF0B243E), Color(0xFF38BDF8), Color(0xFF7DD3FC)), // Sky (Downloads)
             TabTheme(Color(0xFF21123A), Color(0xFFA855F7), Color(0xFFC084FC))  // Violet (Settings)
         )
@@ -340,7 +329,7 @@ fun ElementalFloatingBottomBar(
                 NavigationItem.items.forEachIndexed { index, item ->
                     val isSelected = selectedIndex == index
                     val theme = themes.getOrElse(index) { themes.last() }
-                    val showDownloadBadge = index == 3 && activeDownloadsCount > 0
+                    val showDownloadBadge = index == 2 && activeDownloadsCount > 0
 
                     val iconScale by animateFloatAsState(
                         targetValue = if (isSelected) 1.15f else 1f,

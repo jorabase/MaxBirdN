@@ -30,7 +30,6 @@ data class CourseUiState(
 
     // Course Commerce, Access Requests, Custom Pricing & Installments (কিস্তি)
     val commerceSnapshot: CourseCommerceSnapshot = CourseCommerceSnapshot(),
-    val deviceCoursePermissions: com.example.security.DeviceCoursePermissions = com.example.security.DeviceCoursePermissions(),
     val requestingAccessProgramId: String? = null,
     val submittingPaymentProgramId: String? = null,
     val activePaymentSheetProgramId: String? = null,
