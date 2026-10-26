@@ -1842,5 +1842,96 @@ $$;
 
 GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 
+-- ১৬.১০ স্কিমা সিঙ্ক ও মাইগ্রেশন ফিক্স (যদি আগে ভিন্ন কলাম নামে টেবিল তৈরি হয়ে থাকে তবে সব কলাম স্বয়ংক্রিয়ভাবে যুক্ত ও সিঙ্ক করবে)
+ALTER TABLE public.course_payment_settings ADD COLUMN IF NOT EXISTS payment_instruction_bn TEXT DEFAULT 'উপরের যেকোনো নাম্বারে Send Money করে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।';
+ALTER TABLE public.course_payment_settings ADD COLUMN IF NOT EXISTS payment_instructions_bn TEXT DEFAULT 'উপরের যেকোনো নাম্বারে Send Money করে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।';
+ALTER TABLE public.course_payment_settings ADD COLUMN IF NOT EXISTS default_course_price INTEGER DEFAULT 1000;
+
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS device_id TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS device_hash TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS display_device_id TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS shikho_account_key TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS shikho_user_id TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS user_phone TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS student_phone TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS student_class TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS student_group TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS class_code TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS group_code TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS batch_id TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS allow_installments BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS installment_enabled BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS active_plan_id TEXT DEFAULT 'FULL';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS active_plan_title TEXT DEFAULT 'এককালীন সম্পূর্ণ পেমেন্ট';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS selected_plan_id TEXT DEFAULT 'FULL';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS selected_plan_title TEXT DEFAULT 'এককালীন সম্পূর্ণ পেমেন্ট';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS last_transaction_id TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS last_payment_amount NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS last_sender_mobile TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS last_payment_method TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS pending_installment_tx_id TEXT DEFAULT '';
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS pending_installment_amount NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE public.course_access_enrollments ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMPTZ NULL;
+
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS device_id TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS device_hash TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS display_device_id TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS shikho_account_key TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS shikho_user_id TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS user_phone TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS payment_type TEXT DEFAULT 'INITIAL';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS plan_id TEXT DEFAULT 'FULL';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS plan_title TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS selected_plan_id TEXT DEFAULT 'FULL';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS selected_plan_title TEXT DEFAULT '';
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS interval_days INT DEFAULT 7;
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE public.course_payment_transactions ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT now();
+
+CREATE OR REPLACE FUNCTION public.sync_course_access_enrollment_columns()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF COALESCE(NEW.device_id, '') = '' AND COALESCE(NEW.device_hash, '') <> '' THEN
+        NEW.device_id := NEW.device_hash;
+    ELSIF COALESCE(NEW.device_hash, '') = '' AND COALESCE(NEW.device_id, '') <> '' THEN
+        NEW.device_hash := NEW.device_id;
+    END IF;
+
+    IF COALESCE(NEW.shikho_account_key, '') = '' AND COALESCE(NEW.shikho_user_id, '') <> '' THEN
+        NEW.shikho_account_key := NEW.shikho_user_id;
+    ELSIF COALESCE(NEW.shikho_user_id, '') = '' AND COALESCE(NEW.shikho_account_key, '') <> '' THEN
+        NEW.shikho_user_id := NEW.shikho_account_key;
+    END IF;
+
+    IF COALESCE(NEW.student_phone, '') = '' AND COALESCE(NEW.user_phone, '') <> '' THEN
+        NEW.student_phone := NEW.user_phone;
+    ELSIF COALESCE(NEW.user_phone, '') = '' AND COALESCE(NEW.student_phone, '') <> '' THEN
+        NEW.user_phone := NEW.student_phone;
+    END IF;
+
+    IF COALESCE(NEW.student_class, '') = '' AND COALESCE(NEW.class_code, '') <> '' THEN
+        NEW.student_class := NEW.class_code;
+    ELSIF COALESCE(NEW.class_code, '') = '' AND COALESCE(NEW.student_class, '') <> '' THEN
+        NEW.class_code := NEW.student_class;
+    END IF;
+
+    IF COALESCE(NEW.student_group, '') = '' AND COALESCE(NEW.group_code, '') <> '' THEN
+        NEW.student_group := NEW.group_code;
+    ELSIF COALESCE(NEW.group_code, '') = '' AND COALESCE(NEW.student_group, '') <> '' THEN
+        NEW.group_code := NEW.student_group;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_course_access_enrollment_columns ON public.course_access_enrollments;
+CREATE TRIGGER trg_sync_course_access_enrollment_columns
+BEFORE INSERT OR UPDATE ON public.course_access_enrollments
+FOR EACH ROW EXECUTE FUNCTION public.sync_course_access_enrollment_columns();
+
+NOTIFY pgrst, 'reload schema';
+
 
 
