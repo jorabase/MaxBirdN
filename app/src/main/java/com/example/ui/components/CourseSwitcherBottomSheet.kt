@@ -76,7 +76,8 @@ fun CourseSwitcherBottomSheet(
     activeProgram: EnrolledProgram?,
     onSelectProgram: (EnrolledProgram) -> Unit,
     onDismiss: () -> Unit,
-    onChangeSyllabusClick: (() -> Unit)? = null
+    onChangeSyllabusClick: (() -> Unit)? = null,
+    onBrowseCoursesClick: (() -> Unit)? = null
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -121,7 +122,7 @@ fun CourseSwitcherBottomSheet(
                 Column {
                     Text("কোর্স সুইচ করো", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
-                        "তোমার শ্রেণির উপলব্ধ সকল কোর্সসমূহ:",
+                        "তোমার আনলককৃত ও সক্রিয় কোর্সসমূহ:",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp)
@@ -167,10 +168,10 @@ fun CourseSwitcherBottomSheet(
                         Icon(Icons.Default.School, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                     }
 
-                    Text("কোনো সক্রিয় কোর্স পাওয়া যায়নি", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("কোনো সক্রিয় কোর্স আনলক করা নেই", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 
                     Text(
-                        text = "তোমার বর্তমান শ্রেণি বা গ্রুপের জন্য কোর্সগুলো দেখতে সিলেবাস চেক করো অথবা সিলেবাস পরিবর্তন করো।",
+                        text = "যেকোনো কোর্সে প্রবেশ করতে নিচের 'কোর্স' অপশনে গিয়ে 'কোর্সে এক্সেস পান' বাটনে ট্যাপ করে সম্পূর্ণ পেমেন্ট অথবা কিস্তিতে কোর্সটি আনলক করো।",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -178,15 +179,29 @@ fun CourseSwitcherBottomSheet(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
 
-                    if (onChangeSyllabusClick != null) {
+                    if (onBrowseCoursesClick != null) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Button(
+                            onClick = {
+                                onDismiss()
+                                onBrowseCoursesClick()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("কোর্স আনলক / কিস্তিতে ভর্তি হোন", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (onChangeSyllabusClick != null) {
+                        OutlinedButton(
                             onClick = {
                                 onDismiss()
                                 onChangeSyllabusClick()
                             },
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("সিলেবাস বা শ্রেণি পরিবর্তন করো")
                         }

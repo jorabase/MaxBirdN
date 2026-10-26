@@ -166,6 +166,7 @@ fun MainContainerScreen(
                         onNavigateToProfile = { selectedIndex = 4 },
                         onNavigateToEditProfile = onNavigateToEditProfile,
                         onNavigateToChangeSyllabus = onNavigateToChangeSyllabus,
+                        onNavigateToCourseTab = { selectedIndex = 1 },
                         onCourseSelected = { program ->
                             homeViewModel.switchActiveCourse(program)
                             courseViewModel.openCourse(program)

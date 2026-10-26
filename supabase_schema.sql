@@ -1156,4 +1156,691 @@ $$;
 
 GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 
+-- ========================================================
+-- ১৬. COURSE ACCESS REQUEST, CUSTOM PRICING, FLEXIBLE INSTALLMENTS (কিস্তি) & PAYMENT VERIFICATION SYSTEM
+-- (লক ও ঝাপসা কোর্স, 'কোর্সে এক্সেস পান' রিকোয়েস্ট, স্টুডেন্ট অনুযায়ী দাম ও কিস্তি নির্ধারণ, মোবাইল নম্বর/টাকা/TrxID পেমেন্ট সাবমিশন, রিজেক্ট কারণ এবং কিস্তির মেয়াদ শেষ হলে অটোমেটিক এক্সেস বন্ধ হওয়ার সম্পূর্ণ সিস্টেম)
+-- ========================================================
+
+-- ১৬.১ অ্যাডমিনের পেমেন্ট নম্বর ও নির্দেশনা টেবিল (বিকাশ, নগদ, রকেট)
+CREATE TABLE IF NOT EXISTS public.course_payment_settings (
+    id INT PRIMARY KEY DEFAULT 1,
+    bkash_number TEXT DEFAULT '01700000000',
+    nagad_number TEXT DEFAULT '01700000000',
+    rocket_number TEXT DEFAULT '',
+    payment_instruction_bn TEXT DEFAULT 'উপরের যেকোনো নাম্বারে Send Money করে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।',
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT single_row_payment_settings CHECK (id = 1)
+);
+
+INSERT INTO public.course_payment_settings (id, bkash_number, nagad_number, rocket_number)
+VALUES (1, '01700000000', '01700000000', '')
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE public.course_payment_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access course_payment_settings" ON public.course_payment_settings;
+CREATE POLICY "Allow all access course_payment_settings" ON public.course_payment_settings
+FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE public.course_payment_settings TO anon, authenticated, service_role;
+
+-- ১৬.২ স্টুডেন্ট ও ডিভাইস অনুযায়ী কোর্স এক্সেস রিকোয়েস্ট, কাস্টম দাম এবং কিস্তি ট্র্যাকিং টেবিল
+CREATE TABLE IF NOT EXISTS public.course_access_enrollments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    device_hash TEXT NOT NULL,
+    display_device_id TEXT DEFAULT '',
+    shikho_user_id TEXT NOT NULL,
+    user_phone TEXT DEFAULT '',
+    student_name TEXT DEFAULT '',
+    program_id TEXT NOT NULL,
+    program_title TEXT DEFAULT '',
+    class_code TEXT DEFAULT '',
+    group_code TEXT DEFAULT '',
+    batch_id TEXT DEFAULT '',
+    banner_url TEXT DEFAULT '',
+    -- status values:
+    -- 'REQUESTED'        -> স্টুডেন্ট 'কোর্সে এক্সেস পান' বাটনে ক্লিক করেছে (অ্যাডমিন এখনো দাম সেট করেনি)
+    -- 'APPROVED_TO_BUY'  -> অ্যাডমিন এক্সেস দিয়েছে এবং দাম ও কিস্তি সেট করেছে (অ্যাপে ঝাপসা কেটে গিয়ে দাম ও কেনার অপশন শো করবে)
+    -- 'PAYMENT_PENDING'  -> স্টুডেন্ট পেমেন্ট (মোবাইল নম্বর, টাকা, TrxID) জমা দিয়েছে, অ্যাডমিন এপ্রুভালের অপেক্ষায়
+    -- 'PAYMENT_REJECTED' -> অ্যাডমিন পেমেন্ট রিজেক্ট করেছে (কারণসহ অ্যাপে শো করবে)
+    -- 'ACTIVE'           -> পেমেন্ট এপ্রুভড (ফুল পেইড অথবা কিস্তি চলমান এবং মেয়াদ আছে — কোর্স সম্পূর্ণ আনলকড)
+    -- 'OVERDUE'          -> কিস্তির মেয়াদ (next_due_date) পার হয়ে গেছে কিন্তু কিস্তি দেয়নি (কোর্স অটোমেটিক লক হয়ে গেছে!)
+    -- 'REVOKED'          -> অ্যাডমিন এক্সেস বাতিল করেছে
+    status TEXT NOT NULL DEFAULT 'REQUESTED',
+    total_price NUMERIC(10, 2) DEFAULT 0,
+    paid_amount NUMERIC(10, 2) DEFAULT 0,
+    due_amount NUMERIC(10, 2) DEFAULT 0,
+    allow_installments BOOLEAN DEFAULT true,
+    installment_plans_json JSONB DEFAULT '[]'::jsonb,
+    active_plan_id TEXT DEFAULT '',
+    active_plan_title TEXT DEFAULT '',
+    total_installments INT DEFAULT 1,
+    completed_installments INT DEFAULT 0,
+    installment_interval_days INT DEFAULT 7,
+    next_installment_amount NUMERIC(10, 2) DEFAULT 0,
+    next_due_date TIMESTAMP WITH TIME ZONE NULL,
+    last_transaction_id TEXT DEFAULT '',
+    last_payment_amount NUMERIC(10, 2) DEFAULT 0,
+    last_sender_mobile TEXT DEFAULT '',
+    last_payment_method TEXT DEFAULT '',
+    pending_installment_tx_id TEXT DEFAULT '',
+    pending_installment_amount NUMERIC(10, 2) DEFAULT 0,
+    rejection_reason TEXT DEFAULT '',
+    admin_note TEXT DEFAULT '',
+    requested_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    approved_at TIMESTAMP WITH TIME ZONE NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    UNIQUE(device_hash, shikho_user_id, program_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_device_user ON public.course_access_enrollments(device_hash, shikho_user_id);
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_status ON public.course_access_enrollments(status);
+CREATE INDEX IF NOT EXISTS idx_course_enrollments_due_date ON public.course_access_enrollments(next_due_date);
+
+ALTER TABLE public.course_access_enrollments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access course_access_enrollments" ON public.course_access_enrollments;
+CREATE POLICY "Allow all access course_access_enrollments" ON public.course_access_enrollments
+FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE public.course_access_enrollments TO anon, authenticated, service_role;
+
+-- ১৬.৩ কোর্স পেমেন্ট ও কিস্তি ট্রানজেকশন সাবমিশন টেবিল
+CREATE TABLE IF NOT EXISTS public.course_payment_transactions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    enrollment_id UUID REFERENCES public.course_access_enrollments(id) ON DELETE CASCADE,
+    device_hash TEXT NOT NULL,
+    display_device_id TEXT DEFAULT '',
+    shikho_user_id TEXT NOT NULL,
+    user_phone TEXT DEFAULT '',
+    student_name TEXT DEFAULT '',
+    program_id TEXT NOT NULL,
+    program_title TEXT DEFAULT '',
+    payment_type TEXT DEFAULT 'INITIAL', -- 'INITIAL' (প্রথমবার ভর্তি) অথবা 'INSTALLMENT' (পরবর্তী কিস্তি)
+    selected_plan_id TEXT DEFAULT 'full',
+    selected_plan_title TEXT DEFAULT 'এককালীন সম্পূর্ণ পেমেন্ট',
+    installment_number INT DEFAULT 1,
+    total_installments INT DEFAULT 1,
+    interval_days INT DEFAULT 7,
+    payment_method TEXT NOT NULL DEFAULT 'bKash',
+    sender_mobile TEXT NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    transaction_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
+    rejection_reason TEXT DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    reviewed_at TIMESTAMP WITH TIME ZONE NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_tx_device_user ON public.course_payment_transactions(device_hash, shikho_user_id);
+CREATE INDEX IF NOT EXISTS idx_course_tx_status ON public.course_payment_transactions(status);
+CREATE INDEX IF NOT EXISTS idx_course_tx_enrollment ON public.course_payment_transactions(enrollment_id);
+
+ALTER TABLE public.course_payment_transactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all access course_payment_transactions" ON public.course_payment_transactions;
+CREATE POLICY "Allow all access course_payment_transactions" ON public.course_payment_transactions
+FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+GRANT ALL ON TABLE public.course_payment_transactions TO anon, authenticated, service_role;
+
+-- ১৬.৪ কিস্তির নির্দিষ্ট সময় (next_due_date) পার হয়ে গেলে অটোমেটিক কোর্স এক্সেস অফ করার ফাংশন
+CREATE OR REPLACE FUNCTION public.enforce_overdue_course_installments()
+RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_rec RECORD;
+BEGIN
+    FOR v_rec IN
+        SELECT id, device_hash, shikho_user_id, program_id
+        FROM public.course_access_enrollments
+        WHERE status = 'ACTIVE'
+          AND due_amount > 0
+          AND next_due_date IS NOT NULL
+          AND next_due_date < now()
+    LOOP
+        -- ১. এনরোলমেন্ট স্ট্যাটাস OVERDUE করে দেওয়া
+        UPDATE public.course_access_enrollments
+        SET status = 'OVERDUE',
+            updated_at = now()
+        WHERE id = v_rec.id;
+
+        -- ২. যদি device_shikho_accounts বা devices টেবিলে ওই প্রোগ্রাম আইডি থাকে তবে সেখান থেকেও সরিয়ে দেওয়া যাতে হোমে আর শো না করে
+        UPDATE public.device_shikho_accounts
+        SET allowed_programs = array_remove(allowed_programs, v_rec.program_id)
+        WHERE device_hash = v_rec.device_hash
+          AND shikho_user_id = v_rec.shikho_user_id;
+
+        UPDATE public.devices
+        SET allowed_programs = array_remove(allowed_programs, v_rec.program_id)
+        WHERE device_hash = v_rec.device_hash;
+    END LOOP;
+END;
+$$;
+
+-- ১৬.৫ স্টুডেন্ট অ্যাপ থেকে 'কোর্সে এক্সেস পান' রিকোয়েস্ট পাঠানোর RPC
+CREATE OR REPLACE FUNCTION public.request_course_purchase_access(
+    p_device_hash TEXT,
+    p_display_device_id TEXT DEFAULT '',
+    p_shikho_user_id TEXT DEFAULT '',
+    p_user_phone TEXT DEFAULT '',
+    p_student_name TEXT DEFAULT '',
+    p_program_id TEXT DEFAULT '',
+    p_program_title TEXT DEFAULT '',
+    p_class_code TEXT DEFAULT '',
+    p_group_code TEXT DEFAULT '',
+    p_batch_id TEXT DEFAULT '',
+    p_banner_url TEXT DEFAULT ''
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_uid TEXT := COALESCE(NULLIF(TRIM(p_shikho_user_id), ''), NULLIF(TRIM(p_user_phone), ''), 'guest');
+    v_existing RECORD;
+    v_enrollment_id UUID;
+BEGIN
+    IF COALESCE(TRIM(p_device_hash), '') = '' OR COALESCE(TRIM(p_program_id), '') = '' THEN
+        RETURN json_build_object('success', false, 'message', 'ডিভাইস বা কোর্সের তথ্য পাওয়া যায়নি।');
+    END IF;
+
+    SELECT * INTO v_existing
+    FROM public.course_access_enrollments
+    WHERE device_hash = TRIM(p_device_hash)
+      AND shikho_user_id = v_uid
+      AND program_id = TRIM(p_program_id)
+    LIMIT 1;
+
+    IF FOUND THEN
+        IF v_existing.status IN ('APPROVED_TO_BUY', 'ACTIVE', 'PAYMENT_PENDING', 'OVERDUE') THEN
+            RETURN json_build_object(
+                'success', true,
+                'status', v_existing.status,
+                'enrollment_id', v_existing.id,
+                'message', 'আপনার কোর্স রিকোয়েস্ট ইতিমধ্যে প্রসেস করা হয়েছে।'
+            );
+        END IF;
+
+        UPDATE public.course_access_enrollments
+        SET status = 'REQUESTED',
+            display_device_id = COALESCE(NULLIF(TRIM(p_display_device_id), ''), display_device_id),
+            user_phone = COALESCE(NULLIF(TRIM(p_user_phone), ''), user_phone),
+            student_name = COALESCE(NULLIF(TRIM(p_student_name), ''), student_name),
+            program_title = COALESCE(NULLIF(TRIM(p_program_title), ''), program_title),
+            class_code = COALESCE(NULLIF(TRIM(p_class_code), ''), class_code),
+            group_code = COALESCE(NULLIF(TRIM(p_group_code), ''), group_code),
+            batch_id = COALESCE(NULLIF(TRIM(p_batch_id), ''), batch_id),
+            banner_url = COALESCE(NULLIF(TRIM(p_banner_url), ''), banner_url),
+            rejection_reason = '',
+            requested_at = now(),
+            updated_at = now()
+        WHERE id = v_existing.id
+        RETURNING id INTO v_enrollment_id;
+    ELSE
+        INSERT INTO public.course_access_enrollments (
+            device_hash, display_device_id, shikho_user_id, user_phone, student_name,
+            program_id, program_title, class_code, group_code, batch_id, banner_url,
+            status, requested_at, updated_at
+        ) VALUES (
+            TRIM(p_device_hash),
+            COALESCE(TRIM(p_display_device_id), ''),
+            v_uid,
+            COALESCE(TRIM(p_user_phone), ''),
+            COALESCE(TRIM(p_student_name), ''),
+            TRIM(p_program_id),
+            COALESCE(TRIM(p_program_title), ''),
+            COALESCE(TRIM(p_class_code), ''),
+            COALESCE(TRIM(p_group_code), ''),
+            COALESCE(TRIM(p_batch_id), ''),
+            COALESCE(TRIM(p_banner_url), ''),
+            'REQUESTED',
+            now(),
+            now()
+        ) RETURNING id INTO v_enrollment_id;
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'status', 'REQUESTED',
+        'enrollment_id', v_enrollment_id,
+        'message', 'অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম ও কিস্তি নির্ধারণ করে এক্সেস দিলে এখানে দাম দেখতে পাবেন।'
+    );
+END;
+$$;
+
+-- ১৬.৬ অ্যাডমিন অ্যাপ থেকে স্টুডেন্টের কোর্স এক্সেস রিকোয়েস্ট এপ্রুভ করা এবং দাম ও কিস্তি (যেমন ৫ বারে ২০০ টাকা বা ২ বারে ৫০০ টাকা) সেট করার RPC
+CREATE OR REPLACE FUNCTION public.admin_approve_course_access_request(
+    p_enrollment_id UUID DEFAULT NULL,
+    p_device_hash TEXT DEFAULT '',
+    p_shikho_user_id TEXT DEFAULT '',
+    p_program_id TEXT DEFAULT '',
+    p_total_price NUMERIC DEFAULT 1000,
+    p_allow_installments BOOLEAN DEFAULT true,
+    p_installment_plans_json JSONB DEFAULT NULL,
+    p_admin_note TEXT DEFAULT '',
+    p_grant_direct_active BOOLEAN DEFAULT false
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_plans JSONB;
+    v_price NUMERIC := GREATEST(0, COALESCE(p_total_price, 1000));
+    v_part5 NUMERIC := ROUND(v_price / 5.0, 0);
+    v_part2 NUMERIC := ROUND(v_price / 2.0, 0);
+    v_part3 NUMERIC := ROUND(v_price / 3.0, 0);
+    v_target_id UUID := p_enrollment_id;
+    v_new_status TEXT;
+BEGIN
+    IF p_installment_plans_json IS NOT NULL AND jsonb_typeof(p_installment_plans_json) = 'array' AND jsonb_array_length(p_installment_plans_json) > 0 THEN
+        v_plans := p_installment_plans_json;
+    ELSE
+        IF COALESCE(p_allow_installments, true) = true AND v_price > 0 THEN
+            v_plans := jsonb_build_array(
+                jsonb_build_object(
+                    'plan_id', 'full',
+                    'title_bn', 'এককালীন সম্পূর্ণ পেমেন্ট (৳' || v_price || ')',
+                    'installments_count', 1,
+                    'interval_days', 0,
+                    'first_amount', v_price,
+                    'per_installment_amount', v_price
+                ),
+                jsonb_build_object(
+                    'plan_id', 'inst_2_weekly',
+                    'title_bn', '২ কিস্তিতে পরিশোধ (প্রথমে ৳' || v_part2 || ' + পরে ৳' || (v_price - v_part2) || ')',
+                    'installments_count', 2,
+                    'interval_days', 15,
+                    'first_amount', v_part2,
+                    'per_installment_amount', (v_price - v_part2)
+                ),
+                jsonb_build_object(
+                    'plan_id', 'inst_5_weekly',
+                    'title_bn', '৫ কিস্তিতে পরিশোধ (প্রতি সপ্তাহে ৳' || v_part5 || ' করে)',
+                    'installments_count', 5,
+                    'interval_days', 7,
+                    'first_amount', v_part5,
+                    'per_installment_amount', v_part5
+                ),
+                jsonb_build_object(
+                    'plan_id', 'inst_3_monthly',
+                    'title_bn', '৩ কিস্তিতে পরিশোধ (প্রতি ১০ দিন পরপর ৳' || v_part3 || ' করে)',
+                    'installments_count', 3,
+                    'interval_days', 10,
+                    'first_amount', v_part3,
+                    'per_installment_amount', v_part3
+                )
+            );
+        ELSE
+            v_plans := jsonb_build_array(
+                jsonb_build_object(
+                    'plan_id', 'full',
+                    'title_bn', 'এককালীন সম্পূর্ণ পেমেন্ট (৳' || v_price || ')',
+                    'installments_count', 1,
+                    'interval_days', 0,
+                    'first_amount', v_price,
+                    'per_installment_amount', v_price
+                )
+            );
+        END IF;
+    END IF;
+
+    v_new_status := CASE WHEN COALESCE(p_grant_direct_active, false) = true OR v_price <= 0 THEN 'ACTIVE' ELSE 'APPROVED_TO_BUY' END;
+
+    IF v_target_id IS NULL THEN
+        SELECT id INTO v_target_id
+        FROM public.course_access_enrollments
+        WHERE (device_hash = TRIM(p_device_hash) OR display_device_id = TRIM(p_device_hash))
+          AND (TRIM(p_shikho_user_id) = '' OR shikho_user_id = TRIM(p_shikho_user_id))
+          AND program_id = TRIM(p_program_id)
+        ORDER BY updated_at DESC
+        LIMIT 1;
+    END IF;
+
+    IF v_target_id IS NOT NULL THEN
+        UPDATE public.course_access_enrollments
+        SET status = v_new_status,
+            total_price = v_price,
+            due_amount = CASE WHEN v_new_status = 'ACTIVE' THEN 0 ELSE GREATEST(0, v_price - paid_amount) END,
+            allow_installments = COALESCE(p_allow_installments, true),
+            installment_plans_json = v_plans,
+            admin_note = COALESCE(p_admin_note, ''),
+            rejection_reason = '',
+            approved_at = now(),
+            updated_at = now()
+        WHERE id = v_target_id;
+    ELSIF COALESCE(TRIM(p_device_hash), '') <> '' AND COALESCE(TRIM(p_program_id), '') <> '' THEN
+        INSERT INTO public.course_access_enrollments (
+            device_hash, shikho_user_id, program_id, status,
+            total_price, paid_amount, due_amount, allow_installments,
+            installment_plans_json, admin_note, approved_at, updated_at
+        ) VALUES (
+            TRIM(p_device_hash),
+            COALESCE(NULLIF(TRIM(p_shikho_user_id), ''), 'guest'),
+            TRIM(p_program_id),
+            v_new_status,
+            v_price,
+            CASE WHEN v_new_status = 'ACTIVE' THEN v_price ELSE 0 END,
+            CASE WHEN v_new_status = 'ACTIVE' THEN 0 ELSE v_price END,
+            COALESCE(p_allow_installments, true),
+            v_plans,
+            COALESCE(p_admin_note, ''),
+            now(),
+            now()
+        ) RETURNING id INTO v_target_id;
+    ELSE
+        RETURN json_build_object('success', false, 'message', 'এনরোলমেন্ট রিকোয়েস্ট পাওয়া যায়নি।');
+    END IF;
+
+    RETURN json_build_object(
+        'success', true,
+        'enrollment_id', v_target_id,
+        'status', v_new_status,
+        'total_price', v_price,
+        'message', 'কোর্স কেনার এক্সেস, দাম ও কিস্তি প্ল্যান সফলভাবে সেট করা হয়েছে!'
+    );
+END;
+$$;
+
+-- ১৬.৭ স্টুডেন্ট অ্যাপ থেকে পেমেন্ট বা কিস্তির ট্রানজেকশন (মোবাইল নম্বর, পাঠানো টাকা, TrxID) জমা দেওয়ার RPC
+CREATE OR REPLACE FUNCTION public.submit_course_payment_transaction(
+    p_device_hash TEXT,
+    p_display_device_id TEXT DEFAULT '',
+    p_shikho_user_id TEXT DEFAULT '',
+    p_user_phone TEXT DEFAULT '',
+    p_student_name TEXT DEFAULT '',
+    p_program_id TEXT DEFAULT '',
+    p_program_title TEXT DEFAULT '',
+    p_payment_method TEXT DEFAULT 'bKash',
+    p_sender_mobile TEXT DEFAULT '',
+    p_amount NUMERIC DEFAULT 0,
+    p_transaction_id TEXT DEFAULT '',
+    p_selected_plan_id TEXT DEFAULT 'full',
+    p_selected_plan_title TEXT DEFAULT 'এককালীন সম্পূর্ণ পেমেন্ট',
+    p_total_installments INT DEFAULT 1,
+    p_interval_days INT DEFAULT 7
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_uid TEXT := COALESCE(NULLIF(TRIM(p_shikho_user_id), ''), NULLIF(TRIM(p_user_phone), ''), 'guest');
+    v_enr RECORD;
+    v_enrollment_id UUID;
+    v_tx_id UUID;
+    v_inst_num INT := 1;
+    v_pay_type TEXT := 'INITIAL';
+BEGIN
+    IF COALESCE(TRIM(p_sender_mobile), '') = '' THEN
+        RETURN json_build_object('success', false, 'message', 'যে মোবাইল নম্বর থেকে টাকা পাঠিয়েছেন সেটি লিখুন।');
+    END IF;
+    IF COALESCE(p_amount, 0) <= 0 THEN
+        RETURN json_build_object('success', false, 'message', 'পাঠানো টাকার সঠিক পরিমাণ লিখুন।');
+    END IF;
+    IF COALESCE(TRIM(p_transaction_id), '') = '' THEN
+        RETURN json_build_object('success', false, 'message', 'সঠিক ট্রানজেকশন আইডি (TrxID) লিখুন।');
+    END IF;
+
+    SELECT * INTO v_enr
+    FROM public.course_access_enrollments
+    WHERE device_hash = TRIM(p_device_hash)
+      AND shikho_user_id = v_uid
+      AND program_id = TRIM(p_program_id)
+    LIMIT 1;
+
+    IF FOUND THEN
+        v_enrollment_id := v_enr.id;
+        v_inst_num := COALESCE(v_enr.completed_installments, 0) + 1;
+        v_pay_type := CASE WHEN COALESCE(v_enr.completed_installments, 0) > 0 THEN 'INSTALLMENT' ELSE 'INITIAL' END;
+
+        UPDATE public.course_access_enrollments
+        SET status = CASE
+                WHEN v_enr.status = 'ACTIVE' AND (v_enr.next_due_date IS NULL OR v_enr.next_due_date > now()) THEN 'ACTIVE'
+                ELSE 'PAYMENT_PENDING'
+            END,
+            active_plan_id = CASE WHEN COALESCE(v_enr.active_plan_id, '') = '' THEN COALESCE(p_selected_plan_id, 'full') ELSE v_enr.active_plan_id END,
+            active_plan_title = CASE WHEN COALESCE(v_enr.active_plan_title, '') = '' THEN COALESCE(p_selected_plan_title, 'এককালীন পেমেন্ট') ELSE v_enr.active_plan_title END,
+            total_installments = CASE WHEN COALESCE(v_enr.completed_installments, 0) = 0 THEN GREATEST(1, COALESCE(p_total_installments, 1)) ELSE v_enr.total_installments END,
+            installment_interval_days = CASE WHEN COALESCE(v_enr.completed_installments, 0) = 0 THEN GREATEST(0, COALESCE(p_interval_days, 7)) ELSE v_enr.installment_interval_days END,
+            last_transaction_id = UPPER(TRIM(p_transaction_id)),
+            last_payment_amount = p_amount,
+            last_sender_mobile = TRIM(p_sender_mobile),
+            last_payment_method = COALESCE(TRIM(p_payment_method), 'bKash'),
+            pending_installment_tx_id = UPPER(TRIM(p_transaction_id)),
+            pending_installment_amount = p_amount,
+            rejection_reason = '',
+            updated_at = now()
+        WHERE id = v_enrollment_id;
+    ELSE
+        INSERT INTO public.course_access_enrollments (
+            device_hash, display_device_id, shikho_user_id, user_phone, student_name,
+            program_id, program_title, status, total_price, paid_amount, due_amount,
+            active_plan_id, active_plan_title, total_installments, completed_installments,
+            installment_interval_days, last_transaction_id, last_payment_amount,
+            last_sender_mobile, last_payment_method, pending_installment_tx_id, pending_installment_amount,
+            requested_at, updated_at
+        ) VALUES (
+            TRIM(p_device_hash),
+            COALESCE(TRIM(p_display_device_id), ''),
+            v_uid,
+            COALESCE(TRIM(p_user_phone), ''),
+            COALESCE(TRIM(p_student_name), ''),
+            TRIM(p_program_id),
+            COALESCE(TRIM(p_program_title), ''),
+            'PAYMENT_PENDING',
+            p_amount,
+            0,
+            p_amount,
+            COALESCE(p_selected_plan_id, 'full'),
+            COALESCE(p_selected_plan_title, 'এককালীন পেমেন্ট'),
+            GREATEST(1, COALESCE(p_total_installments, 1)),
+            0,
+            GREATEST(0, COALESCE(p_interval_days, 7)),
+            UPPER(TRIM(p_transaction_id)),
+            p_amount,
+            TRIM(p_sender_mobile),
+            COALESCE(TRIM(p_payment_method), 'bKash'),
+            UPPER(TRIM(p_transaction_id)),
+            p_amount,
+            now(),
+            now()
+        ) RETURNING id INTO v_enrollment_id;
+    END IF;
+
+    INSERT INTO public.course_payment_transactions (
+        enrollment_id, device_hash, display_device_id, shikho_user_id, user_phone, student_name,
+        program_id, program_title, payment_type, selected_plan_id, selected_plan_title,
+        installment_number, total_installments, interval_days,
+        payment_method, sender_mobile, amount, transaction_id, status, created_at
+    ) VALUES (
+        v_enrollment_id,
+        TRIM(p_device_hash),
+        COALESCE(TRIM(p_display_device_id), ''),
+        v_uid,
+        COALESCE(TRIM(p_user_phone), ''),
+        COALESCE(TRIM(p_student_name), ''),
+        TRIM(p_program_id),
+        COALESCE(TRIM(p_program_title), ''),
+        v_pay_type,
+        COALESCE(p_selected_plan_id, 'full'),
+        COALESCE(p_selected_plan_title, 'এককালীন পেমেন্ট'),
+        v_inst_num,
+        GREATEST(1, COALESCE(p_total_installments, 1)),
+        GREATEST(0, COALESCE(p_interval_days, 7)),
+        COALESCE(TRIM(p_payment_method), 'bKash'),
+        TRIM(p_sender_mobile),
+        p_amount,
+        UPPER(TRIM(p_transaction_id)),
+        'PENDING',
+        now()
+    ) RETURNING id INTO v_tx_id;
+
+    RETURN json_build_object(
+        'success', true,
+        'transaction_id', v_tx_id,
+        'enrollment_id', v_enrollment_id,
+        'message', 'আপনার পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করে এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।'
+    );
+END;
+$$;
+
+-- ১৬.৮ অ্যাডমিন অ্যাপ থেকে পেমেন্ট এপ্রুভ (Approve) অথবা কারণসহ রিজেক্ট (Reject) করার RPC
+CREATE OR REPLACE FUNCTION public.admin_review_course_payment(
+    p_transaction_id UUID,
+    p_action TEXT, -- 'APPROVE' অথবা 'REJECT'
+    p_rejection_reason TEXT DEFAULT '',
+    p_next_due_days INT DEFAULT NULL,
+    p_custom_next_installment_amount NUMERIC DEFAULT NULL
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_tx RECORD;
+    v_enr RECORD;
+    v_new_paid NUMERIC;
+    v_total_price NUMERIC;
+    v_new_due NUMERIC;
+    v_new_completed INT;
+    v_remaining_inst INT;
+    v_interval INT;
+    v_next_due TIMESTAMP WITH TIME ZONE;
+    v_next_inst_amt NUMERIC;
+BEGIN
+    SELECT * INTO v_tx
+    FROM public.course_payment_transactions
+    WHERE id = p_transaction_id
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        RETURN json_build_object('success', false, 'message', 'পেমেন্ট ট্রানজেকশন খুঁজে পাওয়া যায়নি।');
+    END IF;
+
+    SELECT * INTO v_enr
+    FROM public.course_access_enrollments
+    WHERE id = v_tx.enrollment_id
+    LIMIT 1;
+
+    IF UPPER(TRIM(p_action)) = 'APPROVE' THEN
+        UPDATE public.course_payment_transactions
+        SET status = 'APPROVED',
+            rejection_reason = '',
+            reviewed_at = now()
+        WHERE id = p_transaction_id;
+
+        IF FOUND AND v_enr.id IS NOT NULL THEN
+            v_total_price := CASE WHEN COALESCE(v_enr.total_price, 0) > 0 THEN v_enr.total_price ELSE v_tx.amount END;
+            v_new_paid := COALESCE(v_enr.paid_amount, 0) + COALESCE(v_tx.amount, 0);
+            v_new_due := GREATEST(0, v_total_price - v_new_paid);
+            v_new_completed := COALESCE(v_enr.completed_installments, 0) + 1;
+            v_interval := COALESCE(p_next_due_days, NULLIF(v_enr.installment_interval_days, 0), NULLIF(v_tx.interval_days, 0), 7);
+
+            IF v_new_due > 0 THEN
+                v_next_due := now() + (v_interval || ' days')::INTERVAL;
+                v_remaining_inst := GREATEST(1, COALESCE(v_enr.total_installments, v_tx.total_installments, 2) - v_new_completed);
+                v_next_inst_amt := COALESCE(p_custom_next_installment_amount, ROUND(v_new_due / v_remaining_inst, 0));
+            ELSE
+                v_next_due := NULL;
+                v_next_inst_amt := 0;
+            END IF;
+
+            UPDATE public.course_access_enrollments
+            SET status = 'ACTIVE',
+                total_price = v_total_price,
+                paid_amount = v_new_paid,
+                due_amount = v_new_due,
+                completed_installments = v_new_completed,
+                installment_interval_days = v_interval,
+                next_installment_amount = v_next_inst_amt,
+                next_due_date = v_next_due,
+                pending_installment_tx_id = '',
+                pending_installment_amount = 0,
+                rejection_reason = '',
+                approved_at = COALESCE(approved_at, now()),
+                updated_at = now()
+            WHERE id = v_enr.id;
+        END IF;
+
+        RETURN json_build_object(
+            'success', true,
+            'status', 'ACTIVE',
+            'paid_amount', v_new_paid,
+            'due_amount', v_new_due,
+            'next_due_date', v_next_due,
+            'message', 'পেমেন্ট সফলভাবে এপ্রুভ করা হয়েছে এবং স্টুডেন্টের জন্য কোর্সটি আনলক হয়েছে!'
+        );
+
+    ELSIF UPPER(TRIM(p_action)) = 'REJECT' THEN
+        UPDATE public.course_payment_transactions
+        SET status = 'REJECTED',
+            rejection_reason = COALESCE(NULLIF(TRIM(p_rejection_reason), ''), 'প্রদত্ত পেমেন্ট তথ্য বা ট্রানজেকশন আইডি সঠিক নয়।'),
+            reviewed_at = now()
+        WHERE id = p_transaction_id;
+
+        IF v_enr.id IS NOT NULL THEN
+            UPDATE public.course_access_enrollments
+            SET status = CASE
+                    WHEN v_enr.status = 'ACTIVE' AND (v_enr.next_due_date IS NULL OR v_enr.next_due_date > now()) THEN 'ACTIVE'
+                    WHEN v_enr.status = 'OVERDUE' OR (v_enr.due_amount > 0 AND v_enr.next_due_date IS NOT NULL AND v_enr.next_due_date < now()) THEN 'OVERDUE'
+                    ELSE 'PAYMENT_REJECTED'
+                END,
+                pending_installment_tx_id = '',
+                pending_installment_amount = 0,
+                rejection_reason = COALESCE(NULLIF(TRIM(p_rejection_reason), ''), 'প্রদত্ত পেমেন্ট তথ্য বা ট্রানজেকশন আইডি সঠিক নয়।'),
+                updated_at = now()
+            WHERE id = v_enr.id;
+        END IF;
+
+        RETURN json_build_object(
+            'success', true,
+            'status', 'REJECTED',
+            'rejection_reason', COALESCE(NULLIF(TRIM(p_rejection_reason), ''), 'প্রদত্ত পেমেন্ট তথ্য বা ট্রানজেকশন আইডি সঠিক নয়।'),
+            'message', 'পেমেন্ট রিকোয়েস্ট রিজেক্ট করা হয়েছে এবং স্টুডেন্টের কাছে কারণ পাঠানো হয়েছে।'
+        );
+    ELSE
+        RETURN json_build_object('success', false, 'message', 'অকার্যকর অ্যাকশন। APPROVE অথবা REJECT পাঠান।');
+    END IF;
+END;
+$$;
+
+-- ১৬.৯ স্টুডেন্ট অ্যাপ থেকে তার সকল কোর্সের এক্সেস, দাম, কিস্তি ও পেমেন্ট স্ট্যাটাস একসাথে পাওয়ার RPC
+CREATE OR REPLACE FUNCTION public.get_student_course_commerce_status(
+    p_device_hash TEXT,
+    p_display_device_id TEXT DEFAULT '',
+    p_shikho_user_id TEXT DEFAULT '',
+    p_user_phone TEXT DEFAULT ''
+) RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    v_uid TEXT := COALESCE(NULLIF(TRIM(p_shikho_user_id), ''), NULLIF(TRIM(p_user_phone), ''), '');
+    v_settings JSON;
+    v_enrollments JSON;
+    v_transactions JSON;
+BEGIN
+    PERFORM public.enforce_overdue_course_installments();
+
+    SELECT row_to_json(s) INTO v_settings
+    FROM (
+        SELECT bkash_number, nagad_number, rocket_number, payment_instruction_bn
+        FROM public.course_payment_settings
+        WHERE id = 1
+        LIMIT 1
+    ) s;
+
+    SELECT COALESCE(json_agg(row_to_json(e) ORDER BY e.updated_at DESC), '[]'::json) INTO v_enrollments
+    FROM (
+        SELECT *
+        FROM public.course_access_enrollments
+        WHERE (device_hash = TRIM(p_device_hash) OR (NULLIF(TRIM(p_display_device_id), '') IS NOT NULL AND display_device_id = TRIM(p_display_device_id)))
+          AND (
+              v_uid = ''
+              OR shikho_user_id = v_uid
+              OR (NULLIF(TRIM(p_user_phone), '') IS NOT NULL AND user_phone = TRIM(p_user_phone))
+          )
+    ) e;
+
+    SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::json) INTO v_transactions
+    FROM (
+        SELECT *
+        FROM public.course_payment_transactions
+        WHERE (device_hash = TRIM(p_device_hash) OR (NULLIF(TRIM(p_display_device_id), '') IS NOT NULL AND display_device_id = TRIM(p_display_device_id)))
+          AND (
+              v_uid = ''
+              OR shikho_user_id = v_uid
+              OR (NULLIF(TRIM(p_user_phone), '') IS NOT NULL AND user_phone = TRIM(p_user_phone))
+          )
+        LIMIT 30
+    ) t;
+
+    RETURN json_build_object(
+        'success', true,
+        'payment_settings', COALESCE(v_settings, json_build_object('bkash_number', '01700000000', 'nagad_number', '01700000000', 'rocket_number', '', 'payment_instruction_bn', 'উপরের নাম্বারে Send Money করে নিচের ফর্মে মোবাইল নম্বর, টাকার পরিমাণ এবং TrxID দিন।')),
+        'enrollments', COALESCE(v_enrollments, '[]'::json),
+        'transactions', COALESCE(v_transactions, '[]'::json)
+    );
+END;
+$$;
+
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+
 

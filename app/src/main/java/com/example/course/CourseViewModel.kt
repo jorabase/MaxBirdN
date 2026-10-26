@@ -98,6 +98,19 @@ class CourseViewModel(
     }
 
     fun openCourse(program: EnrolledProgram) {
+        val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
+        val snapshot = _uiState.value.commerceSnapshot
+        if (!snapshot.isCourseActivelyUnlocked(program.id, program.title_bn, perms)) {
+            val itemState = snapshot.resolveCourseItemState(program.id, program.title_bn, perms)
+            if (itemState.effectiveState == CourseAccessState.INSTALLMENT_OVERDUE ||
+                itemState.effectiveState == CourseAccessState.APPROVED_TO_BUY ||
+                itemState.effectiveState == CourseAccessState.PAYMENT_REJECTED
+            ) {
+                openPaymentSheetForCourse(program.id, program.title_bn ?: "কোর্স")
+            }
+            return
+        }
+
         val title = program.title_bn ?: "প্রোগ্রাম"
         _uiState.update { 
             it.copy(
@@ -117,6 +130,141 @@ class CourseViewModel(
         _uiState.update { it.copy(selectedCourseProgram = null) }
     }
 
+    fun openPaymentSheetForCourse(programId: String, courseTitle: String) {
+        _uiState.update {
+            it.copy(
+                activePaymentSheetProgramId = programId,
+                activePaymentSheetCourseTitle = courseTitle
+            )
+        }
+    }
+
+    fun dismissPaymentSheet() {
+        _uiState.update {
+            it.copy(
+                activePaymentSheetProgramId = null,
+                activePaymentSheetCourseTitle = ""
+            )
+        }
+    }
+
+    fun requestCoursePurchaseAccess(
+        programId: String,
+        programTitle: String,
+        bannerUrl: String?,
+        context: android.content.Context? = null
+    ) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    requestingAccessProgramId = programId,
+                    enrollmentErrorMessage = null,
+                    enrollmentSuccessMessage = null
+                )
+            }
+            val classCode = sessionManager.getUserClassName() ?: "C11"
+            val groupCode = sessionManager.getUserGroup() ?: "Humanities"
+            val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
+
+            val result = CourseCommerceRepository.requestCoursePurchaseAccess(
+                context = sessionManager.appContext,
+                programId = programId,
+                programTitle = programTitle,
+                classCode = classCode,
+                groupCode = groupCode,
+                batchId = batchId,
+                bannerUrl = bannerUrl
+            )
+
+            result.onSuccess { msg ->
+                if (context != null) {
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                val updatedSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
+                _uiState.update {
+                    it.copy(
+                        commerceSnapshot = updatedSnapshot,
+                        requestingAccessProgramId = null,
+                        enrollmentSuccessMessage = msg
+                    )
+                }
+            }.onFailure { err ->
+                val errMsg = err.localizedMessage ?: "রিকোয়েস্ট পাঠাতে সমস্যা হয়েছে"
+                if (context != null) {
+                    android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                _uiState.update {
+                    it.copy(
+                        requestingAccessProgramId = null,
+                        enrollmentErrorMessage = errMsg
+                    )
+                }
+            }
+        }
+    }
+
+    fun submitCoursePayment(
+        programId: String,
+        courseTitle: String,
+        paymentMethod: String,
+        senderMobile: String,
+        amount: Double,
+        transactionId: String,
+        selectedPlan: InstallmentPlanOption,
+        context: android.content.Context? = null,
+        onPaymentSubmitted: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    submittingPaymentProgramId = programId,
+                    enrollmentErrorMessage = null,
+                    enrollmentSuccessMessage = null
+                )
+            }
+
+            val result = CourseCommerceRepository.submitCoursePaymentTransaction(
+                context = sessionManager.appContext,
+                programId = programId,
+                programTitle = courseTitle,
+                paymentMethod = paymentMethod,
+                senderMobile = senderMobile,
+                amount = amount,
+                transactionId = transactionId,
+                selectedPlan = selectedPlan
+            )
+
+            result.onSuccess { msg ->
+                if (context != null) {
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                val updatedSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
+                _uiState.update {
+                    it.copy(
+                        commerceSnapshot = updatedSnapshot,
+                        submittingPaymentProgramId = null,
+                        activePaymentSheetProgramId = null,
+                        activePaymentSheetCourseTitle = "",
+                        enrollmentSuccessMessage = msg
+                    )
+                }
+                fetchEnrolledPrograms()
+                onPaymentSubmitted?.invoke()
+            }.onFailure { err ->
+                val errMsg = err.localizedMessage ?: "পেমেন্ট জমা দিতে সমস্যা হয়েছে"
+                if (context != null) {
+                    android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                _uiState.update {
+                    it.copy(
+                        submittingPaymentProgramId = null,
+                        enrollmentErrorMessage = errMsg
+                    )
+                }
+            }
+        }
+    }
+
     fun fetchEnrolledPrograms() {
         viewModelScope.launch {
             _uiState.update { it.copy(isProgramsLoading = true) }
@@ -125,6 +273,7 @@ class CourseViewModel(
                     context = sessionManager.appContext,
                     forceRefresh = false
                 )
+                val commerceSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
 
                 val rawBatchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
                 val rawClassName = sessionManager.getUserClassName() ?: "C11"
@@ -155,42 +304,63 @@ class CourseViewModel(
                 val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
                 val rawOtherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
 
+                val allCombinedEnrolled = (rawEnrolled + rawOtherAll.map { it.toEnrolledProgram() }).distinctBy { it.id }
+                val allCombinedOther = (rawOtherAll + rawEnrolled.map {
+                    OtherProgram(
+                        id = it.id,
+                        classes = it.classes,
+                        title_bn = it.title_bn,
+                        banner_url = it.banner_url,
+                        is_free = it.is_free,
+                        has_animated_video = it.has_animated_video,
+                        trial_enabled = it.trial_enabled
+                    )
+                }).distinctBy { it.id }
+
                 // Sync discovered courses to Supabase catalog for Admin App convenience
                 viewModelScope.launch {
-                    val combinedForCatalog = (rawEnrolled + rawOtherAll.map { it.toEnrolledProgram() }).distinctBy { it.id }
                     com.example.security.DeviceActivationRepository.syncCourseCatalogToSupabase(
-                        programs = combinedForCatalog,
+                        programs = allCombinedEnrolled,
                         classCode = userClassName,
                         groupCode = group,
                         batchId = batchId
                     )
                 }
 
-                val enrolled = if (!perms.isAccountAuthorized) {
+                // ১. শুধুমাত্র যেসব কোর্স স্টুডেন্ট কিনেছে (অথবা কিস্তি চালু ও মেয়াদ আছে) বা অ্যাডমিন সরাসরি আনলক করেছে সেগুলোই enrolledPrograms এ থাকবে
+                val activeEnrolledList = if (!perms.isAccountAuthorized) {
                     emptyList()
-                } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                    rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
-                } else rawEnrolled
+                } else {
+                    allCombinedEnrolled.filter { prog ->
+                        commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn, perms)
+                    }
+                }
 
-                val otherAll = if (!perms.isAccountAuthorized) {
+                val activeIds = activeEnrolledList.map { it.id }.toSet()
+
+                // ২. বাকি সকল কোর্স লক ও ঝাপসা ক্যাটালগে (otherPrograms) থাকবে যেখান থেকে স্টুডেন্ট 'কোর্সে এক্সেস পান' রিকোয়েস্ট পাঠাতে ও কিস্তিতে কিনতে পারবে
+                val lockedOrPurchasableList = if (!perms.isAccountAuthorized) {
                     emptyList()
-                } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                    rawOtherAll.filter { perms.isProgramAllowed(it.id, it.title_bn) }
-                } else rawOtherAll
-
-                val freeList = otherAll.filter { it.is_free == true }
-                val paidOtherList = otherAll.filter { it.is_free != true }
+                } else {
+                    allCombinedOther.filter { it.id !in activeIds }
+                }
 
                 _uiState.update {
+                    val currentSelected = it.selectedCourseProgram
+                    val validSelected = if (currentSelected != null && currentSelected.id in activeIds) currentSelected else null
                     it.copy(
-                        enrolledPrograms = enrolled,
-                        freePrograms = freeList,
-                        otherPrograms = paidOtherList,
+                        commerceSnapshot = commerceSnapshot,
+                        deviceCoursePermissions = perms,
+                        enrolledPrograms = activeEnrolledList,
+                        freePrograms = emptyList(),
+                        otherPrograms = lockedOrPurchasableList,
+                        selectedCourseProgram = validSelected,
                         isProgramsLoading = false
                     )
                 }
             } catch (e: Exception) {
                 val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
+                val commerceSnapshot = CourseCommerceRepository.getCachedSnapshot(sessionManager.appContext)
                 _uiState.update { current ->
                     val rawClassName = sessionManager.getUserClassName() ?: "C11"
                     val rawGroup = sessionManager.getUserGroup() ?: "Humanities"
@@ -199,26 +369,50 @@ class CourseViewModel(
 
                     if (!perms.isAccountAuthorized) {
                         current.copy(
+                            commerceSnapshot = commerceSnapshot,
+                            deviceCoursePermissions = perms,
                             enrolledPrograms = emptyList(),
                             freePrograms = emptyList(),
                             otherPrograms = emptyList(),
                             isProgramsLoading = false
                         )
-                    } else if (current.enrolledPrograms.isEmpty() && current.freePrograms.isEmpty() && current.otherPrograms.isEmpty()) {
+                    } else if (current.enrolledPrograms.isEmpty() && current.otherPrograms.isEmpty()) {
                         val fbEnrolled = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group)
-                            .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
                         val fbFree = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group)
-                            .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
                         val fbOther = CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group)
-                            .let { list -> if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) list.filter { perms.isProgramAllowed(it.id, it.title_bn) } else list }
+                        val allFbEnrolled = (fbEnrolled + fbFree.map { it.toEnrolledProgram() } + fbOther.map { it.toEnrolledProgram() }).distinctBy { it.id }
+                        val allFbOther = (fbOther + fbFree + fbEnrolled.map {
+                            OtherProgram(
+                                id = it.id,
+                                classes = it.classes,
+                                title_bn = it.title_bn,
+                                banner_url = it.banner_url,
+                                is_free = it.is_free,
+                                has_animated_video = it.has_animated_video,
+                                trial_enabled = it.trial_enabled
+                            )
+                        }).distinctBy { it.id }
+
+                        val activeList = allFbEnrolled.filter { prog ->
+                            commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn, perms)
+                        }
+                        val activeIds = activeList.map { it.id }.toSet()
+                        val remainingOther = allFbOther.filter { it.id !in activeIds }
+
                         current.copy(
-                            enrolledPrograms = fbEnrolled,
-                            freePrograms = fbFree,
-                            otherPrograms = fbOther,
+                            commerceSnapshot = commerceSnapshot,
+                            deviceCoursePermissions = perms,
+                            enrolledPrograms = activeList,
+                            freePrograms = emptyList(),
+                            otherPrograms = remainingOther,
                             isProgramsLoading = false
                         )
                     } else {
-                        current.copy(isProgramsLoading = false)
+                        current.copy(
+                            commerceSnapshot = commerceSnapshot,
+                            deviceCoursePermissions = perms,
+                            isProgramsLoading = false
+                        )
                     }
                 }
             }
@@ -230,118 +424,48 @@ class CourseViewModel(
         context: android.content.Context? = null,
         onEnrollmentSuccess: ((EnrolledProgram) -> Unit)? = null
     ) {
-        viewModelScope.launch {
-            val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
-            if (!perms.isAccountAuthorized || (perms.isRestricted && perms.allowedPrograms.isNotEmpty() && !perms.isProgramAllowed(program.id, program.title_bn))) {
-                val msg = "অ্যাডমিন থেকে এই অ্যাকাউন্টে কোর্সটির এক্সেস দেওয়া হয়নি।"
-                if (context != null) {
-                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
-                }
-                _uiState.update { it.copy(enrollingProgramId = null, enrollmentErrorMessage = msg) }
-                return@launch
-            }
+        val perms = com.example.security.DeviceActivationRepository.getCachedCoursePermissions(sessionManager.appContext)
+        val snapshot = _uiState.value.commerceSnapshot
+        val itemState = snapshot.resolveCourseItemState(program.id, program.title_bn, perms)
 
-            _uiState.update {
-                it.copy(
-                    enrollingProgramId = program.id,
-                    enrollmentErrorMessage = null
+        when (itemState.effectiveState) {
+            CourseAccessState.LOCKED_BLURRED -> {
+                requestCoursePurchaseAccess(
+                    programId = program.id,
+                    programTitle = program.title_bn ?: "কোর্স",
+                    bannerUrl = program.banner_url,
+                    context = context
                 )
             }
-
-            val userId = sessionManager.getUserId() ?: ""
-            val isFreeCourse = program.is_free == true
-            
-            var result = if (isFreeCourse) {
-                repository.enrollInFreeProgram(program.id)
-            } else {
-                repository.generateFreeTrialEnrolment(program.id, userId)
-            }
-
-            // Fallback: If free enrollment failed with "not free", try trial enrolment
-            if (result.isFailure && isFreeCourse) {
-                val errMsg = result.exceptionOrNull()?.message ?: ""
-                if (errMsg.contains("not free", ignoreCase = true) || errMsg.contains("400", ignoreCase = true)) {
-                    result = repository.generateFreeTrialEnrolment(program.id, userId)
-                }
-            } else if (result.isFailure && !isFreeCourse) {
-                val errMsg = result.exceptionOrNull()?.message ?: ""
-                if (errMsg.contains("free", ignoreCase = true) || errMsg.contains("trial", ignoreCase = true) || errMsg.contains("400", ignoreCase = true)) {
-                    result = repository.enrollInFreeProgram(program.id)
-                }
-            }
-
-            result.onSuccess { successMsg ->
-                val feedbackText = if (isFreeCourse) "ফ্রি কোর্সে সফলভাবে ভর্তি হয়েছে!" else "৩ দিনের ফ্রি ট্রায়ালে সফলভাবে ভর্তি হয়েছে!"
+            CourseAccessState.ACCESS_REQUESTED -> {
                 if (context != null) {
-                    android.widget.Toast.makeText(context, feedbackText, android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(
+                        context,
+                        "আপনার রিকোয়েস্ট অ্যাডমিন প্যানেলে পেন্ডিং আছে। অ্যাডমিন দাম ও কিস্তি নির্ধারণ করলে এখানে কেনার অপশন চালু হবে।",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
-
-                // Refresh programs from server to fetch the latest server-generated enrollment record
-                try {
-                    val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
-                    val userClassName = sessionManager.getUserClassName() ?: "C11"
-                    val group = sessionManager.getUserGroup() ?: "Humanities"
-                    val vendor = sessionManager.getUserVendor() ?: "BD"
-
-                    val response = repository.getAcademicProgramByEnrollment(
-                        batchId = batchId,
-                        className = userClassName,
-                        group = group,
-                        vendor = vendor
-                    )
-                    val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
-                    val rawOtherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
-                    val enrolled = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                        rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
-                    } else rawEnrolled
-                    val otherAll = if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                        rawOtherAll.filter { perms.isProgramAllowed(it.id, it.title_bn) }
-                    } else rawOtherAll
-
-                    val freeList = otherAll.filter { it.is_free == true }
-                    val paidOtherList = otherAll.filter { it.is_free != true }
-
-                    val newlyEnrolled = enrolled.find { it.id == program.id } ?: program.toEnrolledProgram()
-
-                    _uiState.update {
-                        it.copy(
-                            enrolledPrograms = if (enrolled.isNotEmpty()) enrolled else (it.enrolledPrograms + newlyEnrolled).distinctBy { p -> p.id },
-                            freePrograms = freeList,
-                            otherPrograms = paidOtherList,
-                            enrollingProgramId = null,
-                            enrollmentSuccessMessage = feedbackText,
-                            enrollmentErrorMessage = null
-                        )
-                    }
-
-                    // Open the course
-                    openCourse(newlyEnrolled)
-                    onEnrollmentSuccess?.invoke(newlyEnrolled)
-                } catch (_: Exception) {
-                    val fallbackEnrolled = program.toEnrolledProgram()
-                    _uiState.update {
-                        it.copy(
-                            enrolledPrograms = (it.enrolledPrograms + fallbackEnrolled).distinctBy { p -> p.id },
-                            enrollingProgramId = null,
-                            enrollmentSuccessMessage = feedbackText,
-                            enrollmentErrorMessage = null
-                        )
-                    }
-                    openCourse(fallbackEnrolled)
-                    onEnrollmentSuccess?.invoke(fallbackEnrolled)
-                }
-            }.onFailure { error ->
-                val reason = error.localizedMessage ?: "সার্ভার রেসপন্স দেয়নি"
-                val errText = "ভর্তি হতে সমস্যা হয়েছে: $reason"
+                fetchEnrolledPrograms()
+            }
+            CourseAccessState.APPROVED_TO_BUY,
+            CourseAccessState.PAYMENT_REJECTED,
+            CourseAccessState.INSTALLMENT_OVERDUE -> {
+                openPaymentSheetForCourse(program.id, program.title_bn ?: "কোর্স")
+            }
+            CourseAccessState.PAYMENT_PENDING -> {
                 if (context != null) {
-                    android.widget.Toast.makeText(context, errText, android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(
+                        context,
+                        "আপনার পেমেন্ট যাচাই চলছে। অ্যাডমিন এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 }
-                _uiState.update {
-                    it.copy(
-                        enrollingProgramId = null,
-                        enrollmentErrorMessage = errText
-                    )
-                }
+                fetchEnrolledPrograms()
+            }
+            CourseAccessState.ACTIVE -> {
+                val enrolledProg = program.toEnrolledProgram()
+                openCourse(enrolledProg)
+                onEnrollmentSuccess?.invoke(enrolledProg)
             }
         }
     }

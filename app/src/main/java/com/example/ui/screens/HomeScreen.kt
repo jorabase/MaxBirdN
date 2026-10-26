@@ -56,6 +56,7 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = onNavigateToProfile,
     onNavigateToChangeSyllabus: () -> Unit = {},
+    onNavigateToCourseTab: () -> Unit = {},
     onCourseSelected: (EnrolledProgram) -> Unit = {},
     onOpenCourse: (phaseId: String?) -> Unit = {},
     onOpenFullRoutine: () -> Unit = {},
@@ -131,7 +132,8 @@ fun HomeScreen(
                 onCourseSelected(program)
             },
             onDismiss = { viewModel.setCourseSwitcherVisible(false) },
-            onChangeSyllabusClick = onNavigateToChangeSyllabus
+            onChangeSyllabusClick = onNavigateToChangeSyllabus,
+            onBrowseCoursesClick = onNavigateToCourseTab
         )
     }
 
@@ -294,6 +296,52 @@ fun HomeScreen(
                                 )
                             }
 
+                            if (uiState.enrolledPrograms.isEmpty()) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(22.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LockOpen,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Text(
+                                            text = "এখনো কোনো কোর্স আনলক করা হয়নি",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Text(
+                                            text = "কোর্স ট্যাবে গিয়ে তোমার পছন্দের কোর্সে 'কোর্সে এক্সেস পান' বাটনে ট্যাপ করো। অ্যাডমিন এক্সেস দিলে এককালীন অথবা সহজ কিস্তিতে কোর্সটি কিনে ক্লাস শুরু করতে পারবে!",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center,
+                                            lineHeight = 18.sp
+                                        )
+                                        Button(
+                                            onClick = onNavigateToCourseTab,
+                                            shape = RoundedCornerShape(14.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                        ) {
+                                            Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("কোর্স আনলক / কিস্তিতে ভর্তি হোন", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
 
                             WeeklyRoutineSection(
                                 lessons = uiState.filteredWeeklyRoutine,

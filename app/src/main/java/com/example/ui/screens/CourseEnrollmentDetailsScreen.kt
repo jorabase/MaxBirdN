@@ -70,6 +70,9 @@ fun CourseEnrollmentDetailsScreen(
             context = context,
             forceRefresh = false
         )
+        val commerceSnapshot = com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(
+            context = context
+        )
         try {
             val rawClassName = sessionManager.getUserClassName() ?: "C11"
             val className = if (perms.isClassAllowed(rawClassName)) rawClassName else (perms.getPrimaryAllowedClassCode() ?: rawClassName)
@@ -95,11 +98,13 @@ fun CourseEnrollmentDetailsScreen(
 
             val response = apiService.getAcademicProgram(query)
             val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
-            val enrolled = if (!perms.isAccountAuthorized) {
-                emptyList()
-            } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                rawEnrolled.filter { perms.isProgramAllowed(it.id, it.title_bn) }
-            } else rawEnrolled
+            val enrolled = rawEnrolled.filter { prog ->
+                commerceSnapshot.isCourseActivelyUnlocked(
+                    programId = prog.id,
+                    titleBn = prog.title_bn,
+                    perms = perms
+                )
+            }
 
             if (enrolled.isNotEmpty()) {
                 val list = mutableListOf<EnrollmentProgramDisplay>()

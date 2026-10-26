@@ -641,15 +641,17 @@ class HomeViewModel(
                 )
             }
 
-            // Apply Admin Device + Shikho Account Course Filter
+            // Fetch student's real-time course purchase & installment status from Supabase
+            val commerceSnapshot = com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(getApplication())
+
+            // Apply Admin Device + Shikho Account + Course Purchase/Installment Filter:
+            // ডিভাইস এক্সেস নিলেই অটোমেটিক কোনো কোর্স আনলক হবে না। শুধুমাত্র কেনা/কিস্তি চলমান (মেয়াদ থাকা) অথবা অ্যাডমিন কর্তৃক সরাসরি অনুমোদিত কোর্সগুলোই হোমে শো হবে।
             val allPrograms = if (!perms.isAccountAuthorized) {
                 emptyList()
-            } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
-                unfilteredAllPrograms.filter { prog ->
-                    perms.isProgramAllowed(prog.id, prog.title_bn)
-                }
             } else {
-                unfilteredAllPrograms
+                unfilteredAllPrograms.filter { prog ->
+                    commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn, perms)
+                }
             }
 
             // একটিভ কোর্স নির্ধারণ (ইউজারের সেভ করা কোর্স অথবা প্রথমটি)
@@ -663,12 +665,11 @@ class HomeViewModel(
                     batchId = active.enrollment_details?.batch_id,
                     classCode = active.classes?.firstOrNull()
                 )
-            } else if (perms.isRestricted && perms.allowedPrograms.isNotEmpty()) {
+            } else {
                 sessionManager.clearActiveProgram()
             }
 
-            val hasActiveEnrollment = active?.enrollment_details?.is_active == true ||
-                    allPrograms.any { it.enrollment_details?.is_active == true }
+            val hasActiveEnrollment = active != null
 
             val activeSavedSubjects = if (active != null) sessionManager.getSelectedSubjectCodes(active.id) else null
             val activeInitialSubjects = active?.subjects?.map {
@@ -680,6 +681,7 @@ class HomeViewModel(
             _uiState.value = _uiState.value.copy(
                 enrolledPrograms = allPrograms,
                 activeProgram = active,
+                weeklyRoutine = if (active == null) emptyList() else _uiState.value.weeklyRoutine,
                 selectedSubjectCodes = initialSelected,
                 courseSubjects = activeInitialSubjects,
                 isPremium = hasActiveEnrollment,
@@ -688,7 +690,7 @@ class HomeViewModel(
                 errorMessage = if (!perms.isAccountAuthorized) {
                     "এই শিখো অ্যাকাউন্টে কোনো কোর্স এনরোল করা নেই"
                 } else if (allPrograms.isEmpty()) {
-                    "অ্যাডমিন থেকে এই শ্রেণির কোনো কোর্সের এক্সেস দেওয়া হয়নি অথবা কোনো সক্রিয় কোর্স পাওয়া যায়নি"
+                    "তুমি এখনো কোনো কোর্সে ভর্তি হওনি। কোর্স অপশনে গিয়ে তোমার পছন্দের কোর্সে এক্সেস নাও ও ভর্তি হও।"
                 } else null
             )
 
