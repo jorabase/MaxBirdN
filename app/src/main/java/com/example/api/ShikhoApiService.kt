@@ -288,6 +288,7 @@ interface ShikhoApiService {
 
                         try {
                             val refreshClient = OkHttpClient.Builder()
+                                .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, sessionManager.appContext) }
                                 .connectTimeout(10, TimeUnit.SECONDS)
                                 .readTimeout(10, TimeUnit.SECONDS)
                                 .build()
@@ -377,6 +378,7 @@ interface ShikhoApiService {
                 }
 
                 val client = OkHttpClient.Builder()
+                    .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, sessionManager.appContext) }
                     .dispatcher(dispatcher)
                     .connectionPool(okhttp3.ConnectionPool(64, 5, TimeUnit.MINUTES))
                     .addInterceptor(com.example.security.ActivationNetworkInterceptor(sessionManager.appContext))

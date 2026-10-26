@@ -1,44 +1,53 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import kotlinx.coroutines.launch
-import android.content.Intent
-import android.net.Uri
 import com.example.auth.SessionManager
 import com.example.notification.ClassAlarmScheduler
 import com.example.notification.NotificationDeepLinkDispatcher
 import com.example.notification.ShikhoFirebaseMessagingService
 import com.example.notification.ShikhoNotificationManager
 import com.example.security.AntiTamperSecurity
+import com.example.security.SecurityViolation
+import com.example.ui.dialogs.UpdateDialog
 import com.example.ui.theme.MyApplicationTheme
 import com.example.update.AppUpdateInfo
 import com.example.update.AppUpdateRepository
-import com.example.ui.dialogs.UpdateDialog
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 val LocalPictureInPictureMode = compositionLocalOf { false }
@@ -46,12 +55,17 @@ val LocalPictureInPictureMode = compositionLocalOf { false }
 class MainActivity : ComponentActivity() {
 
     val isPipModeState = mutableStateOf(false)
+    private val activeSecurityViolationState = mutableStateOf<SecurityViolation?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // 0. Apply Screenshot & Screen Recording Protection (FLAG_SECURE) if enabled in BuildConfig
+        AntiTamperSecurity.applyScreenshotProtection(this)
+
         super.onCreate(savedInstanceState)
 
-        // 0. Anti-Tamper & Security Verification against MT Manager / Frida / Hooking
+        // 0.1 Perform initial Anti-Capture (Reqable/HttpCanary/Proxy) & Anti-Tamper inspection
         AntiTamperSecurity.exitIfTampered(this)
+        activeSecurityViolationState.value = AntiTamperSecurity.inspectSecurityViolation(this)
 
         enableEdgeToEdge()
 
@@ -98,6 +112,18 @@ class MainActivity : ComponentActivity() {
 
             var startupUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
             val startupScope = rememberCoroutineScope()
+            val currentViolation = activeSecurityViolationState.value
+
+            // Continuous background watchdog for Reqable / HttpCanary / Proxy / Debugger activation while app is running
+            LaunchedEffect(Unit) {
+                while (true) {
+                    val detected = withContext(Dispatchers.IO) {
+                        AntiTamperSecurity.inspectSecurityViolation(applicationContext)
+                    }
+                    activeSecurityViolationState.value = detected
+                    delay(4000L)
+                }
+            }
 
             LaunchedEffect(Unit) {
                 startupScope.launch(Dispatchers.IO) {
@@ -117,23 +143,41 @@ class MainActivity : ComponentActivity() {
                         color = MaterialTheme.colorScheme.background
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            AppNavigation()
-
-                            startupUpdateInfo?.let { updateInfo ->
-                                UpdateDialog(
-                                    updateInfo = updateInfo,
-                                    onDismiss = {
-                                        if (!updateInfo.isForce) {
-                                            startupUpdateInfo = null
-                                        }
+                            if (currentViolation != null) {
+                                SecurityViolationShieldScreen(
+                                    violation = currentViolation,
+                                    onRecheck = {
+                                        activeSecurityViolationState.value =
+                                            AntiTamperSecurity.inspectSecurityViolation(this@MainActivity)
+                                    },
+                                    onExitApp = {
+                                        finishAffinity()
                                     }
                                 )
+                            } else {
+                                AppNavigation()
+
+                                startupUpdateInfo?.let { updateInfo ->
+                                    UpdateDialog(
+                                        updateInfo = updateInfo,
+                                        onDismiss = {
+                                            if (!updateInfo.isForce) {
+                                                startupUpdateInfo = null
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        AntiTamperSecurity.applyScreenshotProtection(this)
     }
 
     private fun requestNotificationPermissionOnStartup() {
@@ -182,9 +226,6 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         handleNotificationIntent(intent)
 
-        // Seamless PiP to Fullscreen Transition:
-        // If the user clicks the app icon or re-enters the app from launcher / recents while PiP is active,
-        // bring the Activity back out of PiP mode to the foreground immediately!
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
             val restoreIntent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -217,7 +258,6 @@ class MainActivity : ComponentActivity() {
         if (!url.isNullOrBlank()) {
             android.util.Log.d("MainActivity", "Handling notification intent URL: $url")
             if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
-                // External website (e.g. admission form or registration) - open in browser
                 try {
                     val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -227,7 +267,6 @@ class MainActivity : ComponentActivity() {
                     android.util.Log.e("MainActivity", "Failed to open external URL: ${e.message}", e)
                 }
             } else {
-                // In-app deep link
                 NotificationDeepLinkDispatcher.setPendingDeepLink(url)
             }
         }
@@ -235,11 +274,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        AntiTamperSecurity.applyScreenshotProtection(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             isPipModeState.value = isInPictureInPictureMode
         }
-        // Anti-tamper verification on every foreground resume
+        // Anti-tamper & Anti-Reqable verification on every foreground resume
         AntiTamperSecurity.exitIfTampered(this)
+        activeSecurityViolationState.value = AntiTamperSecurity.inspectSecurityViolation(this)
 
         // Silent heartbeat verification with Supabase
         try {
@@ -274,5 +315,130 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         isPipModeState.value = isInPictureInPictureMode
+    }
+}
+
+@Composable
+private fun SecurityViolationShieldScreen(
+    violation: SecurityViolation,
+    onRecheck: () -> Unit,
+    onExitApp: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF0F172A))
+                )
+            )
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+            border = BorderStroke(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 460.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444).copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = "Security Shield",
+                        tint = Color(0xFFF87171),
+                        modifier = Modifier.size(38.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Text(
+                    text = violation.titleBn,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = violation.messageBn,
+                    fontSize = 14.sp,
+                    color = Color(0xFFCBD5E1),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 21.sp
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF0F172A),
+                    border = BorderStroke(1.dp, Color(0xFF334155)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "শনাক্তকৃত কারণ: ${violation.detectedDetail}",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFFFCA5A5),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Button(
+                    onClick = onRecheck,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("security_recheck_button")
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("পুনরায় যাচাই করুন", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = onExitApp,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0xFF475569)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE2E8F0)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("security_exit_button")
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("অ্যাপ বন্ধ করুন", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
     }
 }

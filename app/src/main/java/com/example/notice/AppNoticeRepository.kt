@@ -20,6 +20,7 @@ object AppNoticeRepository {
     private const val KEY_SEEN_IDS = "seen_notice_ids"
 
     private val httpClient = OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

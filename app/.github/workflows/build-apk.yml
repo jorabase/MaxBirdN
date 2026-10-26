@@ -11,6 +11,26 @@ on:
         description: 'Version Code (e.g. 60100)'
         required: true
         default: '60100'
+      enable_screenshot_protection:
+        description: '🔒 Block Screenshot & Screen Recording (FLAG_SECURE)'
+        required: false
+        default: true
+        type: boolean
+      enable_anti_network_capture:
+        description: '🛡️ Block Reqable, HttpCanary, Proxy & Network Capture'
+        required: false
+        default: true
+        type: boolean
+      enable_anti_tamper:
+        description: '⚔️ Enable Anti-Tamper, Anti-Frida, Anti-MT Manager & Debugger Protection'
+        required: false
+        default: true
+        type: boolean
+      block_vpn_connection:
+        description: '🌐 Block All VPN Connections (Strict Anti-VPN Mode)'
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [ "main", "master" ]
   pull_request:
@@ -40,9 +60,13 @@ jobs:
         VERSION_CODE: ${{ github.event.inputs.version_code || '60000' }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        ENABLE_SCREENSHOT_PROTECTION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_screenshot_protection) || 'true' }}
+        ENABLE_ANTI_NETWORK_CAPTURE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_network_capture) || 'true' }}
+        ENABLE_ANTI_TAMPER: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_tamper) || 'true' }}
+        BLOCK_VPN_CONNECTION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.block_vpn_connection) || 'false' }}
       run: |
         echo "Building with Version Name: $VERSION_NAME and Version Code: $VERSION_CODE"
-        ./gradlew assembleRelease -PVERSION_NAME="$VERSION_NAME" -PVERSION_CODE="$VERSION_CODE" || gradle assembleRelease -PVERSION_NAME="$VERSION_NAME" -PVERSION_CODE="$VERSION_CODE"
+        ./gradlew assembleRelease -PVERSION_NAME="$VERSION_NAME" -PVERSION_CODE="$VERSION_CODE" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION || gradle assembleRelease -PVERSION_NAME="$VERSION_NAME" -PVERSION_CODE="$VERSION_CODE" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4

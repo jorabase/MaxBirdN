@@ -37,6 +37,7 @@ class ModelTestRepository(
         .build()
 
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, sessionManager?.appContext) }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->

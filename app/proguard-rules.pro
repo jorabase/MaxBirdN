@@ -71,6 +71,10 @@
     <fields>;
     <methods>;
 }
+-keep class com.example.course.** {
+    <fields>;
+    <methods>;
+}
 
 # 6. Retrofit & OkHttp Rules
 -keepattributes *Annotation*,Signature

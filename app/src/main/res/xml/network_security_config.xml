@@ -1,15 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config usesCleartextTraffic="true">
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.shikho.com</domain>
+        <domain includeSubdomains="true">analytics.shikho.com</domain>
+        <domain includeSubdomains="true">supabase.co</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">res.cloudinary.com</domain>
         <domain includeSubdomains="true">cloudinary.com</domain>
         <domain includeSubdomains="true">shikho.com</domain>
-        <domain includeSubdomains="true">api.shikho.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
     </domain-config>
 </network-security-config>

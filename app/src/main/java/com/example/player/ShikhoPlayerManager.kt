@@ -167,6 +167,7 @@ object ShikhoPlayerManager {
             maxRequestsPerHost = 64
         }
         OkHttpClient.Builder()
+            .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
             .dispatcher(dispatcher)
             .connectionPool(ConnectionPool(64, 5, TimeUnit.MINUTES))
             .connectTimeout(15, TimeUnit.SECONDS)

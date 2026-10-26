@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -38,10 +39,32 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogWindowProvider
 import com.example.course.AdminPaymentSettings
 import com.example.course.CourseAccessState
 import com.example.course.CourseCommerceItemState
 import com.example.course.InstallmentPlanOption
+import com.example.course.PaymentMethodOption
+import com.example.security.AntiTamperSecurity
+
+private fun resolveMethodBrandColor(method: PaymentMethodOption): Color {
+    if (method.colorHex.isNotBlank()) {
+        try {
+            val cleanHex = if (method.colorHex.startsWith("#")) method.colorHex else "#${method.colorHex}"
+            return Color(android.graphics.Color.parseColor(cleanHex))
+        } catch (_: Throwable) {}
+    }
+    val key = "${method.code} ${method.nameBn}".lowercase()
+    return when {
+        key.contains("bkash") || key.contains("বিকাশ") -> Color(0xFFE2136E)
+        key.contains("nagad") || key.contains("নগদ") -> Color(0xFFF7941D)
+        key.contains("rocket") || key.contains("রকেট") -> Color(0xFF8C3494)
+        key.contains("upay") || key.contains("উপায়") || key.contains("উপায়") -> Color(0xFF0066B3)
+        key.contains("cellfin") || key.contains("সেলফিন") -> Color(0xFF007A33)
+        key.contains("bank") || key.contains("ব্যাংক") -> Color(0xFF0F766E)
+        else -> Color(0xFF5648F9)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +124,10 @@ fun CoursePurchasePaymentBottomSheet(
         }
     }
 
-    var selectedMethod by remember { mutableStateOf("bKash") }
+    val enabledMethods = paymentSettings.enabledMethods
+    var selectedMethodOption by remember(enabledMethods) {
+        mutableStateOf(enabledMethods.firstOrNull())
+    }
     var senderMobile by remember {
         mutableStateOf(
             commerceState.lastSenderMobile.ifBlank { defaultUserPhone }
@@ -115,19 +141,17 @@ fun CoursePurchasePaymentBottomSheet(
     var transactionId by remember { mutableStateOf("") }
     var validationError by remember { mutableStateOf<String?>(null) }
 
-    val targetAdminNumber = when (selectedMethod) {
-        "bKash" -> paymentSettings.bkashNumber.ifBlank { "01700000000" }
-        "Nagad" -> paymentSettings.nagadNumber.ifBlank { paymentSettings.bkashNumber.ifBlank { "01700000000" } }
-        "Rocket" -> paymentSettings.rocketNumber.ifBlank { paymentSettings.bkashNumber.ifBlank { "01700000000" } }
-        else -> paymentSettings.bkashNumber
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        LaunchedEffect(dialogWindow) {
+            AntiTamperSecurity.applyWindowSecureFlag(dialogWindow)
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -417,7 +441,7 @@ fun CoursePurchasePaymentBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Step 2: Payment Method & Admin Send Money Number
+            // Step 2: Payment Method & Admin Send Money Number (100% Dynamic from Admin App, Zero Dummy Data)
             Text(
                 text = "২. পেমেন্ট মাধ্যম নির্বাচন ও টাকা পাঠান",
                 fontSize = 14.sp,
@@ -426,114 +450,147 @@ fun CoursePurchasePaymentBottomSheet(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            val methods = buildList {
-                add(Triple("bKash", "বিকাশ", Color(0xFFE2136E)))
-                add(Triple("Nagad", "নগদ", Color(0xFFF7941D)))
-                if (paymentSettings.rocketNumber.isNotBlank()) {
-                    add(Triple("Rocket", "রকেট", Color(0xFF8C3494)))
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                methods.forEach { (code, nameBn, brandColor) ->
-                    val isSelected = selectedMethod == code
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) brandColor.copy(alpha = 0.12f) else Color(0xFFF8FAFC),
-                        border = BorderStroke(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) brandColor else Color(0xFFE2E8F0)
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedMethod = code }
-                            .testTag("payment_method_$code")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountBalanceWallet,
-                                contentDescription = null,
-                                tint = brandColor,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = nameBn,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) brandColor else Color(0xFF334155)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Admin Number Copy Card
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color(0xFFF0FDF4),
-                border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+            if (enabledMethods.isEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFFFFBEB),
+                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "$selectedMethod নম্বর (Send Money করুন)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF166534)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = targetAdminNumber,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF14532D)
-                            )
-                        }
-                        FilledTonalButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                clipboard?.setPrimaryClip(ClipData.newPlainText("Payment Number", targetAdminNumber))
-                                Toast.makeText(context, "নম্বর কপি হয়েছে: $targetAdminNumber", Toast.LENGTH_SHORT).show()
-                            },
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color(0xFFDCFCE7),
-                                contentColor = Color(0xFF15803D)
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = null,
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Text(
+                            text = "অ্যাডমিন এখনো কোনো পেমেন্ট নম্বর চালু করেননি। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF92400E)
+                        )
+                    }
+                }
+            } else {
+                val activeMethod = selectedMethodOption ?: enabledMethods.first()
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    enabledMethods.chunked(2).forEach { rowMethods ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "কপি",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("কপি করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            rowMethods.forEach { methodItem ->
+                                val brandColor = resolveMethodBrandColor(methodItem)
+                                val isSelected = activeMethod.id == methodItem.id && activeMethod.code == methodItem.code
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isSelected) brandColor.copy(alpha = 0.12f) else Color(0xFFF8FAFC),
+                                    border = BorderStroke(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) brandColor else Color(0xFFE2E8F0)
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { selectedMethodOption = methodItem }
+                                        .testTag("payment_method_${methodItem.code}")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(vertical = 12.dp, horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccountBalanceWallet,
+                                            contentDescription = null,
+                                            tint = brandColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = methodItem.nameBn,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) brandColor else Color(0xFF334155),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                    if (paymentSettings.instructionBn.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = paymentSettings.instructionBn,
-                            fontSize = 12.sp,
-                            color = Color(0xFF15803D)
-                        )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Admin Number Copy Card for the selected method
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFF0FDF4),
+                    border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${activeMethod.nameBn} নম্বর (${activeMethod.accountType})",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF166534)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = activeMethod.accountNumber,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF14532D)
+                                )
+                            }
+                            FilledTonalButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                    clipboard?.setPrimaryClip(ClipData.newPlainText("Payment Number", activeMethod.accountNumber))
+                                    Toast.makeText(context, "নম্বর কপি হয়েছে: ${activeMethod.accountNumber}", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color(0xFFDCFCE7),
+                                    contentColor = Color(0xFF15803D)
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "কপি",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("কপি করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        val effectiveInstruction = activeMethod.instructionBn.ifBlank { paymentSettings.instructionBn }
+                        if (effectiveInstruction.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = effectiveInstruction,
+                                fontSize = 12.sp,
+                                color = Color(0xFF15803D)
+                            )
+                        }
                     }
                 }
             }
@@ -633,6 +690,7 @@ fun CoursePurchasePaymentBottomSheet(
 
             Button(
                 onClick = {
+                    val activeMethod = selectedMethodOption ?: enabledMethods.firstOrNull()
                     val cleanDigits = amountInput.map { ch ->
                         val idx = "০১২৩৪৫৬৭৮৯".indexOf(ch)
                         if (idx >= 0) ('0' + idx) else ch
@@ -642,6 +700,9 @@ fun CoursePurchasePaymentBottomSheet(
                     val cleanTrx = transactionId.trim()
 
                     when {
+                        activeMethod == null -> {
+                            validationError = "অ্যাডমিন এখনো কোনো পেমেন্ট মাধ্যম চালু করেননি।"
+                        }
                         cleanPhone.length < 10 -> {
                             validationError = "অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।"
                         }
@@ -653,7 +714,7 @@ fun CoursePurchasePaymentBottomSheet(
                         }
                         else -> {
                             onSubmitPayment(
-                                selectedMethod,
+                                activeMethod.code,
                                 cleanPhone,
                                 parsedAmt,
                                 cleanTrx,
@@ -662,7 +723,7 @@ fun CoursePurchasePaymentBottomSheet(
                         }
                     }
                 },
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && enabledMethods.isNotEmpty(),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF5648F9)),
                 modifier = Modifier

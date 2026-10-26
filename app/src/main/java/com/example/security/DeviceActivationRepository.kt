@@ -202,6 +202,7 @@ object DeviceActivationRepository {
     private const val KEY_LAST_COURSE_PERMISSIONS_CHECK = "key_last_course_permissions_check"
 
     private val httpClient = OkHttpClient.Builder()
+        .applyAntiCaptureSecurity()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)

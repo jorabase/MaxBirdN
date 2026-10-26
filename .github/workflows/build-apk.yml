@@ -27,6 +27,26 @@ on:
         required: false
         default: ""
         type: string
+      enable_screenshot_protection:
+        description: "🔒 Block Screenshot & Screen Recording (FLAG_SECURE)"
+        required: false
+        default: true
+        type: boolean
+      enable_anti_network_capture:
+        description: "🛡️ Block Reqable, HttpCanary, Proxy & Network Capture"
+        required: false
+        default: true
+        type: boolean
+      enable_anti_tamper:
+        description: "⚔️ Enable Anti-Tamper, Anti-Frida, Anti-MT Manager & Debugger Protection"
+        required: false
+        default: true
+        type: boolean
+      block_vpn_connection:
+        description: "🌐 Block All VPN Connections (Strict Anti-VPN Mode)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -47,6 +67,10 @@ jobs:
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       VERSION_CODE: ${{ inputs.version_code != '' && inputs.version_code || github.run_number }}
       VERSION_NAME: ${{ inputs.version_name != '' && inputs.version_name || format('1.0.{0}', github.run_number) }}
+      ENABLE_SCREENSHOT_PROTECTION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_screenshot_protection) || 'true' }}
+      ENABLE_ANTI_NETWORK_CAPTURE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_network_capture) || 'true' }}
+      ENABLE_ANTI_TAMPER: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_tamper) || 'true' }}
+      BLOCK_VPN_CONNECTION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.block_vpn_connection) || 'false' }}
 
     steps:
       - name: Checkout Code
@@ -178,7 +202,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release APK
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'all')) }}
-        run: ./gradlew assembleRelease --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" --stacktrace
+        run: ./gradlew assembleRelease --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 3. DEBUG APK
@@ -186,7 +210,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Debug APK
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" --stacktrace
+        run: ./gradlew assembleDebug --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 4. RELEASE AAB
@@ -194,7 +218,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release AAB
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'aab' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew bundleRelease --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" --stacktrace
+        run: ./gradlew bundleRelease --no-daemon -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 5. ORGANIZE & UPLOAD ARTIFACTS
@@ -272,4 +296,8 @@ jobs:
           echo "**Package Name:** \`com.maxbird.ff.app\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version Name:** \`$VERSION_NAME\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version Code:** \`$VERSION_CODE\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Screenshot & Screen Record Protection:** \`$ENABLE_SCREENSHOT_PROTECTION\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Anti-Reqable / Network Capture Protection:** \`$ENABLE_ANTI_NETWORK_CAPTURE\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Anti-Tamper & Hook Protection:** \`$ENABLE_ANTI_TAMPER\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Strict Block VPN:** \`$BLOCK_VPN_CONNECTION\`" >> $GITHUB_STEP_SUMMARY
           echo "**Trigger:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY

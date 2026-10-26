@@ -27,6 +27,7 @@ data class AppUpdateInfo(
 object AppUpdateRepository {
     private const val TAG = "AppUpdateRepository"
     private val httpClient = OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()

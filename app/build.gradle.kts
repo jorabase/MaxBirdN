@@ -88,6 +88,26 @@ android {
     buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+
+    fun resolveBoolFlag(propKey: String, envKey: String, defaultVal: Boolean): Boolean {
+      val rawProp = (findProperty(propKey) as? String)?.trim()?.lowercase()
+      if (rawProp == "true" || rawProp == "1" || rawProp == "yes") return true
+      if (rawProp == "false" || rawProp == "0" || rawProp == "no") return false
+      val rawEnv = (System.getenv(envKey) ?: envProps.getProperty(envKey))?.trim()?.lowercase()
+      if (rawEnv == "true" || rawEnv == "1" || rawEnv == "yes") return true
+      if (rawEnv == "false" || rawEnv == "0" || rawEnv == "no") return false
+      return defaultVal
+    }
+
+    val enableScreenshotProtection = resolveBoolFlag("enableScreenshotProtection", "ENABLE_SCREENSHOT_PROTECTION", true)
+    val enableAntiNetworkCapture = resolveBoolFlag("enableAntiNetworkCapture", "ENABLE_ANTI_NETWORK_CAPTURE", true)
+    val enableAntiTamper = resolveBoolFlag("enableAntiTamper", "ENABLE_ANTI_TAMPER", true)
+    val blockVpnConnection = resolveBoolFlag("blockVpnConnection", "BLOCK_VPN_CONNECTION", false)
+
+    buildConfigField("boolean", "ENABLE_SCREENSHOT_PROTECTION", enableScreenshotProtection.toString())
+    buildConfigField("boolean", "ENABLE_ANTI_NETWORK_CAPTURE", enableAntiNetworkCapture.toString())
+    buildConfigField("boolean", "ENABLE_ANTI_TAMPER", enableAntiTamper.toString())
+    buildConfigField("boolean", "BLOCK_VPN_CONNECTION", blockVpnConnection.toString())
   }
 
   signingConfigs {

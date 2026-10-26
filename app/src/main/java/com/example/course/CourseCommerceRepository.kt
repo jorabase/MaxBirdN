@@ -39,11 +39,24 @@ data class InstallmentPlanOption(
     val perInstallmentAmount: Double
 )
 
+data class PaymentMethodOption(
+    val id: String,
+    val code: String,
+    val nameBn: String,
+    val accountNumber: String,
+    val accountType: String = "Send Money করুন",
+    val instructionBn: String = "",
+    val colorHex: String = "",
+    val isEnabled: Boolean = true
+)
+
 data class AdminPaymentSettings(
-    val bkashNumber: String = "01700000000",
-    val nagadNumber: String = "01700000000",
+    val bkashNumber: String = "",
+    val nagadNumber: String = "",
     val rocketNumber: String = "",
-    val instructionBn: String = "উপরের যেকোনো নাম্বারে Send Money করে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।"
+    val upayNumber: String = "",
+    val instructionBn: String = "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।",
+    val enabledMethods: List<PaymentMethodOption> = emptyList()
 )
 
 data class CourseCommerceItemState(
@@ -234,11 +247,36 @@ object CourseCommerceRepository {
     private const val KEY_CACHED_FOR_UID = "key_cached_for_uid"
 
     private val httpClient = OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
+
+    private val DUMMY_PAYMENT_NUMBERS = setOf(
+        "01700000000",
+        "01800000000",
+        "01900000000",
+        "01600000000",
+        "01500000000",
+        "01300000000",
+        "01400000000",
+        "00000000000",
+        "1234567890",
+        "12345678901"
+    )
+
+    fun isRealPaymentNumber(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return false
+        val clean = raw.trim()
+        if (clean.equals("null", ignoreCase = true) || clean.length < 6) return false
+        val digitsOnly = DeviceCoursePermissionsConvertDigits(clean).filter { it.isDigit() }
+        if (digitsOnly.isEmpty() || digitsOnly in DUMMY_PAYMENT_NUMBERS) return false
+        // Reject placeholder numbers like 01700000000 where last 8 digits are all '0'
+        if (digitsOnly.length == 11 && digitsOnly.endsWith("00000000")) return false
+        return true
+    }
 
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -330,27 +368,47 @@ object CourseCommerceRepository {
                 val list = mutableListOf<InstallmentPlanOption>()
                 for (i in 0 until arr.length()) {
                     val obj = arr.optJSONObject(i) ?: continue
-                    val count = obj.optInt("installments_count", obj.optInt("installment_count", 1)).coerceAtLeast(1)
+                    if (obj.has("is_enabled") && !obj.optBoolean("is_enabled", true)) continue
+                    if (obj.has("enabled") && !obj.optBoolean("enabled", true)) continue
+
+                    val count = obj.optInt(
+                        "installments_count",
+                        obj.optInt("installment_count", obj.optInt("count", 1))
+                    ).coerceAtLeast(1)
                     val interval = obj.optInt("interval_days", if (count > 1) 7 else 0)
                     val defaultPart = if (totalPrice > 0) kotlin.math.round(totalPrice / count) else 0.0
-                    val firstAmt = obj.optDouble("first_amount", obj.optDouble("first_payment", defaultPart)).let {
-                        if (it.isNaN() || it <= 0) defaultPart else it
-                    }
-                    val perAmt = obj.optDouble("per_installment_amount", firstAmt).let {
-                        if (it.isNaN() || it <= 0) firstAmt else it
-                    }
-                    val title = obj.optString("title_bn", "").ifBlank {
-                        if (count == 1) "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(totalPrice)})"
-                        else "${CourseCommerceItemState.toBanglaDigits(count.toString())} কিস্তিতে পরিশোধ (${CourseCommerceItemState.formatTakaBn(firstAmt)} করে)"
-                    }
+
+                    val rawFirst = listOf(
+                        obj.optDouble("first_amount", Double.NaN),
+                        obj.optDouble("first_payment", Double.NaN),
+                        obj.optDouble("amount_per_installment", Double.NaN),
+                        obj.optDouble("per_installment_amount", Double.NaN),
+                        obj.optDouble("installment_amount", Double.NaN),
+                        obj.optDouble("amount", Double.NaN)
+                    ).firstOrNull { !it.isNaN() && it > 0.0 } ?: defaultPart
+
+                    val rawPer = listOf(
+                        obj.optDouble("per_installment_amount", Double.NaN),
+                        obj.optDouble("amount_per_installment", Double.NaN),
+                        obj.optDouble("installment_amount", Double.NaN),
+                        obj.optDouble("amount", Double.NaN)
+                    ).firstOrNull { !it.isNaN() && it > 0.0 } ?: rawFirst
+
+                    val title = obj.optString("title_bn", "")
+                        .ifBlank { obj.optString("title", "") }
+                        .ifBlank { obj.optString("name", "") }
+                        .ifBlank {
+                            if (count == 1) "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(totalPrice)})"
+                            else "${CourseCommerceItemState.toBanglaDigits(count.toString())} কিস্তিতে পরিশোধ (${CourseCommerceItemState.formatTakaBn(rawFirst)} করে)"
+                        }
                     list.add(
                         InstallmentPlanOption(
-                            planId = obj.optString("plan_id", "plan_$i"),
+                            planId = obj.optString("plan_id", obj.optString("id", "plan_$i")),
                             titleBn = title,
                             installmentsCount = count,
                             intervalDays = interval,
-                            firstAmount = firstAmt,
-                            perInstallmentAmount = perAmt
+                            firstAmount = rawFirst,
+                            perInstallmentAmount = rawPer
                         )
                     )
                 }
@@ -433,23 +491,147 @@ object CourseCommerceRepository {
         )
     }
 
+    private fun parseDynamicPaymentMethods(
+        settingsObj: JSONObject?,
+        separateMethodsArr: JSONArray?
+    ): List<PaymentMethodOption> {
+        val result = mutableListOf<PaymentMethodOption>()
+        val explicitlyDisabledCodes = mutableSetOf<String>()
+        val addedCodes = mutableSetOf<String>()
+
+        fun parseMethodArray(arr: JSONArray?) {
+            if (arr == null) return
+            for (i in 0 until arr.length()) {
+                val mObj = arr.optJSONObject(i) ?: continue
+                val rawCode = mObj.optString("code", mObj.optString("method_code", mObj.optString("id", ""))).trim()
+                val rawName = mObj.optString("name_bn", mObj.optString("name", mObj.optString("title_bn", mObj.optString("title", rawCode)))).trim()
+                val codeKey = rawCode.ifBlank { rawName }.lowercase()
+
+                val isEnabled = when {
+                    mObj.has("is_enabled") -> mObj.optBoolean("is_enabled", true)
+                    mObj.has("enabled") -> mObj.optBoolean("enabled", true)
+                    mObj.has("is_active") -> mObj.optBoolean("is_active", true)
+                    mObj.has("active") -> mObj.optBoolean("active", true)
+                    else -> true
+                }
+                if (!isEnabled) {
+                    if (codeKey.isNotBlank()) explicitlyDisabledCodes.add(codeKey)
+                    continue
+                }
+
+                val number = listOf(
+                    mObj.optString("account_number", ""),
+                    mObj.optString("number", ""),
+                    mObj.optString("wallet_number", ""),
+                    mObj.optString("phone", ""),
+                    mObj.optString("account_no", "")
+                ).firstOrNull { isRealPaymentNumber(it) }?.trim() ?: continue
+
+                val displayCode = rawCode.ifBlank { rawName }
+                val displayName = rawName.ifBlank { displayCode }
+                val accountType = mObj.optString("account_type", mObj.optString("type", mObj.optString("mode", "Send Money করুন"))).trim()
+                    .ifBlank { "Send Money করুন" }
+                val instruction = mObj.optString("instruction_bn", mObj.optString("instruction", mObj.optString("note", ""))).trim()
+                    .takeIf { !it.equals("null", true) } ?: ""
+                val colorHex = mObj.optString("color_hex", mObj.optString("color", "")).trim()
+                    .takeIf { !it.equals("null", true) } ?: ""
+
+                if (codeKey.isNotBlank()) addedCodes.add(codeKey)
+                result.add(
+                    PaymentMethodOption(
+                        id = mObj.optString("id", displayCode.lowercase()),
+                        code = displayCode,
+                        nameBn = displayName,
+                        accountNumber = number,
+                        accountType = accountType,
+                        instructionBn = instruction,
+                        colorHex = colorHex,
+                        isEnabled = true
+                    )
+                )
+            }
+        }
+
+        // 1. Parse from separate `course_payment_methods` table array if present
+        parseMethodArray(separateMethodsArr)
+
+        // 2. Parse from `payment_methods_json` / `payment_methods` / `methods_json` inside `course_payment_settings`
+        if (settingsObj != null) {
+            val rawMethodsAny = settingsObj.opt("payment_methods_json")
+                ?: settingsObj.opt("payment_methods")
+                ?: settingsObj.opt("methods_json")
+            val jsonArr = when (rawMethodsAny) {
+                is JSONArray -> rawMethodsAny
+                is String -> if (rawMethodsAny.trim().startsWith("[")) runCatching { JSONArray(rawMethodsAny.trim()) }.getOrNull() else null
+                else -> null
+            }
+            parseMethodArray(jsonArr)
+
+            // 3. Also check individual columns (`bkash_number`, `nagad_number`, `rocket_number`, `upay_number`, `cellfin_number`)
+            // ONLY if no custom methods array was provided OR for methods not already handled in the JSON array.
+            // Dummy numbers like 01700000000 / 01800000000 are strictly ignored!
+            val hasExplicitJsonList = jsonArr != null && jsonArr.length() > 0
+            if (!hasExplicitJsonList) {
+                val standardColumns = listOf(
+                    Triple("bkash", "bKash", "বিকাশ") to Pair("bkash_number", "bkash_enabled"),
+                    Triple("nagad", "Nagad", "নগদ") to Pair("nagad_number", "nagad_enabled"),
+                    Triple("rocket", "Rocket", "রকেট") to Pair("rocket_number", "rocket_enabled"),
+                    Triple("upay", "Upay", "উপায়") to Pair("upay_number", "upay_enabled"),
+                    Triple("cellfin", "CellFin", "সেলফিন") to Pair("cellfin_number", "cellfin_enabled")
+                )
+                for ((meta, colPair) in standardColumns) {
+                    val (idKey, codeVal, nameBnVal) = meta
+                    val (numCol, enabledCol) = colPair
+                    if (idKey in addedCodes || idKey in explicitlyDisabledCodes) continue
+                    val colEnabled = if (settingsObj.has(enabledCol)) settingsObj.optBoolean(enabledCol, true) else true
+                    val rawNum = settingsObj.optString(numCol, "").trim()
+                    if (colEnabled && isRealPaymentNumber(rawNum)) {
+                        addedCodes.add(idKey)
+                        result.add(
+                            PaymentMethodOption(
+                                id = idKey,
+                                code = codeVal,
+                                nameBn = nameBnVal,
+                                accountNumber = rawNum,
+                                accountType = "Send Money করুন",
+                                isEnabled = true
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        return result
+    }
+
     private fun parseSnapshotJson(root: JSONObject): CourseCommerceSnapshot {
         val settingsObj = root.optJSONObject("payment_settings")
+        val separateMethodsArr = root.optJSONArray("payment_methods")
+        val enabledMethods = parseDynamicPaymentMethods(settingsObj, separateMethodsArr)
+
         val settings = if (settingsObj != null) {
+            val rawBkash = settingsObj.optString("bkash_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawNagad = settingsObj.optString("nagad_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawRocket = settingsObj.optString("rocket_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawUpay = settingsObj.optString("upay_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
             AdminPaymentSettings(
-                bkashNumber = settingsObj.optString("bkash_number", "01700000000").ifBlank { "01700000000" },
-                nagadNumber = settingsObj.optString("nagad_number", "01700000000").ifBlank { "01700000000" },
-                rocketNumber = settingsObj.optString("rocket_number", ""),
+                bkashNumber = rawBkash,
+                nagadNumber = rawNagad,
+                rocketNumber = rawRocket,
+                upayNumber = rawUpay,
                 instructionBn = settingsObj.optString(
                     "payment_instruction_bn",
                     settingsObj.optString(
                         "payment_instructions_bn",
-                        "উপরের যেকোনো নাম্বারে Send Money করে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।"
+                        "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।"
                     )
-                )
+                ).takeIf { !it.equals("null", true) && it.isNotBlank() }
+                    ?: "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।",
+                enabledMethods = enabledMethods
             )
         } else {
-            AdminPaymentSettings()
+            AdminPaymentSettings(enabledMethods = enabledMethods)
         }
 
         val map = mutableMapOf<String, CourseCommerceItemState>()
@@ -570,7 +752,41 @@ object CourseCommerceRepository {
             val userPhone = (session.getUserPhone() ?: "").trim()
             val effectiveUid = userId.ifBlank { userPhone }
 
-            // 1A. Try RPC `get_student_course_commerce_status` (v1 signature: p_device_hash, p_display_device_id, p_shikho_user_id, p_user_phone)
+            fun enrichWithLivePaymentSettings(targetJson: JSONObject) {
+                try {
+                    val settingsReq = Request.Builder()
+                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_settings?select=*&limit=1")
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val settingsResp = httpClient.newCall(settingsReq).execute()
+                    if (settingsResp.isSuccessful) {
+                        val arr = JSONArray(settingsResp.body?.string() ?: "[]")
+                        if (arr.length() > 0) {
+                            targetJson.put("payment_settings", arr.getJSONObject(0))
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                try {
+                    val methodsReq = Request.Builder()
+                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_methods?select=*&order=id.asc")
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    val methodsResp = httpClient.newCall(methodsReq).execute()
+                    if (methodsResp.isSuccessful) {
+                        val arr = JSONArray(methodsResp.body?.string() ?: "[]")
+                        if (arr.length() > 0) {
+                            targetJson.put("payment_methods", arr)
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 1A. Try RPC `get_student_course_commerce_status`
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_student_course_commerce_status"
             val candidateRpcBodies = listOf(
                 JSONObject().apply {
@@ -606,7 +822,8 @@ object CourseCommerceRepository {
                             val json = JSONObject(bodyStr)
                             val enrArr = json.optJSONArray("enrollments")
                             if ((enrArr != null && enrArr.length() > 0) || json.optBoolean("success", false)) {
-                                saveCachedSnapshot(context, bodyStr, effectiveUid)
+                                enrichWithLivePaymentSettings(json)
+                                saveCachedSnapshot(context, json.toString(), effectiveUid)
                                 return@withContext parseSnapshotJson(json)
                             }
                         }
@@ -616,21 +833,7 @@ object CourseCommerceRepository {
 
             // 2. Direct REST Fallback (fetches all rows and filters in Kotlin so it works regardless of column names!)
             val rootJson = JSONObject()
-            try {
-                val settingsReq = Request.Builder()
-                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_settings?select=*&limit=1")
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .get()
-                    .build()
-                val settingsResp = httpClient.newCall(settingsReq).execute()
-                if (settingsResp.isSuccessful) {
-                    val arr = JSONArray(settingsResp.body?.string() ?: "[]")
-                    if (arr.length() > 0) {
-                        rootJson.put("payment_settings", arr.getJSONObject(0))
-                    }
-                }
-            } catch (_: Throwable) {}
+            enrichWithLivePaymentSettings(rootJson)
 
             try {
                 val enrUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?select=*&order=updated_at.desc"

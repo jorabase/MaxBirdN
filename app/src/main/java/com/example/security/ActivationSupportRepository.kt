@@ -27,6 +27,7 @@ object ActivationSupportRepository {
     private const val KEY_CACHED_LINKS = "cached_support_links"
 
     private val httpClient = OkHttpClient.Builder()
+        .applyAntiCaptureSecurity()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(12, TimeUnit.SECONDS)
         .build()
