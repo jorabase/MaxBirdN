@@ -574,14 +574,14 @@ object CourseCommerceRepository {
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_student_course_commerce_status"
             val candidateRpcBodies = listOf(
                 JSONObject().apply {
+                    put("p_device_id", deviceHash)
+                    put("p_shikho_account_key", effectiveUid)
+                },
+                JSONObject().apply {
                     put("p_device_hash", deviceHash)
                     put("p_display_device_id", displayDeviceId)
                     put("p_shikho_user_id", effectiveUid)
                     put("p_user_phone", userPhone)
-                },
-                JSONObject().apply {
-                    put("p_device_id", deviceHash)
-                    put("p_shikho_account_key", effectiveUid)
                 },
                 JSONObject().apply {
                     put("p_device_id", displayDeviceId)
@@ -711,7 +711,18 @@ object CourseCommerceRepository {
             // 1. Try RPC `request_course_purchase_access` with both parameter signatures
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/request_course_purchase_access"
             val rpcPayloads = listOf(
-                // Signature A (full device_hash + display_device_id + shikho_user_id)
+                // Primary Live DB Signature (p_device_id + p_shikho_account_key)
+                JSONObject().apply {
+                    put("p_device_id", deviceHash)
+                    put("p_shikho_account_key", effectiveUid)
+                    put("p_student_name", studentName)
+                    put("p_student_phone", userPhone)
+                    put("p_student_class", classCode ?: "")
+                    put("p_student_group", groupCode ?: "")
+                    put("p_program_id", programId)
+                    put("p_program_title", programTitle)
+                },
+                // Secondary Signature (p_device_hash + p_display_device_id + p_shikho_user_id)
                 JSONObject().apply {
                     put("p_device_hash", deviceHash)
                     put("p_display_device_id", displayDeviceId)
@@ -724,17 +735,6 @@ object CourseCommerceRepository {
                     put("p_group_code", groupCode ?: "")
                     put("p_batch_id", batchId ?: "")
                     put("p_banner_url", bannerUrl ?: "")
-                },
-                // Signature B (p_device_id + p_shikho_account_key from chat SQL)
-                JSONObject().apply {
-                    put("p_device_id", deviceHash)
-                    put("p_shikho_account_key", effectiveUid)
-                    put("p_student_name", studentName)
-                    put("p_student_phone", userPhone)
-                    put("p_student_class", classCode ?: "")
-                    put("p_student_group", groupCode ?: "")
-                    put("p_program_id", programId)
-                    put("p_program_title", programTitle)
                 }
             )
 
@@ -767,12 +767,36 @@ object CourseCommerceRepository {
                 } catch (_: Throwable) {}
             }
 
-            // 2. Direct REST Fallback into `course_access_enrollments` (tries both schema variants)
+            // 2. Direct REST Fallback into `course_access_enrollments` (tries live DB unique key first)
             val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }.format(Date())
 
             val upsertVariants = listOf(
+                Pair(
+                    "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?on_conflict=device_id,shikho_account_key,program_id",
+                    JSONObject().apply {
+                        put("device_id", deviceHash)
+                        put("device_hash", deviceHash)
+                        put("display_device_id", displayDeviceId)
+                        put("shikho_account_key", effectiveUid)
+                        put("shikho_user_id", effectiveUid)
+                        put("student_name", studentName)
+                        put("student_phone", userPhone)
+                        put("user_phone", userPhone)
+                        put("student_class", classCode ?: "")
+                        put("student_group", groupCode ?: "")
+                        put("program_id", programId)
+                        put("program_title", programTitle)
+                        put("class_code", classCode ?: "")
+                        put("group_code", groupCode ?: "")
+                        put("batch_id", batchId ?: "")
+                        put("banner_url", bannerUrl ?: "")
+                        put("status", "REQUESTED")
+                        put("requested_at", nowIso)
+                        put("updated_at", nowIso)
+                    }
+                ),
                 Pair(
                     "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?on_conflict=device_hash,shikho_user_id,program_id",
                     JSONObject().apply {
@@ -787,25 +811,6 @@ object CourseCommerceRepository {
                         put("group_code", groupCode ?: "")
                         put("batch_id", batchId ?: "")
                         put("banner_url", bannerUrl ?: "")
-                        put("status", "REQUESTED")
-                        put("requested_at", nowIso)
-                        put("updated_at", nowIso)
-                    }
-                ),
-                Pair(
-                    "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?on_conflict=device_id,shikho_account_key,program_id",
-                    JSONObject().apply {
-                        put("device_id", deviceHash)
-                        put("shikho_account_key", effectiveUid)
-                        put("student_name", studentName)
-                        put("student_phone", userPhone)
-                        put("student_class", classCode ?: "")
-                        put("student_group", groupCode ?: "")
-                        put("program_id", programId)
-                        put("program_title", programTitle)
-                        put("class_code", classCode ?: "")
-                        put("group_code", groupCode ?: "")
-                        put("batch_id", batchId ?: "")
                         put("status", "REQUESTED")
                         put("requested_at", nowIso)
                         put("updated_at", nowIso)
@@ -925,7 +930,23 @@ object CourseCommerceRepository {
             // 1. Try RPC `submit_course_payment_transaction` with both parameter signatures
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/submit_course_payment_transaction"
             val rpcPayloads = listOf(
-                // Signature A (p_device_hash, p_display_device_id, p_shikho_user_id)
+                // Primary Live DB Signature (p_device_id, p_shikho_account_key)
+                JSONObject().apply {
+                    put("p_device_id", deviceHash)
+                    put("p_shikho_account_key", effectiveUid)
+                    put("p_student_name", studentName)
+                    put("p_program_id", programId)
+                    put("p_program_title", programTitle)
+                    put("p_plan_id", selectedPlan.planId)
+                    put("p_plan_title", selectedPlan.titleBn)
+                    put("p_total_installments", selectedPlan.installmentsCount)
+                    put("p_installment_interval_days", selectedPlan.intervalDays)
+                    put("p_payment_method", paymentMethod)
+                    put("p_sender_mobile", cleanMobile)
+                    put("p_amount", amount.toInt().coerceAtLeast(1))
+                    put("p_transaction_id", cleanTrx)
+                },
+                // Secondary Signature (p_device_hash, p_display_device_id, p_shikho_user_id)
                 JSONObject().apply {
                     put("p_device_hash", deviceHash)
                     put("p_display_device_id", displayDeviceId)
@@ -942,22 +963,6 @@ object CourseCommerceRepository {
                     put("p_selected_plan_title", selectedPlan.titleBn)
                     put("p_total_installments", selectedPlan.installmentsCount)
                     put("p_interval_days", selectedPlan.intervalDays)
-                },
-                // Signature B (p_device_id, p_shikho_account_key from chat SQL)
-                JSONObject().apply {
-                    put("p_device_id", deviceHash)
-                    put("p_shikho_account_key", effectiveUid)
-                    put("p_student_name", studentName)
-                    put("p_program_id", programId)
-                    put("p_program_title", programTitle)
-                    put("p_plan_id", selectedPlan.planId)
-                    put("p_plan_title", selectedPlan.titleBn)
-                    put("p_total_installments", selectedPlan.installmentsCount)
-                    put("p_installment_interval_days", selectedPlan.intervalDays)
-                    put("p_payment_method", paymentMethod)
-                    put("p_sender_mobile", cleanMobile)
-                    put("p_amount", amount.toInt().coerceAtLeast(1))
-                    put("p_transaction_id", cleanTrx)
                 }
             )
 
@@ -989,7 +994,7 @@ object CourseCommerceRepository {
                 } catch (_: Throwable) {}
             }
 
-            // 2. Direct REST Fallback into `course_payment_transactions` (tries both schema variants)
+            // 2. Direct REST Fallback into `course_payment_transactions` (tries live DB schema first)
             val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }.format(Date())
@@ -998,6 +1003,36 @@ object CourseCommerceRepository {
             val enrollmentId = existingItem?.enrollmentId?.takeIf { it.isNotBlank() }
 
             val txVariants = listOf(
+                JSONObject().apply {
+                    if (enrollmentId != null) {
+                        val longId = enrollmentId.toLongOrNull()
+                        if (longId != null) put("enrollment_id", longId) else put("enrollment_id", enrollmentId)
+                    }
+                    put("device_id", deviceHash)
+                    put("device_hash", deviceHash)
+                    put("display_device_id", displayDeviceId)
+                    put("shikho_account_key", effectiveUid)
+                    put("shikho_user_id", effectiveUid)
+                    put("user_phone", userPhone)
+                    put("student_name", studentName)
+                    put("program_id", programId)
+                    put("program_title", programTitle)
+                    put("plan_id", selectedPlan.planId)
+                    put("plan_title", selectedPlan.titleBn)
+                    put("selected_plan_id", selectedPlan.planId)
+                    put("selected_plan_title", selectedPlan.titleBn)
+                    put("payment_type", if ((existingItem?.completedInstallments ?: 0) > 0) "INSTALLMENT" else "INITIAL")
+                    put("installment_number", (existingItem?.completedInstallments ?: 0) + 1)
+                    put("total_installments", selectedPlan.installmentsCount)
+                    put("interval_days", selectedPlan.intervalDays)
+                    put("payment_method", paymentMethod)
+                    put("sender_mobile", cleanMobile)
+                    put("amount", amount.toInt().coerceAtLeast(1))
+                    put("transaction_id", cleanTrx)
+                    put("status", "PENDING")
+                    put("submitted_at", nowIso)
+                    put("created_at", nowIso)
+                },
                 JSONObject().apply {
                     if (enrollmentId != null) put("enrollment_id", enrollmentId)
                     put("device_hash", deviceHash)
@@ -1019,27 +1054,6 @@ object CourseCommerceRepository {
                     put("transaction_id", cleanTrx)
                     put("status", "PENDING")
                     put("created_at", nowIso)
-                },
-                JSONObject().apply {
-                    if (enrollmentId != null) {
-                        val longId = enrollmentId.toLongOrNull()
-                        if (longId != null) put("enrollment_id", longId) else put("enrollment_id", enrollmentId)
-                    }
-                    put("device_id", deviceHash)
-                    put("shikho_account_key", effectiveUid)
-                    put("student_name", studentName)
-                    put("program_id", programId)
-                    put("program_title", programTitle)
-                    put("plan_id", selectedPlan.planId)
-                    put("plan_title", selectedPlan.titleBn)
-                    put("installment_number", (existingItem?.completedInstallments ?: 0) + 1)
-                    put("total_installments", selectedPlan.installmentsCount)
-                    put("payment_method", paymentMethod)
-                    put("sender_mobile", cleanMobile)
-                    put("amount", amount.toInt().coerceAtLeast(1))
-                    put("transaction_id", cleanTrx)
-                    put("status", "PENDING")
-                    put("submitted_at", nowIso)
                 }
             )
 
