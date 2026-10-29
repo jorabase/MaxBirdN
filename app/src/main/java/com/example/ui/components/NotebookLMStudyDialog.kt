@@ -100,6 +100,7 @@ fun NotebookLMStudyDialog(
 
     val geminiConfig by GeminiAiStudyRepository.configState.collectAsState()
     var showApiSettingsDialog by remember { mutableStateOf(false) }
+    var showLiveCallDialog by remember { mutableStateOf(false) }
 
     // Multi-turn AI Tutor Conversation State
     var questionInput by remember { mutableStateOf("") }
@@ -140,20 +141,18 @@ fun NotebookLMStudyDialog(
         }
     }
 
-    suspend fun collectActiveSlideBitmaps(): List<Pair<Int, Bitmap>> {
+    suspend fun collectActiveSlideBitmaps(includeAllPages: Boolean = true): List<Pair<Int, Bitmap>> {
         val slideBitmaps = mutableListOf<Pair<Int, Bitmap>>()
         if (renderer != null && renderer.isInitialized && renderer.pageCount > 0) {
-            val pagesToRender = if (includeAdjacentSlides && safeTotalPages > 1) {
-                listOf(activeSlidePage - 1, activeSlidePage, activeSlidePage + 1)
-                    .filter { it in 1..safeTotalPages }
-                    .distinct()
+            val pagesToRender = if (includeAllPages) {
+                (1..minOf(safeTotalPages, 25)).toList()
             } else {
                 listOf(activeSlidePage)
             }
 
             for (pageNum in pagesToRender) {
                 val bmp = renderer.getCachedBitmap(pageNum - 1)
-                    ?: renderer.renderPage(pageNum - 1, 1600)
+                    ?: renderer.renderPage(pageNum - 1, 1000)
                 if (bmp != null) {
                     slideBitmaps.add(pageNum to bmp)
                     if (pageNum == activeSlidePage && currentSlideBitmap == null) {
@@ -171,21 +170,16 @@ fun NotebookLMStudyDialog(
         val cleanPrompt = promptText.trim()
         if (cleanPrompt.isBlank() || isAiLoading) return
 
-        val pagesCount = if (includeAdjacentSlides && safeTotalPages > 1) {
-            listOf(activeSlidePage - 1, activeSlidePage, activeSlidePage + 1)
-                .count { it in 1..safeTotalPages }
-        } else 1
-
         val userMsg = AiChatMessage(
             isUser = true,
             text = cleanPrompt,
             attachedSlidePage = activeSlidePage,
-            attachedSlideCount = pagesCount
+            attachedSlideCount = safeTotalPages
         )
         chatMessages.add(userMsg)
         isAiLoading = true
         showProgressBar = false
-        loadingStatusText = "${GeminiAiStudyRepository.DISPLAY_MODEL_NAME} স্লাইড পৃষ্ঠা ${toBengaliDigits(activeSlidePage)} বিশ্লেষণ করছে..."
+        loadingStatusText = "${GeminiAiStudyRepository.DISPLAY_MODEL_NAME} সম্পূর্ণ স্লাইড ডেক (মোট ${toBengaliDigits(safeTotalPages)} পৃষ্ঠা) বিশ্লেষণ করছে..."
 
         coroutineScope.launch {
             try {
@@ -194,7 +188,7 @@ fun NotebookLMStudyDialog(
                 }
             } catch (_: Exception) {}
 
-            val slideBitmaps = collectActiveSlideBitmaps()
+            val slideBitmaps = collectActiveSlideBitmaps(includeAllPages = true)
             val historySnapshot = chatMessages.dropLast(1).toList()
 
             val result = GeminiAiStudyRepository.askSlideQuestion(
@@ -280,7 +274,7 @@ fun NotebookLMStudyDialog(
                 }
             } catch (_: Exception) {}
 
-            val slideBitmaps = if (uploadedBytes == null) collectActiveSlideBitmaps() else emptyList()
+            val slideBitmaps = if (uploadedBytes == null) collectActiveSlideBitmaps(includeAllPages = true) else emptyList()
 
             val result = GeminiAiStudyRepository.analyzeSlidePDF(
                 context = context,
@@ -578,6 +572,38 @@ fun NotebookLMStudyDialog(
 
                         Spacer(modifier = Modifier.width(6.dp))
 
+                        // 📞 Gemini Live Voice Call Button (like Gemini App call)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, Color(0xFF34D399)),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showLiveCallDialog = true }
+                                .testTag("open_gemini_live_call_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Call,
+                                    contentDescription = "Gemini Live Call",
+                                    tint = Color(0xFFA7F3D0),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "লাইভ কল",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         // Quick API Key Settings Button
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -729,6 +755,9 @@ fun NotebookLMStudyDialog(
                                 voiceController.stopSpeaking()
                                 chatMessages.clear()
                             },
+                            onOpenLiveCall = {
+                                showLiveCallDialog = true
+                            },
                             context = context
                         )
                         0 -> NotebookLMTabContent(
@@ -741,6 +770,20 @@ fun NotebookLMStudyDialog(
                 }
             }
         }
+    }
+
+    if (showLiveCallDialog) {
+        val liveCallBitmaps by produceState(initialValue = emptyList<Pair<Int, Bitmap>>(), renderer, safeTotalPages) {
+            value = collectActiveSlideBitmaps(includeAllPages = true)
+        }
+        com.example.ui.dialogs.GeminiLiveCallDialog(
+            slideTitle = title.ifBlank { "লেকচার স্লাইড" },
+            currentPage = activeSlidePage,
+            totalPages = safeTotalPages,
+            pdfFile = targetFile,
+            slideBitmaps = liveCallBitmaps,
+            onDismissRequest = { showLiveCallDialog = false }
+        )
     }
 
     if (showApiSettingsDialog) {
@@ -782,6 +825,7 @@ private fun InAppGeminiSlideTutorTab(
     speakingMessageId: String?,
     onToggleSpeakMessage: (AiChatMessage) -> Unit,
     onClearChat: () -> Unit,
+    onOpenLiveCall: () -> Unit,
     context: Context
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -951,7 +995,7 @@ private fun InAppGeminiSlideTutorTab(
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = "স্লাইড সামারি ও প্রশ্ন",
+                            text = "সম্পূর্ণ স্লাইড ডেক সামারি",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -1369,6 +1413,25 @@ private fun InAppGeminiSlideTutorTab(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // 📞 Gemini Live Voice Call Button (like Gemini App call)
+                    FilledTonalIconButton(
+                        onClick = onOpenLiveCall,
+                        enabled = !isAiLoading,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color(0xFF10B981).copy(alpha = 0.16f),
+                            contentColor = Color(0xFF059669)
+                        ),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("ai_slide_open_live_call_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Gemini Live Call",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
                     // Microphone Voice Input Button (`startVoiceSession`)
                     FilledTonalIconButton(
                         onClick = onToggleVoiceRecording,

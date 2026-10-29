@@ -308,7 +308,7 @@ fun GeminiApiSettingsDialog(
                                 feedbackMessage = null
                             },
                             placeholder = {
-                                Text("AIzaSy... এখানে আপনার API Key পেস্ট করুন", fontSize = 13.sp)
+                                Text("AQ... বা AIza... আপনার Gemini API Key পেস্ট করুন", fontSize = 13.sp)
                             },
                             singleLine = true,
                             visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),

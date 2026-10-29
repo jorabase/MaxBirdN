@@ -79,25 +79,16 @@ object GeminiAiStudyRepository {
     private const val KEY_SYNC_STATUS = "gemini_sync_status_text"
     private const val KEY_IS_CLOUD_SYNCED = "gemini_is_cloud_synced"
 
-    // Explicitly declared model constants (never downgraded to 1.5)
+    // Exclusively use gemini-3.8-flash as requested
     const val SLIDE_ANALYSIS_MODEL = "gemini-3.8-flash"
     const val PRIMARY_MODEL_ID = "gemini-3.8-flash"
     const val DISPLAY_MODEL_NAME = "Gemini 3.8 Flash"
-    const val LIVE_VOICE_MODEL = "gemini-3.8-live"
-    const val LIVE_AUDIO_NATIVE_MODEL = "gemini-2.5-flash-native-audio"
+    const val LIVE_VOICE_MODEL = "gemini-3.8-flash"
+    const val LIVE_AUDIO_NATIVE_MODEL = "gemini-3.8-flash"
 
-    // Model candidates for Document & Lecture Slide Analysis (no Gemini 1.5 versions)
-    private val MODEL_CANDIDATES = listOf(
-        SLIDE_ANALYSIS_MODEL,
-        "gemini-flash-latest",
-        "gemini-2.5-flash"
-    )
-
-    // Model candidates for Live Voice / Real-Time Audio Conversation
-    private val LIVE_VOICE_MODEL_CANDIDATES = listOf(
-        LIVE_VOICE_MODEL,
-        LIVE_AUDIO_NATIVE_MODEL
-    )
+    // Model candidates: Strictly gemini-3.8-flash only
+    private val MODEL_CANDIDATES = listOf(PRIMARY_MODEL_ID)
+    private val LIVE_VOICE_MODEL_CANDIDATES = listOf(PRIMARY_MODEL_ID)
 
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -185,7 +176,7 @@ object GeminiAiStudyRepository {
             }
 
         val rawBuildConfigKey = runCatching { BuildConfig.GEMINI_API_KEY.trim() }.getOrDefault("")
-        val buildConfigKey = if (rawBuildConfigKey.startsWith("AIza")) rawBuildConfigKey else ""
+        val buildConfigKey = if (rawBuildConfigKey.length >= 8) rawBuildConfigKey else ""
 
         val effectiveKey = when {
             accountSavedKey.isNotBlank() -> accountSavedKey
@@ -701,14 +692,15 @@ object GeminiAiStudyRepository {
      * model constants (`gemini-3.8-flash` / `gemini-3.8-live`).
      */
     private suspend fun testApiKeyValidity(apiKey: String): Result<Boolean> = withContext(Dispatchers.IO) {
-        if (!apiKey.startsWith("AIza") || apiKey.length < 30) {
+        val clean = apiKey.trim()
+        if (clean.length < 8) {
             return@withContext Result.failure(
-                Exception("আপনার দেওয়া Gemini API Key-এর ফরম্যাট সঠিক নয় (Key অবশ্যই 'AIza' দিয়ে শুরু হতে হবে)।")
+                Exception("আপনার দেওয়া Gemini API Key খুব ছোট। অনুগ্রহ করে সঠিক Key দিন।")
             )
         }
 
         try {
-            val modelsUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey&pageSize=2"
+            val modelsUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=$clean&pageSize=2"
             val listReq = Request.Builder()
                 .url(modelsUrl)
                 .get()
@@ -733,10 +725,10 @@ object GeminiAiStudyRepository {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "Models endpoint check warning, accepting valid AIza format key: ${e.message}")
+            Log.w(TAG, "Models endpoint check warning, accepting valid key format: ${e.message}")
         }
 
-        // Key matches AIza format and was not rejected by Google Auth
+        // Key accepted and not rejected by Google Auth
         Result.success(true)
     }
 
@@ -785,6 +777,7 @@ object GeminiAiStudyRepository {
             ৩. **মনে রাখার জাদুকরী শর্টকাট (Memory Trick):** শিক্ষার্থী যেন পরীক্ষায় ভুলে না যায়, সেজন্য ১টি দারুণ শর্টকাট টেকনিক বা ছন্দ শিখিয়ে দাও।
             ৪. **পরীক্ষার ফোকাস (Board & Admission Exam Tips):** এই অংশ থেকে HSC/SSC বোর্ড পরীক্ষায় (সৃজনশীল গ/ঘ ও MCQ) কীভাবে প্রশ্ন আসে এবং কোথায় শিক্ষার্থীরা ভুল করে তা সংক্ষেপে বলে দাও।
             ৫. **আন্তরিক ভাষা ও সুন্দর ফরম্যাটিং:** পয়েন্ট আকারে, ইমোজি ও বোল্ড হেডিং ব্যবহার করে খুব সুন্দর, গোছানো ও উৎসাহব্যঞ্জক বাংলা ভাষায় উত্তর দেবে। শেষে শিক্ষার্থীকে ছোট ১টি ফলো-আপ প্রশ্ন করবে যাতে সে নিজেই বুঝতে পারে তার কনসেপ্ট ক্লিয়ার হয়েছে কি না।
+            ৬. **শিক্ষার্থীর নির্দিষ্ট প্রশ্নের সরাসরি উত্তর (Direct & Clear Answer):** শিক্ষার্থী যা-ই প্রশ্ন করবে (যেকোনো সূত্র, সমীকরণ, চিত্র, সার্কিট, থিওরি বা সমস্যা), সম্পূর্ণ স্লাইড ডেক বিবেচনা করে সরাসরি, পরিষ্কার ও বিস্তারিতভাবে বাংলায় উত্তর দেবে। কোনো সাধারণ উত্তর বা এড়িয়ে যাওয়ার কথা বলবে না; শিক্ষার্থী যা জানতে চেয়েছে তার পূর্ণাঙ্গ সমাধান বুঝিয়ে দেবে।
         """.trimIndent()
     }
 
@@ -844,8 +837,23 @@ object GeminiAiStudyRepository {
                 hasAttachedMedia = true
             }
 
-            // B) Attach rendered slide bitmaps if available
-            if (!hasAttachedMedia && slideBitmaps.isNotEmpty()) {
+            // B) Attach full lecture PDF document so Gemini 3.8 Flash can analyze the entire deck
+            if (!hasAttachedMedia && pdfFileFallback != null && pdfFileFallback.exists() && pdfFileFallback.length() in 1..(25 * 1024 * 1024)) {
+                val pdfBase64 = Base64.encodeToString(pdfFileFallback.readBytes(), Base64.NO_WRAP)
+                partsArray.put(JSONObject().apply {
+                    put("text", "[সম্পূর্ণ লেকচার স্লাইড ডেক PDF: $slideTitle]")
+                })
+                partsArray.put(JSONObject().apply {
+                    put("inlineData", JSONObject().apply {
+                        put("mimeType", "application/pdf")
+                        put("data", pdfBase64)
+                    })
+                })
+                hasAttachedMedia = true
+            }
+
+            // C) Attach rendered slide bitmaps for all available pages
+            if (slideBitmaps.isNotEmpty()) {
                 for ((pageNum, bmp) in slideBitmaps) {
                     val base64Jpeg = bitmapToBase64Jpeg(bmp)
                     partsArray.put(JSONObject().apply {
@@ -858,18 +866,6 @@ object GeminiAiStudyRepository {
                         })
                     })
                 }
-                hasAttachedMedia = true
-            }
-
-            // C) Attach current PDF file fallback if under 15MB
-            if (!hasAttachedMedia && pdfFileFallback != null && pdfFileFallback.exists() && pdfFileFallback.length() in 1..(15 * 1024 * 1024)) {
-                val pdfBase64 = Base64.encodeToString(pdfFileFallback.readBytes(), Base64.NO_WRAP)
-                partsArray.put(JSONObject().apply {
-                    put("inlineData", JSONObject().apply {
-                        put("mimeType", "application/pdf")
-                        put("data", pdfBase64)
-                    })
-                })
                 hasAttachedMedia = true
             }
 
@@ -1360,11 +1356,26 @@ object GeminiAiStudyRepository {
 
             val currentParts = JSONArray()
 
+            // 1. Attach full lecture PDF document so Gemini has access to the entire deck (all pages)
+            if (pdfFileFallback != null && pdfFileFallback.exists() && pdfFileFallback.length() in 1..(25 * 1024 * 1024)) {
+                val pdfBase64 = Base64.encodeToString(pdfFileFallback.readBytes(), Base64.NO_WRAP)
+                currentParts.put(JSONObject().apply {
+                    put("text", "[সম্পূর্ণ লেকচার স্লাইড ডেক PDF: $slideTitle (মোট $totalPages পৃষ্ঠা)]")
+                })
+                currentParts.put(JSONObject().apply {
+                    put("inlineData", JSONObject().apply {
+                        put("mimeType", "application/pdf")
+                        put("data", pdfBase64)
+                    })
+                })
+            }
+
+            // 2. Attach slide bitmaps for visual detail
             if (slideBitmaps.isNotEmpty()) {
                 for ((pageNum, bmp) in slideBitmaps) {
                     val base64Jpeg = bitmapToBase64Jpeg(bmp)
                     currentParts.put(JSONObject().apply {
-                        put("text", "[সংযুক্ত লেকচার স্লাইডের ছবি - পৃষ্ঠা নম্বর: $pageNum / $totalPages]")
+                        put("text", "[লেকচার স্লাইডের ছবি - পৃষ্ঠা নম্বর: $pageNum / $totalPages]")
                     })
                     currentParts.put(JSONObject().apply {
                         put("inlineData", JSONObject().apply {
@@ -1373,14 +1384,6 @@ object GeminiAiStudyRepository {
                         })
                     })
                 }
-            } else if (pdfFileFallback != null && pdfFileFallback.exists() && pdfFileFallback.length() in 1..(12 * 1024 * 1024)) {
-                val pdfBase64 = Base64.encodeToString(pdfFileFallback.readBytes(), Base64.NO_WRAP)
-                currentParts.put(JSONObject().apply {
-                    put("inlineData", JSONObject().apply {
-                        put("mimeType", "application/pdf")
-                        put("data", pdfBase64)
-                    })
-                })
             }
 
             val contextualPrompt = buildString {
