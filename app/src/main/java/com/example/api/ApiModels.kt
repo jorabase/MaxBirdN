@@ -125,14 +125,17 @@ fun parseIsoToDhakaMillis(isoString: String?, isEndOfDay: Boolean = false): Long
 @JsonClass(generateAdapter = true)
 data class UserCheckRequest(
     val phone: String,
-    val type: String = "student"
+    val type: String = "student",
+    val vendor: String = "shikho"
 )
 
 @JsonClass(generateAdapter = true)
 data class UserCheckResponse(
     val code: Int? = null,
     val message: String? = null,
-    val pin_exist: Boolean? = false
+    val error: String? = null,
+    val pin_exist: Boolean? = false,
+    val has_fixed_otp: Boolean? = false
 )
 
 @JsonClass(generateAdapter = true)
@@ -141,14 +144,15 @@ data class SendSmsRequest(
     val type: String = "student",
     val auth_type: String,
     val vendor: String = "shikho",
-    val google_ads_id: String
+    val google_ads_id: String? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class SendSmsResponse(
     val code: Int? = null,
     val message: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val next_otp_in_seconds: Int? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -161,7 +165,43 @@ data class VerifyOtpRequest(
 @JsonClass(generateAdapter = true)
 data class VerifyOtpResponse(
     val code: Int? = null,
-    val message: String? = null
+    val message: String? = null,
+    val error: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SignupClassCode(
+    val code: String = "C11"
+)
+
+@JsonClass(generateAdapter = true)
+data class SignupProfilePayload(
+    val first_name: String = "",
+    val `class`: SignupClassCode = SignupClassCode("C11"),
+    val gender: String = "",
+    val avatar: String = "",
+    val study_group: String = "HUM",
+    val type: String = "student"
+)
+
+@JsonClass(generateAdapter = true)
+data class SignupRequest(
+    val type: String = "student",
+    val auth_type: String = "signup",
+    val phone: String,
+    val otp: String,
+    val source: String = "website",
+    val profile: SignupProfilePayload = SignupProfilePayload(),
+    val vendor: String = "shikho",
+    val password: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SignupResponse(
+    val code: Int? = null,
+    val message: String? = null,
+    val error: String? = null,
+    val tokens: LoginTokens? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -174,8 +214,8 @@ data class LoginRequest(
     val phone: String,
     val otp: String,
     val type: String = "student",
-    val profile: ProfileDevice,
-    val google_ads_id: String
+    val profile: ProfileDevice? = null,
+    val google_ads_id: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -187,7 +227,10 @@ data class LoginTokens(
 
 @JsonClass(generateAdapter = true)
 data class LoginResponse(
-    val tokens: LoginTokens
+    val code: Int? = null,
+    val message: String? = null,
+    val error: String? = null,
+    val tokens: LoginTokens? = null
 )
 
 @JsonClass(generateAdapter = true)

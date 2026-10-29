@@ -98,6 +98,7 @@ fun LoginScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var visible by remember { mutableStateOf(false) }
     var showQrLoginSheet by remember { mutableStateOf(false) }
+    val hasRateLimitPendingOtp by viewModel.hasRateLimitPendingOtp.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val isDark = isSystemInDarkTheme()
 
@@ -665,24 +666,45 @@ fun LoginScreen(
                                     .fillMaxWidth()
                                     .padding(top = 12.dp)
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ErrorOutline,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = errorMessage ?: "",
-                                        color = if (isDark) Color(0xFFFCA5A5) else MaterialTheme.colorScheme.error,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        lineHeight = 17.sp
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ErrorOutline,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = errorMessage ?: "",
+                                            color = if (isDark) Color(0xFFFCA5A5) else MaterialTheme.colorScheme.error,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            lineHeight = 17.sp
+                                        )
+                                    }
+                                    if (hasRateLimitPendingOtp && phoneInput.length >= 10) {
+                                        TextButton(
+                                            onClick = {
+                                                errorMessage = null
+                                                viewModel.proceedToOtpDuringCooldown(phoneInput)
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                            modifier = Modifier.align(Alignment.End)
+                                        ) {
+                                            Text(
+                                                text = "ইতিমধ্যে OTP পেয়েছেন? ওটিপি দিন →",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = primary
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

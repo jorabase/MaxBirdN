@@ -3,7 +3,6 @@ package com.example.security
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
@@ -17,7 +16,6 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
 import java.io.IOException
-import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Proxy
 import java.net.ProxySelector
@@ -25,6 +23,7 @@ import java.net.SocketAddress
 import java.net.URI
 import java.security.cert.X509Certificate
 import java.util.Collections
+import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
 
 data class SecurityViolation(
@@ -51,6 +50,9 @@ object AntiTamperSecurity {
     @Volatile
     private var appContextRef: Context? = null
 
+    @Volatile
+    private var activeMitmCaptureDetail: String? = null
+
     private val SUSPICIOUS_HOOK_FILES = listOf(
         "/data/local/tmp/frida",
         "/data/local/tmp/frida-server",
@@ -58,31 +60,6 @@ object AntiTamperSecurity {
         "/system/framework/XposedBridge.jar",
         "/system/lib/libxposed_art.so",
         "/system/lib64/libxposed_art.so"
-    )
-
-    /**
-     * Known Network Capture / Packet Sniffer / MITM Proxy applications on Android
-     */
-    private val NETWORK_CAPTURE_PACKAGES = mapOf(
-        "com.reqable.android" to "Reqable Network Capture",
-        "com.reqable.app" to "Reqable Packet Sniffer",
-        "com.guoshi.httpcanary" to "HttpCanary Packet Capture",
-        "com.guoshi.httpcanary.premium" to "HttpCanary Premium",
-        "com.achep.httpcanary" to "HttpCanary Sniffer",
-        "tech.httptoolkit.android.v1" to "HTTP Toolkit Interceptor",
-        "tech.httptoolkit.android" to "HTTP Toolkit",
-        "com.emanuelef.remote_capture" to "PCAPdroid Network Monitor",
-        "com.emanuelef.remote_capture.debug" to "PCAPdroid Debug",
-        "app.greyshirts.sslcapture" to "Packet Capture (SSL Capture)",
-        "jp.co.taosoftware.android.packetcapture" to "Packet Capture",
-        "com.minhui.networkcapture" to "NetCapture",
-        "com.minhui.networkcapture.pro" to "NetCapture Pro",
-        "com.evbadroid.proxymon" to "ProxyMon",
-        "org.sandrob.drony" to "Drony Proxy Capture",
-        "org.proxydroid" to "ProxyDroid",
-        "com.xk72.charles" to "Charles Proxy",
-        "io.proxyman.android" to "Proxyman Capture",
-        "com.egorovandreyrm.pcapremote" to "PCAP Remote"
     )
 
     /**
@@ -127,6 +104,13 @@ object AntiTamperSecurity {
     }
 
     /**
+     * Clears transient MITM / TLS capture alert when the user taps Recheck after stopping capture
+     */
+    fun clearTransientCaptureAlert() {
+        activeMitmCaptureDetail = null
+    }
+
+    /**
      * Applies or clears Screenshot & Screen Recording protection (FLAG_SECURE) on the Activity
      * based on `BuildConfig.ENABLE_SCREENSHOT_PROTECTION`.
      */
@@ -159,33 +143,38 @@ object AntiTamperSecurity {
 
     /**
      * Performs a complete runtime security inspection according to the active BuildConfig flags.
-     * Returns null if safe, or a [SecurityViolation] describing the threat in Bengali.
+     * Note: Having apps like Reqable or HttpCanary installed on the phone is completely allowed;
+     * a violation is triggered ONLY when network capture / proxy / MITM interception is actively running on this app.
      */
     fun inspectSecurityViolation(context: Context? = appContextRef): SecurityViolation? {
         val ctx = context?.applicationContext ?: appContextRef
 
-        // 1. Anti-Network Capture Check (Reqable / HttpCanary / Proxy / Packet Sniffers)
+        // 1. Anti-Network Capture Check (Only when actively running on this app)
         if (BuildConfig.ENABLE_ANTI_NETWORK_CAPTURE) {
-            // 1A. Check System / Wi-Fi HTTP, HTTPS, or SOCKS Proxy
+            // 1A. Check active HTTP, HTTPS, SOCKS, or VPN Proxy routing this app's traffic
             val proxyDetail = detectActiveSystemProxy(ctx)
             if (proxyDetail != null) {
                 return SecurityViolation(
                     code = "NETWORK_PROXY_DETECTED",
-                    titleBn = "নেটওয়ার্ক প্রক্সি / ক্যাপচার শনাক্ত হয়েছে!",
-                    messageBn = "অ্যাপের ডাটা সুরক্ষার স্বার্থে কোনো প্রকার Proxy, Reqable বা Network Interceptor চালু রেখে এই অ্যাপ ব্যবহার করা যাবে না। অনুগ্রহ করে Wi-Fi/System Proxy বা ক্যাপচার অ্যাপ বন্ধ করে পুনরায় চেষ্টা করুন।",
+                    titleBn = "অ্যাপের ওপর নেটওয়ার্ক ক্যাপচার / প্রক্সি চালু রয়েছে!",
+                    messageBn = "অ্যাপের ডাটা সুরক্ষার স্বার্থে এই অ্যাপের ওপর Reqable, HttpCanary বা অন্য কোনো Network Capture / Proxy চালু রেখে ব্যবহার করা যাবে না। অনুগ্রহ করে ক্যাপচারটি বন্ধ করে 'পুনরায় যাচাই করুন' বাটনে ট্যাপ করুন (অ্যাপ আনইনস্টল করার প্রয়োজন নেই)।",
                     detectedDetail = proxyDetail
                 )
             }
 
-            // 1B. Check Installed Network Sniffer / MITM Apps (Reqable, HttpCanary, HTTP Toolkit, PCAPdroid, etc.)
-            if (ctx != null) {
-                val snifferApp = detectInstalledNetworkSnifferApp(ctx)
-                if (snifferApp != null) {
+            // 1B. Check if active TLS/SSL MITM traffic interception was caught on this app's connections
+            val mitmDetail = activeMitmCaptureDetail
+            if (mitmDetail != null) {
+                // Auto-clear if VPN/Proxy capture is no longer active on this app
+                val stillInVpnCapture = ctx != null && isVpnConnectionActiveForApp(ctx)
+                if (!stillInVpnCapture) {
+                    activeMitmCaptureDetail = null
+                } else {
                     return SecurityViolation(
-                        code = "SNIFFER_APP_DETECTED",
-                        titleBn = "নেটওয়ার্ক ক্যাপচার অ্যাপ শনাক্ত হয়েছে!",
-                        messageBn = "আপনার ডিভাইসে নেটওয়ার্ক ক্যাপচার/স্নিফার অ্যাপ ($snifferApp) শনাক্ত হয়েছে। অ্যাপের সিকিউরিটি নীতিমালার কারণে Reqable, HttpCanary বা সমজাতীয় ক্যাপচার টুল ফোনে থাকা অবস্থায় অ্যাপটি চালানো যাবে না। অনুগ্রহ করে ওই অ্যাপটি আনইনস্টল করে পুনরায় প্রবেশ করুন।",
-                        detectedDetail = snifferApp
+                        code = "ACTIVE_MITM_CAPTURE_DETECTED",
+                        titleBn = "অ্যাপের নেটওয়ার্ক ট্রাফিক ক্যাপচার শনাক্ত হয়েছে!",
+                        messageBn = "এই অ্যাপের নেটওয়ার্ক রিকোয়েস্ট Reqable বা অন্য কোনো ক্যাপচার টুল দিয়ে ইন্টারসেপ্ট করার চেষ্টা শনাক্ত হয়েছে। অনুগ্রহ করে এই অ্যাপের ওপর থেকে ক্যাপচার বা VPN ইন্টারসেপশন বন্ধ করে 'পুনরায় যাচাই করুন' বাটনে ট্যাপ করুন।",
+                        detectedDetail = mitmDetail
                     )
                 }
             }
@@ -236,7 +225,7 @@ object AntiTamperSecurity {
     }
 
     /**
-     * Checks if a system HTTP/HTTPS/SOCKS proxy is configured on the JVM or Android ConnectivityManager
+     * Checks if a system HTTP/HTTPS/SOCKS proxy or active network VPN HTTP proxy is configured for this app
      */
     fun detectActiveSystemProxy(context: Context?): String? {
         try {
@@ -260,7 +249,12 @@ object AntiTamperSecurity {
                 val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                 val proxyInfo = cm?.defaultProxy
                 if (proxyInfo != null && !proxyInfo.host.isNullOrBlank()) {
-                    return "System Proxy (${proxyInfo.host}:${proxyInfo.port})"
+                    return "Active Proxy (${proxyInfo.host}:${proxyInfo.port})"
+                }
+                val activeNetwork = cm?.activeNetwork
+                val linkProxy = if (activeNetwork != null) cm.getLinkProperties(activeNetwork)?.httpProxy else null
+                if (linkProxy != null && !linkProxy.host.isNullOrBlank()) {
+                    return "Active Capture Proxy (${linkProxy.host}:${linkProxy.port})"
                 }
             }
         } catch (_: Throwable) {}
@@ -268,24 +262,16 @@ object AntiTamperSecurity {
     }
 
     /**
-     * Checks if Reqable, HttpCanary, PCAPdroid, HTTP Toolkit, Packet Capture, etc. are installed
+     * Checks whether the active network specifically routing THIS app is a VPN tunnel (`TRANSPORT_VPN`)
      */
-    fun detectInstalledNetworkSnifferApp(context: Context): String? {
-        val pm = context.packageManager
-        for ((pkg, label) in NETWORK_CAPTURE_PACKAGES) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
-                } else {
-                    @Suppress("DEPRECATION")
-                    pm.getPackageInfo(pkg, 0)
-                }
-                return "$label ($pkg)"
-            } catch (_: PackageManager.NameNotFoundException) {
-                // Not installed
-            } catch (_: Throwable) {}
-        }
-        return null
+    fun isVpnConnectionActiveForApp(context: Context): Boolean {
+        try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val activeNetwork = cm?.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
+            return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        } catch (_: Throwable) {}
+        return false
     }
 
     /**
@@ -293,10 +279,7 @@ object AntiTamperSecurity {
      */
     fun isVpnConnectionActive(context: Context): Boolean {
         try {
-            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            val activeNetwork = cm?.activeNetwork
-            val caps = if (activeNetwork != null) cm.getNetworkCapabilities(activeNetwork) else null
-            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+            if (isVpnConnectionActiveForApp(context)) {
                 return true
             }
 
@@ -403,7 +386,23 @@ object AntiTamperSecurity {
                 throw IOException(violation.titleBn)
             }
         }
-        chain.proceed(chain.request())
+        try {
+            chain.proceed(chain.request())
+        } catch (e: SSLPeerUnverifiedException) {
+            if (BuildConfig.ENABLE_ANTI_NETWORK_CAPTURE && activeMitmCaptureDetail == null) {
+                activeMitmCaptureDetail = "Active SSL/TLS MITM Capture"
+            }
+            throw e
+        } catch (e: SSLHandshakeException) {
+            val ctx = appContextRef
+            if (BuildConfig.ENABLE_ANTI_NETWORK_CAPTURE && ctx != null && isVpnConnectionActiveForApp(ctx)) {
+                val msg = e.message?.lowercase().orEmpty()
+                if (msg.contains("certpathvalidatorexception") || msg.contains("trust anchor") || msg.contains("untrusted")) {
+                    activeMitmCaptureDetail = "Active VPN SSL/TLS Interception (Reqable / Sniffer CA)"
+                }
+            }
+            throw e
+        }
     }
 
     /**
@@ -422,6 +421,7 @@ object AntiTamperSecurity {
                         val subject = cert.subjectX500Principal?.name?.lowercase().orEmpty()
                         for (keyword in MITM_CERT_KEYWORDS) {
                             if (issuer.contains(keyword) || subject.contains(keyword)) {
+                                activeMitmCaptureDetail = "Active TLS MITM Certificate ($keyword)"
                                 throw SSLPeerUnverifiedException(
                                     "Blocked untrusted MITM/Sniffer TLS Certificate ($keyword)"
                                 )

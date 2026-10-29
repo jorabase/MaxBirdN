@@ -39,6 +39,9 @@ interface ShikhoApiService {
     @POST("/auth/v2/verify/otp")
     suspend fun verifyOtp(@Body request: VerifyOtpRequest): VerifyOtpResponse
 
+    @POST("/auth/v2/signup")
+    suspend fun signup(@Body request: SignupRequest): SignupResponse
+
     @POST("/auth/v2/login")
     suspend fun login(@Body request: LoginRequest): LoginResponse
 
@@ -212,6 +215,8 @@ interface ShikhoApiService {
 
                 val headerInterceptor = Interceptor { chain ->
                     val token = sessionManager.getAccessToken()
+                    val urlPath = chain.request().url.encodedPath
+                    val isUnauthenticatedAuthEndpoint = urlPath.startsWith("/auth/v2/") && urlPath != "/auth/v2/logout"
                     val reqBuilder = chain.request().newBuilder()
                         .header("Accept", "application/json")
                         .header("Content-Type", "application/json")
@@ -219,7 +224,7 @@ interface ShikhoApiService {
                         .header("Build-Version", "(607) 6.0.7")
                         .header("User-Agent", "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)")
 
-                    if (!token.isNullOrBlank()) {
+                    if (!token.isNullOrBlank() && !isUnauthenticatedAuthEndpoint) {
                         reqBuilder.header("Authorization", "Bearer $token")
                     }
 

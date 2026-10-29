@@ -147,6 +147,7 @@ class MainActivity : ComponentActivity() {
                                 SecurityViolationShieldScreen(
                                     violation = currentViolation,
                                     onRecheck = {
+                                        AntiTamperSecurity.clearTransientCaptureAlert()
                                         activeSecurityViolationState.value =
                                             AntiTamperSecurity.inspectSecurityViolation(this@MainActivity)
                                     },
