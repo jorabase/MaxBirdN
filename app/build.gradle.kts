@@ -82,12 +82,8 @@ android {
     val supabaseAnonKey = (System.getenv("SUPABASE_ANON_KEY")
       ?: envProps.getProperty("SUPABASE_ANON_KEY")
       ?: "").trim().removeSurrounding("\"")
-    val geminiApiKey = (System.getenv("GEMINI_API_KEY")
-      ?: envProps.getProperty("GEMINI_API_KEY")
-      ?: "").trim().removeSurrounding("\"")
     buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
-    buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
 
     fun resolveBoolFlag(propKey: String, envKey: String, defaultVal: Boolean): Boolean {
       val rawProp = (findProperty(propKey) as? String)?.trim()?.lowercase()
@@ -181,7 +177,6 @@ secrets {
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
   ignoreList.add("SUPABASE_URL")
   ignoreList.add("SUPABASE_ANON_KEY")
-  ignoreList.add("GEMINI_API_KEY")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.ERROR }
@@ -221,7 +216,7 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.coil.svg)
   implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
+  // implementation(libs.firebase.ai)
   implementation(libs.firebase.messaging)
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)

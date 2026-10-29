@@ -292,8 +292,6 @@ fun PdfViewerContent(
     var readingTheme by remember { mutableStateOf(ReadingTheme.DAY) }
     var isFullscreen by remember { mutableStateOf(false) }
     var showShareBottomSheet by remember { mutableStateOf(false) }
-    var showAiStudyDialog by remember { mutableStateOf(false) }
-    var activePageForAi by remember { mutableIntStateOf(1) }
 
     // Resolve target file strictly for in-app viewing
     val targetPdfFile = remember(
@@ -489,9 +487,6 @@ fun PdfViewerContent(
                             isFullscreen = !isFullscreen
                         },
                         isBookmarked = isSlideBookmarked,
-                        onAiStudyClick = {
-                            showAiStudyDialog = true
-                        },
                         onBookmarkClick = {
                             coroutineScope.launch {
                                 if (isSlideBookmarked) {
@@ -576,11 +571,6 @@ fun PdfViewerContent(
                                 readingTheme = readingTheme,
                                 isFullscreen = isFullscreen,
                                 onToggleFullscreen = { isFullscreen = !isFullscreen },
-                                onCurrentPageChanged = { page -> activePageForAi = page },
-                                onOpenAiForPage = { page ->
-                                    activePageForAi = page
-                                    showAiStudyDialog = true
-                                },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -617,19 +607,6 @@ fun PdfViewerContent(
                 pdfFile = targetPdfFile,
                 pdfUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl,
                 onDismiss = { showShareBottomSheet = false }
-            )
-        }
-
-        // NotebookLM-style Gemini 3.8 Flash AI Slide Tutor Dialog
-        if (showAiStudyDialog) {
-            NotebookLMStudyDialog(
-                title = title,
-                currentPage = activePageForAi,
-                totalPageCount = rendererState?.pageCount ?: 1,
-                targetFile = targetPdfFile,
-                remoteUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl ?: slideUrl,
-                renderer = rendererState,
-                onDismiss = { showAiStudyDialog = false }
             )
         }
     }
@@ -691,7 +668,6 @@ private fun PdfViewerTopBar(
     isLandscape: Boolean,
     downloadedItem: DownloadedItemEntity?,
     isBookmarked: Boolean = false,
-    onAiStudyClick: () -> Unit = {},
     onBookmarkClick: () -> Unit = {},
     onDismiss: () -> Unit,
     onToggleOrientation: () -> Unit,
@@ -767,36 +743,6 @@ private fun PdfViewerTopBar(
                             color = Color.White.copy(alpha = 0.7f)
                         )
                     }
-                }
-            }
-
-            // 0. AI Study Tutor Pill Button (Gemini 3.8 Flash)
-            Surface(
-                onClick = onAiStudyClick,
-                shape = RoundedCornerShape(16.dp),
-                color = Color(0xFF4F46E5),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.7f)),
-                modifier = Modifier
-                    .padding(end = 2.dp)
-                    .testTag("pdf_viewer_ai_tutor_button")
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "AI দিয়ে বুঝুন",
-                        tint = Color(0xFFFDE047),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "AI",
-                        color = Color.White,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
                 }
             }
 
@@ -928,8 +874,6 @@ private fun NativePdfViewerContent(
     readingTheme: ReadingTheme,
     isFullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
-    onCurrentPageChanged: (Int) -> Unit = {},
-    onOpenAiForPage: (Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -950,10 +894,6 @@ private fun NativePdfViewerContent(
                 (horizontalPagerState.currentPage + 1).coerceAtMost(renderer.pageCount)
             }
         }
-    }
-
-    LaunchedEffect(currentVisiblePage.value) {
-        onCurrentPageChanged(currentVisiblePage.value)
     }
 
     val displayWidthPx = context.resources.displayMetrics.widthPixels
@@ -1249,43 +1189,6 @@ private fun NativePdfViewerContent(
                             tint = if (currentVisiblePage.value < renderer.pageCount) Color.White else Color.White.copy(alpha = 0.3f),
                             modifier = Modifier.size(20.dp)
                         )
-                    }
-
-                    VerticalDivider(
-                        modifier = Modifier
-                            .height(18.dp)
-                            .padding(horizontal = 4.dp),
-                        color = Color.White.copy(alpha = 0.2f)
-                    )
-
-                    // Ask AI about current slide button (NotebookLM style)
-                    Surface(
-                        onClick = { onOpenAiForPage(currentVisiblePage.value) },
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFF4F46E5),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF818CF8).copy(alpha = 0.6f)),
-                        modifier = Modifier
-                            .padding(start = 2.dp, end = 2.dp)
-                            .testTag("pdf_dock_ai_tutor_button")
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "AI দিয়ে এই স্লাইডটি বুঝুন",
-                                tint = Color(0xFFFDE047),
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "AI দিয়ে বুঝুন",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
                 }
             }
