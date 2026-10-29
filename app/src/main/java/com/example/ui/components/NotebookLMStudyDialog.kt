@@ -1,10 +1,14 @@
 package com.example.ui.components
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -21,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -39,19 +44,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.example.ai.AiChatMessage
 import com.example.ai.GeminiAiStudyRepository
 import com.example.ai.GeminiTutorResult
+import com.example.ai.GeminiVoiceSessionController
 import com.example.ui.dialogs.GeminiApiSettingsDialog
 import com.example.utils.NotebookLMHelper
 import com.example.utils.toBengaliDigits
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Universal Dialog for In-App Gemini 3.8 Flash Slide Study Tutor & Google NotebookLM Integration.
- * Sends the exact lecture slide page visually to Gemini 3.8 Flash so students can ask any question
- * about diagrams, logic gates, math derivations, or concepts they didn't understand in class.
+ * Universal Dialog for In-App Gemini 3.8 Flash Slide Study Tutor, PDF/Slide Analyzer (`analyzeSlidePDF`),
+ * Interactive Live Voice Tutor (`startVoiceSession` via `gemini-3.8-live` / `gemini-2.5-flash-native-audio`),
+ * & Google NotebookLM Integration.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,16 +75,14 @@ fun NotebookLMStudyDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var selectedTab by remember { mutableIntStateOf(initialTab) } // 1: AI Tutor, 0: NotebookLM
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
 
-    // Active slide page that the student is asking about (can be changed inside the dialog!)
     val safeTotalPages = totalPageCount.coerceAtLeast(1)
     var activeSlidePage by remember(currentPage, safeTotalPages) {
         mutableIntStateOf(currentPage.coerceIn(1, safeTotalPages))
     }
     var includeAdjacentSlides by remember { mutableStateOf(false) }
 
-    // Rendered bitmap preview of the active slide page
     var currentSlideBitmap by remember(activeSlidePage, renderer) {
         mutableStateOf(renderer?.getCachedBitmap(activeSlidePage - 1))
     }
@@ -87,7 +93,6 @@ fun NotebookLMStudyDialog(
         }
     }
 
-    // Initialize and check Gemini API Key from local + Supabase cloud
     LaunchedEffect(Unit) {
         GeminiAiStudyRepository.initialize(context)
         GeminiAiStudyRepository.syncApiKeyFromCloud(context, forceRefresh = false)
@@ -99,14 +104,73 @@ fun NotebookLMStudyDialog(
     // Multi-turn AI Tutor Conversation State
     var questionInput by remember { mutableStateOf("") }
     var isAiLoading by remember { mutableStateOf(false) }
+    var loadingStatusText by remember { mutableStateOf("") }
+    var analysisProgress by remember { mutableFloatStateOf(0f) }
+    var showProgressBar by remember { mutableStateOf(false) }
+
     val chatMessages = remember { mutableStateListOf<AiChatMessage>() }
     val chatListState = rememberLazyListState()
+
+    // Interactive Voice Session & Playback State
+    var speakingMessageId by remember { mutableStateOf<String?>(null) }
+    var isVoiceRecording by remember { mutableStateOf(false) }
+    var voiceRecordingSeconds by remember { mutableIntStateOf(0) }
+
+    val voiceController = remember(context) {
+        GeminiVoiceSessionController(context) { activeId ->
+            speakingMessageId = activeId
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            voiceController.release()
+        }
+    }
+
+    LaunchedEffect(isVoiceRecording) {
+        if (isVoiceRecording) {
+            voiceRecordingSeconds = 0
+            while (isVoiceRecording) {
+                delay(1000L)
+                voiceRecordingSeconds += 1
+            }
+        } else {
+            voiceRecordingSeconds = 0
+        }
+    }
+
+    suspend fun collectActiveSlideBitmaps(): List<Pair<Int, Bitmap>> {
+        val slideBitmaps = mutableListOf<Pair<Int, Bitmap>>()
+        if (renderer != null && renderer.isInitialized && renderer.pageCount > 0) {
+            val pagesToRender = if (includeAdjacentSlides && safeTotalPages > 1) {
+                listOf(activeSlidePage - 1, activeSlidePage, activeSlidePage + 1)
+                    .filter { it in 1..safeTotalPages }
+                    .distinct()
+            } else {
+                listOf(activeSlidePage)
+            }
+
+            for (pageNum in pagesToRender) {
+                val bmp = renderer.getCachedBitmap(pageNum - 1)
+                    ?: renderer.renderPage(pageNum - 1, 1600)
+                if (bmp != null) {
+                    slideBitmaps.add(pageNum to bmp)
+                    if (pageNum == activeSlidePage && currentSlideBitmap == null) {
+                        currentSlideBitmap = bmp
+                    }
+                }
+            }
+        } else if (currentSlideBitmap != null) {
+            slideBitmaps.add(activeSlidePage to currentSlideBitmap!!)
+        }
+        return slideBitmaps
+    }
 
     fun sendQuestionToGemini(promptText: String) {
         val cleanPrompt = promptText.trim()
         if (cleanPrompt.isBlank() || isAiLoading) return
 
-        // Add user message to chat
         val pagesCount = if (includeAdjacentSlides && safeTotalPages > 1) {
             listOf(activeSlidePage - 1, activeSlidePage, activeSlidePage + 1)
                 .count { it in 1..safeTotalPages }
@@ -120,6 +184,8 @@ fun NotebookLMStudyDialog(
         )
         chatMessages.add(userMsg)
         isAiLoading = true
+        showProgressBar = false
+        loadingStatusText = "${GeminiAiStudyRepository.DISPLAY_MODEL_NAME} স্লাইড পৃষ্ঠা ${toBengaliDigits(activeSlidePage)} বিশ্লেষণ করছে..."
 
         coroutineScope.launch {
             try {
@@ -128,31 +194,7 @@ fun NotebookLMStudyDialog(
                 }
             } catch (_: Exception) {}
 
-            // Collect slide bitmap(s) for multimodal visual analysis
-            val slideBitmaps = mutableListOf<Pair<Int, Bitmap>>()
-            if (renderer != null && renderer.isInitialized && renderer.pageCount > 0) {
-                val pagesToRender = if (includeAdjacentSlides && safeTotalPages > 1) {
-                    listOf(activeSlidePage - 1, activeSlidePage, activeSlidePage + 1)
-                        .filter { it in 1..safeTotalPages }
-                        .distinct()
-                } else {
-                    listOf(activeSlidePage)
-                }
-
-                for (pageNum in pagesToRender) {
-                    val bmp = renderer.getCachedBitmap(pageNum - 1)
-                        ?: renderer.renderPage(pageNum - 1, 1600)
-                    if (bmp != null) {
-                        slideBitmaps.add(pageNum to bmp)
-                        if (pageNum == activeSlidePage && currentSlideBitmap == null) {
-                            currentSlideBitmap = bmp
-                        }
-                    }
-                }
-            } else if (currentSlideBitmap != null) {
-                slideBitmaps.add(activeSlidePage to currentSlideBitmap!!)
-            }
-
+            val slideBitmaps = collectActiveSlideBitmaps()
             val historySnapshot = chatMessages.dropLast(1).toList()
 
             val result = GeminiAiStudyRepository.askSlideQuestion(
@@ -200,8 +242,254 @@ fun NotebookLMStudyDialog(
         }
     }
 
+    /**
+     * Triggers `analyzeSlidePDF()` either on a user-uploaded PDF/Image file
+     * or on the currently open lecture slide PDF.
+     */
+    fun triggerSlidePdfAnalysis(
+        uploadedBytes: ByteArray? = null,
+        uploadedMimeType: String = "application/pdf",
+        uploadedFileName: String? = null
+    ) {
+        if (isAiLoading) return
+
+        val labelText = if (uploadedFileName != null) {
+            "📤 আপলোড করা ফাইল বিশ্লেষণ করুন: $uploadedFileName (মূল টপিক, সারাংশ ও রিভিশন প্রশ্ন)"
+        } else {
+            "📄 এই লেকচার স্লাইডের মূল টপিকসমূহ, বুলেট সারাংশ এবং রিভিশন প্রশ্নোত্তর তৈরি করে দাও।"
+        }
+
+        chatMessages.add(
+            AiChatMessage(
+                isUser = true,
+                text = labelText,
+                attachedSlidePage = if (uploadedFileName == null) activeSlidePage else null,
+                uploadedFileName = uploadedFileName
+            )
+        )
+
+        isAiLoading = true
+        showProgressBar = true
+        analysisProgress = 0.08f
+        loadingStatusText = "স্লাইড / PDF ফাইল প্রস্তুত করা হচ্ছে..."
+
+        coroutineScope.launch {
+            try {
+                if (chatMessages.isNotEmpty()) {
+                    chatListState.animateScrollToItem(chatMessages.size - 1)
+                }
+            } catch (_: Exception) {}
+
+            val slideBitmaps = if (uploadedBytes == null) collectActiveSlideBitmaps() else emptyList()
+
+            val result = GeminiAiStudyRepository.analyzeSlidePDF(
+                context = context,
+                slideTitle = uploadedFileName ?: title.ifBlank { "লেকচার স্লাইড" },
+                uploadedBytes = uploadedBytes,
+                uploadedMimeType = uploadedMimeType,
+                uploadedFileName = uploadedFileName,
+                slideBitmaps = slideBitmaps,
+                pdfFileFallback = targetFile,
+                onProgress = { progress, status ->
+                    analysisProgress = progress
+                    loadingStatusText = status
+                }
+            )
+
+            isAiLoading = false
+            showProgressBar = false
+            when (result) {
+                is GeminiTutorResult.Success -> {
+                    chatMessages.add(
+                        AiChatMessage(
+                            isUser = false,
+                            text = result.explanation,
+                            attachedSlidePage = if (uploadedFileName == null) activeSlidePage else null,
+                            uploadedFileName = uploadedFileName
+                        )
+                    )
+                }
+                is GeminiTutorResult.Error -> {
+                    chatMessages.add(
+                        AiChatMessage(
+                            isUser = false,
+                            text = result.message,
+                            isError = true
+                        )
+                    )
+                    if (result.isMissingKey) {
+                        showApiSettingsDialog = true
+                    }
+                }
+            }
+
+            try {
+                if (chatMessages.isNotEmpty()) {
+                    chatListState.animateScrollToItem(chatMessages.size - 1)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Completes recording and sends the student's spoken audio query to `startVoiceSession()`
+     * (`gemini-3.8-live` / `gemini-2.5-flash-native-audio`).
+     */
+    fun finishAndSendVoiceSession() {
+        val audioBytes = voiceController.stopAudioRecording()
+        isVoiceRecording = false
+
+        if (audioBytes == null || audioBytes.isEmpty()) {
+            Toast.makeText(context, "ভয়েস রেকর্ড খুব ছোট বা অস্পষ্ট হয়েছে, আবার চেষ্টা করুন", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val userVoiceMsg = AiChatMessage(
+            isUser = true,
+            text = "🎙️ ভয়েস প্রশ্ন (${toBengaliDigits(voiceRecordingSeconds.coerceAtLeast(1))} সেকেন্ড অডিও)",
+            attachedSlidePage = activeSlidePage,
+            isVoiceQuery = true
+        )
+        chatMessages.add(userVoiceMsg)
+        isAiLoading = true
+        showProgressBar = false
+        loadingStatusText = "${GeminiAiStudyRepository.LIVE_VOICE_MODEL} ভয়েস প্রশ্ন ও স্লাইড বিশ্লেষণ করছে..."
+
+        coroutineScope.launch {
+            try {
+                if (chatMessages.isNotEmpty()) {
+                    chatListState.animateScrollToItem(chatMessages.size - 1)
+                }
+            } catch (_: Exception) {}
+
+            val slideBitmaps = collectActiveSlideBitmaps()
+            val historySnapshot = chatMessages.dropLast(1).toList()
+
+            val result = GeminiAiStudyRepository.startVoiceSession(
+                context = context,
+                slideTitle = title.ifBlank { "লেকচার স্লাইড" },
+                currentPage = activeSlidePage,
+                totalPages = safeTotalPages,
+                recordedAudioBytes = audioBytes,
+                audioMimeType = "audio/mp4",
+                spokenTranscriptHint = questionInput.trim(),
+                slideBitmaps = slideBitmaps,
+                chatHistory = historySnapshot,
+                onStatusUpdate = { status ->
+                    loadingStatusText = status
+                }
+            )
+
+            questionInput = ""
+            isAiLoading = false
+
+            when (result) {
+                is GeminiTutorResult.Success -> {
+                    val replyMsg = AiChatMessage(
+                        isUser = false,
+                        text = result.explanation,
+                        attachedSlidePage = activeSlidePage,
+                        isVoiceQuery = true,
+                        audioBytesWav = result.audioBytesWav
+                    )
+                    chatMessages.add(replyMsg)
+                    // Automatically play back the voice tutor response
+                    voiceController.toggleSpeakMessage(
+                        messageId = replyMsg.id,
+                        rawText = replyMsg.text,
+                        audioBytes = replyMsg.audioBytesWav
+                    )
+                }
+                is GeminiTutorResult.Error -> {
+                    chatMessages.add(
+                        AiChatMessage(
+                            isUser = false,
+                            text = result.message,
+                            attachedSlidePage = activeSlidePage,
+                            isError = true
+                        )
+                    )
+                    if (result.isMissingKey) {
+                        showApiSettingsDialog = true
+                    }
+                }
+            }
+
+            try {
+                if (chatMessages.isNotEmpty()) {
+                    chatListState.animateScrollToItem(chatMessages.size - 1)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    // File Picker for uploading PDF or Slide Images (`analyzeSlidePDF`)
+    val slideFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val readRes = GeminiVoiceSessionController.readUploadedSlideUri(context, uri)
+            readRes.onSuccess { doc ->
+                triggerSlidePdfAnalysis(
+                    uploadedBytes = doc.bytes,
+                    uploadedMimeType = doc.mimeType,
+                    uploadedFileName = doc.fileName
+                )
+            }.onFailure { err ->
+                Toast.makeText(
+                    context,
+                    err.localizedMessage ?: "ফাইল আপলোড করা যায়নি",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    // Runtime Permission Launcher for Microphone (`RECORD_AUDIO`)
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            voiceController.startAudioRecording().onSuccess {
+                isVoiceRecording = true
+            }.onFailure { err ->
+                Toast.makeText(context, err.localizedMessage ?: "মাইক্রোফোন ত্রুটি", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(
+                context,
+                "ভয়েস প্রশ্ন করার জন্য মাইক্রোফোন (Audio) পারমিশন প্রয়োজন",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    fun onToggleVoiceButton() {
+        if (isVoiceRecording) {
+            finishAndSendVoiceSession()
+            return
+        }
+        val hasPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPerm) {
+            voiceController.startAudioRecording().onSuccess {
+                isVoiceRecording = true
+            }.onFailure { err ->
+                Toast.makeText(context, err.localizedMessage ?: "মাইক্রোফোন ত্রুটি", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            voiceController.release()
+            onDismiss()
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
@@ -220,9 +508,9 @@ fun NotebookLMStudyDialog(
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
-                                    Color(0xFF312E81), // Deep Indigo
-                                    Color(0xFF4F46E5), // Indigo
-                                    Color(0xFF7C3AED)  // Violet
+                                    Color(0xFF312E81),
+                                    Color(0xFF4F46E5),
+                                    Color(0xFF7C3AED)
                                 )
                             )
                         )
@@ -255,21 +543,26 @@ fun NotebookLMStudyDialog(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "AI স্লাইড টিউটর",
-                                    fontSize = 15.5.sp,
+                                    text = "AI স্লাইড ও ভয়েস টিউটর",
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFF10B981)
                                 ) {
                                     Text(
-                                        text = "Gemini 3.8 Flash",
+                                        text = "3.8 Flash + Live",
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.5.dp)
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                             }
@@ -282,6 +575,8 @@ fun NotebookLMStudyDialog(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         // Quick API Key Settings Button
                         Surface(
@@ -315,7 +610,9 @@ fun NotebookLMStudyDialog(
                                     text = if (geminiConfig.isConfigured) "API ✓" else "API সেট",
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -323,7 +620,10 @@ fun NotebookLMStudyDialog(
                         Spacer(modifier = Modifier.width(6.dp))
 
                         IconButton(
-                            onClick = onDismiss,
+                            onClick = {
+                                voiceController.release()
+                                onDismiss()
+                            },
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
@@ -354,7 +654,7 @@ fun NotebookLMStudyDialog(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Text("✨ এআই দিয়ে স্লাইড বুঝুন", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                                Text("✨ এআই স্লাইড ও ভয়েস টিউটর", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     )
@@ -367,7 +667,7 @@ fun NotebookLMStudyDialog(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(Icons.Default.AutoStories, contentDescription = null, modifier = Modifier.size(15.dp))
-                                Text("NotebookLM এ পাঠান", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                                Text("NotebookLM এ পাঠান", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                             }
                         }
                     )
@@ -396,12 +696,39 @@ fun NotebookLMStudyDialog(
                             questionInput = questionInput,
                             onQuestionChange = { questionInput = it },
                             isAiLoading = isAiLoading,
+                            loadingStatusText = loadingStatusText,
+                            showProgressBar = showProgressBar,
+                            analysisProgress = analysisProgress,
                             chatMessages = chatMessages,
                             chatListState = chatListState,
                             onAskQuestion = { prompt ->
                                 sendQuestionToGemini(prompt)
                             },
-                            onClearChat = { chatMessages.clear() },
+                            onAnalyzeCurrentSlidePdf = {
+                                triggerSlidePdfAnalysis()
+                            },
+                            onUploadExternalSlideOrPdf = {
+                                slideFilePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+                            },
+                            isVoiceRecording = isVoiceRecording,
+                            voiceRecordingSeconds = voiceRecordingSeconds,
+                            onToggleVoiceRecording = { onToggleVoiceButton() },
+                            onCancelVoiceRecording = {
+                                voiceController.cancelAudioRecording()
+                                isVoiceRecording = false
+                            },
+                            speakingMessageId = speakingMessageId,
+                            onToggleSpeakMessage = { msg ->
+                                voiceController.toggleSpeakMessage(
+                                    messageId = msg.id,
+                                    rawText = msg.text,
+                                    audioBytes = msg.audioBytesWav
+                                )
+                            },
+                            onClearChat = {
+                                voiceController.stopSpeaking()
+                                chatMessages.clear()
+                            },
                             context = context
                         )
                         0 -> NotebookLMTabContent(
@@ -440,14 +767,25 @@ private fun InAppGeminiSlideTutorTab(
     questionInput: String,
     onQuestionChange: (String) -> Unit,
     isAiLoading: Boolean,
+    loadingStatusText: String,
+    showProgressBar: Boolean,
+    analysisProgress: Float,
     chatMessages: List<AiChatMessage>,
     chatListState: androidx.compose.foundation.lazy.LazyListState,
     onAskQuestion: (String) -> Unit,
+    onAnalyzeCurrentSlidePdf: () -> Unit,
+    onUploadExternalSlideOrPdf: () -> Unit,
+    isVoiceRecording: Boolean,
+    voiceRecordingSeconds: Int,
+    onToggleVoiceRecording: () -> Unit,
+    onCancelVoiceRecording: () -> Unit,
+    speakingMessageId: String?,
+    onToggleSpeakMessage: (AiChatMessage) -> Unit,
     onClearChat: () -> Unit,
     context: Context
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        // 1. Attached Slide Visual Context Bar (NotebookLM Source Card)
+        // 1. Attached Slide Visual Context Bar + PDF/Image Upload Analyzer Bar
         Surface(
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 2.dp,
@@ -470,8 +808,8 @@ private fun InAppGeminiSlideTutorTab(
                         color = Color(0xFF0F172A),
                         border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                         modifier = Modifier
-                            .width(74.dp)
-                            .height(50.dp)
+                            .width(72.dp)
+                            .height(48.dp)
                     ) {
                         if (currentSlideBitmap != null) {
                             Image(
@@ -504,14 +842,14 @@ private fun InAppGeminiSlideTutorTab(
                             ) {
                                 Text(
                                     text = "📌 স্লাইড সোর্স সংযুক্ত",
-                                    fontSize = 10.5.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF4F46E5),
+                                    maxLines = 1,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
 
-                            // Toggle Single Slide vs Multi-Slide Context
                             if (totalPageCount > 1) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -525,24 +863,25 @@ private fun InAppGeminiSlideTutorTab(
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (includeAdjacentSlides) Color(0xFF059669) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
 
                         Text(
                             text = "পৃষ্ঠা ${toBengaliDigits(activeSlidePage)} এর ছবি ও লেখা সরাসরি AI দেখবে",
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    // Prev / Next Slide Page Stepper inside AI Dialog
+                    // Prev / Next Slide Page Stepper
                     if (totalPageCount > 1) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -565,7 +904,7 @@ private fun InAppGeminiSlideTutorTab(
                             }
                             Text(
                                 text = "${toBengaliDigits(activeSlidePage)}/${toBengaliDigits(totalPageCount)}",
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 2.dp)
@@ -585,7 +924,72 @@ private fun InAppGeminiSlideTutorTab(
                     }
                 }
 
-                // Missing API Key Setup Banner (if user hasn't added their key yet)
+                // Action Row: `analyzeSlidePDF()` on Current Slide OR Upload PDF / Image
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = onAnalyzeCurrentSlidePdf,
+                        enabled = !isAiLoading,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Color(0xFF4F46E5).copy(alpha = 0.12f),
+                            contentColor = Color(0xFF4F46E5)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("analyze_slide_pdf_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Summarize,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "স্লাইড সামারি ও প্রশ্ন",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onUploadExternalSlideOrPdf,
+                        enabled = !isAiLoading,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.45f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFF7C3AED)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp)
+                            .testTag("upload_slide_pdf_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.UploadFile,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "PDF / ছবি আপলোড",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Missing API Key Setup Banner
                 if (!isApiKeyConfigured) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -613,7 +1017,7 @@ private fun InAppGeminiSlideTutorTab(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    text = "AI দিয়ে স্লাইড বুঝতে আপনার Gemini API Key সেট করুন",
+                                    text = "AI ও ভয়েস টিউটর ব্যবহার করতে Gemini API Key সেট করুন",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -646,7 +1050,6 @@ private fun InAppGeminiSlideTutorTab(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            // Welcome & Quick Pedagogical Prompts Card
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
@@ -667,7 +1070,8 @@ private fun InAppGeminiSlideTutorTab(
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.School,
@@ -697,7 +1101,7 @@ private fun InAppGeminiSlideTutorTab(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = "নিচের যেকোনো অপশনে ট্যাপ করুন অথবা সরাসরি নিচে আপনার প্রশ্ন লিখুন (যেমন: 'আমি এই গেইটটি বুঝতে পারছি না, কীভাবে কাজ করে?'):",
+                            text = "নিচের যেকোনো অপশনে ট্যাপ করুন, 🎤 মাইক্রোফোন বাটনে চাপ দিয়ে মুখে প্রশ্ন করুন, অথবা লিখে পাঠান:",
                             fontSize = 11.5.sp,
                             lineHeight = 16.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -710,7 +1114,7 @@ private fun InAppGeminiSlideTutorTab(
                             "🔍 স্লাইডের চিত্র/গেইট ও সমীকরণ ভেঙে বোঝাও" to "এই স্লাইডে যে চিত্র, ডায়াগ্রাম/লজিক গেইট বা সমীকরণ ও ছক দেওয়া আছে, তার প্রতিটি অংশ ও ইনপুট-আউটপুট কীভাবে কাজ করছে তা লাইন বাই লাইন ভেঙে বুঝিয়ে দাও।",
                             "⚡ মনে রাখার শর্টকাট ট্রিক ও বাস্তব উদাহরণ" to "এই স্লাইডের নিয়ম ও সূত্রগুলো যেন পরীক্ষায় কখনোই ভুল না হয়, সেজন্য মনে রাখার শর্টকাট টেকনিক এবং একটি বাস্তব উদাহরণ দাও।",
                             "🎯 বোর্ড ও ভর্তি পরীক্ষার প্রশ্ন (CQ + MCQ) টিপস" to "এই স্লাইডের টপিক থেকে পরীক্ষায় (MCQ এবং সৃজনশীল গ/ঘ) কী ধরনের প্রশ্ন আসে এবং কীভাবে উত্তর করলে পূর্ণ নম্বর পাওয়া যাবে তা উদাহরণসহ দেখাও।",
-                            "📝 এই স্লাইডের মূল সারাংশ ও রিভিশন নোট" to "NotebookLM এর মতো এই স্লাইডটির একটি গোছানো স্টাডি গাইড, মূল পয়েন্টগুলোর সারাংশ এবং কুইক রিভিশন নোট তৈরি করে দাও।",
+                            "📝 মূল লেকচার টপিক, সারাংশ ও রিভিশন প্রশ্ন" to "এই স্লাইডটির মূল লেকচার টপিকসমূহ, সহজ বুলেট সারাংশ এবং বাংলায় রিভিশন প্রশ্নোত্তর তৈরি করে দাও।",
                             "❓ আমাকে ছোট কুইজ ধরে যাচাই করো" to "এই স্লাইডের ওপর ভিত্তি করে আমাকে ২টি ছোট MCQ ও ১টি অনুধাবনমূলক প্রশ্ন করো এবং উত্তরসহ ব্যাখ্যা দাও যাতে আমি যাচাই করতে পারি আমি বুঝেছি কি না।"
                         )
 
@@ -760,6 +1164,8 @@ private fun InAppGeminiSlideTutorTab(
             items(chatMessages, key = { it.id }) { msg ->
                 AiChatMessageBubble(
                     message = msg,
+                    isSpeaking = speakingMessageId == msg.id,
+                    onToggleSpeak = { onToggleSpeakMessage(msg) },
                     context = context,
                     onRetryOrSetupKey = {
                         if (!isApiKeyConfigured) {
@@ -769,7 +1175,7 @@ private fun InAppGeminiSlideTutorTab(
                 )
             }
 
-            // Loading Indicator when Gemini 3.8 Flash is analyzing the slide
+            // Loading & Progress Bar Indicator when Gemini 3.8 Flash / Live is processing
             if (isAiLoading) {
                 item {
                     Card(
@@ -780,29 +1186,59 @@ private fun InAppGeminiSlideTutorTab(
                         border = BorderStroke(1.dp, Color(0xFF4F46E5).copy(alpha = 0.25f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.5.dp,
-                                color = Color(0xFF4F46E5)
-                            )
-                            Column {
-                                Text(
-                                    text = "Gemini 3.8 Flash স্লাইড পৃষ্ঠা ${toBengaliDigits(activeSlidePage)} বিশ্লেষণ করছে...",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.5.dp,
+                                    color = Color(0xFF4F46E5)
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "স্লাইডের চিত্র, সমীকরণ ও লেখা দেখে সহজ ব্যাখ্যা তৈরি করা হচ্ছে",
-                                    fontSize = 11.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = loadingStatusText.ifBlank {
+                                            "Gemini 3.8 Flash স্লাইড পৃষ্ঠা ${toBengaliDigits(activeSlidePage)} বিশ্লেষণ করছে..."
+                                        },
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "স্লাইডের চিত্র, সমীকরণ ও অডিও দেখে সহজ ব্যাখ্যা তৈরি করা হচ্ছে",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            if (showProgressBar) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    LinearProgressIndicator(
+                                        progress = { analysisProgress.coerceIn(0f, 1f) },
+                                        color = Color(0xFF4F46E5),
+                                        trackColor = Color(0xFF4F46E5).copy(alpha = 0.16f),
+                                        drawStopIndicator = {},
+                                        gapSize = 0.dp,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                    )
+                                    Text(
+                                        text = "অগ্রগতি: ${toBengaliDigits((analysisProgress * 100).toInt().coerceIn(5, 100))}%",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF4F46E5)
+                                    )
+                                }
                             }
                         }
                     }
@@ -810,7 +1246,7 @@ private fun InAppGeminiSlideTutorTab(
             }
         }
 
-        // 3. Bottom Question Input Bar
+        // 3. Bottom Question Input & Live Voice Interaction Bar
         Surface(
             color = MaterialTheme.colorScheme.surface,
             shadowElevation = 8.dp,
@@ -822,8 +1258,73 @@ private fun InAppGeminiSlideTutorTab(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
+                // Active Live Voice Recording Banner (`gemini-3.8-live`)
+                AnimatedVisibility(visible = isVoiceRecording) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0xFFDC2626).copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, Color(0xFFDC2626).copy(alpha = 0.4f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFDC2626))
+                                )
+                                Column {
+                                    Text(
+                                        text = "🎙️ লাইভ ভয়েস রেকর্ড হচ্ছে (${toBengaliDigits(voiceRecordingSeconds)}s)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFDC2626)
+                                    )
+                                    Text(
+                                        text = "স্লাইডটি নিয়ে আপনার প্রশ্ন বলুন, বলা শেষ হলে 'পাঠান' চাপুন",
+                                        fontSize = 10.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                TextButton(
+                                    onClick = onCancelVoiceRecording,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text("বাতিল", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.error)
+                                }
+                                Button(
+                                    onClick = onToggleVoiceRecording,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("পাঠান", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Quick Follow-up chips if conversation already started
-                if (chatMessages.isNotEmpty() && !isAiLoading) {
+                if (chatMessages.isNotEmpty() && !isAiLoading && !isVoiceRecording) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -868,13 +1369,32 @@ private fun InAppGeminiSlideTutorTab(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Microphone Voice Input Button (`startVoiceSession`)
+                    FilledTonalIconButton(
+                        onClick = onToggleVoiceRecording,
+                        enabled = !isAiLoading,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (isVoiceRecording) Color(0xFFDC2626) else Color(0xFF4F46E5).copy(alpha = 0.12f),
+                            contentColor = if (isVoiceRecording) Color.White else Color(0xFF4F46E5)
+                        ),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("ai_slide_voice_mic_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isVoiceRecording) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = if (isVoiceRecording) "ভয়েস প্রশ্ন পাঠান" else "ভয়েস দিয়ে প্রশ্ন করুন",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
                     OutlinedTextField(
                         value = questionInput,
                         onValueChange = onQuestionChange,
                         placeholder = {
                             Text(
-                                "স্লাইডের যা বুঝতে পারছেন না প্রশ্ন করুন...",
-                                fontSize = 13.sp,
+                                "স্লাইডের যা বুঝতে পারছেন না লিখুন বা 🎤 চাপুন...",
+                                fontSize = 12.5.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -918,6 +1438,8 @@ private fun InAppGeminiSlideTutorTab(
 @Composable
 private fun AiChatMessageBubble(
     message: AiChatMessage,
+    isSpeaking: Boolean,
+    onToggleSpeak: () -> Unit,
     context: Context,
     onRetryOrSetupKey: () -> Unit
 ) {
@@ -932,17 +1454,20 @@ private fun AiChatMessageBubble(
                 modifier = Modifier.widthIn(max = 310.dp)
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    if (message.attachedSlidePage != null) {
+                    if (message.uploadedFileName != null || message.attachedSlidePage != null) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color.White.copy(alpha = 0.18f),
                             modifier = Modifier.padding(bottom = 5.dp)
                         ) {
                             Text(
-                                text = if (message.attachedSlideCount > 1) {
-                                    "📄 স্লাইড পৃষ্ঠা ${toBengaliDigits(message.attachedSlidePage)} (+পাশাপাশি স্লাইড)"
-                                } else {
-                                    "📄 স্লাইড পৃষ্ঠা ${toBengaliDigits(message.attachedSlidePage)}"
+                                text = when {
+                                    message.uploadedFileName != null -> "📎 ফাইল: ${message.uploadedFileName}"
+                                    message.attachedSlideCount > 1 && message.attachedSlidePage != null ->
+                                        "📄 স্লাইড পৃষ্ঠা ${toBengaliDigits(message.attachedSlidePage)} (+পাশাপাশি স্লাইড)"
+                                    message.attachedSlidePage != null ->
+                                        "📄 স্লাইড পৃষ্ঠা ${toBengaliDigits(message.attachedSlidePage)}"
+                                    else -> ""
                                 },
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -989,7 +1514,8 @@ private fun AiChatMessageBubble(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
@@ -1000,7 +1526,11 @@ private fun AiChatMessageBubble(
                             }
                         ) {
                             Text(
-                                text = if (message.isError) "⚠️ সতর্কবার্তা" else "✨ Gemini 3.8 Flash টিউটর",
+                                text = when {
+                                    message.isError -> "⚠️ সতর্কবার্তা"
+                                    message.isVoiceQuery -> "🎙️ Gemini 3.8 Live ভয়েস টিউটর"
+                                    else -> "✨ Gemini 3.8 Flash টিউটর"
+                                },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (message.isError) MaterialTheme.colorScheme.error else Color(0xFF4F46E5),
@@ -1018,21 +1548,54 @@ private fun AiChatMessageBubble(
                     }
 
                     if (!message.isError) {
-                        IconButton(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                val clip = ClipData.newPlainText("AI Study Note", message.text)
-                                clipboard?.setPrimaryClip(clip)
-                                Toast.makeText(context, "ব্যাখ্যা ক্লিপবোর্ডে কপি হয়েছে", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.size(28.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "কপি করুন",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
+                            // Voice Playback Button (`🔊 শুনুন` / `⏹ থামান`)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSpeaking) Color(0xFF10B981).copy(alpha = 0.18f) else Color(0xFF4F46E5).copy(alpha = 0.1f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onToggleSpeak() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isSpeaking) Icons.Default.StopCircle else Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = "শুনুন",
+                                        tint = if (isSpeaking) Color(0xFF059669) else Color(0xFF4F46E5),
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = if (isSpeaking) "থামান" else "শুনুন",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSpeaking) Color(0xFF059669) else Color(0xFF4F46E5)
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                    val clip = ClipData.newPlainText("AI Study Note", message.text)
+                                    clipboard?.setPrimaryClip(clip)
+                                    Toast.makeText(context, "ব্যাখ্যা ক্লিপবোর্ডে কপি হয়েছে", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "কপি করুন",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }

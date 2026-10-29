@@ -286,19 +286,28 @@ private fun MyCoursesListView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         text = "আমার কোর্স ও মিশন",
-                        fontSize = 23.sp,
+                        fontSize = 21.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        letterSpacing = (-0.5).sp
+                        letterSpacing = (-0.3).sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (enrolled.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(8.dp))
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(50),
                             color = Color(0xFF10B981).copy(alpha = 0.15f),
                             border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f))
                         ) {
@@ -307,17 +316,20 @@ private fun MyCoursesListView(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF10B981),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
                             )
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
                     text = if (enrolled.isEmpty()) "নিচের কোর্সগুলো থেকে এক্সেস নিয়ে এককালীন বা কিস্তিতে ভর্তি হও" else "চলমান শিক্ষাবর্ষ ও ভর্তি হওয়া কোর্সসমূহ",
-                    fontSize = 13.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -366,7 +378,7 @@ private fun MyCoursesListView(
                 if (other.isNotEmpty()) {
                     item {
                         CourseFilterChip(
-                            label = "কোর্স কিনুন / এক্সেস নিন (${toBengaliDigits(other.size)})",
+                            label = "কোর্স কিনুন (${toBengaliDigits(other.size)})",
                             selected = selectedFilter == "other",
                             onClick = { selectedFilter = "other" }
                         )
@@ -572,16 +584,17 @@ private fun EnrolledCourseBannerCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.Start
             ) {
-                // Top Row: Status badge on left + Installment badge if applicable
+                // Top Row: Status badge on left + Installment badge if applicable (Guaranteed single-line, no collision)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(50),
                         color = Color(0xFF10B981).copy(alpha = 0.22f),
-                        border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.45f))
+                        border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.45f)),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -598,22 +611,53 @@ private fun EnrolledCourseBannerCard(
                                 text = "ভর্তি হয়েছো (আনলকড)",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFECFDF5)
+                                color = Color(0xFFECFDF5),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
+                    Spacer(modifier = Modifier.weight(1f))
+
                     if (hasActiveInstallmentDue) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(50),
                             color = Color(0xFFF59E0B).copy(alpha = 0.25f),
                             border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.65f))
                         ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFDE68A),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "কিস্তি চলমান",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFEF3C7),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    } else if (commerceState.totalPrice > 0.0) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color(0xFF38BDF8).copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, Color(0xFF7DD3FC).copy(alpha = 0.5f))
+                        ) {
                             Text(
-                                text = "কিস্তি চলমান (${commerceState.getRemainingDaysTextBn()})",
+                                text = "সম্পূর্ণ পরিশোধিত",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFEF3C7),
+                                color = Color(0xFFE0F2FE),
+                                maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             )
                         }
@@ -622,27 +666,51 @@ private fun EnrolledCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Centered Banner Graphic Box
+                // Layered Hero Banner Box (Ambient blurred backdrop + sharp uncropped foreground)
                 if (!program.banner_url.isNullOrBlank()) {
+                    val bannerRequest = remember(program.banner_url, context) {
+                        ImageRequest.Builder(context)
+                            .data(program.banner_url)
+                            .crossfade(true)
+                            .build()
+                    }
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.Black.copy(alpha = 0.22f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(18.dp),
+                        color = Color.Black.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(130.dp)
+                            .height(142.dp)
                     ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(program.banner_url)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = title,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp)
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // Ambient blurred backdrop so there are never empty dark bars on the sides
+                            AsyncImage(
+                                model = bannerRequest,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .blur(20.dp)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.32f))
+                            )
+                            // Sharp uncropped foreground graphic
+                            AsyncImage(
+                                model = bannerRequest,
+                                contentDescription = title,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(vertical = 6.dp, horizontal = 10.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(14.dp))
                 }
@@ -667,7 +735,7 @@ private fun EnrolledCourseBannerCard(
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(14.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -677,44 +745,99 @@ private fun EnrolledCourseBannerCard(
                                     text = "পরিশোধিত: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} / ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}",
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF4ADE80)
+                                    color = Color(0xFF4ADE80),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "বকেয়া: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}",
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFCA5A5)
+                                    color = Color(0xFFFCA5A5),
+                                    maxLines = 1
                                 )
                             }
 
                             val progress = if (commerceState.totalPrice > 0) {
-                                (commerceState.paidAmount / commerceState.totalPrice).toFloat().coerceIn(0f, 1f)
+                                (commerceState.paidAmount / commerceState.totalPrice).toFloat().coerceIn(0.04f, 1f)
                             } else 0.5f
 
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                color = Color(0xFF34D399),
-                                trackColor = Color.White.copy(alpha = 0.2f),
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Custom smooth rounded progress bar without broken M3 stop-dot or track gap
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                            )
+                                    .height(7.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color.White.copy(alpha = 0.18f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(progress)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            Brush.horizontalGradient(
+                                                listOf(Color(0xFF10B981), Color(0xFF34D399))
+                                            )
+                                        )
+                                )
+                            }
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             val nextAmt = if (commerceState.nextInstallmentAmount > 0) commerceState.nextInstallmentAmount else commerceState.dueAmount
                             val dueDateText = commerceState.getFormattedNextDueDateBn()
-                            Text(
-                                text = buildString {
-                                    append("পরবর্তী কিস্তি: ${CourseCommerceItemState.formatTakaBn(nextAmt)}")
-                                    if (dueDateText.isNotBlank()) {
-                                        append(" • শেষ তারিখ: $dueDateText (${commerceState.getRemainingDaysTextBn()})")
+                            val remainingTimeText = commerceState.getRemainingDaysTextBn()
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = buildString {
+                                        append("পরবর্তী কিস্তি: ${CourseCommerceItemState.formatTakaBn(nextAmt)}")
+                                        if (dueDateText.isNotBlank()) {
+                                            append(" • শেষ তারিখ: $dueDateText")
+                                        }
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFFFEF3C7),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            if (remainingTimeText.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFF59E0B).copy(alpha = 0.18f),
+                                    border = BorderStroke(0.8.dp, Color(0xFFFBBF24).copy(alpha = 0.4f))
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccessTime,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFDE68A),
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = "সময় বাকি: $remainingTimeText",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFFDE68A),
+                                            maxLines = 1
+                                        )
                                     }
-                                },
-                                fontSize = 11.5.sp,
-                                color = Color(0xFFFEF3C7)
-                            )
+                                }
+                            }
 
                             if (commerceState.rejectionReason.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(6.dp))
@@ -726,7 +849,7 @@ private fun EnrolledCourseBannerCard(
                                 )
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             if (commerceState.hasPendingInstallmentPayment) {
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
@@ -754,7 +877,7 @@ private fun EnrolledCourseBannerCard(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(vertical = 9.dp),
+                                            .padding(vertical = 10.dp, horizontal = 12.dp),
                                         horizontalArrangement = Arrangement.Center,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -769,7 +892,9 @@ private fun EnrolledCourseBannerCard(
                                             text = "পরবর্তী কিস্তি পরিশোধ করুন (${CourseCommerceItemState.formatTakaBn(nextAmt)})",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.ExtraBold,
-                                            color = Color(0xFF0F172A)
+                                            color = Color(0xFF0F172A),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -878,7 +1003,7 @@ private fun OtherCourseBannerCard(
                 // Top Row: Dynamic Status Badge & Price Tag (when unlocked for purchase)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val (badgeText, badgeBg, badgeBorder, badgeIcon) = when (state) {
@@ -927,9 +1052,10 @@ private fun OtherCourseBannerCard(
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(50),
                         color = badgeBg,
-                        border = BorderStroke(1.dp, badgeBorder)
+                        border = BorderStroke(1.dp, badgeBorder),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -946,24 +1072,29 @@ private fun OtherCourseBannerCard(
                                 text = badgeText,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
+                    Spacer(modifier = Modifier.weight(1f))
+
                     // Show Admin-set Custom Price Badge ONLY when Admin has approved access (no longer blurred!)
                     if (!isBlurredLocked && commerceState.totalPrice > 0.0) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
+                            shape = RoundedCornerShape(50),
                             color = Color(0xFFFEF08A),
                             shadowElevation = 2.dp
                         ) {
                             Text(
                                 text = "মূল্য: ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}",
-                                fontSize = 13.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF0F172A),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
                             )
                         }
                     }
@@ -975,23 +1106,41 @@ private fun OtherCourseBannerCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(135.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .height(142.dp)
+                        .clip(RoundedCornerShape(18.dp))
                         .background(Color.Black.copy(alpha = 0.28f))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp)),
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(18.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!program.banner_url.isNullOrBlank()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
+                        val bannerRequest = remember(program.banner_url, context) {
+                            ImageRequest.Builder(context)
                                 .data(program.banner_url)
                                 .crossfade(true)
-                                .build(),
+                                .build()
+                        }
+                        // Ambient blurred backdrop to eliminate empty dark bars on left/right
+                        AsyncImage(
+                            model = bannerRequest,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .blur(20.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.32f))
+                        )
+                        AsyncImage(
+                            model = bannerRequest,
                             contentDescription = title,
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(8.dp)
+                                .padding(vertical = 6.dp, horizontal = 10.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .then(
                                     if (isBlurredLocked) Modifier.blur(16.dp)
                                     else if (state == CourseAccessState.INSTALLMENT_OVERDUE) Modifier.blur(8.dp)
@@ -1780,15 +1929,23 @@ fun SubjectGridCard(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     val progress = (item.progressPercentage / 100f).coerceIn(0f, 1f)
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        color = parsedColor,
-                        trackColor = parsedColor.copy(alpha = 0.15f),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                    )
+                            .clip(RoundedCornerShape(50))
+                            .background(parsedColor.copy(alpha = 0.15f))
+                    ) {
+                        if (progress > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(progress.coerceAtLeast(0.05f))
+                                    .clip(RoundedCornerShape(50))
+                                    .background(parsedColor)
+                            )
+                        }
+                    }
                 } else {
                     Surface(
                         shape = RoundedCornerShape(10.dp),

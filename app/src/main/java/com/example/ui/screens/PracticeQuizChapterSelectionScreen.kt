@@ -154,12 +154,19 @@ fun PracticeQuizChapterSelectionScreen(
                     }
 
                     // Progress Bar
-                    LinearProgressIndicator(
-                        progress = { 0.33f },
-                        modifier = Modifier.fillMaxWidth().height(3.dp),
-                        color = subjectColor,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(0.33f)
+                                .background(subjectColor)
+                        )
+                    }
                 }
             }
         },

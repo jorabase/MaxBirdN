@@ -670,15 +670,21 @@ fun ExamQuestionsContent(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                LinearProgressIndicator(
-                    progress = { progress },
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = Color(0xFF10B981),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(progress.coerceIn(0.02f, 1f))
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xFF10B981))
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(12.dp))
 

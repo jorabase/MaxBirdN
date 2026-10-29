@@ -269,15 +269,21 @@ fun MCQExamScreen(
                         (uiState.currentQuestionIndex + 1).toFloat() / uiState.mcqQuestions.size.toFloat()
                     } else 0f
                 }
-                LinearProgressIndicator(
-                    progress = { progress },
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(progress.coerceIn(0.02f, 1f))
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
 
                 if (question != null) {
                     // Question Box

@@ -1073,15 +1073,21 @@ private fun ActiveDownloadProgressCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            LinearProgressIndicator(
-                progress = { animatedProgress },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = if (isPaused) Color(0xFFF59E0B) else Color(0xFF0284C7),
-                trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-            )
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(animatedProgress.coerceIn(0.02f, 1f))
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isPaused) Color(0xFFF59E0B) else Color(0xFF0284C7))
+                )
+            }
         }
     }
 }
@@ -1169,7 +1175,8 @@ fun DownloadedItemCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = accentColor.copy(alpha = 0.14f)
+                        color = accentColor.copy(alpha = 0.14f),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Text(
                             text = if (isFailed) "ডাউনলোড ব্যর্থ" else subjectLabel,

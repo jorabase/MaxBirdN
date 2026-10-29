@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -418,7 +419,12 @@ fun PracticeQuizResultScreen(
                                             text = subjectDetail.title_bn ?: subjectDetail.title ?: uiState.subjectTitle,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(end = 8.dp)
                                         )
 
                                         // Proficiency Level Pill (e.g. "কাঁচা")
@@ -433,6 +439,7 @@ fun PracticeQuizResultScreen(
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFFF59E0B),
+                                                maxLines = 1,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                             )
                                         }
@@ -444,15 +451,23 @@ fun PracticeQuizResultScreen(
                                     val total = (if (subjectDetail.questionsCount > 0) subjectDetail.questionsCount else 1).coerceAtLeast(1)
                                     val pct = (correct.toFloat() / total.toFloat()).coerceIn(0f, 1f)
 
-                                    LinearProgressIndicator(
-                                        progress = { pct },
-                                        color = Color(0xFF10B981),
-                                        trackColor = Color.White.copy(alpha = 0.15f),
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(6.dp)
-                                            .clip(RoundedCornerShape(3.dp))
-                                    )
+                                            .clip(RoundedCornerShape(50))
+                                            .background(Color.White.copy(alpha = 0.15f))
+                                    ) {
+                                        if (pct > 0f) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .fillMaxWidth(pct.coerceAtLeast(0.04f))
+                                                    .clip(RoundedCornerShape(50))
+                                                    .background(Color(0xFF10B981))
+                                            )
+                                        }
+                                    }
 
                                     Spacer(modifier = Modifier.height(6.dp))
 

@@ -52,11 +52,18 @@ fun GeminiApiSettingsDialog(
     }
 
     val configState by GeminiAiStudyRepository.configState.collectAsState()
-    var apiKeyInput by remember(configState.apiKey) { mutableStateOf(configState.apiKey) }
+    var apiKeyInput by remember { mutableStateOf(configState.apiKey) }
+    LaunchedEffect(configState.apiKey) {
+        if (apiKeyInput.isBlank() && configState.apiKey.isNotBlank()) {
+            apiKeyInput = configState.apiKey
+        }
+    }
     var isKeyVisible by remember { mutableStateOf(false) }
     var feedbackMessage by remember { mutableStateOf<String?>(null) }
     var isErrorFeedback by remember { mutableStateOf(false) }
     var isDeleting by remember { mutableStateOf(false) }
+    var isSavingKey by remember { mutableStateOf(false) }
+    var isManualCloudSyncing by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -90,66 +97,68 @@ fun GeminiApiSettingsDialog(
                                 )
                             )
                         )
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(Color.White.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Gemini AI",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        Column(
                             modifier = Modifier.weight(1f)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color.White.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoAwesome,
-                                    contentDescription = "Gemini AI",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                Text(
+                                    text = "Gemini API সেটিংস",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
-                            }
-
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF10B981)
                                 ) {
                                     Text(
-                                        text = "Gemini API সেটিংস",
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color.White
+                                        text = "3.8 Flash",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                     )
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFF10B981)
-                                    ) {
-                                        Text(
-                                            text = "3.8 Flash",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "এআই দিয়ে লেকচার স্লাইড ও কঠিন টপিক বুঝুন",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha = 0.88f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
                             }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "এআই দিয়ে লেকচার স্লাইড ও কঠিন টপিক বুঝুন",
+                                fontSize = 11.5.sp,
+                                color = Color.White.copy(alpha = 0.9f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
                         IconButton(
@@ -239,29 +248,34 @@ fun GeminiApiSettingsDialog(
                             IconButton(
                                 onClick = {
                                     scope.launch {
+                                        isManualCloudSyncing = true
                                         feedbackMessage = null
-                                        val restored = GeminiAiStudyRepository.syncApiKeyFromCloud(
-                                            context = context,
-                                            sessionManager = sessionManager,
-                                            forceRefresh = true
-                                        )
-                                        if (!restored.isNullOrBlank()) {
-                                            apiKeyInput = restored
-                                            isErrorFeedback = false
-                                            feedbackMessage = "☁️ ক্লাউড ডাটাবেজ থেকে আপনার API Key সফলভাবে সিঙ্ক হয়েছে!"
-                                        } else {
-                                            isErrorFeedback = true
-                                            feedbackMessage = "ক্লাউড ডাটাবেজে আপনার একাউন্টের কোনো সংরক্ষিত API Key পাওয়া যায়নি।"
+                                        try {
+                                            val restored = GeminiAiStudyRepository.syncApiKeyFromCloud(
+                                                context = context,
+                                                sessionManager = sessionManager,
+                                                forceRefresh = true
+                                            )
+                                            if (!restored.isNullOrBlank()) {
+                                                apiKeyInput = restored
+                                                isErrorFeedback = false
+                                                feedbackMessage = "☁️ ক্লাউড ডাটাবেজ থেকে আপনার API Key সফলভাবে সিঙ্ক হয়েছে!"
+                                            } else {
+                                                isErrorFeedback = true
+                                                feedbackMessage = "ক্লাউড ডাটাবেজে আপনার একাউন্টের কোনো সংরক্ষিত API Key পাওয়া যায়নি।"
+                                            }
+                                        } finally {
+                                            isManualCloudSyncing = false
                                         }
                                     }
                                 },
-                                enabled = !configState.isSyncing,
+                                enabled = !isManualCloudSyncing && !isSavingKey,
                                 modifier = Modifier
                                     .size(36.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surface)
                             ) {
-                                if (configState.isSyncing) {
+                                if (isManualCloudSyncing) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(16.dp),
                                         strokeWidth = 2.dp
@@ -385,25 +399,30 @@ fun GeminiApiSettingsDialog(
                                 return@Button
                             }
                             scope.launch {
+                                isSavingKey = true
                                 feedbackMessage = null
-                                val result = GeminiAiStudyRepository.saveAndSyncApiKey(
-                                    context = context,
-                                    apiKeyInput = trimmed,
-                                    sessionManager = sessionManager,
-                                    verifyFirst = true
-                                )
-                                result.onSuccess { msg ->
-                                    isErrorFeedback = false
-                                    feedbackMessage = msg
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                    onKeySavedSuccessfully?.invoke()
-                                }.onFailure { err ->
-                                    isErrorFeedback = true
-                                    feedbackMessage = err.localizedMessage ?: "API Key যাচাই করা যায়নি"
+                                try {
+                                    val result = GeminiAiStudyRepository.saveAndSyncApiKey(
+                                        context = context,
+                                        apiKeyInput = trimmed,
+                                        sessionManager = sessionManager,
+                                        verifyFirst = true
+                                    )
+                                    result.onSuccess { msg ->
+                                        isErrorFeedback = false
+                                        feedbackMessage = msg
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        onKeySavedSuccessfully?.invoke()
+                                    }.onFailure { err ->
+                                        isErrorFeedback = true
+                                        feedbackMessage = err.localizedMessage ?: "API Key যাচাই করা যায়নি"
+                                    }
+                                } finally {
+                                    isSavingKey = false
                                 }
                             }
                         },
-                        enabled = !configState.isSyncing && !isDeleting,
+                        enabled = !isSavingKey && !isManualCloudSyncing && !isDeleting,
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF4F46E5)
@@ -413,7 +432,7 @@ fun GeminiApiSettingsDialog(
                             .height(50.dp)
                             .testTag("save_gemini_api_key_button")
                     ) {
-                        if (configState.isSyncing) {
+                        if (isSavingKey) {
                             CircularProgressIndicator(
                                 color = Color.White,
                                 strokeWidth = 2.5.dp,
@@ -434,14 +453,17 @@ fun GeminiApiSettingsDialog(
                             onClick = {
                                 scope.launch {
                                     isDeleting = true
-                                    GeminiAiStudyRepository.deleteApiKey(context, sessionManager)
-                                    apiKeyInput = ""
-                                    isDeleting = false
-                                    isErrorFeedback = false
-                                    feedbackMessage = "API Key ডিভাইস ও ক্লাউড থেকে মুছে ফেলা হয়েছে।"
+                                    try {
+                                        GeminiAiStudyRepository.deleteApiKey(context, sessionManager)
+                                        apiKeyInput = ""
+                                        isErrorFeedback = false
+                                        feedbackMessage = "API Key ডিভাইস ও ক্লাউড থেকে মুছে ফেলা হয়েছে।"
+                                    } finally {
+                                        isDeleting = false
+                                    }
                                 }
                             },
-                            enabled = !configState.isSyncing && !isDeleting,
+                            enabled = !isSavingKey && !isManualCloudSyncing && !isDeleting,
                             shape = RoundedCornerShape(14.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
                             colors = ButtonDefaults.outlinedButtonColors(

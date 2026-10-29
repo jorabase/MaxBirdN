@@ -819,15 +819,21 @@ fun AnimatedLessonPlayerScreen(
                                 fontSize = 13.sp
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { gestureBrightness },
+                            Box(
                                 modifier = Modifier
                                     .width(110.dp)
                                     .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = Color(0xFFFDE047),
-                                trackColor = Color.White.copy(alpha = 0.2f),
-                            )
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(gestureBrightness.coerceIn(0f, 1f))
+                                        .clip(RoundedCornerShape(50))
+                                        .background(Color(0xFFFDE047))
+                                )
+                            }
                         } else if (gestureVolume >= 0) {
                             val maxV = maxVolume.coerceAtLeast(1)
                             val fraction = (gestureVolume.toFloat() / maxV).coerceIn(0f, 1f)
@@ -850,15 +856,21 @@ fun AnimatedLessonPlayerScreen(
                                 fontSize = 13.sp
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                                progress = { fraction },
+                            Box(
                                 modifier = Modifier
                                     .width(110.dp)
                                     .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = Color(0xFF60A5FA),
-                                trackColor = Color.White.copy(alpha = 0.2f),
-                            )
+                                    .clip(RoundedCornerShape(50))
+                                    .background(Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(fraction)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(Color(0xFF60A5FA))
+                                )
+                            }
                         }
                     }
                 }

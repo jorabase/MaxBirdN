@@ -255,7 +255,8 @@ fun TimelineRoutineCard(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = subjectColors.backgroundColor,
-                            border = BorderStroke(0.8.dp, subjectColors.textColor.copy(alpha = 0.25f))
+                            border = BorderStroke(0.8.dp, subjectColors.textColor.copy(alpha = 0.25f)),
+                            modifier = Modifier.weight(1f, fill = false)
                         ) {
                             Text(
                                 text = subjectName,
@@ -286,6 +287,7 @@ fun TimelineRoutineCard(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = posColor,
+                                    maxLines = 1,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
                             }

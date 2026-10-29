@@ -237,11 +237,20 @@ fun MainContainerScreen(
             }
         }
 
-        // Floating Bottom Bar
+        // Floating Bottom Bar with subtle bottom fade scrim so scrolling text never clashes with dock corners
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.82f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
         ) {
             ElementalFloatingBottomBar(
                 selectedIndex = selectedIndex,
@@ -250,6 +259,7 @@ fun MainContainerScreen(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         selectedIndex = index
                         if (index == 1) {
+                            courseViewModel.fetchEnrolledPrograms()
                             courseViewModel.loadSubjects()
                         }
                     }
@@ -322,8 +332,8 @@ fun ElementalFloatingBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 NavigationItem.items.forEachIndexed { index, item ->
@@ -332,7 +342,7 @@ fun ElementalFloatingBottomBar(
                     val showDownloadBadge = index == 2 && activeDownloadsCount > 0
 
                     val iconScale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.15f else 1f,
+                        targetValue = if (isSelected) 1.05f else 1f,
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioMediumBouncy,
                             stiffness = Spring.StiffnessMedium
@@ -358,7 +368,7 @@ fun ElementalFloatingBottomBar(
                         targetState = isSelected,
                         transitionSpec = {
                             (fadeIn(tween(200)) + scaleIn(
-                                initialScale = 0.9f,
+                                initialScale = 0.92f,
                                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
                             )).togetherWith(fadeOut(tween(140)))
                         },
@@ -376,7 +386,7 @@ fun ElementalFloatingBottomBar(
                                 ),
                                 shadowElevation = 6.dp,
                                 modifier = Modifier
-                                    .height(42.dp)
+                                    .height(40.dp)
                                     .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
                                     .clickable(interactionSource = interaction, indication = null) {
                                         onTabSelected(index)
@@ -385,7 +395,7 @@ fun ElementalFloatingBottomBar(
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
                                 ) {
                                     Box {
                                         Icon(
@@ -410,7 +420,7 @@ fun ElementalFloatingBottomBar(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = item.title,
-                                        fontSize = 12.sp,
+                                        fontSize = 12.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                         maxLines = 1,
@@ -428,7 +438,7 @@ fun ElementalFloatingBottomBar(
                                     .clickable(interactionSource = interaction, indication = null) {
                                         onTabSelected(index)
                                     }
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Box {
                                     Icon(
@@ -436,7 +446,7 @@ fun ElementalFloatingBottomBar(
                                         contentDescription = item.title,
                                         tint = iconTint,
                                         modifier = Modifier
-                                            .size(18.dp)
+                                            .size(19.dp)
                                             .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                                     )
                                     if (showDownloadBadge) {
@@ -453,7 +463,7 @@ fun ElementalFloatingBottomBar(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = item.title,
-                                    fontSize = 9.5.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = iconTint,
                                     maxLines = 1
