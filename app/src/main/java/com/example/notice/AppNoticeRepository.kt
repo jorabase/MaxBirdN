@@ -43,7 +43,7 @@ object AppNoticeRepository {
             return@withContext cachedNotices
         }
 
-        val endpoint = "$supabaseUrl/rest/v1/app_notices?is_active=eq.true&order=priority.desc,created_at.desc"
+        val endpoint = "${supabaseUrl.trimEnd('/')}/rest/v1/app_notices?is_active=eq.true&order=priority.desc,created_at.desc"
 
         try {
             val request = Request.Builder()

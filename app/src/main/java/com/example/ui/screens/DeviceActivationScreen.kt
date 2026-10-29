@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
@@ -26,8 +23,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -37,20 +32,23 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Park
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -63,13 +61,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -77,16 +76,26 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.security.ActivationResult
 import com.example.security.ActivationSupportLink
 import com.example.security.ActivationSupportRepository
 import com.example.security.DeviceActivationRepository
-import com.example.security.DeviceSecurityManager
-import com.example.security.DeviceStatusResult
+import com.example.security.StudentVerificationStatus
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+
+private data class FireflyParticle(
+    val baseX: Float,
+    val baseY: Float,
+    val radiusDp: Float,
+    val speedFactor: Float,
+    val phaseOffset: Float,
+    val driftAmplitudeX: Float,
+    val isGolden: Boolean
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,16 +107,24 @@ fun DeviceActivationScreen(
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    var accessCodeInput by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var successMessage by remember { mutableStateOf<String?>(null) }
-    var isCopied by remember { mutableStateOf(false) }
-    var isDeviceBanned by remember { mutableStateOf(false) }
-    var banReasonMessage by remember { mutableStateOf("") }
-    var copyResetJob by remember { mutableStateOf<Job?>(null) }
+    var studentNameInput by remember {
+        mutableStateOf(DeviceActivationRepository.getSavedStudentName(context))
+    }
+    var isInitialChecking by remember { mutableStateOf(true) }
+    var isSubmittingOrRefreshing by remember { mutableStateOf(false) }
+    var verificationStatus by remember {
+        mutableStateOf<StudentVerificationStatus>(
+            if (DeviceActivationRepository.isPendingRequestedLocally(context)) {
+                StudentVerificationStatus.Pending(
+                    studentName = DeviceActivationRepository.getSavedStudentName(context)
+                )
+            } else {
+                StudentVerificationStatus.NotRequested
+            }
+        )
+    }
+    var statusBannerMessage by remember { mutableStateOf<String?>(null) }
 
-    val displayDeviceId = remember { DeviceSecurityManager.getDisplayDeviceId(context) }
     val isSupabaseConfigured = remember { DeviceActivationRepository.isConfigured() }
 
     // Dynamic support links fetched from Supabase with instant offline-first cache
@@ -115,126 +132,80 @@ fun DeviceActivationScreen(
         mutableStateOf<List<ActivationSupportLink>>(ActivationSupportRepository.getCachedLinks(context))
     }
 
-    LaunchedEffect(Unit) {
-        try {
-            val freshLinks = ActivationSupportRepository.fetchSupportLinks(context)
-            if (freshLinks.isNotEmpty()) {
-                supportLinks = freshLinks
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (t: Throwable) {
-            Log.e("DeviceActivation", "Error loading fresh support links: ${t.message}")
-        }
-
-        // Check ban status on screen load & register device telemetry in database
-        try {
-            when (val status = DeviceActivationRepository.checkDeviceStatus(context)) {
-                is DeviceStatusResult.Banned -> {
-                    isDeviceBanned = true
-                    banReasonMessage = status.reason
-                    errorMessage = "এই ডিভাইসটি অ্যাডমিন দ্বারা ব্যান করা হয়েছে। কোনো এক্সেস কোড কাজ করবে না।"
+    fun performStatusCheck(showFeedbackToast: Boolean = false) {
+        if (isSubmittingOrRefreshing) return
+        coroutineScope.launch {
+            try {
+                if (showFeedbackToast) {
+                    isSubmittingOrRefreshing = true
+                    statusBannerMessage = null
                 }
-                else -> {
-                    isDeviceBanned = false
+                val result = DeviceActivationRepository.checkStudentVerificationStatus(context)
+                verificationStatus = result
+                isInitialChecking = false
+                isSubmittingOrRefreshing = false
+
+                if (showFeedbackToast) {
+                    when (result) {
+                        is StudentVerificationStatus.Approved -> {
+                            statusBannerMessage = "অভিনন্দন! আপনার স্টুডেন্ট ভেরিফিকেশন সম্পন্ন হয়েছে।"
+                        }
+                        is StudentVerificationStatus.Pending -> {
+                            statusBannerMessage = "আপনার ভেরিফিকেশন এখনো প্রক্রিয়াধীন রয়েছে। অনুগ্রহ করে অপেক্ষা করুন।"
+                        }
+                        is StudentVerificationStatus.Blocked -> {
+                            statusBannerMessage = null
+                        }
+                        is StudentVerificationStatus.Error -> {
+                            statusBannerMessage = result.message
+                        }
+                        is StudentVerificationStatus.NotRequested -> {
+                            statusBannerMessage = null
+                        }
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.e("StudentVerification", "Error checking status: ${t.message}")
+                isInitialChecking = false
+                isSubmittingOrRefreshing = false
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (t: Throwable) {
-            Log.e("DeviceActivation", "Error checking device ban status: ${t.message}")
         }
     }
 
-    // High security pulsing & rotating shield animations
-    val infiniteTransition = rememberInfiniteTransition(label = "cyber_shield_transition")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-    val ringRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(10000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ring_rotation"
-    )
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.75f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow_alpha"
-    )
-
-    val primaryAccent by animateColorAsState(
-        targetValue = if (isDeviceBanned) Color(0xFFEF4444) else Color(0xFF38BDF8),
-        animationSpec = tween(500),
-        label = "primary_accent"
-    )
-
-    val secondaryAccent by animateColorAsState(
-        targetValue = if (isDeviceBanned) Color(0xFF991B1B) else Color(0xFF2563EB),
-        animationSpec = tween(500),
-        label = "secondary_accent"
-    )
-
-    fun handleCopyId() {
+    fun handleRequestVerification() {
+        if (isSubmittingOrRefreshing) return
         try {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("Device ID", displayDeviceId)
-            clipboard.setPrimaryClip(clip)
-            isCopied = true
-            Toast.makeText(context, "ডিভাইস আইডি কপি হয়েছে!", Toast.LENGTH_SHORT).show()
-            copyResetJob?.cancel()
-            copyResetJob = coroutineScope.launch {
-                delay(2200)
-                isCopied = false
-            }
-        } catch (e: Exception) {
-            Log.e("DeviceActivation", "Clipboard copy failed", e)
+            keyboardController?.hide()
+        } catch (_: Throwable) {}
+
+        if (!isSupabaseConfigured) {
+            verificationStatus = StudentVerificationStatus.Error("সার্ভার সংযোগ কনফিগার করা হয়নি।")
+            return
         }
-    }
 
-    fun handleShareId() {
-        try {
-            val shareText = "আমার MaxBird অ্যাপের ডিভাইস আইডি:\n$displayDeviceId\n\nঅনুগ্রহ করে আমাকে এক্সেস কোড প্রদান করুন।"
-            val sendIntent = Intent().apply {
-                action = Intent.ACTION_SEND
-                putExtra(Intent.EXTRA_TEXT, shareText)
-                type = "text/plain"
-            }
-            val chooserIntent = Intent.createChooser(sendIntent, "ডিভাইস আইডি শেয়ার করুন").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(chooserIntent)
-        } catch (_: Exception) {
-            handleCopyId()
-        }
-    }
+        isSubmittingOrRefreshing = true
+        statusBannerMessage = null
 
-    fun handlePasteCode() {
-        try {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val item = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-            if (!item.isNullOrBlank()) {
-                accessCodeInput = item.trim().uppercase()
-                errorMessage = null
-                Toast.makeText(context, "কোড পেস্ট করা হয়েছে", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, "ক্লিপবোর্ডে কোনো কোড নেই", Toast.LENGTH_SHORT).show()
+        coroutineScope.launch {
+            try {
+                val result = DeviceActivationRepository.submitStudentVerificationRequest(
+                    context = context,
+                    studentName = studentNameInput.trim()
+                )
+                isSubmittingOrRefreshing = false
+                verificationStatus = result
+                if (result is StudentVerificationStatus.Pending) {
+                    statusBannerMessage = "স্বাগতম! আপনার ভেরিফিকেশন আবেদন সফলভাবে গৃহীত হয়েছে।"
+                }
+            } catch (e: CancellationException) {
+                isSubmittingOrRefreshing = false
+                throw e
+            } catch (t: Throwable) {
+                isSubmittingOrRefreshing = false
+                verificationStatus = StudentVerificationStatus.Error("সংযোগ সমস্যা হয়েছে, অনুগ্রহ করে আবার চেষ্টা করুন।")
             }
-        } catch (_: Exception) {
-            Toast.makeText(context, "পেস্ট করা সম্ভব হয়নি", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -253,168 +224,184 @@ fun DeviceActivationScreen(
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            Log.e("DeviceActivation", "Cannot open link: ${link.url}", e)
-            handleCopyId()
-            Toast.makeText(context, "লিংক ওপেন করা যায়নি। ডিভাইস আইডি কপি করা হয়েছে।", Toast.LENGTH_SHORT).show()
+            Log.e("StudentVerification", "Cannot open link: ${link.url}", e)
+            Toast.makeText(context, "লিংক ওপেন করা যায়নি।", Toast.LENGTH_SHORT).show()
         }
     }
 
-    fun handleActivate() {
-        if (isLoading) return
-
-        if (isDeviceBanned) {
-            errorMessage = "⚠️ এই ডিভাইসটি অ্যাডমিন দ্বারা ব্যান করা হয়েছে। কোনো এক্সেস কোড গ্রহণযোগ্য নয়।"
-            return
-        }
-
-        val code = accessCodeInput.trim()
-        if (code.isBlank()) {
-            errorMessage = "দয়া করে এক্সেস কোডটি লিখুন।"
-            return
-        }
-
-        try {
-            keyboardController?.hide()
-        } catch (_: Throwable) {}
-
-        isLoading = true
-        errorMessage = null
-        successMessage = null
-
-        coroutineScope.launch {
+    LaunchedEffect(Unit) {
+        // Load support links silently
+        launch {
             try {
-                if (!isSupabaseConfigured) {
-                    isLoading = false
-                    errorMessage = "Supabase কনফিগারেশন এখনো সংযুক্ত করা হয়নি। অনুগ্রহ করে GitHub Secrets এ SUPABASE_URL এবং SUPABASE_ANON_KEY যোগ করে নতুন বিল্ড করুন।"
-                    return@launch
+                val freshLinks = ActivationSupportRepository.fetchSupportLinks(context)
+                if (freshLinks.isNotEmpty()) {
+                    supportLinks = freshLinks
                 }
-
-                val result = DeviceActivationRepository.activateDevice(context, code)
-                isLoading = false
-                when (result) {
-                    is ActivationResult.Success -> {
-                        successMessage = result.message
-                        delay(900)
-                        try {
-                            onActivationSuccess()
-                        } catch (t: Throwable) {
-                            Log.e("DeviceActivation", "Navigation error: ${t.message}", t)
-                        }
-                    }
-                    is ActivationResult.Error -> {
-                        errorMessage = result.message
-                        if (result.isBanned) {
-                            isDeviceBanned = true
-                            banReasonMessage = result.message
-                        }
-                    }
-                }
-            } catch (e: CancellationException) {
-                isLoading = false
-                throw e
-            } catch (t: Throwable) {
-                Log.e("DeviceActivation", "Error in handleActivate: ${t.message}", t)
-                isLoading = false
-                errorMessage = "ত্রুটি ঘটেছে: ${t.localizedMessage ?: "দয়া করে আবার চেষ্টা করুন"}"
-            }
+            } catch (_: Throwable) {}
         }
+        // Check device verification status once on screen open (handles reinstall auto-restore & pending check)
+        performStatusCheck(showFeedbackToast = false)
     }
 
-    // Ultra-modern deep cyber-obsidian background
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF040814),
-            Color(0xFF091326),
-            Color(0xFF050B16)
-        )
+    val isBlocked = verificationStatus is StudentVerificationStatus.Blocked
+    val isApproved = verificationStatus is StudentVerificationStatus.Approved
+    val isPending = verificationStatus is StudentVerificationStatus.Pending
+
+    // Infinite Nature Animations (Wind sway, fireflies, sunbeams, emblem pulse)
+    val infiniteTransition = rememberInfiniteTransition(label = "enchanted_forest_transition")
+
+    val natureTime by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "nature_time"
     )
+
+    val fireflyProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(18000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "firefly_progress"
+    )
+
+    val sunbeamBreath by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "sunbeam_breath"
+    )
+
+    val emblemPulse by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "emblem_pulse"
+    )
+
+    val ringRotate by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ring_rotate"
+    )
+
+    val primaryForestAccent by animateColorAsState(
+        targetValue = when {
+            isBlocked -> Color(0xFFF87171)
+            isApproved -> Color(0xFF4ADE80)
+            isPending -> Color(0xFFFACC15)
+            else -> Color(0xFF34D399)
+        },
+        animationSpec = tween(500),
+        label = "primary_forest_accent"
+    )
+
+    val secondaryForestAccent by animateColorAsState(
+        targetValue = when {
+            isBlocked -> Color(0xFFDC2626)
+            isApproved -> Color(0xFF10B981)
+            isPending -> Color(0xFF34D399)
+            else -> Color(0xFFA3E635)
+        },
+        animationSpec = tween(500),
+        label = "secondary_forest_accent"
+    )
+
+    val fireflies = remember {
+        List(26) { idx ->
+            FireflyParticle(
+                baseX = ((idx * 37 + 13) % 96) / 100f + 0.02f,
+                baseY = ((idx * 53 + 29) % 90) / 100f + 0.05f,
+                radiusDp = 2.2f + (idx % 4) * 1.1f,
+                speedFactor = 0.6f + (idx % 5) * 0.25f,
+                phaseOffset = (idx * 0.75f),
+                driftAmplitudeX = 0.025f + (idx % 3) * 0.015f,
+                isGolden = idx % 2 == 0
+            )
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundBrush)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
+            .background(Color(0xFF031812))
     ) {
-        // Ambient Background Glowing Orbs
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val canvasWidth = size.width
-            val canvasHeight = size.height
+        // 1. Full-Bleed Animated Enchanted Forest Scene Canvas
+        EnchantedForestBackdrop(
+            natureTime = natureTime,
+            fireflyProgress = fireflyProgress,
+            sunbeamAlpha = sunbeamBreath,
+            fireflies = fireflies,
+            isBlocked = isBlocked,
+            modifier = Modifier.fillMaxSize()
+        )
 
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        primaryAccent.copy(alpha = 0.14f * glowAlpha),
-                        Color.Transparent
-                    ),
-                    center = Offset(canvasWidth * 0.5f, canvasHeight * 0.12f),
-                    radius = canvasWidth * 0.75f
-                ),
-                center = Offset(canvasWidth * 0.5f, canvasHeight * 0.12f),
-                radius = canvasWidth * 0.75f
-            )
-
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        secondaryAccent.copy(alpha = 0.10f),
-                        Color.Transparent
-                    ),
-                    center = Offset(canvasWidth * 0.85f, canvasHeight * 0.75f),
-                    radius = canvasWidth * 0.65f
-                ),
-                center = Offset(canvasWidth * 0.85f, canvasHeight * 0.75f),
-                radius = canvasWidth * 0.65f
-            )
-        }
-
+        // 2. Foreground Scrollable Content with Safe Insets
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // 1. Cyber Security Shield Emblem with Rotating Arc & Multi-Layer Glow
+            // Animated Enchanted Forest Emblem
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(116.dp)
+                modifier = Modifier.size(124.dp)
             ) {
-                // Pulsing radial aura
+                // Soft bioluminescent aura
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .scale(pulseScale)
+                        .scale(emblemPulse)
                         .clip(CircleShape)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    primaryAccent.copy(alpha = 0.32f),
-                                    secondaryAccent.copy(alpha = 0.12f),
+                                    primaryForestAccent.copy(alpha = 0.34f),
+                                    secondaryForestAccent.copy(alpha = 0.14f),
                                     Color.Transparent
                                 )
                             )
                         )
                 )
 
-                // Rotating futuristic cyber ring
+                // Rotating botanical golden-emerald halo ring
                 Canvas(
                     modifier = Modifier
-                        .size(96.dp)
-                        .rotate(ringRotation)
+                        .size(104.dp)
+                        .rotate(ringRotate)
                 ) {
                     val strokeWidth = 2.5.dp.toPx()
                     drawArc(
                         brush = Brush.sweepGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                primaryAccent.copy(alpha = 0.85f),
+                                primaryForestAccent.copy(alpha = 0.9f),
+                                secondaryForestAccent.copy(alpha = 0.8f),
                                 Color.Transparent,
-                                secondaryAccent.copy(alpha = 0.7f),
+                                primaryForestAccent.copy(alpha = 0.65f),
                                 Color.Transparent
                             )
                         ),
@@ -425,40 +412,45 @@ fun DeviceActivationScreen(
                     )
                 }
 
-                // Inner Glassmorphic Shield Core
+                // Inner Forest Glass Orb
                 Surface(
                     shape = CircleShape,
-                    color = Color(0xFF0E1B33),
+                    color = if (isBlocked) Color(0xFF2A0F12) else Color(0xFF07291E),
                     border = BorderStroke(
-                        width = 1.8.dp,
+                        width = 2.dp,
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                primaryAccent.copy(alpha = 0.9f),
-                                secondaryAccent.copy(alpha = 0.4f)
+                                primaryForestAccent.copy(alpha = 0.95f),
+                                secondaryForestAccent.copy(alpha = 0.45f)
                             )
                         )
                     ),
-                    shadowElevation = 16.dp,
+                    shadowElevation = 18.dp,
                     modifier = Modifier
-                        .size(76.dp)
-                        .scale(pulseScale * 0.98f)
+                        .size(82.dp)
+                        .scale(emblemPulse * 0.98f)
                 ) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    primaryAccent.copy(alpha = 0.2f),
-                                    Color(0xFF0A1426)
+                                    primaryForestAccent.copy(alpha = 0.25f),
+                                    if (isBlocked) Color(0xFF1F090C) else Color(0xFF041D15)
                                 )
                             )
                         )
                     ) {
                         Icon(
-                            imageVector = if (isDeviceBanned) Icons.Filled.Lock else Icons.Filled.Shield,
-                            contentDescription = "Security Shield",
-                            tint = primaryAccent,
-                            modifier = Modifier.size(38.dp)
+                            imageVector = when {
+                                isBlocked -> Icons.Filled.Lock
+                                isApproved -> Icons.Filled.VerifiedUser
+                                isPending -> Icons.Filled.Spa
+                                else -> Icons.Filled.Park
+                            },
+                            contentDescription = "Forest Emblem",
+                            tint = primaryForestAccent,
+                            modifier = Modifier.size(40.dp)
                         )
                     }
                 }
@@ -466,43 +458,53 @@ fun DeviceActivationScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Security Status Badge Pill
+            // Serene Forest Pill Badge
             Surface(
                 shape = RoundedCornerShape(50),
-                color = if (isDeviceBanned) Color(0xFF3B0D11).copy(alpha = 0.85f) else Color(0xFF10203B).copy(alpha = 0.85f),
+                color = if (isBlocked) Color(0xFF3B0D11).copy(alpha = 0.85f) else Color(0xFF082E22).copy(alpha = 0.85f),
                 border = BorderStroke(
                     1.dp,
-                    if (isDeviceBanned) Color(0xFFEF4444).copy(alpha = 0.5f) else Color(0xFF38BDF8).copy(alpha = 0.35f)
+                    primaryForestAccent.copy(alpha = 0.45f)
                 )
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (isDeviceBanned) Color(0xFFEF4444) else Color(0xFF10B981))
+                    Icon(
+                        imageVector = if (isBlocked) Icons.Filled.ErrorOutline else Icons.Filled.Eco,
+                        contentDescription = null,
+                        tint = primaryForestAccent,
+                        modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
                     Text(
-                        text = if (isDeviceBanned) "ডিভাইস অ্যাক্সেস ব্লকড" else "সুরক্ষিত ডিভাইস প্রোটেকশন",
-                        fontSize = 11.5.sp,
+                        text = when {
+                            isBlocked -> "প্রবেশাধিকার স্থগিত"
+                            isApproved -> "ভেরিফাইড স্টুডেন্ট পোর্টাল"
+                            isPending -> "ভেরিফিকেশন প্রক্রিয়াধীন"
+                            else -> "শান্ত ও আনন্দময় শিক্ষার ভুবন"
+                        },
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isDeviceBanned) Color(0xFFFCA5A5) else Color(0xFF7DD3FC),
+                        color = if (isBlocked) Color(0xFFFCA5A5) else Color(0xFFA7F3D0),
                         letterSpacing = 0.3.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // 2. Title & Subtitle
+            // Main Welcoming Title & Subtitle
             Text(
-                text = "ডিভাইস সুরক্ষা ও এক্সেস কন্ট্রোল",
-                fontSize = 23.sp,
+                text = when {
+                    isBlocked -> "প্রবেশাধিকার সাময়িকভাবে বন্ধ"
+                    isApproved -> "স্বাগতম! ভেরিফিকেশন সম্পন্ন"
+                    isPending -> "স্বাগতম! একটু অপেক্ষা করুন"
+                    else -> "স্বাগতম! শিক্ষার সবুজ ভুবনে"
+                },
+                fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
                 textAlign = TextAlign.Center,
@@ -512,773 +514,932 @@ fun DeviceActivationScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "এই অ্যাপটি সম্পূর্ণ প্রাইভেট ও নিরাপদ। অনুমোদিত ডিভাইসে এক্সেস দেওয়ার জন্য অ্যাডমিনের দেওয়া সিক্রেট কোড প্রয়োজন।",
-                fontSize = 13.sp,
-                color = Color(0xFF94A3B8),
+                text = when {
+                    isBlocked -> "এই ডিভাইস থেকে বর্তমানে অ্যাপে প্রবেশের অনুমতি স্থগিত রয়েছে।"
+                    isApproved -> "আপনার ডিভাইসটি ইতিমধ্যে স্টুডেন্ট হিসেবে ভেরিফাইড রয়েছে। নিচের বাটনে ট্যাপ করে সরাসরি প্রবেশ করুন।"
+                    isPending -> "আপনার স্টুডেন্ট ভেরিফিকেশন আবেদন গ্রহণ করা হয়েছে। ভেরিফিকেশন সম্পন্ন হলেই আপনি অ্যাপে প্রবেশ করতে পারবেন।"
+                    else -> "আমাদের বিশেষ লার্নিং প্ল্যাটফর্মে যুক্ত হতে নিচে এক ক্লিকে আপনার স্টুডেন্ট ভেরিফিকেশন সম্পন্ন করুন।"
+                },
+                fontSize = 13.5.sp,
+                color = Color(0xFFD1FAE5).copy(alpha = 0.85f),
                 textAlign = TextAlign.Center,
                 lineHeight = 20.sp,
-                modifier = Modifier.padding(horizontal = 10.dp)
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
-            // Quick 3-Step Visual Guide Bar
+            // Main Interactive Card (Animated Transitions between Checking / NotRequested / Pending / Approved / Blocked)
             Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color(0xFF0B1528).copy(alpha = 0.75f),
-                border = BorderStroke(1.dp, Color(0xFF1E293B)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    StepBadgeItem(number = "১", title = "আইডি কপি")
-                    StepDividerLine()
-                    StepBadgeItem(number = "২", title = "অ্যাডমিনকে সেন্ড")
-                    StepDividerLine()
-                    StepBadgeItem(number = "৩", title = "কোড অ্যাক্টিভ")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // 3. Unique Hardware Device ID Card
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = Color(0xFF0B1528).copy(alpha = 0.92f),
+                shape = RoundedCornerShape(26.dp),
+                color = if (isBlocked) Color(0xFF1F0A0D).copy(alpha = 0.92f) else Color(0xFF06231A).copy(alpha = 0.90f),
                 border = BorderStroke(
-                    width = 1.2.dp,
+                    width = 1.4.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF38BDF8).copy(alpha = 0.4f),
-                            Color(0xFF1E293B).copy(alpha = 0.8f),
-                            Color(0xFF3B82F6).copy(alpha = 0.3f)
+                            primaryForestAccent.copy(alpha = 0.55f),
+                            Color(0xFF0F3D2E).copy(alpha = 0.7f),
+                            secondaryForestAccent.copy(alpha = 0.4f)
                         )
                     )
                 ),
-                shadowElevation = 10.dp,
+                shadowElevation = 16.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFF0284C7).copy(alpha = 0.2f),
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Lock,
-                                        contentDescription = null,
-                                        tint = Color(0xFF38BDF8),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "আপনার অনন্য ডিভাইস আইডি",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFE2E8F0)
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFF1E293B)
-                        ) {
-                            Text(
-                                text = "HARDWARE ID",
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Monospace ID Display Box with Interactive Copy Feedback
-                    val idBoxBorderColor by animateColorAsState(
-                        targetValue = if (isCopied) Color(0xFF10B981) else Color(0xFF253B5E),
-                        label = "id_box_border"
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF050B16),
-                        border = BorderStroke(1.2.dp, idBoxBorderColor),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { handleCopyId() }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = displayDeviceId,
-                                    fontSize = 17.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = if (isCopied) Color(0xFF34D399) else Color(0xFF38BDF8),
-                                    letterSpacing = 1.5.sp
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = if (isCopied) "ক্লিপবোর্ডে কপি করা হয়েছে" else "কপি করতে এখানে ট্যাপ করুন",
-                                    fontSize = 10.sp,
-                                    color = if (isCopied) Color(0xFF10B981) else Color(0xFF64748B)
-                                )
-                            }
-
-                            // Animated copy status button (Preserving testTag)
-                            IconButton(
-                                onClick = { handleCopyId() },
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isCopied) Color(0xFF065F46).copy(alpha = 0.5f)
-                                        else Color(0xFF16243D)
-                                    )
-                                    .testTag("copy_device_id_button")
-                            ) {
-                                AnimatedContent(
-                                    targetState = isCopied,
-                                    transitionSpec = { scaleIn() + fadeIn() togetherWith fadeOut() },
-                                    label = "copy_icon_anim"
-                                ) { copied ->
-                                    Icon(
-                                        imageVector = if (copied) Icons.Filled.CheckCircle else Icons.Filled.ContentCopy,
-                                        contentDescription = "Copy Device ID",
-                                        tint = if (copied) Color(0xFF34D399) else Color(0xFF60A5FA),
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Action Buttons Row: Copy and Share
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = { handleCopyId() },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (isCopied) Color(0xFF065F46) else Color(0xFF162540),
-                                contentColor = if (isCopied) Color(0xFFA7F3D0) else Color(0xFF93C5FD)
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(42.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isCopied) Icons.Filled.CheckCircle else Icons.Filled.ContentCopy,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isCopied) "কপি হয়েছে!" else "আইডি কপি",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        FilledTonalButton(
-                            onClick = { handleShareId() },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = Color(0xFF162540),
-                                contentColor = Color(0xFF93C5FD)
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(42.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Share,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "শেয়ার করুন",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = "কোড সংগ্রহ করতে উপরের আইডিটি কপি করে অ্যাডমিনকে পাঠান",
-                        fontSize = 11.sp,
-                        color = Color(0xFF64748B),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // 3.5 Banned Device Alert Card (Shown if banned by admin)
-            AnimatedVisibility(
-                visible = isDeviceBanned,
-                enter = fadeIn() + expandVertically() + scaleIn(initialScale = 0.95f),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xFF23090C),
-                    border = BorderStroke(
-                        width = 1.5.dp,
-                        brush = Brush.linearGradient(
-                            colors = listOf(Color(0xFFEF4444), Color(0xFF991B1B))
-                        )
-                    ),
-                    shadowElevation = 12.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 18.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFF7F1D1D).copy(alpha = 0.35f),
-                                        Color.Transparent
-                                    )
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    primaryForestAccent.copy(alpha = 0.10f),
+                                    Color.Transparent
                                 )
                             )
-                            .padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFF7F1D1D).copy(alpha = 0.7f),
-                            border = BorderStroke(1.dp, Color(0xFFF87171).copy(alpha = 0.5f)),
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Filled.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFCA5A5),
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "ডিভাইস ব্যান করা হয়েছে!",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFFF87171)
                         )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = if (banReasonMessage.isNotBlank()) banReasonMessage else "এই ডিভাইসটি অ্যাডমিন প্যানেল থেকে স্থায়ীভাবে নিষিদ্ধ (Banned) করা হয়েছে। এই ফোনে কোনো ধরনের এক্সেস কোড চলবে না।",
-                            fontSize = 13.sp,
-                            color = Color(0xFFFECACA),
-                            textAlign = TextAlign.Center,
-                            lineHeight = 19.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF450A0A),
-                            border = BorderStroke(1.dp, Color(0xFFDC2626).copy(alpha = 0.6f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "স্ট্যাটাস: BANNED / স্থায়ীভাবে নিষিদ্ধ",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFF87171),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = "ব্যান তোলার জন্য নিচে অ্যাডমিনের সাথে যোগাযোগ করুন।",
-                            fontSize = 11.5.sp,
-                            color = Color(0xFFFCA5A5),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
-
-            // 4. Access Code Input Card
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = Color(0xFF0B1528).copy(alpha = 0.94f),
-                border = BorderStroke(
-                    width = 1.2.dp,
-                    brush = Brush.linearGradient(
-                        colors = if (isDeviceBanned) {
-                            listOf(Color(0xFF991B1B), Color(0xFF450A0A))
-                        } else {
-                            listOf(
-                                Color(0xFF3B82F6).copy(alpha = 0.45f),
-                                Color(0xFF1E293B),
-                                Color(0xFF38BDF8).copy(alpha = 0.35f)
-                            )
-                        }
-                    )
-                ),
-                shadowElevation = 10.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp)
+                        .padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isDeviceBanned) Color(0xFF7F1D1D).copy(alpha = 0.3f)
-                                else Color(0xFF2563EB).copy(alpha = 0.2f),
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Key,
-                                        contentDescription = null,
-                                        tint = if (isDeviceBanned) Color(0xFFF87171) else Color(0xFF60A5FA),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isDeviceBanned) "এক্সেস কোড (ডিভাইস ব্যান থাকায় নিষ্ক্রিয়)" else "এক্সেস কোড লিখুন",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isDeviceBanned) Color(0xFFF87171) else Color(0xFFE2E8F0)
-                            )
-                        }
-
-                        // Quick Paste Chip Button
-                        if (!isDeviceBanned) {
-                            Surface(
-                                onClick = { handlePasteCode() },
-                                shape = RoundedCornerShape(50),
-                                color = Color(0xFF162540),
-                                border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.4f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                    AnimatedContent(
+                        targetState = Pair(isInitialChecking, verificationStatus),
+                        transitionSpec = {
+                            (fadeIn(tween(320)) + scaleIn(initialScale = 0.96f)) togetherWith
+                                fadeOut(tween(220))
+                        },
+                        label = "verification_state_card"
+                    ) { (checking, status) ->
+                        when {
+                            checking -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.ContentPaste,
-                                        contentDescription = null,
-                                        tint = Color(0xFF60A5FA),
-                                        modifier = Modifier.size(13.dp)
+                                    CircularProgressIndicator(
+                                        color = Color(0xFF34D399),
+                                        strokeWidth = 3.dp,
+                                        modifier = Modifier.size(38.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.height(14.dp))
                                     Text(
-                                        text = "পেস্ট করুন",
-                                        fontSize = 11.sp,
+                                        text = "স্টুডেন্ট ভেরিফিকেশন যাচাই করা হচ্ছে...",
+                                        fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF93C5FD)
+                                        color = Color(0xFFA7F3D0),
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                            status is StudentVerificationStatus.Approved -> {
+                                // Already Verified / Reinstalled Device -> Immediate "প্রবেশ করুন" Button!
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF065F46).copy(alpha = 0.6f),
+                                        border = BorderStroke(1.5.dp, Color(0xFF34D399)),
+                                        modifier = Modifier.size(64.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Filled.CheckCircle,
+                                                contentDescription = null,
+                                                tint = Color(0xFF4ADE80),
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                        }
+                                    }
 
-                    OutlinedTextField(
-                        value = accessCodeInput,
-                        onValueChange = {
-                            if (!isDeviceBanned) {
-                                accessCodeInput = it.uppercase()
-                                errorMessage = null
-                            }
-                        },
-                        enabled = !isDeviceBanned,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("activation_code_input"),
-                        textStyle = LocalTextStyle.current.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            letterSpacing = 1.sp
-                        ),
-                        placeholder = {
-                            Text(
-                                text = if (isDeviceBanned) "ডিভাইস ব্যান থাকায় কোনো কোড কাজ করবে না" else "যেমন: VIP-STUDENT-01",
-                                color = if (isDeviceBanned) Color(0xFFEF4444) else Color(0xFF64748B),
-                                fontSize = 13.5.sp,
-                                fontFamily = FontFamily.Default,
-                                fontWeight = FontWeight.Normal,
-                                letterSpacing = 0.sp
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = if (isDeviceBanned) Icons.Filled.Lock else Icons.Filled.VerifiedUser,
-                                contentDescription = null,
-                                tint = if (isDeviceBanned) Color(0xFFEF4444) else Color(0xFF38BDF8),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        },
-                        trailingIcon = {
-                            if (accessCodeInput.isNotBlank() && !isDeviceBanned) {
-                                IconButton(onClick = { accessCodeInput = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Clear,
-                                        contentDescription = "Clear",
-                                        tint = Color(0xFF94A3B8),
-                                        modifier = Modifier.size(18.dp)
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    Text(
+                                        text = "স্টুডেন্ট ভেরিফিকেশন সক্রিয় আছে!",
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFECFDF5),
+                                        textAlign = TextAlign.Center
                                     )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = "আপনার এই ডিভাইসটি ভেরিফাইড রয়েছে। নিচের বাটনে ট্যাপ করে সরাসরি আপনার লার্নিং ড্যাশবোর্ডে প্রবেশ করুন।",
+                                        fontSize = 13.5.sp,
+                                        color = Color(0xFFA7F3D0),
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 20.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(20.dp))
+
+                                    val enterBrush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF10B981),
+                                            Color(0xFF059669),
+                                            Color(0xFF16A34A)
+                                        )
+                                    )
+
+                                    Button(
+                                        onClick = { onActivationSuccess() },
+                                        shape = RoundedCornerShape(16.dp),
+                                        contentPadding = PaddingValues(0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color.Transparent
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .shadow(
+                                                elevation = 12.dp,
+                                                shape = RoundedCornerShape(16.dp),
+                                                ambientColor = Color(0xFF34D399),
+                                                spotColor = Color(0xFF10B981)
+                                            )
+                                            .background(enterBrush, RoundedCornerShape(16.dp))
+                                            .testTag("activate_device_button")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.Login,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = "প্রবেশ করুন",
+                                                fontSize = 16.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = if (isDeviceBanned) Color(0xFFEF4444) else Color(0xFF38BDF8),
-                            unfocusedBorderColor = if (isDeviceBanned) Color(0xFF7F1D1D) else Color(0xFF253755),
-                            disabledBorderColor = Color(0xFF7F1D1D),
-                            disabledTextColor = Color(0xFF94A3B8),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            cursorColor = Color(0xFF38BDF8),
-                            focusedContainerColor = Color(0xFF050B16),
-                            unfocusedContainerColor = Color(0xFF050B16),
-                            disabledContainerColor = Color(0xFF1A0808)
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Characters,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { if (!isDeviceBanned) handleActivate() }
-                        )
-                    )
 
-                    // Error Message Banner
-                    AnimatedVisibility(
-                        visible = errorMessage != null,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFF3B1014),
-                            border = BorderStroke(1.dp, Color(0xFFDC2626).copy(alpha = 0.6f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.ErrorOutline,
-                                    contentDescription = null,
-                                    tint = Color(0xFFF87171),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = errorMessage.orEmpty(),
-                                    fontSize = 12.5.sp,
-                                    color = Color(0xFFFECACA),
-                                    lineHeight = 18.sp
-                                )
+                            status is StudentVerificationStatus.Pending -> {
+                                // Pending Verification State -> Welcomes student & shows 1-5 mins / up to 24 hours message
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF064E3B).copy(alpha = 0.7f),
+                                        border = BorderStroke(1.5.dp, Color(0xFFFACC15).copy(alpha = 0.8f)),
+                                        modifier = Modifier.size(64.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Filled.HourglassTop,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFDE047),
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    Text(
+                                        text = "স্বাগতম! আপনার আবেদন গৃহীত হয়েছে 🌿",
+                                        fontSize = 18.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    // Highlighted Wait Time Notice Card (1-5 minutes, sometimes 24 hours)
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = Color(0xFF041A13),
+                                        border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.45f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.AccessTime,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFFDE047),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "১–৫ মিনিট অপেক্ষা করুন",
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color(0xFFFDE047)
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            Text(
+                                                text = "সাধারণত ১ থেকে ৫ মিনিটের মধ্যেই স্টুডেন্ট ভেরিফিকেশন সম্পন্ন হয়ে যায়। তবে কখনো কখনো সর্বোচ্চ ২৪ ঘণ্টা সময় লাগতে পারে।",
+                                                fontSize = 13.sp,
+                                                color = Color(0xFFD1FAE5),
+                                                textAlign = TextAlign.Center,
+                                                lineHeight = 19.sp
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Text(
+                                        text = "ভেরিফিকেশন সম্পন্ন হলে নিচের বাটনে ট্যাপ করুন অথবা অ্যাপটি পুনরায় ওপেন করলেই সরাসরি প্রবেশ করতে পারবেন।",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFFA7F3D0).copy(alpha = 0.85f),
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 17.sp
+                                    )
+
+                                    if (statusBannerMessage != null) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFF064E3B),
+                                            border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.6f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = statusBannerMessage.orEmpty(),
+                                                fontSize = 12.5.sp,
+                                                color = Color(0xFFECFDF5),
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(18.dp))
+
+                                    val refreshBrush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF059669),
+                                            Color(0xFF10B981),
+                                            Color(0xFF0D9488)
+                                        )
+                                    )
+
+                                    Button(
+                                        onClick = { performStatusCheck(showFeedbackToast = true) },
+                                        enabled = !isSubmittingOrRefreshing,
+                                        shape = RoundedCornerShape(16.dp),
+                                        contentPadding = PaddingValues(0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(54.dp)
+                                            .shadow(
+                                                elevation = 10.dp,
+                                                shape = RoundedCornerShape(16.dp),
+                                                ambientColor = Color(0xFF34D399)
+                                            )
+                                            .background(refreshBrush, RoundedCornerShape(16.dp))
+                                            .testTag("activate_device_button")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            if (isSubmittingOrRefreshing) {
+                                                CircularProgressIndicator(
+                                                    color = Color.White,
+                                                    strokeWidth = 2.5.dp,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = "যাচাই করা হচ্ছে...",
+                                                    fontSize = 15.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Refresh,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "স্ট্যাটাস রিফ্রেশ করুন",
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        }
-                    }
 
-                    // Success Message Banner
-                    AnimatedVisibility(
-                        visible = successMessage != null,
-                        enter = fadeIn() + expandVertically() + scaleIn(initialScale = 0.95f),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFF064E3B),
-                            border = BorderStroke(1.dp, Color(0xFF10B981)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF34D399),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = successMessage.orEmpty(),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFA7F3D0)
-                                )
+                            status is StudentVerificationStatus.Blocked -> {
+                                // Blocked Device State
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF7F1D1D).copy(alpha = 0.6f),
+                                        border = BorderStroke(1.5.dp, Color(0xFFF87171)),
+                                        modifier = Modifier.size(64.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Filled.ErrorOutline,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFCA5A5),
+                                                modifier = Modifier.size(34.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    Text(
+                                        text = "ডিভাইসটির প্রবেশাধিকার বন্ধ রয়েছে",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFFCA5A5),
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = status.reason.ifBlank {
+                                            "নিরাপত্তা বা শর্তাবলী ভঙ্গের কারণে এই ডিভাইসে অ্যাপ ব্যবহারের অনুমতি স্থগিত করা হয়েছে।"
+                                        },
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFFECACA),
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 19.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(18.dp))
+
+                                    OutlinedButton(
+                                        onClick = { performStatusCheck(showFeedbackToast = true) },
+                                        enabled = !isSubmittingOrRefreshing,
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.dp, Color(0xFFF87171).copy(alpha = 0.6f)),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Refresh,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFCA5A5),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "পুনরায় যাচাই করুন",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFFCA5A5)
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                            else -> {
+                                // Default New User State -> One-Click "স্টুডেন্ট ভেরিফিকেশন করুন"
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFDE047),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "এক ক্লিকেই স্টুডেন্ট ভেরিফিকেশন",
+                                            fontSize = 16.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFFECFDF5)
+                                        )
+                                    }
 
-                    // Premium Gradient Activate Button (Preserving testTag)
-                    val isButtonEnabled = !isLoading && !isDeviceBanned && successMessage == null
-                    val buttonBrush = when {
-                        isDeviceBanned -> Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF7F1D1D), Color(0xFF450A0A))
-                        )
-                        isButtonEnabled -> Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF2563EB), Color(0xFF0284C7), Color(0xFF1D4ED8))
-                        )
-                        else -> Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF1E3A8A), Color(0xFF172554))
-                        )
-                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
 
-                    Button(
-                        onClick = { handleActivate() },
-                        enabled = isButtonEnabled,
-                        shape = RoundedCornerShape(14.dp),
-                        contentPadding = PaddingValues(0.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp)
-                            .shadow(
-                                elevation = if (isButtonEnabled) 10.dp else 0.dp,
-                                shape = RoundedCornerShape(14.dp),
-                                ambientColor = Color(0xFF38BDF8),
-                                spotColor = Color(0xFF2563EB)
-                            )
-                            .background(buttonBrush, RoundedCornerShape(14.dp))
-                            .testTag("activate_device_button")
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    color = Color.White,
-                                    strokeWidth = 2.5.dp,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = "যাচাই করা হচ্ছে...",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            } else if (isDeviceBanned) {
-                                Icon(
-                                    imageVector = Icons.Filled.Lock,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFCA5A5),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "ডিভাইস ব্যান করা হয়েছে (নিষিদ্ধ)",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFCA5A5)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Filled.Security,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "এক্সেস সক্রিয় করুন",
-                                    fontSize = 15.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
+                                    Text(
+                                        text = "কোনো কোড বা ঝামেলার প্রয়োজন নেই! নিচে আপনার নাম লিখে বা সরাসরি বাটনে ক্লিক করে স্টুডেন্ট ভেরিফিকেশন সম্পন্ন করুন।",
+                                        fontSize = 12.8.sp,
+                                        color = Color(0xFFA7F3D0),
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 18.5.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // Optional Student Name Input
+                                    OutlinedTextField(
+                                        value = studentNameInput,
+                                        onValueChange = { studentNameInput = it },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("activation_code_input"),
+                                        placeholder = {
+                                            Text(
+                                                text = "আপনার নাম লিখুন (ঐচ্ছিক)",
+                                                color = Color(0xFF6EE7B7).copy(alpha = 0.55f),
+                                                fontSize = 13.5.sp
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Filled.Person,
+                                                contentDescription = null,
+                                                tint = Color(0xFF34D399),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(15.dp),
+                                        singleLine = true,
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = Color(0xFF34D399),
+                                            unfocusedBorderColor = Color(0xFF065F46),
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            cursorColor = Color(0xFF34D399),
+                                            focusedContainerColor = Color(0xFF031710),
+                                            unfocusedContainerColor = Color(0xFF031710)
+                                        ),
+                                        keyboardOptions = KeyboardOptions(
+                                            capitalization = KeyboardCapitalization.Words,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = { handleRequestVerification() }
+                                        )
+                                    )
+
+                                    if (status is StudentVerificationStatus.Error) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFF3B1014),
+                                            border = BorderStroke(1.dp, Color(0xFFF87171).copy(alpha = 0.5f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.ErrorOutline,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFF87171),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = status.message,
+                                                    fontSize = 12.5.sp,
+                                                    color = Color(0xFFFECACA)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(18.dp))
+
+                                    val verifyButtonBrush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color(0xFF059669),
+                                            Color(0xFF10B981),
+                                            Color(0xFF16A34A)
+                                        )
+                                    )
+
+                                    Button(
+                                        onClick = { handleRequestVerification() },
+                                        enabled = !isSubmittingOrRefreshing,
+                                        shape = RoundedCornerShape(16.dp),
+                                        contentPadding = PaddingValues(0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color.Transparent,
+                                            disabledContainerColor = Color.Transparent
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(56.dp)
+                                            .shadow(
+                                                elevation = 12.dp,
+                                                shape = RoundedCornerShape(16.dp),
+                                                ambientColor = Color(0xFF34D399),
+                                                spotColor = Color(0xFF10B981)
+                                            )
+                                            .background(verifyButtonBrush, RoundedCornerShape(16.dp))
+                                            .testTag("activate_device_button")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            if (isSubmittingOrRefreshing) {
+                                                CircularProgressIndicator(
+                                                    color = Color.White,
+                                                    strokeWidth = 2.5.dp,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = "ভেরিফিকেশন পাঠানো হচ্ছে...",
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Filled.VerifiedUser,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Text(
+                                                    text = "স্টুডেন্ট ভেরিফিকেশন করুন",
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 5. Contact Admin & Support Links Section
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = Color(0xFF0A1324).copy(alpha = 0.92f),
-                border = BorderStroke(1.dp, Color(0xFF1E2E4A)),
-                shadowElevation = 6.dp,
-                modifier = Modifier.fillMaxWidth()
+            // Friendly Help / Support Section (only if support links are configured)
+            AnimatedVisibility(
+                visible = supportLinks.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
             ) {
-                Column(
-                    modifier = Modifier.padding(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                Column {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = Color(0xFF051E16).copy(alpha = 0.88f),
+                        border = BorderStroke(1.dp, Color(0xFF065F46).copy(alpha = 0.65f)),
+                        shadowElevation = 8.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFF162540),
-                            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.3f)),
-                            modifier = Modifier.size(40.dp)
+                        Column(
+                            modifier = Modifier.padding(18.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = null,
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier.size(18.dp)
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF064E3B),
+                                    border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.35f)),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.SupportAgent,
+                                            contentDescription = null,
+                                            tint = Color(0xFF34D399),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "সহযোগিতা ও স্টুডেন্ট সাপোর্ট",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFECFDF5)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "যেকোনো প্রয়োজনে আমাদের হেল্পডেস্কে বার্তা পাঠাতে পারেন",
+                                        fontSize = 11.5.sp,
+                                        color = Color(0xFFA7F3D0).copy(alpha = 0.8f)
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "কোড পেতে অ্যাডমিনের সাথে যোগাযোগ",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFF1F5F9)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "আপনার ডিভাইস আইডি পাঠিয়ে যেকোনো মাধ্যমে কোড নিন",
-                                fontSize = 11.5.sp,
-                                color = Color(0xFF94A3B8)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // List of dynamic contact links configured from Admin app
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        supportLinks.forEach { link ->
-                            SupportLinkCard(
-                                link = link,
-                                onClick = { handleOpenLink(link) }
-                            )
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                supportLinks.forEach { link ->
+                                    ForestSupportLinkCard(
+                                        link = link,
+                                        onClick = { handleOpenLink(link) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Extra space at bottom to prevent navigation bar clipping
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
+/**
+ * Full-screen procedural animated Enchanted Forest Canvas:
+ * - Twilight emerald sky with golden sunbeams filtering through the canopy
+ * - Glowing moon/sun orb over distant misty mountains
+ * - Multi-layered rolling forest hills & swaying pine trees
+ * - Peaceful gliding birds & 26 glowing golden-emerald fireflies
+ */
 @Composable
-private fun StepBadgeItem(number: String, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(
-            shape = CircleShape,
-            color = Color(0xFF1E3A8A).copy(alpha = 0.6f),
-            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f)),
-            modifier = Modifier.size(20.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = number,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF7DD3FC)
+private fun EnchantedForestBackdrop(
+    natureTime: Float,
+    fireflyProgress: Float,
+    sunbeamAlpha: Float,
+    fireflies: List<FireflyParticle>,
+    isBlocked: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val skyColors = if (isBlocked) {
+        listOf(
+            Color(0xFF1A0608),
+            Color(0xFF2B0C10),
+            Color(0xFF140507)
+        )
+    } else {
+        listOf(
+            Color(0xFF021610),
+            Color(0xFF062C20),
+            Color(0xFF0B3B2B),
+            Color(0xFF031912)
+        )
+    }
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // 1. Sky Background Gradient
+        drawRect(
+            brush = Brush.verticalGradient(colors = skyColors),
+            size = size
+        )
+
+        // 2. Soft Golden-Emerald Sunbeams / Canopy Light Rays from Top-Center
+        val rayOrigin = Offset(w * 0.5f, -h * 0.08f)
+        val rayColor = if (isBlocked) Color(0xFFF87171) else Color(0xFFA7F3D0)
+        for (i in -2..2) {
+            val spread = i * 0.24f
+            val rayPath = Path().apply {
+                moveTo(rayOrigin.x, rayOrigin.y)
+                lineTo(w * (0.35f + spread), h * 0.72f)
+                lineTo(w * (0.65f + spread), h * 0.72f)
+                close()
+            }
+            drawPath(
+                path = rayPath,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        rayColor.copy(alpha = 0.07f * sunbeamAlpha),
+                        Color.Transparent
+                    ),
+                    startY = 0f,
+                    endY = h * 0.72f
+                )
+            )
+        }
+
+        // 3. Luminous Forest Moon / Sun Halo in Upper Sky
+        val orbCenter = Offset(w * 0.82f, h * 0.14f)
+        val orbColor = if (isBlocked) Color(0xFFEF4444) else Color(0xFFFDE047)
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    orbColor.copy(alpha = 0.22f * sunbeamAlpha),
+                    orbColor.copy(alpha = 0.05f),
+                    Color.Transparent
+                ),
+                center = orbCenter,
+                radius = w * 0.35f
+            ),
+            center = orbCenter,
+            radius = w * 0.35f
+        )
+        drawCircle(
+            color = orbColor.copy(alpha = 0.28f),
+            center = orbCenter,
+            radius = w * 0.06f
+        )
+
+        // 4. Distant Misty Mountains & Layered Rolling Forest Hills
+        drawRollingHillLayer(
+            w = w,
+            h = h,
+            baseYRatio = 0.68f,
+            amplitudeRatio = 0.055f,
+            phase = 0.4f,
+            color = if (isBlocked) Color(0xFF280B0E).copy(alpha = 0.7f) else Color(0xFF083526).copy(alpha = 0.75f)
+        )
+        drawRollingHillLayer(
+            w = w,
+            h = h,
+            baseYRatio = 0.76f,
+            amplitudeRatio = 0.045f,
+            phase = 2.1f,
+            color = if (isBlocked) Color(0xFF1F080A).copy(alpha = 0.85f) else Color(0xFF05271C).copy(alpha = 0.88f)
+        )
+        drawRollingHillLayer(
+            w = w,
+            h = h,
+            baseYRatio = 0.85f,
+            amplitudeRatio = 0.035f,
+            phase = 4.2f,
+            color = if (isBlocked) Color(0xFF140406) else Color(0xFF031A12)
+        )
+
+        // 5. Swaying Pine & Forest Trees along Left & Right Edges
+        val swayOffset = sin(natureTime) * 6.dp.toPx()
+        val treePositions = listOf(
+            Triple(0.06f, 0.78f, 0.16f),
+            Triple(0.15f, 0.82f, 0.13f),
+            Triple(0.24f, 0.85f, 0.10f),
+            Triple(0.76f, 0.84f, 0.11f),
+            Triple(0.86f, 0.81f, 0.14f),
+            Triple(0.94f, 0.77f, 0.17f)
+        )
+        val treeColorBack = if (isBlocked) Color(0xFF24080B) else Color(0xFF042218)
+        val treeColorFront = if (isBlocked) Color(0xFF170406) else Color(0xFF02140E)
+
+        treePositions.forEachIndexed { index, (xRatio, baseYRatio, heightRatio) ->
+            val treeColor = if (index % 2 == 0) treeColorFront else treeColorBack
+            drawForestPineTree(
+                centerX = w * xRatio + swayOffset * (if (index % 2 == 0) 1f else 0.6f),
+                baseY = h * baseYRatio,
+                treeHeight = h * heightRatio,
+                treeWidth = w * 0.14f,
+                sway = swayOffset * 0.5f,
+                color = treeColor
+            )
+        }
+
+        // 6. Peaceful Gliding Birds in Upper Canopy
+        if (!isBlocked) {
+            for (b in 0..3) {
+                val birdProgress = (fireflyProgress * 0.8f + b * 0.18f) % 1f
+                val bx = w * (0.1f + birdProgress * 0.8f)
+                val by = h * (0.16f + (b % 2) * 0.035f + sin(natureTime * 2f + b) * 0.008f)
+                val wingFlap = sin(natureTime * 4f + b * 1.3f) * 4.dp.toPx()
+                val birdSpan = 7.dp.toPx()
+
+                val birdPath = Path().apply {
+                    moveTo(bx - birdSpan, by - wingFlap)
+                    quadraticBezierTo(bx - birdSpan * 0.4f, by - 3.dp.toPx(), bx, by)
+                    quadraticBezierTo(bx + birdSpan * 0.4f, by - 3.dp.toPx(), bx + birdSpan, by - wingFlap)
+                }
+                drawPath(
+                    path = birdPath,
+                    color = Color(0xFFA7F3D0).copy(alpha = 0.45f),
+                    style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round)
                 )
             }
         }
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = title,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFFCBD5E1)
-        )
+
+        // 7. Magical Glowing Fireflies (জোনাকি পোকা) Drifting Across the Forest
+        fireflies.forEach { fly ->
+            val currentYRatio = (fly.baseY - fireflyProgress * fly.speedFactor).let { raw ->
+                val mod = raw % 1f
+                if (mod < 0f) mod + 1f else mod
+            }
+            val waveX = sin(natureTime * fly.speedFactor + fly.phaseOffset) * fly.driftAmplitudeX
+            val fx = (fly.baseX + waveX).coerceIn(0.02f, 0.98f) * w
+            val fy = currentYRatio * h
+
+            val twinkle = ((sin(natureTime * 2f + fly.phaseOffset) + 1f) * 0.5f).coerceIn(0.2f, 1f)
+            val coreColor = when {
+                isBlocked -> Color(0xFFF87171)
+                fly.isGolden -> Color(0xFFFDE047)
+                else -> Color(0xFF6EE7B7)
+            }
+
+            val rPx = fly.radiusDp.dp.toPx()
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        coreColor.copy(alpha = 0.55f * twinkle),
+                        coreColor.copy(alpha = 0.15f * twinkle),
+                        Color.Transparent
+                    ),
+                    center = Offset(fx, fy),
+                    radius = rPx * 4.2f
+                ),
+                center = Offset(fx, fy),
+                radius = rPx * 4.2f
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.85f * twinkle),
+                center = Offset(fx, fy),
+                radius = rPx * 0.7f
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawRollingHillLayer(
+    w: Float,
+    h: Float,
+    baseYRatio: Float,
+    amplitudeRatio: Float,
+    phase: Float,
+    color: Color
+) {
+    val path = Path().apply {
+        val startY = h * baseYRatio
+        moveTo(0f, h)
+        lineTo(0f, startY)
+        val steps = 32
+        for (i in 1..steps) {
+            val x = (w * i) / steps
+            val angle = (i.toFloat() / steps) * PI.toFloat() * 2f + phase
+            val y = startY + sin(angle) * (h * amplitudeRatio)
+            lineTo(x, y)
+        }
+        lineTo(w, h)
+        close()
+    }
+    drawPath(path = path, color = color)
+}
+
+private fun DrawScope.drawForestPineTree(
+    centerX: Float,
+    baseY: Float,
+    treeHeight: Float,
+    treeWidth: Float,
+    sway: Float,
+    color: Color
+) {
+    // 3 tiered pine canopy triangles
+    for (tier in 0..2) {
+        val tierTopY = baseY - treeHeight * (1f - tier * 0.24f)
+        val tierBottomY = baseY - treeHeight * (0.55f - tier * 0.25f)
+        val tierHalfWidth = (treeWidth * 0.5f) * (0.65f + tier * 0.22f)
+        val tierSway = sway * (1f - tier * 0.25f)
+
+        val tierPath = Path().apply {
+            moveTo(centerX + tierSway, tierTopY)
+            lineTo(centerX - tierHalfWidth, tierBottomY)
+            lineTo(centerX + tierHalfWidth, tierBottomY)
+            close()
+        }
+        drawPath(path = tierPath, color = color)
     }
 }
 
 @Composable
-private fun StepDividerLine() {
-    Box(
-        modifier = Modifier
-            .width(16.dp)
-            .height(1.dp)
-            .background(Color(0xFF334155))
-    )
-}
-
-/**
- * Modern, un-squished support link card with custom brand accents and glassmorphic depth.
- */
-@Composable
-private fun SupportLinkCard(
+private fun ForestSupportLinkCard(
     link: ActivationSupportLink,
     onClick: () -> Unit
 ) {
@@ -1290,21 +1451,21 @@ private fun SupportLinkCard(
                 }
                 Color(android.graphics.Color.parseColor(cleanHex))
             } catch (_: Exception) {
-                getBrandColorForType(link.iconType)
+                getForestBrandColorForType(link.iconType)
             }
         } else {
-            getBrandColorForType(link.iconType)
+            getForestBrandColorForType(link.iconType)
         }
     }
 
     val iconVector: ImageVector = remember(link.iconType) {
-        getBrandIconForType(link.iconType)
+        getForestBrandIconForType(link.iconType)
     }
 
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF060E1C),
+        color = Color(0xFF03150F),
         border = BorderStroke(
             width = 1.dp,
             brush = Brush.horizontalGradient(
@@ -1324,7 +1485,7 @@ private fun SupportLinkCard(
                 .background(
                     Brush.horizontalGradient(
                         colors = listOf(
-                            brandColor.copy(alpha = 0.08f),
+                            brandColor.copy(alpha = 0.10f),
                             Color.Transparent
                         )
                     )
@@ -1337,10 +1498,9 @@ private fun SupportLinkCard(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Circular Brand Icon Badge
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = brandColor.copy(alpha = 0.16f),
+                    color = brandColor.copy(alpha = 0.18f),
                     border = BorderStroke(1.dp, brandColor.copy(alpha = 0.45f)),
                     modifier = Modifier.size(42.dp)
                 ) {
@@ -1370,7 +1530,7 @@ private fun SupportLinkCard(
                         Text(
                             text = link.subtitle,
                             fontSize = 11.5.sp,
-                            color = Color(0xFF94A3B8),
+                            color = Color(0xFFA7F3D0).copy(alpha = 0.8f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1380,7 +1540,6 @@ private fun SupportLinkCard(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Action arrow icon
             Surface(
                 shape = CircleShape,
                 color = brandColor.copy(alpha = 0.15f),
@@ -1400,18 +1559,18 @@ private fun SupportLinkCard(
     }
 }
 
-private fun getBrandColorForType(type: String): Color {
+private fun getForestBrandColorForType(type: String): Color {
     return when (type.lowercase().trim()) {
-        "telegram" -> Color(0xFF229ED9)
-        "whatsapp" -> Color(0xFF25D366)
-        "facebook" -> Color(0xFF1877F2)
-        "phone", "call" -> Color(0xFFF59E0B)
-        "website", "web" -> Color(0xFF38BDF8)
-        else -> Color(0xFF60A5FA)
+        "telegram" -> Color(0xFF38BDF8)
+        "whatsapp" -> Color(0xFF4ADE80)
+        "facebook" -> Color(0xFF60A5FA)
+        "phone", "call" -> Color(0xFFFBBF24)
+        "website", "web" -> Color(0xFF34D399)
+        else -> Color(0xFF34D399)
     }
 }
 
-private fun getBrandIconForType(type: String): ImageVector {
+private fun getForestBrandIconForType(type: String): ImageVector {
     return when (type.lowercase().trim()) {
         "telegram" -> Icons.AutoMirrored.Filled.Send
         "whatsapp" -> Icons.Filled.OpenInNew

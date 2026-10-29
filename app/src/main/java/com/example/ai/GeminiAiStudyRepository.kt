@@ -476,7 +476,6 @@ object GeminiAiStudyRepository {
                 put("student_name", identity.studentName)
                 put("gemini_api_key", apiKey)
                 put("preferred_model", PRIMARY_MODEL_ID)
-                put("is_active", true)
             }
 
             val req = Request.Builder()
@@ -566,7 +565,7 @@ object GeminiAiStudyRepository {
             if (conditions.isEmpty()) return@withContext null
 
             val orFilter = conditions.distinct().joinToString(",")
-            val restUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/user_gemini_api_keys?or=($orFilter)&is_active=eq.true&select=gemini_api_key,updated_at&order=updated_at.desc&limit=1"
+            val restUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/user_gemini_api_keys?or=($orFilter)&select=gemini_api_key,preferred_model,updated_at&order=updated_at.desc&limit=1"
 
             val req = Request.Builder()
                 .url(restUrl)
