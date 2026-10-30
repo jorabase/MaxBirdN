@@ -28,9 +28,10 @@ data class CourseUiState(
     val enrollmentErrorMessage: String? = null,
     val pendingEnrollmentProgram: OtherProgram? = null,
 
-    // Course Commerce, Access Requests, Custom Pricing & Installments (কিস্তি)
+    // Course Commerce, Access Requests, Custom Pricing, Free Trial & Installments (কিস্তি)
     val commerceSnapshot: CourseCommerceSnapshot = CourseCommerceSnapshot(),
     val requestingAccessProgramId: String? = null,
+    val startingTrialProgramId: String? = null,
     val submittingPaymentProgramId: String? = null,
     val activePaymentSheetProgramId: String? = null,
     val activePaymentSheetCourseTitle: String = "",

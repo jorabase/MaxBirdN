@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,9 +38,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import com.example.course.AdminPaymentSettings
 import com.example.course.CourseAccessState
@@ -74,7 +78,9 @@ fun CoursePurchasePaymentBottomSheet(
     paymentSettings: AdminPaymentSettings,
     defaultUserPhone: String = "",
     isSubmitting: Boolean = false,
+    isStartingTrial: Boolean = false,
     onDismiss: () -> Unit,
+    onStartFreeTrial: (() -> Unit)? = null,
     onSubmitPayment: (
         paymentMethod: String,
         senderMobile: String,
@@ -280,6 +286,117 @@ fun CoursePurchasePaymentBottomSheet(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "নির্ধারিত সময়ের মধ্যে কিস্তি পরিশোধ না করায় কোর্স এক্সেস সাময়িক বন্ধ রয়েছে। এখন কিস্তি পরিশোধ করলে আবার সাথে সাথে আনলক হয়ে যাবে।",
+                                fontSize = 12.5.sp,
+                                color = Color(0xFF92400E)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+            }
+
+            // Free Trial Available Offer Card (if Admin enabled Free Trial before purchase)
+            if (commerceState.canStartFreeTrial && onStartFreeTrial != null) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFFECFDF5),
+                    border = BorderStroke(1.5.dp, Color(0xFF10B981).copy(alpha = 0.55f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFD1FAE5)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CardGiftcard,
+                                    contentDescription = null,
+                                    tint = Color(0xFF059669),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "🎁 কেনার আগে ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল নিন!",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF065F46)
+                                )
+                                Text(
+                                    text = "অ্যাডমিন আপনাকে এই কোর্সটি ফ্রিতে যাচাই করে দেখার সুযোগ দিয়েছেন। ট্রায়াল শেষে পছন্দ হলে কিনতে পারবেন।",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF047857),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = onStartFreeTrial,
+                            enabled = !isStartingTrial && !isSubmitting,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("sheet_start_free_trial_button")
+                        ) {
+                            if (isStartingTrial) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("ফ্রি ট্রায়াল চালু হচ্ছে...", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(Icons.Default.CardGiftcard, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল শুরু করুন",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+            } else if (commerceState.isTrialExpiredNow) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFFFFBEB),
+                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "আপনার ফ্রি ট্রায়ালের মেয়াদ শেষ হয়েছে!",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFB45309)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "কোর্সটির সকল ক্লাস ও রিসোর্স আনলক রাখতে নিচে এককালীন অথবা কিস্তিতে ভর্তি সম্পন্ন করুন।",
                                 fontSize = 12.5.sp,
                                 color = Color(0xFF92400E)
                             )
@@ -752,3 +869,162 @@ fun CoursePurchasePaymentBottomSheet(
         }
     }
 }
+
+/**
+ * Confirmation dialog shown when the student clicks "কোর্সে এক্সেস পান" so accidental taps
+ * never send unintended access requests to the Admin App.
+ */
+@Composable
+fun CourseAccessRequestConfirmDialog(
+    courseTitle: String,
+    isRequesting: Boolean = false,
+    onDismiss: () -> Unit,
+    onConfirmRequest: () -> Unit
+) {
+    Dialog(onDismissRequest = { if (!isRequesting) onDismiss() }) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        LaunchedEffect(dialogWindow) {
+            AntiTamperSecurity.applyWindowSecureFlag(dialogWindow)
+        }
+
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF0F172A),
+            border = BorderStroke(1.2.dp, Color(0xFF6366F1).copy(alpha = 0.45f)),
+            shadowElevation = 12.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("course_access_confirm_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    Color(0xFF4F46E5).copy(alpha = 0.28f),
+                                    Color(0xFF7C3AED).copy(alpha = 0.28f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VpnKey,
+                        contentDescription = null,
+                        tint = Color(0xFFA5B4FC),
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "কোর্সের এক্সেস রিকোয়েস্ট নিশ্চিত করুন",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1E293B),
+                    border = BorderStroke(1.dp, Color(0xFF334155)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = courseTitle,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF38BDF8),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "আপনি কি এই কোর্সটির দাম, কিস্তির সুবিধা ও ফ্রি ট্রায়াল পাওয়ার জন্য অ্যাডমিনের কাছে রিকোয়েস্ট পাঠাতে চান?",
+                    fontSize = 13.5.sp,
+                    color = Color(0xFFCBD5E1),
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(modifier = Modifier.height(22.dp))
+
+                Button(
+                    onClick = onConfirmRequest,
+                    enabled = !isRequesting,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("confirm_course_access_yes_button")
+                ) {
+                    if (isRequesting) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "রিকোয়েস্ট পাঠানো হচ্ছে...",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "হ্যাঁ, আমি এক্সেস নিতে চাই",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !isRequesting,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color(0xFF475569)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE2E8F0)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .testTag("confirm_course_access_cancel_button")
+                ) {
+                    Text(
+                        text = "না, এখন থাক",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+

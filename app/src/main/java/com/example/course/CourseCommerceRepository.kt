@@ -84,11 +84,54 @@ data class CourseCommerceItemState(
     val pendingInstallmentTxId: String = "",
     val pendingInstallmentAmount: Double = 0.0,
     val rejectionReason: String = "",
-    val adminNote: String = ""
+    val adminNote: String = "",
+    // Free Trial Management (Controlled by Admin App)
+    val trialEnabled: Boolean = false,
+    val trialDays: Int = 0,
+    val trialHours: Int = 0,
+    val trialStartedAtIso: String? = null,
+    val trialEndsAtIso: String? = null,
+    val trialEndsAtMillis: Long? = null,
+    val isTrialUsed: Boolean = false
 ) {
+    /**
+     * True if the student is currently in an active, non-expired Free Trial (and hasn't paid yet).
+     */
+    val isTrialCurrentlyActive: Boolean
+        get() = trialEnabled &&
+            paidAmount <= 0.0 &&
+            trialEndsAtMillis != null &&
+            System.currentTimeMillis() < trialEndsAtMillis
+
+    /**
+     * True if the student used a Free Trial whose time has now expired (and hasn't paid for the course yet).
+     */
+    val isTrialExpiredNow: Boolean
+        get() = paidAmount <= 0.0 && (
+            (trialEndsAtMillis != null && System.currentTimeMillis() >= trialEndsAtMillis) ||
+            (isTrialUsed && !isTrialCurrentlyActive && trialEndsAtMillis != null)
+        )
+
+    /**
+     * True if Admin enabled Free Trial for this course and the student can start it right now before buying.
+     */
+    val canStartFreeTrial: Boolean
+        get() = trialEnabled &&
+            (trialDays > 0 || trialHours > 0) &&
+            paidAmount <= 0.0 &&
+            !isTrialCurrentlyActive &&
+            !isTrialExpiredNow &&
+            !isTrialUsed &&
+            trialEndsAtMillis == null
+
     val isCurrentlyUnlockedForStudy: Boolean
         get() {
+            // ১. ফ্রি ট্রায়াল চলমান থাকলে (মেয়াদ থাকা পর্যন্ত) কোর্স আনলকড থাকবে!
+            if (isTrialCurrentlyActive) return true
+
             if (accessState != CourseAccessState.ACTIVE) return false
+            // যদি পেমেন্ট ছাড়া শুধু ট্রায়াল হয়ে থাকে এবং ট্রায়ালের মেয়াদ শেষ হয়ে যায়, তবে সাথে সাথে লক!
+            if (paidAmount <= 0.0 && isTrialExpiredNow) return false
             // যদি কিস্তিতে কেনা হয় এবং বকেয়া থাকে (dueAmount > 0), তবে নির্দিষ্ট সময়ের মধ্যে কিস্তি না দিলে এক্সেস বন্ধ!
             if (dueAmount > 0.0 && nextDueDateMillis != null && System.currentTimeMillis() > nextDueDateMillis) {
                 return false
@@ -99,17 +142,48 @@ data class CourseCommerceItemState(
     val isOverdueNow: Boolean
         get() {
             if (accessState == CourseAccessState.INSTALLMENT_OVERDUE) return true
-            if (accessState == CourseAccessState.ACTIVE && dueAmount > 0.0 && nextDueDateMillis != null && System.currentTimeMillis() > nextDueDateMillis) {
+            if (accessState == CourseAccessState.ACTIVE && paidAmount > 0.0 && dueAmount > 0.0 && nextDueDateMillis != null && System.currentTimeMillis() > nextDueDateMillis) {
                 return true
             }
             return false
         }
 
     val effectiveState: CourseAccessState
-        get() = if (isOverdueNow) CourseAccessState.INSTALLMENT_OVERDUE else accessState
+        get() = when {
+            isOverdueNow -> CourseAccessState.INSTALLMENT_OVERDUE
+            isTrialCurrentlyActive -> CourseAccessState.ACTIVE
+            accessState == CourseAccessState.ACTIVE && paidAmount <= 0.0 && isTrialExpiredNow -> CourseAccessState.APPROVED_TO_BUY
+            else -> accessState
+        }
 
     val hasPendingInstallmentPayment: Boolean
         get() = pendingInstallmentTxId.isNotBlank() && pendingInstallmentAmount > 0.0
+
+    fun getTrialDurationLabelBn(): String {
+        return when {
+            trialDays > 0 && trialHours > 0 -> "${toBanglaDigits(trialDays.toString())} দিন ${toBanglaDigits(trialHours.toString())} ঘণ্টা"
+            trialDays > 0 -> "${toBanglaDigits(trialDays.toString())} দিন"
+            trialHours > 0 -> "${toBanglaDigits(trialHours.toString())} ঘণ্টা"
+            else -> "১ দিন"
+        }
+    }
+
+    fun getRemainingTrialTimeTextBn(): String {
+        val endMs = trialEndsAtMillis ?: return ""
+        val diff = endMs - System.currentTimeMillis()
+        if (diff <= 0L) return "ট্রায়ালের মেয়াদ শেষ!"
+        val totalMinutes = (diff / (1000L * 60)).toInt().coerceAtLeast(1)
+        val days = totalMinutes / (60 * 24)
+        val hours = (totalMinutes % (60 * 24)) / 60
+        val mins = totalMinutes % 60
+        return when {
+            days > 0 && hours > 0 -> "${toBanglaDigits(days.toString())} দিন ${toBanglaDigits(hours.toString())} ঘণ্টা বাকি"
+            days > 0 -> "${toBanglaDigits(days.toString())} দিন বাকি"
+            hours > 0 && mins > 0 -> "${toBanglaDigits(hours.toString())} ঘণ্টা ${toBanglaDigits(mins.toString())} মিনিট বাকি"
+            hours > 0 -> "${toBanglaDigits(hours.toString())} ঘণ্টা বাকি"
+            else -> "${toBanglaDigits(mins.toString())} মিনিট বাকি"
+        }
+    }
 
     fun getRemainingDaysTextBn(): String {
         val dueMs = nextDueDateMillis ?: return ""
@@ -420,13 +494,45 @@ object CourseCommerceRepository {
         val nextDueIso = obj.optString("next_due_date", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
         val nextDueMillis = parseIsoTimestampMillis(nextDueIso)
 
+        // Parse Free Trial fields configured by Admin App
+        val rawTrialDays = obj.optInt("trial_days", obj.optInt("free_trial_days", 0)).coerceAtLeast(0)
+        val rawTrialHours = obj.optInt("trial_hours", obj.optInt("free_trial_hours", 0)).coerceAtLeast(0)
+        val trialStartedIso = obj.optString("trial_started_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
+        val trialEndsIso = (
+            obj.optString("trial_ends_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
+                ?: obj.optString("trial_end_date", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
+        )
+        val trialEndsMillis = parseIsoTimestampMillis(trialEndsIso)
+        val trialEnabled = when {
+            obj.has("trial_enabled") -> obj.optBoolean("trial_enabled", false)
+            obj.has("allow_free_trial") -> obj.optBoolean("allow_free_trial", false)
+            rawStatus == "TRIAL_ACTIVE" -> true
+            trialEndsMillis != null && System.currentTimeMillis() < trialEndsMillis -> true
+            rawTrialDays > 0 || rawTrialHours > 0 -> true
+            else -> false
+        }
+        val effectiveTrialDays = if (trialEnabled && rawTrialDays == 0 && rawTrialHours == 0) 1 else rawTrialDays
+        val isTrialUsed = obj.optBoolean("is_trial_used", false) ||
+            trialStartedIso != null ||
+            rawStatus == "TRIAL_EXPIRED" ||
+            (trialEndsMillis != null && System.currentTimeMillis() >= trialEndsMillis)
+
         val mappedState = when (rawStatus) {
             "REQUESTED" -> CourseAccessState.ACCESS_REQUESTED
-            "APPROVED_TO_BUY" -> CourseAccessState.APPROVED_TO_BUY
+            "APPROVED_TO_BUY", "TRIAL_EXPIRED" -> CourseAccessState.APPROVED_TO_BUY
+            "TRIAL_ACTIVE" -> {
+                if (trialEndsMillis != null && System.currentTimeMillis() < trialEndsMillis) {
+                    CourseAccessState.ACTIVE
+                } else {
+                    CourseAccessState.APPROVED_TO_BUY
+                }
+            }
             "PAYMENT_PENDING" -> CourseAccessState.PAYMENT_PENDING
             "PAYMENT_REJECTED", "REJECTED" -> CourseAccessState.PAYMENT_REJECTED
             "ACTIVE" -> {
-                if (dueAmount > 0.0 && nextDueMillis != null && System.currentTimeMillis() > nextDueMillis) {
+                if (paidAmount <= 0.0 && trialEndsMillis != null && System.currentTimeMillis() >= trialEndsMillis) {
+                    CourseAccessState.APPROVED_TO_BUY
+                } else if (paidAmount > 0.0 && dueAmount > 0.0 && nextDueMillis != null && System.currentTimeMillis() > nextDueMillis) {
                     CourseAccessState.INSTALLMENT_OVERDUE
                 } else {
                     CourseAccessState.ACTIVE
@@ -473,7 +579,14 @@ object CourseCommerceRepository {
             pendingInstallmentTxId = obj.optString("pending_installment_tx_id", "").takeIf { !it.equals("null", true) } ?: "",
             pendingInstallmentAmount = obj.optDouble("pending_installment_amount", 0.0).let { if (it.isNaN()) 0.0 else it },
             rejectionReason = obj.optString("rejection_reason", "").takeIf { !it.equals("null", true) } ?: "",
-            adminNote = obj.optString("admin_note", "").takeIf { !it.equals("null", true) } ?: ""
+            adminNote = obj.optString("admin_note", "").takeIf { !it.equals("null", true) } ?: "",
+            trialEnabled = trialEnabled,
+            trialDays = effectiveTrialDays,
+            trialHours = rawTrialHours,
+            trialStartedAtIso = trialStartedIso,
+            trialEndsAtIso = trialEndsIso,
+            trialEndsAtMillis = trialEndsMillis,
+            isTrialUsed = isTrialUsed
         )
     }
 
@@ -1522,7 +1635,7 @@ object CourseCommerceRepository {
 
             if (enrollmentId != null) {
                 val patchJson = JSONObject().apply {
-                    if (existingItem?.accessState != CourseAccessState.ACTIVE) {
+                    if (existingItem?.accessState != CourseAccessState.ACTIVE || (existingItem.paidAmount <= 0.0)) {
                         put("status", "PAYMENT_PENDING")
                     }
                     put("selected_plan_id", selectedPlan.planId)
@@ -1560,6 +1673,151 @@ object CourseCommerceRepository {
             }
         } catch (e: Throwable) {
             return@withContext Result.failure(Exception("নেটওয়ার্ক সমস্যা: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+        }
+    }
+
+    /**
+     * Activates the Admin-approved Free Trial for a course so the student can explore the course
+     * for `trial_days` / `trial_hours` before buying. When the trial expires, the course automatically
+     * locks and prompts the student to purchase.
+     */
+    suspend fun startCourseFreeTrial(
+        context: Context,
+        programId: String,
+        programTitle: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val account = resolveStudentAccount(context)
+            if (!account.isLoggedIn) {
+                return@withContext Result.failure(Exception("অনুগ্রহ করে আগে আপনার শিখো একাউন্টে লগইন করুন।"))
+            }
+
+            val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
+            if (supabaseUrl.isBlank() || anonKey.isBlank()) {
+                return@withContext Result.failure(Exception("সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
+            }
+
+            val existingRow = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
+            val cachedItem = getCachedSnapshot(context).enrollmentsByProgramId[programId]
+
+            val trialEnabled = existingRow?.optBoolean("trial_enabled", cachedItem?.trialEnabled ?: false)
+                ?: (cachedItem?.trialEnabled ?: false)
+            val trialDays = existingRow?.optInt("trial_days", cachedItem?.trialDays ?: 1)?.coerceAtLeast(0)
+                ?: (cachedItem?.trialDays ?: 1)
+            val trialHours = existingRow?.optInt("trial_hours", cachedItem?.trialHours ?: 0)?.coerceAtLeast(0)
+                ?: (cachedItem?.trialHours ?: 0)
+            val alreadyUsed = existingRow?.optBoolean("is_trial_used", false) == true &&
+                !existingRow.optString("trial_ends_at", "").isNullOrBlank()
+
+            if (!trialEnabled && trialDays <= 0 && trialHours <= 0) {
+                return@withContext Result.failure(Exception("এই কোর্সের জন্য এখনো ফ্রি ট্রায়াল চালু করা হয়নি।"))
+            }
+            if (alreadyUsed) {
+                val existingEndMs = parseIsoTimestampMillis(existingRow?.optString("trial_ends_at", ""))
+                if (existingEndMs != null && System.currentTimeMillis() >= existingEndMs) {
+                    return@withContext Result.failure(Exception("আপনার ফ্রি ট্রায়ালের মেয়াদ ইতিমধ্যে শেষ হয়েছে। কোর্সটি চালিয়ে যেতে ভর্তি হোন।"))
+                }
+            }
+
+            val nowMs = System.currentTimeMillis()
+            val durationMs = when {
+                trialDays > 0 && trialHours > 0 -> (trialDays * 24L + trialHours) * 3600L * 1000L
+                trialDays > 0 -> trialDays * 24L * 3600L * 1000L
+                trialHours > 0 -> trialHours * 3600L * 1000L
+                else -> 24L * 3600L * 1000L
+            }
+            val endMs = nowMs + durationMs
+
+            val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val nowIso = isoFormatter.format(Date(nowMs))
+            val endIso = isoFormatter.format(Date(endMs))
+            val durationLabelBn = when {
+                trialDays > 0 -> "${CourseCommerceItemState.toBanglaDigits(trialDays.toString())} দিনের"
+                trialHours > 0 -> "${CourseCommerceItemState.toBanglaDigits(trialHours.toString())} ঘণ্টার"
+                else -> "১ দিনের"
+            }
+
+            // 1. Try RPC `start_course_free_trial` if configured in Supabase
+            var rpcSucceeded = false
+            try {
+                val rpcPayload = JSONObject().apply {
+                    put("p_device_id", account.accountKey)
+                    put("p_shikho_account_key", account.accountKey)
+                    put("p_student_phone", account.normPhone.ifBlank { account.rawPhone })
+                    put("p_program_id", programId)
+                }
+                val rpcReq = Request.Builder()
+                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/rpc/start_course_free_trial")
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post(rpcPayload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                httpClient.newCall(rpcReq).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val bodyStr = resp.body?.string() ?: ""
+                        if (bodyStr.trim().startsWith("{")) {
+                            val json = JSONObject(bodyStr)
+                            if (json.optBoolean("success", false)) {
+                                rpcSucceeded = true
+                            }
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+
+            // 2. Also PATCH `course_access_enrollments` directly so it works even before/without RPC
+            val rowId = existingRow?.optString("id", "")?.trim().orEmpty()
+                .ifBlank { cachedItem?.enrollmentId.orEmpty() }
+
+            var patchSucceeded = rpcSucceeded
+            if (rowId.isNotBlank()) {
+                val patchPayloads = listOf(
+                    JSONObject().apply {
+                        put("status", "TRIAL_ACTIVE")
+                        put("trial_enabled", true)
+                        put("trial_started_at", nowIso)
+                        put("trial_ends_at", endIso)
+                        put("is_trial_used", true)
+                        put("updated_at", nowIso)
+                    },
+                    JSONObject().apply {
+                        put("trial_enabled", true)
+                        put("trial_started_at", nowIso)
+                        put("trial_ends_at", endIso)
+                        put("is_trial_used", true)
+                        put("updated_at", nowIso)
+                    }
+                )
+                for (patchObj in patchPayloads) {
+                    try {
+                        val patchReq = Request.Builder()
+                            .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$rowId")
+                            .addHeader("apikey", anonKey)
+                            .addHeader("Authorization", "Bearer $anonKey")
+                            .addHeader("Content-Type", "application/json")
+                            .patch(patchObj.toString().toRequestBody("application/json".toMediaType()))
+                            .build()
+                        httpClient.newCall(patchReq).execute().use { resp ->
+                            if (resp.isSuccessful) {
+                                patchSucceeded = true
+                            }
+                        }
+                        if (patchSucceeded) break
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            if (patchSucceeded) {
+                fetchCourseCommerceStatus(context)
+                return@withContext Result.success("🎉 অভিনন্দন! আপনার $durationLabelBn ফ্রি ট্রায়াল চালু হয়েছে। এখন আপনি কোর্সটির ক্লাসগুলো ফ্রিতে দেখতে পারবেন।")
+            } else {
+                return@withContext Result.failure(Exception("ফ্রি ট্রায়াল চালু করতে সমস্যা হয়েছে। অনুগ্রহ করে ডাটাবেজে ট্রায়াল SQL রান করা আছে কিনা নিশ্চিত করুন।"))
+            }
+        } catch (e: Throwable) {
+            return@withContext Result.failure(Exception("নেটওয়ার্ক ত্রুটি: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
         }
     }
 

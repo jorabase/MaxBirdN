@@ -202,6 +202,56 @@ class CourseViewModel(
         }
     }
 
+    fun startCourseFreeTrial(
+        programId: String,
+        programTitle: String,
+        context: android.content.Context? = null
+    ) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    startingTrialProgramId = programId,
+                    enrollmentErrorMessage = null,
+                    enrollmentSuccessMessage = null
+                )
+            }
+
+            val result = CourseCommerceRepository.startCourseFreeTrial(
+                context = sessionManager.appContext,
+                programId = programId,
+                programTitle = programTitle
+            )
+
+            result.onSuccess { msg ->
+                if (context != null) {
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                val updatedSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
+                _uiState.update {
+                    it.copy(
+                        commerceSnapshot = updatedSnapshot,
+                        startingTrialProgramId = null,
+                        activePaymentSheetProgramId = null,
+                        activePaymentSheetCourseTitle = "",
+                        enrollmentSuccessMessage = msg
+                    )
+                }
+                fetchEnrolledPrograms()
+            }.onFailure { err ->
+                val errMsg = err.localizedMessage ?: "ফ্রি ট্রায়াল চালু করতে সমস্যা হয়েছে"
+                if (context != null) {
+                    android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                _uiState.update {
+                    it.copy(
+                        startingTrialProgramId = null,
+                        enrollmentErrorMessage = errMsg
+                    )
+                }
+            }
+        }
+    }
+
     fun submitCoursePayment(
         programId: String,
         courseTitle: String,

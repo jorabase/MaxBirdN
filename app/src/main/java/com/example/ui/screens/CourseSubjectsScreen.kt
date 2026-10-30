@@ -50,6 +50,7 @@ import com.example.course.CourseCommerceItemState
 import com.example.course.CourseUiState
 import com.example.course.CourseViewModel
 import com.example.course.SubjectWithProgress
+import com.example.ui.components.CourseAccessRequestConfirmDialog
 import com.example.ui.components.CoursePurchasePaymentBottomSheet
 import com.example.ui.components.getProgramBadge
 import com.example.utils.SubjectIconBadge
@@ -69,9 +70,34 @@ fun CourseSubjectsScreen(
     val selectedProgram = uiState.selectedCourseProgram
     val sessionManager = remember(context) { SessionManager(context) }
 
+    // State for Confirmation Dialog before sending Course Access Request
+    var confirmAccessProgram by remember { mutableStateOf<OtherProgram?>(null) }
+
     // Always refresh programs & course commerce/installment status when screen opens
     LaunchedEffect(Unit) {
         viewModel.fetchEnrolledPrograms()
+    }
+
+    // Show Confirmation Dialog when user clicks "কোর্সে এক্সেস পান"
+    confirmAccessProgram?.let { targetProgram ->
+        val isReq = uiState.requestingAccessProgramId == targetProgram.id
+        CourseAccessRequestConfirmDialog(
+            courseTitle = targetProgram.title_bn ?: "কোর্স",
+            isRequesting = isReq,
+            onDismiss = {
+                if (!isReq) confirmAccessProgram = null
+            },
+            onConfirmRequest = {
+                val progToRequest = targetProgram
+                confirmAccessProgram = null
+                viewModel.requestCoursePurchaseAccess(
+                    programId = progToRequest.id,
+                    programTitle = progToRequest.title_bn ?: "কোর্স",
+                    bannerUrl = progToRequest.banner_url,
+                    context = context
+                )
+            }
+        )
     }
 
     val activePaymentProgId = uiState.activePaymentSheetProgramId
@@ -87,7 +113,17 @@ fun CourseSubjectsScreen(
             paymentSettings = uiState.commerceSnapshot.paymentSettings,
             defaultUserPhone = sessionManager.getUserPhone() ?: "",
             isSubmitting = uiState.submittingPaymentProgramId == activePaymentProgId,
+            isStartingTrial = uiState.startingTrialProgramId == activePaymentProgId,
             onDismiss = { viewModel.dismissPaymentSheet() },
+            onStartFreeTrial = if (commerceItem.canStartFreeTrial) {
+                {
+                    viewModel.startCourseFreeTrial(
+                        programId = activePaymentProgId,
+                        programTitle = activePaymentCourseTitle,
+                        context = context
+                    )
+                }
+            } else null,
             onSubmitPayment = { method, senderMobile, amount, trxId, plan ->
                 viewModel.submitCoursePayment(
                     programId = activePaymentProgId,
@@ -189,10 +225,12 @@ fun CourseSubjectsScreen(
                             viewModel.openPaymentSheetForCourse(programId, titleBn)
                         },
                         onRequestCourseAccess = { otherProgram ->
-                            viewModel.requestCoursePurchaseAccess(
+                            confirmAccessProgram = otherProgram
+                        },
+                        onStartFreeTrial = { otherProgram ->
+                            viewModel.startCourseFreeTrial(
                                 programId = otherProgram.id,
                                 programTitle = otherProgram.title_bn ?: "কোর্স",
-                                bannerUrl = otherProgram.banner_url,
                                 context = context
                             )
                         },
@@ -256,7 +294,7 @@ private fun CourseFilterChip(
 }
 
 /**
- * Course List View showing active enrolled courses and blurred/locked or purchasable courses
+ * Course List View showing active enrolled courses and locked or purchasable courses
  */
 @Composable
 private fun MyCoursesListView(
@@ -264,6 +302,7 @@ private fun MyCoursesListView(
     onOpenEnrolledCourse: (EnrolledProgram) -> Unit,
     onPayInstallment: (programId: String, titleBn: String) -> Unit,
     onRequestCourseAccess: (OtherProgram) -> Unit,
+    onStartFreeTrial: (OtherProgram) -> Unit,
     onOpenPurchaseSheet: (OtherProgram) -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -479,7 +518,7 @@ private fun MyCoursesListView(
                     }
                 }
 
-                // Locked / Blurred / Purchasable Courses Section
+                // Locked / Purchasable Courses Section (Clear, unblurred cards)
                 if (other.isNotEmpty() && (selectedFilter == "all" || selectedFilter == "other")) {
                     item {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -498,7 +537,7 @@ private fun MyCoursesListView(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "পছন্দের কোর্সে 'কোর্সে এক্সেস পান' ক্লিক করলে অ্যাডমিন দাম ও কিস্তি সেট করে দিবেন",
+                                    text = "পছন্দের কোর্সে 'কোর্সে এক্সেস পান' ক্লিক করলে অ্যাডমিন দাম, কিস্তি ও ফ্রি ট্রায়াল সেট করে দিবেন",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -518,7 +557,9 @@ private fun MyCoursesListView(
                             program = program,
                             commerceState = commerceItem,
                             isRequestingAccess = uiState.requestingAccessProgramId == program.id,
+                            isStartingTrial = uiState.startingTrialProgramId == program.id,
                             onRequestAccess = { onRequestCourseAccess(program) },
+                            onStartFreeTrial = { onStartFreeTrial(program) },
                             onOpenPaymentSheet = { onOpenPurchaseSheet(program) },
                             onRefreshStatus = onRefresh
                         )
@@ -562,7 +603,8 @@ private fun EnrolledCourseBannerCard(
     val context = LocalContext.current
     val title = program.title_bn?.trim() ?: "কোর্স"
     val cardGradient = remember(program.id, title) { getCourseGradient(title) }
-    val hasActiveInstallmentDue = commerceState.dueAmount > 0.0
+    val isTrialActive = commerceState.isTrialCurrentlyActive
+    val hasActiveInstallmentDue = !isTrialActive && commerceState.dueAmount > 0.0
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -584,7 +626,7 @@ private fun EnrolledCourseBannerCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.Start
             ) {
-                // Top Row: Status badge on left + Installment badge if applicable (Guaranteed single-line, no collision)
+                // Top Row: Status badge on left + Trial or Installment badge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -592,8 +634,8 @@ private fun EnrolledCourseBannerCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(50),
-                        color = Color(0xFF10B981).copy(alpha = 0.22f),
-                        border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.45f)),
+                        color = if (isTrialActive) Color(0xFF7C3AED).copy(alpha = 0.35f) else Color(0xFF10B981).copy(alpha = 0.22f),
+                        border = BorderStroke(1.dp, if (isTrialActive) Color(0xFFC4B5FD).copy(alpha = 0.6f) else Color(0xFF34D399).copy(alpha = 0.45f)),
                         modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Row(
@@ -601,14 +643,14 @@ private fun EnrolledCourseBannerCard(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CheckCircle,
+                                imageVector = if (isTrialActive) Icons.Default.CardGiftcard else Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = Color(0xFF34D399),
+                                tint = if (isTrialActive) Color(0xFFDDD6FE) else Color(0xFF34D399),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "ভর্তি হয়েছো (আনলকড)",
+                                text = if (isTrialActive) "ফ্রি ট্রায়াল চলমান" else "ভর্তি হয়েছো (আনলকড)",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFECFDF5),
@@ -620,7 +662,34 @@ private fun EnrolledCourseBannerCard(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    if (hasActiveInstallmentDue) {
+                    if (isTrialActive) {
+                        val remTrialText = commerceState.getRemainingTrialTimeTextBn()
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.28f),
+                            border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.65f))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFDE68A),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (remTrialText.isNotBlank()) "$remTrialText বাকি" else "ট্রায়াল সক্রিয়",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFEF3C7),
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    } else if (hasActiveInstallmentDue) {
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color(0xFFF59E0B).copy(alpha = 0.25f),
@@ -686,7 +755,6 @@ private fun EnrolledCourseBannerCard(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Ambient blurred backdrop so there are never empty dark bars on the sides
                             AsyncImage(
                                 model = bannerRequest,
                                 contentDescription = null,
@@ -700,7 +768,6 @@ private fun EnrolledCourseBannerCard(
                                     .fillMaxSize()
                                     .background(Color.Black.copy(alpha = 0.32f))
                             )
-                            // Sharp uncropped foreground graphic
                             AsyncImage(
                                 model = bannerRequest,
                                 contentDescription = title,
@@ -725,6 +792,69 @@ private fun EnrolledCourseBannerCard(
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 24.sp
                 )
+
+                // If currently on Free Trial, show Trial countdown and option to buy full course
+                if (isTrialActive) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.Black.copy(alpha = 0.35f),
+                        border = BorderStroke(1.dp, Color(0xFFC4B5FD).copy(alpha = 0.45f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            val remTrial = commerceState.getRemainingTrialTimeTextBn()
+                            Text(
+                                text = if (remTrial.isNotBlank()) "🎁 ফ্রি ট্রায়ালে কোর্সটি আনলক আছে • বাকি সময়: $remTrial" else "🎁 ফ্রি ট্রায়ালে কোর্সটি আনলক আছে",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFDDD6FE)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "ট্রায়াল শেষ হওয়ার আগে বা পরে যেকোনো সময় পূর্ণ মেয়াদে কোর্সটি কিনে নিতে পারবেন।",
+                                fontSize = 11.5.sp,
+                                color = Color.White.copy(alpha = 0.85f),
+                                lineHeight = 16.sp
+                            )
+                            if (commerceState.totalPrice > 0.0) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF4ADE80),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable(onClick = onPayNextInstallment)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 9.dp, horizontal = 12.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ShoppingCartCheckout,
+                                            contentDescription = null,
+                                            tint = Color(0xFF064E3B),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "পূর্ণ মেয়াদে কোর্সটি কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})",
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF064E3B),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // If bought on installments and still has remaining balance, show installment tracker box
                 if (hasActiveInstallmentDue) {
@@ -765,7 +895,6 @@ private fun EnrolledCourseBannerCard(
                             } else 0.5f
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            // Custom smooth rounded progress bar without broken M3 stop-dot or track gap
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -954,7 +1083,9 @@ private fun OtherCourseBannerCard(
     program: OtherProgram,
     commerceState: CourseCommerceItemState,
     isRequestingAccess: Boolean,
+    isStartingTrial: Boolean,
     onRequestAccess: () -> Unit,
+    onStartFreeTrial: () -> Unit,
     onOpenPaymentSheet: () -> Unit,
     onRefreshStatus: () -> Unit
 ) {
@@ -962,10 +1093,7 @@ private fun OtherCourseBannerCard(
     val title = program.title_bn ?: "কোর্স"
     val cardGradient = remember(program.id, title) { getCourseGradient(title) }
     val state = commerceState.effectiveState
-
-    // কোর্সটি কখন ঝাপসা (Blurred) দেখাবে?
-    // যখন স্টুডেন্ট এখনো এক্সেস পায়নি (LOCKED_BLURRED বা ACCESS_REQUESTED)
-    val isBlurredLocked = state == CourseAccessState.LOCKED_BLURRED || state == CourseAccessState.ACCESS_REQUESTED
+    val isLockedPriorToApproval = state == CourseAccessState.LOCKED_BLURRED || state == CourseAccessState.ACCESS_REQUESTED
 
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -1008,7 +1136,7 @@ private fun OtherCourseBannerCard(
                 ) {
                     val (badgeText, badgeBg, badgeBorder, badgeIcon) = when (state) {
                         CourseAccessState.LOCKED_BLURRED -> Quadruple(
-                            "লকড ও ঝাপসা কোর্স",
+                            "কোর্সে এক্সেস নিন",
                             Color.Black.copy(alpha = 0.45f),
                             Color.White.copy(alpha = 0.35f),
                             Icons.Default.Lock
@@ -1019,12 +1147,30 @@ private fun OtherCourseBannerCard(
                             Color(0xFFFBBF24).copy(alpha = 0.65f),
                             Icons.Default.Schedule
                         )
-                        CourseAccessState.APPROVED_TO_BUY -> Quadruple(
-                            "কেনার এক্সেস অনুমোদিত",
-                            Color(0xFF10B981).copy(alpha = 0.25f),
-                            Color(0xFF34D399).copy(alpha = 0.65f),
-                            Icons.Default.LockOpen
-                        )
+                        CourseAccessState.APPROVED_TO_BUY -> {
+                            if (commerceState.isTrialExpiredNow) {
+                                Quadruple(
+                                    "ফ্রি ট্রায়াল শেষ • এখন কিনুন",
+                                    Color(0xFFF59E0B).copy(alpha = 0.32f),
+                                    Color(0xFFFBBF24).copy(alpha = 0.75f),
+                                    Icons.Default.TimerOff
+                                )
+                            } else if (commerceState.canStartFreeTrial) {
+                                Quadruple(
+                                    "🎁 ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়ালসহ অনুমোদিত",
+                                    Color(0xFF7C3AED).copy(alpha = 0.35f),
+                                    Color(0xFFC4B5FD).copy(alpha = 0.75f),
+                                    Icons.Default.CardGiftcard
+                                )
+                            } else {
+                                Quadruple(
+                                    "কেনার এক্সেস অনুমোদিত",
+                                    Color(0xFF10B981).copy(alpha = 0.25f),
+                                    Color(0xFF34D399).copy(alpha = 0.65f),
+                                    Icons.Default.LockOpen
+                                )
+                            }
+                        }
                         CourseAccessState.PAYMENT_PENDING -> Quadruple(
                             "পেমেন্ট যাচাই চলছে",
                             Color(0xFF3B82F6).copy(alpha = 0.28f),
@@ -1081,8 +1227,8 @@ private fun OtherCourseBannerCard(
 
                     Spacer(modifier = Modifier.weight(1f))
 
-                    // Show Admin-set Custom Price Badge ONLY when Admin has approved access (no longer blurred!)
-                    if (!isBlurredLocked && commerceState.totalPrice > 0.0) {
+                    // Show Admin-set Custom Price Badge when Admin has approved access
+                    if (!isLockedPriorToApproval && commerceState.totalPrice > 0.0) {
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color(0xFFFEF08A),
@@ -1102,7 +1248,7 @@ private fun OtherCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Course Banner Box: Blurred & Locked until Admin grants purchase access!
+                // Course Banner Box: Always sharp and crystal-clear so users can clearly see what course it is!
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1131,8 +1277,9 @@ private fun OtherCourseBannerCard(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.32f))
+                                .background(Color.Black.copy(alpha = 0.28f))
                         )
+                        // Sharp unblurred course graphic for ALL states
                         AsyncImage(
                             model = bannerRequest,
                             contentDescription = title,
@@ -1141,101 +1288,18 @@ private fun OtherCourseBannerCard(
                                 .fillMaxSize()
                                 .padding(vertical = 6.dp, horizontal = 10.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .then(
-                                    if (isBlurredLocked) Modifier.blur(16.dp)
-                                    else if (state == CourseAccessState.INSTALLMENT_OVERDUE) Modifier.blur(8.dp)
-                                    else Modifier
-                                )
                         )
-                    }
-
-                    // Frosted Glass Lock Overlay when course is blurred/locked
-                    if (isBlurredLocked) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xFF0F172A).copy(alpha = 0.72f),
-                                            Color(0xFF1E293B).copy(alpha = 0.85f)
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.16f))
-                                        .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (state == CourseAccessState.ACCESS_REQUESTED) Icons.Default.HourglassTop else Icons.Default.Lock,
-                                        contentDescription = "Locked",
-                                        tint = Color(0xFFFBBF24),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = if (state == CourseAccessState.ACCESS_REQUESTED) {
-                                        "অ্যাডমিন অনুমোদনের অপেক্ষায়..."
-                                    } else {
-                                        "কোর্সটি লক করা আছে • এক্সেস নিয়ে দাম দেখুন"
-                                    },
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    } else if (state == CourseAccessState.INSTALLMENT_OVERDUE) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF7F1D1D).copy(alpha = 0.75f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(12.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LockClock,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFEE2E2),
-                                    modifier = Modifier.size(30.dp)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "কিস্তির সময় শেষ হওয়ায় এক্সেস বন্ধ রয়েছে",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Course Title
+                // Course Title (Always bright and clearly readable)
                 Text(
                     text = title,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isBlurredLocked) Color.White.copy(alpha = 0.85f) else Color.White,
+                    color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 24.sp
@@ -1243,13 +1307,13 @@ private fun OtherCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // State-specific Details Box (Installment options, Rejection reason, Pending info, or Overdue details)
+                // State-specific Details Box
                 when (state) {
                     CourseAccessState.LOCKED_BLURRED -> {
                         Text(
-                            text = "এই কোর্সটি কিনতে বা কিস্তির দাম জানতে নিচের 'কোর্সে এক্সেস পান' বাটনে ক্লিক করুন। অ্যাডমিন আপনাকে কেনার এক্সেস ও দাম নির্ধারণ করে দেবেন।",
+                            text = "এই কোর্সটি কিনতে, ফ্রি ট্রায়াল নিতে বা কিস্তির দাম জানতে নিচের 'কোর্সে এক্সেস পান' বাটনে ক্লিক করুন।",
                             fontSize = 12.5.sp,
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = Color.White.copy(alpha = 0.88f),
                             lineHeight = 18.sp
                         )
                     }
@@ -1262,7 +1326,7 @@ private fun OtherCourseBannerCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "⏳ আপনার রিকোয়েস্ট অ্যাডমিন অ্যাপে পাঠানো হয়েছে! অ্যাডমিন এই কোর্সের দাম ও কিস্তি সেট করে এপ্রুভ করলেই ঝাপসা ভাব কেটে যাবে এবং আপনি কিনতে পারবেন।",
+                                text = "⏳ আপনার রিকোয়েস্ট অ্যাডমিন অ্যাপে পাঠানো হয়েছে! অ্যাডমিন এই কোর্সের দাম, কিস্তি ও ফ্রি ট্রায়াল সেট করে এপ্রুভ করলেই আপনি কোর্সটি শুরু করতে পারবেন।",
                                 fontSize = 12.5.sp,
                                 color = Color(0xFFFEF3C7),
                                 lineHeight = 18.sp,
@@ -1279,6 +1343,42 @@ private fun OtherCourseBannerCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(modifier = Modifier.padding(13.dp)) {
+                                if (commerceState.isTrialExpiredNow) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFFF59E0B).copy(alpha = 0.22f),
+                                        border = BorderStroke(1.dp, Color(0xFFFBBF24).copy(alpha = 0.55f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "⏰ আপনার ফ্রি ট্রায়ালের সময় শেষ হয়েছে! এখন এককালীন বা কিস্তিতে ভর্তি হয়ে পুরো কোর্সটি আনলক করুন।",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFFEF3C7),
+                                            lineHeight = 17.sp,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                } else if (commerceState.canStartFreeTrial) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFF7C3AED).copy(alpha = 0.28f),
+                                        border = BorderStroke(1.dp, Color(0xFFC4B5FD).copy(alpha = 0.55f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "🎁 কেনার আগে এই কোর্সটি ${commerceState.getTrialDurationLabelBn()} সম্পূর্ণ ফ্রিতে ট্রায়াল হিসেবে পড়ে দেখতে পারবেন!",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFEDE9FE),
+                                            lineHeight = 17.sp,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1507,40 +1607,93 @@ private fun OtherCourseBannerCard(
                     }
 
                     CourseAccessState.APPROVED_TO_BUY -> {
-                        Surface(
-                            shape = RoundedCornerShape(26.dp),
-                            color = Color(0xFF4ADE80),
-                            shadowElevation = 4.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(26.dp))
-                                .clickable(onClick = onOpenPaymentSheet)
-                                .testTag("buy_course_button_${program.id}")
-                        ) {
-                            Row(
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Free Trial Button if available before buying
+                            if (commerceState.canStartFreeTrial) {
+                                Surface(
+                                    shape = RoundedCornerShape(26.dp),
+                                    color = Color(0xFFFEF08A),
+                                    shadowElevation = 4.dp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(26.dp))
+                                        .clickable(enabled = !isStartingTrial, onClick = onStartFreeTrial)
+                                        .testTag("start_free_trial_card_button_${program.id}")
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp, horizontal = 14.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (isStartingTrial) {
+                                            CircularProgressIndicator(
+                                                color = Color(0xFF0F172A),
+                                                strokeWidth = 2.dp,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "ফ্রি ট্রায়াল চালু হচ্ছে...",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.CardGiftcard,
+                                                contentDescription = null,
+                                                tint = Color(0xFF7C3AED),
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "🎁 ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল শুরু করুন",
+                                                fontSize = 14.5.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(26.dp),
+                                color = Color(0xFF4ADE80),
+                                shadowElevation = 4.dp,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 13.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .clip(RoundedCornerShape(26.dp))
+                                    .clickable(onClick = onOpenPaymentSheet)
+                                    .testTag("buy_course_button_${program.id}")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.ShoppingCartCheckout,
-                                    contentDescription = null,
-                                    tint = Color(0xFF064E3B),
-                                    modifier = Modifier.size(19.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (commerceState.allowInstallments) {
-                                        "কোর্সটি কিনুন / কিস্তিতে ভর্তি হোন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
-                                    } else {
-                                        "কোর্সটি কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
-                                    },
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFF064E3B)
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 13.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ShoppingCartCheckout,
+                                        contentDescription = null,
+                                        tint = Color(0xFF064E3B),
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (commerceState.allowInstallments) {
+                                            "কোর্সটি কিনুন / কিস্তিতে ভর্তি হোন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                        } else {
+                                            "কোর্সটি কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                        },
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFF064E3B)
+                                    )
+                                }
                             }
                         }
                     }
