@@ -114,9 +114,9 @@ class PdfPageRenderer(
         private set
 
     val pageAspectRatios = mutableStateMapOf<Int, Float>()
-    // Memory-bounded LruCache (capped at 32 MB or 1/8th of heap) to prevent OutOfMemoryError on low-RAM phones
-    private val maxCacheBytes: Int = ((Runtime.getRuntime().maxMemory() / 8L)
-        .coerceIn(12L * 1024L * 1024L, 32L * 1024L * 1024L)).toInt()
+    // Memory-bounded LruCache (capped up to 56 MB or 1/6th of heap) for crisp ARGB_8888 slides
+    private val maxCacheBytes: Int = ((Runtime.getRuntime().maxMemory() / 6L)
+        .coerceIn(20L * 1024L * 1024L, 56L * 1024L * 1024L)).toInt()
     private val cache = object : LruCache<Int, Bitmap>(maxCacheBytes) {
         override fun sizeOf(key: Int, value: Bitmap): Int {
             return value.allocationByteCount.coerceAtLeast(1)
@@ -136,19 +136,21 @@ class PdfPageRenderer(
                 initError = "পিডিএফ ফাইলটি পাওয়া যায়নি বা ফাইলের সাইজ শূন্য।"
                 return
             }
-            pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            renderer = PdfRenderer(pfd!!)
-            val count = renderer!!.pageCount
+            val openedPfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            val createdRenderer = PdfRenderer(openedPfd)
+            val count = createdRenderer.pageCount
+            pfd = openedPfd
+            renderer = createdRenderer
             pageCount = count
 
             // Probe first page aspect ratio for placeholder sizing
             if (count > 0) {
                 synchronized(lock) {
                     try {
-                        val firstPage = renderer!!.openPage(0)
+                        val firstPage = createdRenderer.openPage(0)
                         val w = firstPage.width.toFloat()
                         val h = firstPage.height.toFloat()
-                        pageAspectRatios[0] = if (h > 0) w / h else 1.414f // 16:9 or standard slide ratio default
+                        pageAspectRatios[0] = if (h > 0) w / h else 1.777f
                         firstPage.close()
                     } catch (_: Exception) {}
                 }
@@ -161,29 +163,43 @@ class PdfPageRenderer(
         }
     }
 
-    suspend fun renderPage(pageIndex: Int, targetWidthPx: Int): Bitmap? = withContext(Dispatchers.Default) {
+    suspend fun renderPage(pageIndex: Int, targetWidthPx: Int): Bitmap? = withContext(Dispatchers.IO) {
         if (!isInitialized || pageIndex < 0 || pageIndex >= pageCount) return@withContext null
 
-        cache.get(pageIndex)?.let { return@withContext it }
+        cache.get(pageIndex)?.let { cached ->
+            if (!cached.isRecycled) return@withContext cached
+        }
 
         val activeRenderer = renderer ?: return@withContext null
 
-        synchronized(lock) {
+        var detectedAspect: Float? = null
+        val renderedBitmap: Bitmap? = synchronized(lock) {
             try {
-                cache.get(pageIndex)?.let { return@synchronized it }
+                cache.get(pageIndex)?.let { cached ->
+                    if (!cached.isRecycled) return@synchronized cached
+                }
 
                 val page = activeRenderer.openPage(pageIndex)
                 try {
                     val pWidth = page.width
                     val pHeight = page.height
-                    val aspect = if (pHeight > 0) pWidth.toFloat() / pHeight.toFloat() else 1.414f
-                    pageAspectRatios[pageIndex] = aspect
+                    val aspect = if (pHeight > 0) pWidth.toFloat() / pHeight.toFloat() else 1.777f
+                    detectedAspect = aspect
 
-                    // Render at high resolution (1200px to 2000px) with RGB_565 (50% less RAM) since background is opaque white
-                    val renderWidth = targetWidthPx.coerceIn(1200, 2000)
+                    // CRITICAL: Android's PdfRenderer.Page.render STRICTLY requires Bitmap.Config.ARGB_8888
+                    // (Passing RGB_565 throws IllegalArgumentException: Unsupported pixel format!)
+                    val renderWidth = targetWidthPx.coerceIn(1080, 1680)
                     val renderHeight = (renderWidth / aspect).toInt().coerceAtLeast(100)
 
-                    val bitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.RGB_565)
+                    val bitmap = try {
+                        Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
+                    } catch (_: OutOfMemoryError) {
+                        cache.evictAll()
+                        val fallbackWidth = 900
+                        val fallbackHeight = (fallbackWidth / aspect).toInt().coerceAtLeast(100)
+                        Bitmap.createBitmap(fallbackWidth, fallbackHeight, Bitmap.Config.ARGB_8888)
+                    }
+
                     val canvas = Canvas(bitmap)
                     canvas.drawColor(AndroidColor.WHITE)
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
@@ -191,16 +207,29 @@ class PdfPageRenderer(
                     cache.put(pageIndex, bitmap)
                     bitmap
                 } finally {
-                    page.close()
+                    try {
+                        page.close()
+                    } catch (_: Exception) {}
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "Error rendering page $pageIndex: ${e.message}", e)
                 null
             }
         }
+
+        if (detectedAspect != null) {
+            withContext(Dispatchers.Main.immediate) {
+                pageAspectRatios[pageIndex] = detectedAspect!!
+            }
+        }
+
+        renderedBitmap
     }
 
-    fun getCachedBitmap(pageIndex: Int): Bitmap? = cache.get(pageIndex)
+    fun getCachedBitmap(pageIndex: Int): Bitmap? {
+        val bmp = cache.get(pageIndex)
+        return if (bmp != null && !bmp.isRecycled) bmp else null
+    }
 
     fun close() {
         synchronized(lock) {
@@ -1236,16 +1265,33 @@ private fun PdfPageCard(
     targetWidthPx: Int,
     isSlideMode: Boolean = false
 ) {
-    var pageBitmap by remember(pageIndex) {
+    var pageBitmap by remember(pageIndex, renderer) {
         mutableStateOf(renderer.getCachedBitmap(pageIndex))
     }
 
-    val aspectRatio = renderer.pageAspectRatios[pageIndex] ?: 1.414f
+    val aspectRatio = renderer.pageAspectRatios[pageIndex]
+        ?: renderer.pageAspectRatios[0]
+        ?: 1.777f
 
-    LaunchedEffect(pageIndex, renderer) {
-        if (pageBitmap == null) {
-            val bmp = renderer.renderPage(pageIndex, targetWidthPx)
-            pageBitmap = bmp
+    LaunchedEffect(pageIndex, renderer, renderer.isInitialized, targetWidthPx) {
+        if (!renderer.isInitialized) return@LaunchedEffect
+
+        val currentBmp = pageBitmap
+        if (currentBmp == null || currentBmp.isRecycled) {
+            var bmp = renderer.renderPage(pageIndex, targetWidthPx)
+            if (bmp == null) {
+                kotlinx.coroutines.delay(150L)
+                bmp = renderer.renderPage(pageIndex, targetWidthPx)
+            }
+            if (bmp != null && !bmp.isRecycled) {
+                pageBitmap = bmp
+            }
+        }
+
+        // Pre-warm the next slide in the background for instant scrolling
+        val nextIndex = pageIndex + 1
+        if (nextIndex < renderer.pageCount && renderer.getCachedBitmap(nextIndex) == null) {
+            renderer.renderPage(nextIndex, targetWidthPx)
         }
     }
 
