@@ -42,8 +42,42 @@ object LessonCacheManager {
             } else item
             val key = updatedItem.id.ifBlank { "${updatedItem.content_id}_${updatedItem.start_time}_${updatedItem.title}" }
             if (key.isNotBlank()) {
-                allLessons[key] = updatedItem
+                val existing = allLessons[key]
+                allLessons[key] = if (existing != null) {
+                    updatedItem.copy(
+                        title = updatedItem.title?.takeIf { it.isNotBlank() } ?: existing.title,
+                        content_id = updatedItem.content_id?.takeIf { it.isNotBlank() } ?: existing.content_id,
+                        content_type = updatedItem.content_type?.takeIf { it.isNotBlank() } ?: existing.content_type,
+                        hw_type = updatedItem.hw_type?.takeIf { it.isNotBlank() } ?: existing.hw_type,
+                        chapter_id = updatedItem.chapter_id?.takeIf { it.isNotBlank() } ?: existing.chapter_id,
+                        subject_id = updatedItem.subject_id?.takeIf { it.isNotBlank() } ?: existing.subject_id,
+                        subject_name = updatedItem.subject_name?.takeIf { it.isNotBlank() } ?: existing.subject_name,
+                        start_time = updatedItem.start_time?.takeIf { it.isNotBlank() } ?: existing.start_time,
+                        end_time = updatedItem.end_time?.takeIf { it.isNotBlank() } ?: existing.end_time,
+                        live_class = updatedItem.live_class ?: existing.live_class,
+                        model_test = updatedItem.model_test ?: existing.model_test,
+                        topics = updatedItem.topics?.takeIf { it.isNotEmpty() } ?: existing.topics,
+                        phase_id = updatedItem.phase_id?.takeIf { it.isNotBlank() } ?: existing.phase_id,
+                        program_id = updatedItem.program_id?.takeIf { it.isNotBlank() } ?: existing.program_id,
+                        user_activity_state = if (existing.user_activity_state.equals("COMPLETED", ignoreCase = true)) {
+                            existing.user_activity_state
+                        } else {
+                            updatedItem.user_activity_state?.takeIf { it.isNotBlank() } ?: existing.user_activity_state
+                        }
+                    )
+                } else {
+                    updatedItem
+                }
             }
+        }
+    }
+
+    fun getLessonById(id: String): StudentLessonItem? {
+        val clean = id.trim()
+        if (clean.isBlank()) return null
+        allLessons[clean]?.let { return it }
+        return allLessons.values.firstOrNull {
+            it.id == clean || it.content_id == clean || it.session_id == clean || it.live_class?.id == clean
         }
     }
 
@@ -72,13 +106,52 @@ object LessonCacheManager {
         )
     }
 
+    fun normalizeBengaliText(text: String?): String {
+        if (text.isNullOrBlank()) return ""
+        return text
+            .replace("\u09AF\u09BC", "\u09DF") // য় -> য়
+            .replace("\u09A1\u09BC", "\u09DC") // ড় -> ড়
+            .replace("\u09A2\u09BC", "\u09DD") // ঢ় -> ঢ়
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     fun cleanChapterTitle(title: String?): String {
         if (title.isNullOrBlank()) return ""
-        val withoutPrefixes = title.replace(
+        val normalized = normalizeBengaliText(title)
+        val withoutPrefixes = normalized.replace(
             Regex("^(?:অধ্যায়|অধ্যায়|চ্যাপ্টার|Chapter|Ch|পর্ব|পার্ট|[০-৯0-9]+(?:ম|য়|র্থ|ষ্ঠ|তম)?)\\s*([০-৯0-9]+)?[:\\.\\-\\s]*", RegexOption.IGNORE_CASE),
             ""
         ).trim()
-        return if (withoutPrefixes.length >= 2) withoutPrefixes else title.trim()
+        val withoutSuffixes = withoutPrefixes
+            .replace(Regex("\\s*\\((?:Quiz|Animated)\\s*HW\\)\\s*$", RegexOption.IGNORE_CASE), "")
+            .trim()
+        return if (withoutSuffixes.length >= 2) withoutSuffixes else normalized
+    }
+
+    private fun extractLessonTitleChapterPrefix(title: String?): String {
+        if (title.isNullOrBlank()) return ""
+        val normalized = normalizeBengaliText(title)
+        val withoutHw = normalized
+            .replace(Regex("\\s*\\((?:Quiz|Animated)\\s*HW\\)\\s*$", RegexOption.IGNORE_CASE), "")
+            .trim()
+        val beforeColon = if (withoutHw.contains(":")) {
+            val parts = withoutHw.split(":")
+            val first = parts.firstOrNull()?.trim() ?: ""
+            // Skip prefixes like "MCQ Solving Class:" or "Lecture 1:"
+            if (first.contains("Class", ignoreCase = true) ||
+                first.contains("Lecture", ignoreCase = true) ||
+                first.contains("ক্লাস", ignoreCase = true) ||
+                first.contains("লেকচার", ignoreCase = true)
+            ) {
+                parts.drop(1).joinToString(":").trim()
+            } else {
+                first
+            }
+        } else {
+            withoutHw
+        }
+        return cleanChapterTitle(beforeColon)
     }
 
     fun filterLessons(
@@ -94,15 +167,21 @@ object LessonCacheManager {
         val cleanCandidateIds = candidateChapterIds.map { it.trim() }.filter { it.isNotBlank() }
         val cleanOtherIds = otherChapterIds.map { it.trim() }.filter { it.isNotBlank() && !cleanCandidateIds.contains(it) }
 
-        val rawName = chapterName?.trim() ?: ""
+        val rawName = normalizeBengaliText(chapterName)
         val cleanName = cleanChapterTitle(rawName)
 
         val cleanOtherNames = otherChapterNames
             .map { cleanChapterTitle(it) }
             .filter { it.isNotBlank() && !it.equals(cleanName, ignoreCase = true) }
 
-        val cleanSubject = subjectTitle?.replace("পত্র", "")?.replace("১ম", "")?.replace("২য়", "")?.trim() ?: ""
-        val cleanChapterNo = chapterNo?.trim()?.takeIf { it.isNotBlank() }
+        val cleanSubject = normalizeBengaliText(subjectTitle)
+            .replace("পত্র", "")
+            .replace("১ম", "")
+            .replace("২য়", "")
+            .replace("1st", "", ignoreCase = true)
+            .replace("2nd", "", ignoreCase = true)
+            .replace("Paper", "", ignoreCase = true)
+            .trim()
         val cleanProgramId = programId?.trim()?.takeIf { it.isNotBlank() }
 
         fun isSameId(id1: String, id2: String): Boolean {
@@ -114,18 +193,17 @@ object LessonCacheManager {
 
         val matched = lessons.filter { item ->
             // CRITICAL PROGRAM/COURSE ISOLATION CHECK:
-            // If programId is specified and the item has a program_id set, they MUST match!
             val itemProgId = item.program_id?.trim()?.takeIf { it.isNotBlank() }
             if (cleanProgramId != null && itemProgId != null) {
                 if (!isSameId(itemProgId, cleanProgramId)) {
                     return@filter false
                 }
             }
-            val lTitle = item.title ?: ""
+            val lTitle = normalizeBengaliText(item.title)
             val lLiveClass = item.live_class
-            val lChapterName = (lLiveClass?.chapter_name ?: "").trim()
+            val lChapterName = normalizeBengaliText(lLiveClass?.chapter_name)
             val lCleanChapterName = cleanChapterTitle(lChapterName)
-            val lSubject = (item.subject_name ?: lLiveClass?.subject_name ?: "").trim()
+            val lSubject = normalizeBengaliText(item.subject_name ?: lLiveClass?.subject_name)
 
             // Collect all chapter IDs associated with this lesson
             val lessonChapterIds = listOfNotNull(
@@ -137,14 +215,26 @@ object LessonCacheManager {
             val isDirectIdMatch = lessonChapterIds.any { id ->
                 cleanCandidateIds.any { cid -> isSameId(id, cid) }
             }
-
-            // If we have explicit candidate IDs and the lesson has explicit chapter IDs,
-            // we MUST strictly match by ID. No fallbacks allowed.
-            if (cleanCandidateIds.isNotEmpty() && lessonChapterIds.isNotEmpty()) {
-                return@filter isDirectIdMatch
+            if (isDirectIdMatch) {
+                return@filter true
             }
 
-            // Subject relevance check is always required
+            // 2. Direct negative chapter ID check against other known chapter IDs
+            val belongsToOtherChapter = lessonChapterIds.any { id ->
+                cleanOtherIds.any { otherId -> isSameId(id, otherId) }
+            }
+            if (belongsToOtherChapter) {
+                return@filter false
+            }
+
+            // If both candidate IDs and lesson chapter IDs exist and didn't match,
+            // only allow fallback to exact chapter name if the lesson is an Exam/Quiz whose chapter_id
+            // might use the master chapter ID namespace while only one candidate ID was passed.
+            if (cleanCandidateIds.isNotEmpty() && lessonChapterIds.isNotEmpty() && !item.isExam) {
+                return@filter false
+            }
+
+            // Subject relevance check
             val subjectMatch = cleanSubject.isBlank() || lSubject.isBlank() ||
                 lSubject.contains(cleanSubject, ignoreCase = true) ||
                 cleanSubject.contains(lSubject, ignoreCase = true)
@@ -153,15 +243,7 @@ object LessonCacheManager {
                 return@filter false
             }
 
-            // 2. Direct negative chapter ID check against other known chapter IDs
-            val belongsToOtherChapter = lessonChapterIds.any { id ->
-                cleanOtherIds.any { otherId -> isSameId(id, otherId) }
-            }
-            if (belongsToOtherChapter && !isDirectIdMatch) {
-                return@filter false
-            }
-
-            // 3. Exact or clean chapter name matching (when IDs are empty)
+            // 3. Exact or clean chapter name matching
             var matchesThisChapterName = false
             if (lCleanChapterName.isNotBlank() && cleanName.isNotBlank()) {
                 matchesThisChapterName = lCleanChapterName.equals(cleanName, ignoreCase = true) ||
@@ -173,8 +255,7 @@ object LessonCacheManager {
                     (lChapterName.length >= 4 && rawName.contains(lChapterName, ignoreCase = true))
             }
 
-            // 4. Negative chapter name check:
-            // If the lesson's chapter name matches another chapter, and DOES NOT match our chapter
+            // 4. Negative chapter name check
             val matchesOtherChapterName = cleanOtherNames.any { otherName ->
                 otherName.length >= 4 && (
                     lCleanChapterName.contains(otherName, ignoreCase = true) ||
@@ -189,14 +270,19 @@ object LessonCacheManager {
                 return@filter true
             }
 
-            // Last resort: If the lesson has NO chapter ID and NO chapter name at all,
-            // we can check if the lesson title contains the clean chapter name,
-            // but ONLY if the clean chapter name is long enough (>= 5 chars) to avoid matching common noise like numbers or "Ch".
-            if (lessonChapterIds.isEmpty() && lCleanChapterName.isBlank() && lChapterName.isBlank()) {
-                if (cleanName.length >= 5 && lTitle.contains(cleanName, ignoreCase = true)) {
-                    // Prevent matching if it contains another chapter's name
+            // 5. Title prefix / chapter name matching for LiveExam and Quiz HW items
+            if (cleanName.isNotBlank() && lCleanChapterName.isBlank() && lChapterName.isBlank()) {
+                val titlePrefix = extractLessonTitleChapterPrefix(lTitle)
+                if (titlePrefix.isNotBlank() && titlePrefix.equals(cleanName, ignoreCase = true)) {
+                    return@filter true
+                }
+                if (cleanName.length >= 4 && (
+                        titlePrefix.contains(cleanName, ignoreCase = true) ||
+                        lTitle.contains(cleanName, ignoreCase = true)
+                    )
+                ) {
                     val matchesOtherTitle = cleanOtherNames.any { otherName ->
-                        otherName.length >= 5 && lTitle.contains(otherName, ignoreCase = true)
+                        otherName.length >= 4 && lTitle.contains(otherName, ignoreCase = true)
                     }
                     if (!matchesOtherTitle) {
                         return@filter true

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.api.*
 import com.example.auth.SessionManager
+import com.example.quiz.PracticeQuizRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,13 @@ data class ChapterExamUiState(
     val stage: ExamStage = ExamStage.INTRO,
     val sessionId: String = "",
     val lessonId: String = "",
+    val chapterId: String = "",
+    val chapterName: String = "",
+    val subjectCode: String = "",
+    val subjectTitle: String = "",
+    val examTitle: String = "",
+    val isPracticeMcqBacking: Boolean = false,
+    val activeMcqSessionId: String = "",
     val examInfo: LiveExamSessionDetails? = null,
     val questions: List<LiveExamQuestionItem> = emptyList(),
     val currentQuestionIndex: Int = 0,
@@ -50,150 +58,353 @@ class ChapterExamViewModel(
     private val _uiState = MutableStateFlow(ChapterExamUiState())
     val uiState: StateFlow<ChapterExamUiState> = _uiState.asStateFlow()
 
+    private val practiceQuizRepository = PracticeQuizRepository(apiService, sessionManager)
+
     private var questionStartTimeMs: Long = 0L
     private var timerJob: Job? = null
 
-    fun loadExamInfo(sessionId: String, lessonId: String) {
-        _uiState.update { it.copy(sessionId = sessionId, lessonId = lessonId, isLoading = true, errorMessage = null) }
+    private fun mapPracticeQuestionToLiveQuestion(q: PracticeQuizQuestionItem): LiveExamQuestionItem {
+        return LiveExamQuestionItem(
+            id = q.id,
+            title = q.title,
+            solution = q.description,
+            markdown_version = q.markdown_version ?: "2",
+            mcq_options = q.mcq_options,
+            correct_option = q.correct_option
+        )
+    }
+
+    private fun findCachedLesson(sessionId: String, lessonId: String): StudentLessonItem? {
+        return LessonCacheManager.getLessonById(lessonId)
+            ?: LessonCacheManager.getLessonById(sessionId)
+    }
+
+    private fun findSiblingLiveExamCandidateIds(
+        sessionId: String,
+        lessonId: String,
+        chapterId: String,
+        chapterName: String,
+        subjectTitle: String,
+        examTitle: String
+    ): List<String> {
+        val cachedLesson = findCachedLesson(sessionId, lessonId)
+        val candidateChapterIds = listOfNotNull(
+            chapterId.takeIf { it.isNotBlank() },
+            cachedLesson?.chapter_id?.takeIf { it.isNotBlank() },
+            cachedLesson?.live_class?.chapter_id?.takeIf { it.isNotBlank() }
+        ).distinct()
+
+        val effChapterName = chapterName.ifBlank {
+            cachedLesson?.live_class?.chapter_name?.takeIf { it.isNotBlank() }
+                ?: LessonCacheManager.cleanChapterTitle(examTitle.ifBlank { cachedLesson?.title ?: "" })
+        }
+        val effSubjectTitle = subjectTitle.ifBlank {
+            cachedLesson?.subject_name ?: cachedLesson?.live_class?.subject_name ?: ""
+        }
+
+        val chapterLessons = LessonCacheManager.findLessonsForChapter(
+            candidateChapterIds = candidateChapterIds,
+            chapterName = effChapterName,
+            subjectTitle = effSubjectTitle,
+            programId = cachedLesson?.program_id
+        )
+
+        val liveExamIds = mutableListOf<String>()
+        chapterLessons.filter { it.isLiveExam || it.content_type.equals("LiveExam", ignoreCase = true) || it.isExam }
+            .sortedByDescending { it.isLiveExam || it.content_type.equals("LiveExam", ignoreCase = true) }
+            .forEach { item ->
+                item.session_id?.takeIf { it.isNotBlank() }?.let { liveExamIds.add(it) }
+                item.content_id?.takeIf { it.isNotBlank() }?.let { liveExamIds.add(it) }
+                item.id.takeIf { it.isNotBlank() }?.let { liveExamIds.add(it) }
+            }
+        return liveExamIds.distinct()
+    }
+
+    private suspend fun queryLiveExamInfoById(candidateId: String): LiveExamSessionDetails? {
+        if (candidateId.isBlank()) return null
+        return try {
+            val query = GraphQlQuery(
+                operationName = "GetLiveExamInfo",
+                query = """
+                    query GetLiveExamInfo(${'$'}session_id: String!) {
+                      liveExamSession(id: ${'$'}session_id) {
+                        start_time
+                        end_time
+                        title
+                        markdown_version
+                        chapters { id name no }
+                        subject { display }
+                        total_number_of_question
+                      }
+                    }
+                """.trimIndent(),
+                variables = mapOf("session_id" to candidateId)
+            )
+            val response = apiService.getLiveExamInfo(query)
+            response.data?.liveExamSession
+        } catch (e: Exception) {
+            Log.w("ChapterExamVM", "GetLiveExamInfo failed for candidateId=$candidateId: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun queryLiveQuestionsById(candidateId: String): List<LiveExamQuestionItem> {
+        if (candidateId.isBlank()) return emptyList()
+        return try {
+            val query = GraphQlQuery(
+                operationName = "GetLiveQuestions",
+                query = """
+                    query GetLiveQuestions(${'$'}live_exam_session_id: String) {
+                      academicProgramLiveExamQuestions(live_exam_session_id: ${'$'}live_exam_session_id) {
+                        data {
+                          id
+                          title
+                          solution
+                          markdown_version
+                          mcq_options { description no }
+                        }
+                      }
+                    }
+                """.trimIndent(),
+                variables = mapOf("live_exam_session_id" to candidateId)
+            )
+            val response = apiService.getLiveQuestions(query)
+            response.data?.academicProgramLiveExamQuestions?.data ?: emptyList()
+        } catch (e: Exception) {
+            Log.w("ChapterExamVM", "GetLiveQuestions failed for candidateId=$candidateId: ${e.message}")
+            emptyList()
+        }
+    }
+
+    fun loadExamInfo(
+        sessionId: String,
+        lessonId: String,
+        chapterId: String = "",
+        chapterName: String = "",
+        subjectCode: String = "",
+        subjectTitle: String = "",
+        examTitle: String = ""
+    ) {
+        val cachedLesson = findCachedLesson(sessionId, lessonId)
+        val effChapterId = chapterId.ifBlank {
+            cachedLesson?.chapter_id ?: cachedLesson?.live_class?.chapter_id ?: ""
+        }
+        val effChapterName = chapterName.ifBlank {
+            cachedLesson?.live_class?.chapter_name
+                ?: LessonCacheManager.cleanChapterTitle(examTitle.ifBlank { cachedLesson?.title ?: "" })
+        }
+        val effSubjectCode = subjectCode.ifBlank {
+            cachedLesson?.subject_id ?: cachedLesson?.live_class?.subject_id ?: ""
+        }
+        val effSubjectTitle = subjectTitle.ifBlank {
+            cachedLesson?.subject_name ?: cachedLesson?.live_class?.subject_name ?: ""
+        }
+        val effExamTitle = examTitle.ifBlank {
+            cachedLesson?.title ?: effChapterName.ifBlank { "অধ্যায় পরীক্ষা" }
+        }
+
+        _uiState.update {
+            it.copy(
+                sessionId = sessionId,
+                lessonId = lessonId,
+                chapterId = effChapterId,
+                chapterName = effChapterName,
+                subjectCode = effSubjectCode,
+                subjectTitle = effSubjectTitle,
+                examTitle = effExamTitle,
+                isPracticeMcqBacking = false,
+                activeMcqSessionId = "",
+                questions = emptyList(),
+                userAnswers = emptyMap(),
+                timeSpentPerQuestion = emptyMap(),
+                isLoading = true,
+                errorMessage = null
+            )
+        }
+
         viewModelScope.launch {
             var info: LiveExamSessionDetails? = null
+            var resolvedLiveSessionId = sessionId
+            var preloadedQuestions: List<LiveExamQuestionItem> = emptyList()
+            var isMcqBacking = false
+            var mcqSessionId = ""
 
-            // 1. Try with sessionId
-            if (sessionId.isNotBlank()) {
-                try {
-                    val query = GraphQlQuery(
-                        operationName = "GetLiveExamInfo",
-                        query = """
-                            query GetLiveExamInfo(${'$'}session_id: String!) {
-                              liveExamSession(id: ${'$'}session_id) {
-                                start_time
-                                end_time
-                                title
-                                markdown_version
-                                chapters { id name no }
-                                subject { display }
-                                total_number_of_question
-                              }
-                            }
-                        """.trimIndent(),
-                        variables = mapOf("session_id" to sessionId)
-                    )
-                    val response = apiService.getLiveExamInfo(query)
-                    info = response.data?.liveExamSession
-                } catch (e: Exception) {
-                    Log.e("ChapterExamVM", "Error loading exam info with sessionId: $sessionId", e)
+            val directCandidates = listOfNotNull(
+                sessionId.takeIf { it.isNotBlank() },
+                lessonId.takeIf { it.isNotBlank() },
+                cachedLesson?.content_id?.takeIf { it.isNotBlank() },
+                cachedLesson?.session_id?.takeIf { it.isNotBlank() }
+            ).distinct()
+
+            // 1. Try direct candidate IDs with GetLiveExamInfo
+            for (candId in directCandidates) {
+                val found = queryLiveExamInfoById(candId)
+                if (found != null) {
+                    info = found
+                    resolvedLiveSessionId = candId
+                    break
                 }
             }
 
-            // 2. Try with lessonId if info is still null
-            if (info == null && lessonId.isNotBlank() && lessonId != sessionId) {
-                try {
-                    val query = GraphQlQuery(
-                        operationName = "GetLiveExamInfo",
-                        query = """
-                            query GetLiveExamInfo(${'$'}session_id: String!) {
-                              liveExamSession(id: ${'$'}session_id) {
-                                start_time
-                                end_time
-                                title
-                                markdown_version
-                                chapters { id name no }
-                                subject { display }
-                                total_number_of_question
-                              }
-                            }
-                        """.trimIndent(),
-                        variables = mapOf("session_id" to lessonId)
-                    )
-                    val response = apiService.getLiveExamInfo(query)
-                    info = response.data?.liveExamSession
-                } catch (e: Exception) {
-                    Log.e("ChapterExamVM", "Error loading exam info with lessonId: $lessonId", e)
+            // 2. If still null, check sibling LiveExam IDs in the same chapter
+            if (info == null) {
+                val siblingIds = findSiblingLiveExamCandidateIds(
+                    sessionId = sessionId,
+                    lessonId = lessonId,
+                    chapterId = effChapterId,
+                    chapterName = effChapterName,
+                    subjectTitle = effSubjectTitle,
+                    examTitle = effExamTitle
+                ).filter { !directCandidates.contains(it) }
+
+                for (sibId in siblingIds) {
+                    val found = queryLiveExamInfoById(sibId)
+                    if (found != null) {
+                        info = found
+                        resolvedLiveSessionId = sibId
+                        break
+                    }
                 }
             }
 
-            if (info != null) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        examInfo = info,
-                        stage = ExamStage.INTRO,
-                        errorMessage = null
-                    )
+            // 3. If still null, check if sessionId/content_id is an existing MCQ session
+            if (info == null) {
+                for (candId in directCandidates) {
+                    val mcqSession = runCatching { practiceQuizRepository.getMcqSession(candId) }.getOrNull()
+                    val qs = mcqSession?.questions
+                    if (mcqSession != null && !qs.isNullOrEmpty()) {
+                        preloadedQuestions = qs.map { mapPracticeQuestionToLiveQuestion(it) }
+                        isMcqBacking = true
+                        mcqSessionId = mcqSession.id.ifBlank { candId }
+                        info = LiveExamSessionDetails(
+                            start_time = cachedLesson?.start_time,
+                            end_time = cachedLesson?.end_time,
+                            title = mcqSession.title?.takeIf { it.isNotBlank() } ?: effExamTitle,
+                            markdown_version = 2,
+                            chapters = listOf(ExamChapterInfo(id = effChapterId, name = effChapterName.ifBlank { "অধ্যায়" }, no = "1")),
+                            subject = ExamSubjectInfo(display = effSubjectTitle.ifBlank { "বিষয়" }),
+                            total_number_of_question = preloadedQuestions.size
+                        )
+                        break
+                    }
                 }
-            } else {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "পরীক্ষার তথ্য লোড করা সম্ভব হয়নি।"
-                    )
-                }
+            }
+
+            // 4. Construct metadata for Quiz HW / Chapter Quiz so Intro & Rules screens always work seamlessly
+            if (info == null) {
+                info = LiveExamSessionDetails(
+                    start_time = cachedLesson?.start_time,
+                    end_time = cachedLesson?.end_time,
+                    title = effExamTitle,
+                    markdown_version = 2,
+                    chapters = listOf(
+                        ExamChapterInfo(
+                            id = effChapterId,
+                            name = effChapterName.ifBlank { effExamTitle },
+                            no = "1"
+                        )
+                    ),
+                    subject = ExamSubjectInfo(display = effSubjectTitle.ifBlank { "বিষয়" }),
+                    total_number_of_question = 25
+                )
+            }
+
+            _uiState.update {
+                it.copy(
+                    sessionId = resolvedLiveSessionId,
+                    isLoading = false,
+                    examInfo = info,
+                    questions = preloadedQuestions,
+                    isPracticeMcqBacking = isMcqBacking,
+                    activeMcqSessionId = mcqSessionId,
+                    stage = ExamStage.INTRO,
+                    errorMessage = null
+                )
             }
         }
     }
 
     fun proceedToRules() {
-        _uiState.update { it.copy(stage = ExamStage.RULES) }
+        _uiState.update { it.copy(stage = ExamStage.RULES, errorMessage = null) }
     }
 
     fun startExamQuestions() {
-        val sId = _uiState.value.sessionId
-        val lId = _uiState.value.lessonId
+        val state = _uiState.value
+        val sId = state.sessionId
+        val lId = state.lessonId
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-        viewModelScope.launch {
-            var fetchedQuestions: List<LiveExamQuestionItem> = emptyList()
 
-            // 1. Try with sId
-            if (sId.isNotBlank()) {
-                try {
-                    val query = GraphQlQuery(
-                        operationName = "GetLiveQuestions",
-                        query = """
-                            query GetLiveQuestions(${'$'}live_exam_session_id: String) {
-                              academicProgramLiveExamQuestions(live_exam_session_id: ${'$'}live_exam_session_id) {
-                                data {
-                                  id
-                                  title
-                                  solution
-                                  markdown_version
-                                  mcq_options { description no }
-                                }
-                              }
-                            }
-                        """.trimIndent(),
-                        variables = mapOf("live_exam_session_id" to sId)
-                    )
-                    val response = apiService.getLiveQuestions(query)
-                    fetchedQuestions = response.data?.academicProgramLiveExamQuestions?.data ?: emptyList()
-                } catch (e: Exception) {
-                    Log.e("ChapterExamVM", "Error loading questions with sId: $sId", e)
+        viewModelScope.launch {
+            var fetchedQuestions: List<LiveExamQuestionItem> = state.questions
+            var resolvedLiveSessionId = sId
+            var isMcqBacking = state.isPracticeMcqBacking
+            var mcqSessionId = state.activeMcqSessionId
+
+            val cachedLesson = findCachedLesson(sId, lId)
+            val directCandidates = listOfNotNull(
+                sId.takeIf { it.isNotBlank() },
+                lId.takeIf { it.isNotBlank() },
+                cachedLesson?.content_id?.takeIf { it.isNotBlank() },
+                cachedLesson?.session_id?.takeIf { it.isNotBlank() }
+            ).distinct()
+
+            // 1. Try direct candidate IDs with GetLiveQuestions
+            if (fetchedQuestions.isEmpty()) {
+                for (candId in directCandidates) {
+                    val qs = queryLiveQuestionsById(candId)
+                    if (qs.isNotEmpty()) {
+                        fetchedQuestions = qs
+                        resolvedLiveSessionId = candId
+                        isMcqBacking = false
+                        break
+                    }
                 }
             }
 
-            // 2. If empty, try with lId
-            if (fetchedQuestions.isEmpty() && lId.isNotBlank() && lId != sId) {
-                try {
-                    val query = GraphQlQuery(
-                        operationName = "GetLiveQuestions",
-                        query = """
-                            query GetLiveQuestions(${'$'}live_exam_session_id: String) {
-                              academicProgramLiveExamQuestions(live_exam_session_id: ${'$'}live_exam_session_id) {
-                                data {
-                                  id
-                                  title
-                                  solution
-                                  markdown_version
-                                  mcq_options { description no }
-                                }
-                              }
-                            }
-                        """.trimIndent(),
-                        variables = mapOf("live_exam_session_id" to lId)
-                    )
-                    val response = apiService.getLiveQuestions(query)
-                    fetchedQuestions = response.data?.academicProgramLiveExamQuestions?.data ?: emptyList()
-                } catch (e: Exception) {
-                    Log.e("ChapterExamVM", "Error loading questions with lId: $lId", e)
+            // 2. Try sibling LiveExam candidate IDs from the same chapter in LessonCacheManager
+            if (fetchedQuestions.isEmpty()) {
+                val siblingIds = findSiblingLiveExamCandidateIds(
+                    sessionId = sId,
+                    lessonId = lId,
+                    chapterId = state.chapterId,
+                    chapterName = state.chapterName,
+                    subjectTitle = state.subjectTitle,
+                    examTitle = state.examTitle
+                ).filter { !directCandidates.contains(it) }
+
+                for (sibId in siblingIds) {
+                    val qs = queryLiveQuestionsById(sibId)
+                    if (qs.isNotEmpty()) {
+                        fetchedQuestions = qs
+                        resolvedLiveSessionId = sibId
+                        isMcqBacking = false
+                        break
+                    }
+                }
+            }
+
+            // 3. Try existing Practice MCQ session by candidate IDs
+            if (fetchedQuestions.isEmpty()) {
+                for (candId in directCandidates) {
+                    val mcqSession = runCatching { practiceQuizRepository.getMcqSession(candId) }.getOrNull()
+                    val qs = mcqSession?.questions
+                    if (mcqSession != null && !qs.isNullOrEmpty()) {
+                        fetchedQuestions = qs.map { mapPracticeQuestionToLiveQuestion(it) }
+                        isMcqBacking = true
+                        mcqSessionId = mcqSession.id.ifBlank { candId }
+                        break
+                    }
+                }
+            }
+
+            // 4. Start a Chapter Practice Quiz / Quiz HW MCQ session for this chapter & subject
+            if (fetchedQuestions.isEmpty()) {
+                val startedSession = startChapterPracticeMcqSession(state, cachedLesson)
+                val qs = startedSession?.questions
+                if (startedSession != null && !qs.isNullOrEmpty()) {
+                    fetchedQuestions = qs.map { mapPracticeQuestionToLiveQuestion(it) }
+                    isMcqBacking = true
+                    mcqSessionId = startedSession.id.ifBlank { sId }
                 }
             }
 
@@ -201,11 +412,17 @@ class ChapterExamViewModel(
                 val totalCount = fetchedQuestions.size
                 val defaultDurationSeconds = (totalCount * 60).toLong().coerceAtLeast(300L)
 
-                _uiState.update {
-                    it.copy(
+                _uiState.update { current ->
+                    current.copy(
+                        sessionId = resolvedLiveSessionId,
+                        isPracticeMcqBacking = isMcqBacking,
+                        activeMcqSessionId = mcqSessionId,
                         isLoading = false,
                         questions = fetchedQuestions,
+                        examInfo = current.examInfo?.copy(total_number_of_question = totalCount),
                         currentQuestionIndex = 0,
+                        userAnswers = emptyMap(),
+                        timeSpentPerQuestion = emptyMap(),
                         remainingSeconds = defaultDurationSeconds,
                         stage = ExamStage.QUESTIONS,
                         errorMessage = null
@@ -217,11 +434,135 @@ class ChapterExamViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "প্রশ্ন লোড করা সম্ভব হয়নি। অনুগ্রহ করে পরবর্তীতে আবার চেষ্টা করুন।"
+                        errorMessage = "প্রশ্ন লোড করা সম্ভব হয়নি। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।"
                     )
                 }
             }
         }
+    }
+
+    private suspend fun startChapterPracticeMcqSession(
+        state: ChapterExamUiState,
+        cachedLesson: StudentLessonItem?
+    ): PracticeQuizSessionItem? {
+        val rawSubCode = state.subjectCode.ifBlank {
+            cachedLesson?.subject_id ?: cachedLesson?.live_class?.subject_id ?: ""
+        }
+        val rawSubTitle = state.subjectTitle.ifBlank {
+            cachedLesson?.subject_name
+                ?: cachedLesson?.live_class?.subject_name
+                ?: state.examInfo?.subject?.display
+                ?: ""
+        }
+        val rawChapId = state.chapterId.ifBlank {
+            cachedLesson?.chapter_id
+                ?: cachedLesson?.live_class?.chapter_id
+                ?: state.examInfo?.chapters?.firstOrNull()?.id
+                ?: ""
+        }
+        val rawChapName = state.chapterName.ifBlank {
+            cachedLesson?.live_class?.chapter_name
+                ?: state.examInfo?.chapters?.firstOrNull()?.name
+                ?: LessonCacheManager.cleanChapterTitle(state.examTitle)
+        }
+
+        val cleanTargetChapName = LessonCacheManager.cleanChapterTitle(rawChapName)
+        val cleanExamTitleName = LessonCacheManager.cleanChapterTitle(state.examTitle)
+
+        // Resolve hierarchy subject & chapter IDs via PracticeQuizRepository
+        val hierarchyPair = try {
+            practiceQuizRepository.getSubjectChaptersWithQuestionCounts(
+                subjectCode = rawSubCode,
+                subjectTitle = rawSubTitle
+            )
+        } catch (e: Exception) {
+            Log.w("ChapterExamVM", "Hierarchy lookup failed: ${e.message}")
+            null
+        }
+
+        val matchedSubject = hierarchyPair?.first
+        val hierarchyChapters = hierarchyPair?.second.orEmpty()
+
+        val matchedHierarchyChapters = hierarchyChapters.filter { ch ->
+            val chClean = LessonCacheManager.cleanChapterTitle(ch.name)
+            (rawChapId.isNotBlank() && ch.id.equals(rawChapId, ignoreCase = true)) ||
+                (cleanTargetChapName.isNotBlank() && (
+                    chClean.equals(cleanTargetChapName, ignoreCase = true) ||
+                        (cleanTargetChapName.length >= 3 && chClean.contains(cleanTargetChapName, ignoreCase = true)) ||
+                        (chClean.length >= 3 && cleanTargetChapName.contains(chClean, ignoreCase = true))
+                    )) ||
+                (cleanExamTitleName.isNotBlank() && (
+                    chClean.equals(cleanExamTitleName, ignoreCase = true) ||
+                        (cleanExamTitleName.length >= 3 && chClean.contains(cleanExamTitleName, ignoreCase = true))
+                    ))
+        }
+
+        val hierarchyChapterIds = matchedHierarchyChapters
+            .mapNotNull { it.id.takeIf { id -> id.isNotBlank() } }
+            .distinct()
+
+        val allCandidateChapterIds = (hierarchyChapterIds + listOfNotNull(
+            rawChapId.takeIf { it.isNotBlank() },
+            cachedLesson?.chapter_id?.takeIf { it.isNotBlank() },
+            cachedLesson?.live_class?.chapter_id?.takeIf { it.isNotBlank() }
+        )).distinct()
+
+        val resolvedSubjectIds = listOfNotNull(
+            matchedSubject?.code?.takeIf { it.isNotBlank() },
+            rawSubCode.takeIf { it.isNotBlank() }
+        ).distinct()
+
+        val desiredCount = (state.examInfo?.total_number_of_question ?: 25).coerceIn(5, 50)
+
+        // Attempt 1: Hierarchy matched chapter IDs + subject IDs
+        if (hierarchyChapterIds.isNotEmpty()) {
+            val s1 = runCatching {
+                practiceQuizRepository.startPracticeQuizSession(
+                    subjectIds = resolvedSubjectIds.ifEmpty { null },
+                    chapterIds = listOf(hierarchyChapterIds.first()),
+                    totalCount = desiredCount
+                )
+            }.getOrNull()
+            if (s1 != null && !s1.questions.isNullOrEmpty()) return s1
+
+            val s1b = runCatching {
+                practiceQuizRepository.startPracticeQuizSession(
+                    subjectIds = null,
+                    chapterIds = hierarchyChapterIds,
+                    totalCount = desiredCount
+                )
+            }.getOrNull()
+            if (s1b != null && !s1b.questions.isNullOrEmpty()) return s1b
+        }
+
+        // Attempt 2: All candidate chapter IDs + subject IDs
+        if (allCandidateChapterIds.isNotEmpty()) {
+            for (cid in allCandidateChapterIds) {
+                val s2 = runCatching {
+                    practiceQuizRepository.startPracticeQuizSession(
+                        subjectIds = resolvedSubjectIds.ifEmpty { null },
+                        chapterIds = listOf(cid),
+                        totalCount = desiredCount
+                    )
+                }.getOrNull()
+                if (s2 != null && !s2.questions.isNullOrEmpty()) return s2
+            }
+        }
+
+        // Attempt 3: All chapters of the subject if single chapter had no questions in MCQ bank
+        val allSubjectChapterIds = hierarchyChapters.mapNotNull { it.id.takeIf { id -> id.isNotBlank() } }
+        if (allSubjectChapterIds.isNotEmpty()) {
+            val s3 = runCatching {
+                practiceQuizRepository.startPracticeQuizSession(
+                    subjectIds = resolvedSubjectIds.ifEmpty { null },
+                    chapterIds = allSubjectChapterIds,
+                    totalCount = desiredCount
+                )
+            }.getOrNull()
+            if (s3 != null && !s3.questions.isNullOrEmpty()) return s3
+        }
+
+        return null
     }
 
     private fun startTimer() {
@@ -299,32 +640,80 @@ class ChapterExamViewModel(
         _uiState.update { it.copy(stage = ExamStage.SUBMITTING, isLoading = true, errorMessage = null) }
 
         viewModelScope.launch {
-            try {
-                val mutation = GraphQlQuery(
-                    operationName = "SubmitLiveExam",
-                    query = """
-                        mutation SubmitLiveExam(${'$'}exam_session_id: String!, ${'$'}lesson_id: String, ${'$'}question_type: LiveExamSessionTypeEnum!, ${'$'}answers: [AcpLiveExamQuestionAnswerInputObject]!) {
-                          acpLiveExamResult(answers: ${'$'}answers, exam_session_id: ${'$'}exam_session_id, lesson_id: ${'$'}lesson_id, question_type: ${'$'}question_type) {
-                            code
-                            message
-                          }
+            if (state.isPracticeMcqBacking && state.activeMcqSessionId.isNotBlank()) {
+                try {
+                    val mcqAnswers = state.questions.mapNotNull { q ->
+                        val qId = q.id ?: return@mapNotNull null
+                        val ans = state.userAnswers[qId]
+                        if (ans.isNullOrBlank()) null
+                        else mapOf<String, Any?>(
+                            "id" to qId,
+                            "given_ans" to ans,
+                            "is_submitted" to true
+                        )
+                    }
+                    runCatching {
+                        practiceQuizRepository.submitPracticeQuizSession(
+                            sessionId = state.activeMcqSessionId,
+                            isFinal = true,
+                            isTimeout = state.remainingSeconds <= 0L,
+                            questionAnswers = mcqAnswers
+                        )
+                    }
+                    val feedback = runCatching {
+                        practiceQuizRepository.getMcqSessionFeedback(state.activeMcqSessionId)
+                    }.getOrNull()
+                    val feedbackQuestions = feedback?.questions.orEmpty().associateBy { it.id }
+                    if (feedbackQuestions.isNotEmpty()) {
+                        val enrichedQuestions = _uiState.value.questions.map { q ->
+                            val fbQ = feedbackQuestions[q.id]
+                            if (fbQ != null) {
+                                q.copy(
+                                    solution = fbQ.description?.takeIf { it.isNotBlank() } ?: q.solution,
+                                    correct_option = fbQ.correct_option?.takeIf { it.isNotBlank() } ?: q.correct_option,
+                                    mcq_options = fbQ.mcq_options?.takeIf { it.isNotEmpty() } ?: q.mcq_options
+                                )
+                            } else q
                         }
-                    """.trimIndent(),
-                    variables = mapOf(
-                        "exam_session_id" to state.sessionId,
-                        "lesson_id" to state.lessonId.ifBlank { null },
-                        "question_type" to "MCQ",
-                        "answers" to answersPayload
+                        _uiState.update { it.copy(questions = enrichedQuestions) }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ChapterExamVM", "Error submitting practice MCQ session: ${state.activeMcqSessionId}", e)
+                }
+            } else {
+                try {
+                    val mutation = GraphQlQuery(
+                        operationName = "SubmitLiveExam",
+                        query = """
+                            mutation SubmitLiveExam(${'$'}exam_session_id: String!, ${'$'}lesson_id: String, ${'$'}question_type: LiveExamSessionTypeEnum!, ${'$'}answers: [AcpLiveExamQuestionAnswerInputObject]!) {
+                              acpLiveExamResult(answers: ${'$'}answers, exam_session_id: ${'$'}exam_session_id, lesson_id: ${'$'}lesson_id, question_type: ${'$'}question_type) {
+                                code
+                                message
+                              }
+                            }
+                        """.trimIndent(),
+                        variables = mapOf(
+                            "exam_session_id" to state.sessionId,
+                            "lesson_id" to state.lessonId.ifBlank { null },
+                            "question_type" to "MCQ",
+                            "answers" to answersPayload
+                        )
                     )
-                )
-                apiService.submitLiveExam(mutation)
-            } catch (e: Exception) {
-                Log.e("ChapterExamVM", "Error submitting live exam: ${state.sessionId}", e)
+                    apiService.submitLiveExam(mutation)
+                } catch (e: Exception) {
+                    Log.e("ChapterExamVM", "Error submitting live exam: ${state.sessionId}", e)
+                }
             }
 
             // Mark exam completed
-            if (state.lessonId.isNotBlank()) sessionManager.markLessonCompleted(state.lessonId)
-            if (state.sessionId.isNotBlank()) sessionManager.markLessonCompleted(state.sessionId)
+            if (state.lessonId.isNotBlank()) {
+                sessionManager.markLessonCompleted(state.lessonId)
+                LessonCacheManager.markLessonCompletedInCache(state.lessonId)
+            }
+            if (state.sessionId.isNotBlank()) {
+                sessionManager.markLessonCompleted(state.sessionId)
+                LessonCacheManager.markLessonCompletedInCache(state.sessionId)
+            }
             val examId = state.lessonId.ifBlank { state.sessionId }
             completedItemRepository?.markCompleted(
                 itemId = examId,
@@ -341,8 +730,9 @@ class ChapterExamViewModel(
         viewModelScope.launch {
             var summary: ExamResultSummary? = null
             var pdfUrl: String? = null
+            val isMcqBacking = _uiState.value.isPracticeMcqBacking
 
-            if (sessionId.isNotBlank()) {
+            if (!isMcqBacking && sessionId.isNotBlank()) {
                 try {
                     val queryPerf = GraphQlQuery(
                         operationName = "GetLiveExamPerformanceAnalysis",
@@ -370,7 +760,7 @@ class ChapterExamViewModel(
                 }
             }
 
-            if (summary == null && lessonId.isNotBlank() && lessonId != sessionId) {
+            if (!isMcqBacking && summary == null && lessonId.isNotBlank() && lessonId != sessionId) {
                 try {
                     val queryPerf = GraphQlQuery(
                         operationName = "GetLiveExamPerformanceAnalysis",
@@ -472,13 +862,14 @@ class ChapterExamViewModel(
     }
 
     fun loadSolutions() {
-        val sId = _uiState.value.sessionId
-        val lId = _uiState.value.lessonId
+        val state = _uiState.value
+        val sId = state.sessionId
+        val lId = state.lessonId
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             var items: List<ExamAnswerSolutionItem> = emptyList()
 
-            if (sId.isNotBlank()) {
+            if (!state.isPracticeMcqBacking && sId.isNotBlank()) {
                 try {
                     val query = GraphQlQuery(
                         operationName = "GetLiveExamSolutions",
@@ -501,7 +892,7 @@ class ChapterExamViewModel(
                 }
             }
 
-            if (items.isEmpty() && lId.isNotBlank() && lId != sId) {
+            if (!state.isPracticeMcqBacking && items.isEmpty() && lId.isNotBlank() && lId != sId) {
                 try {
                     val query = GraphQlQuery(
                         operationName = "GetLiveExamSolutions",
@@ -593,11 +984,11 @@ class ChapterExamViewModel(
     }
 
     fun backToIntro() {
-        _uiState.update { it.copy(stage = ExamStage.INTRO) }
+        _uiState.update { it.copy(stage = ExamStage.INTRO, errorMessage = null) }
     }
 
     fun backToPerformance() {
-        _uiState.update { it.copy(stage = ExamStage.PERFORMANCE) }
+        _uiState.update { it.copy(stage = ExamStage.PERFORMANCE, errorMessage = null) }
     }
 
     fun goToSolutionIndex(index: Int) {

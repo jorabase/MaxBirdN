@@ -154,7 +154,23 @@ object Routes {
     const val VIDEO_PLAYER = "video_player?url={url}&title={title}&subject={subject}&color={color}&isLive={isLive}"
     const val ROUTINE_FULL = "routine_full"
     const val COURSE_ENROLLMENT_DETAILS = "course_enrollment_details"
-    const val CHAPTER_EXAM = "chapter_exam/{sessionId}?lessonId={lessonId}&title={title}&chapter={chapter}"
+    const val CHAPTER_EXAM = "chapter_exam/{sessionId}?lessonId={lessonId}&title={title}&chapter={chapter}&chapterId={chapterId}&subjectCode={subjectCode}&subjectTitle={subjectTitle}"
+    fun chapterExamRoute(
+        sessionId: String,
+        lessonId: String = "",
+        title: String = "",
+        chapter: String = "",
+        chapterId: String = "",
+        subjectCode: String = "",
+        subjectTitle: String = ""
+    ): String {
+        val encTitle = safeUrlEncode(title)
+        val encChapter = safeUrlEncode(chapter)
+        val encChapterId = safeUrlEncode(chapterId)
+        val encSubCode = safeUrlEncode(subjectCode)
+        val encSubTitle = safeUrlEncode(subjectTitle)
+        return "chapter_exam/$sessionId?lessonId=$lessonId&title=$encTitle&chapter=$encChapter&chapterId=$encChapterId&subjectCode=$encSubCode&subjectTitle=$encSubTitle"
+    }
     const val PRACTICE_QUIZ_CHAPTERS = "practice_quiz_chapters/{subjectCode}?title={title}&color={color}&chapterId={chapterId}&chapterName={chapterName}"
     const val PRACTICE_QUIZ_COUNT = "practice_quiz_count"
     const val PRACTICE_QUIZ_PLAYER = "practice_quiz_player/{sessionId}"
@@ -453,10 +469,30 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                 ?: lesson.id
             val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
-            val chapter = lesson.subject_name ?: ""
-            val encodedTitle = safeUrlEncode(title)
-            val encodedChapter = safeUrlEncode(chapter)
-            navController.navigate("chapter_exam/$sessionId?lessonId=${lesson.id}&title=$encodedTitle&chapter=$encodedChapter")
+            val chapter = lesson.live_class?.chapter_name?.takeIf { it.isNotBlank() }
+                ?: lesson.chapter_name?.takeIf { it.isNotBlank() }
+                ?: courseViewModel.uiState.value.selectedLesson?.chapter_name?.takeIf { it.isNotBlank() }
+                ?: ""
+            val chapId = lesson.chapter_id?.takeIf { it.isNotBlank() }
+                ?: lesson.live_class?.chapter_id?.takeIf { it.isNotBlank() }
+                ?: ""
+            val subCode = lesson.subject_id?.takeIf { it.isNotBlank() }
+                ?: lesson.live_class?.subject_id?.takeIf { it.isNotBlank() }
+                ?: courseViewModel.uiState.value.selectedSubjectCode
+            val subTitle = lesson.subject_name?.takeIf { it.isNotBlank() }
+                ?: lesson.live_class?.subject_name?.takeIf { it.isNotBlank() }
+                ?: courseViewModel.uiState.value.selectedSubjectTitle
+            navController.navigate(
+                Routes.chapterExamRoute(
+                    sessionId = sessionId,
+                    lessonId = lesson.id,
+                    title = title,
+                    chapter = chapter,
+                    chapterId = chapId,
+                    subjectCode = subCode,
+                    subjectTitle = subTitle
+                )
+            )
         } else if (lesson.isLiveNow ||
             lesson.live_class?.is_on_going == true ||
             lesson.user_activity_state.equals("LIVE", ignoreCase = true)
@@ -1204,9 +1240,19 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     navController.navigate("practice_quiz_chapters/$sCode?title=$encodedTitle&color=$encodedColor&chapterId=$encodedChapterId&chapterName=$encodedChapterName")
                 },
                 onNavigateToExam = { sessionId, lessonId, title, chapter ->
-                    val encodedTitle = safeUrlEncode(title)
-                    val encodedChapter = safeUrlEncode(chapter)
-                    navController.navigate("chapter_exam/$sessionId?lessonId=$lessonId&title=$encodedTitle&chapter=$encodedChapter")
+                    val effSubCode = subjectCode.ifBlank { courseViewModel.uiState.value.selectedSubjectCode }
+                    val effSubTitle = subjectTitle.ifBlank { courseViewModel.uiState.value.selectedSubjectTitle }
+                    navController.navigate(
+                        Routes.chapterExamRoute(
+                            sessionId = sessionId,
+                            lessonId = lessonId,
+                            title = title,
+                            chapter = chapter,
+                            chapterId = chapterId,
+                            subjectCode = effSubCode,
+                            subjectTitle = effSubTitle
+                        )
+                    )
                 },
                 onNavigateToChapterResources = { cId, cName, sCode, phId ->
                     val encodedName = safeUrlEncode(cName)
@@ -1237,19 +1283,30 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 navArgument("sessionId") { type = NavType.StringType },
                 navArgument("lessonId") { type = NavType.StringType; defaultValue = "" },
                 navArgument("title") { type = NavType.StringType; defaultValue = "" },
-                navArgument("chapter") { type = NavType.StringType; defaultValue = "" }
+                navArgument("chapter") { type = NavType.StringType; defaultValue = "" },
+                navArgument("chapterId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("subjectCode") { type = NavType.StringType; defaultValue = "" },
+                navArgument("subjectTitle") { type = NavType.StringType; defaultValue = "" }
             )
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
             val lessonId = backStackEntry.arguments?.getString("lessonId") ?: ""
             val title = safeUrlDecode(backStackEntry.arguments?.getString("title"))
             val chapter = safeUrlDecode(backStackEntry.arguments?.getString("chapter"))
+            val chapterId = safeUrlDecode(backStackEntry.arguments?.getString("chapterId"))
+            val subjectCode = safeUrlDecode(backStackEntry.arguments?.getString("subjectCode"))
+                .ifBlank { courseViewModel.uiState.value.selectedSubjectCode }
+            val subjectTitle = safeUrlDecode(backStackEntry.arguments?.getString("subjectTitle"))
+                .ifBlank { courseViewModel.uiState.value.selectedSubjectTitle }
 
             ChapterExamScreen(
                 sessionId = sessionId,
                 lessonId = lessonId,
                 examTitle = title,
                 chapterName = chapter,
+                chapterId = chapterId,
+                subjectCode = subjectCode,
+                subjectTitle = subjectTitle,
                 viewModel = chapterExamViewModel,
                 onBack = { navController.safePopBackStack() }
             )

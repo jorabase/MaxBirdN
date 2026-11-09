@@ -532,26 +532,42 @@ class CourseRepository(
         val endDate = dateFormat.format(endCal.time)
 
         val fragment = """
-            id
-            title
-            content_id
-            content_type
             access_level
+            hw_type
             start_time
-            end_time
             subject_id
             subject_name
+            title
+            end_time
+            icon
+            id
+            content_id
+            content_type
+            user_activity_state
             batch_id
             chapter_id
-            icon
-            color_code
-            user_activity_state
             live_class {
-              id
-              playback_url
-              start_time
+              chapter_id
+              chapter_name
               end_time
+              is_on_going
+              start_time
+              subject_name
+              subject_id
+              id
+              type
             }
+            model_test {
+              result_publish_time
+              type
+              exam_category
+            }
+            topics {
+              id
+              name
+            }
+            color_code
+            phase_id
         """.trimIndent()
 
         val minimalFragment = """
@@ -560,6 +576,7 @@ class CourseRepository(
             content_id
             content_type
             access_level
+            hw_type
             start_time
             end_time
             subject_id
@@ -606,7 +623,7 @@ class CourseRepository(
             return emptyList()
         }
 
-        // 1. Primary fast query: Phase-wise (most programs in Shikho)
+        // 1. Primary query: Phase-wise + Phase Date-range merged (ensures all LiveExam and Quiz HW items are included)
         if (!phaseId.isNullOrBlank()) {
             val listPhase = runQuery(
                 opName = "GetUpcomingLessonsPhaseWise",
@@ -621,11 +638,31 @@ class CourseRepository(
                 },
                 variables = mapOf("program_id" to programId, "phase_id" to phaseId)
             )
-            if (listPhase.isNotEmpty()) {
-                lessonsCache[cacheKey] = listPhase
-                lessonsCache[programId] = listPhase
-                LessonCacheManager.saveLessons(listPhase, programId = programId)
-                return listPhase
+            val listPhaseDate = runQuery(
+                opName = "GetStudentLessonsPhaseDate",
+                queryStr = { f ->
+                    """
+                        query GetStudentLessonsPhaseDate(${'$'}program_id: String!, ${'$'}phase_id: String!, ${'$'}start_date: String!, ${'$'}end_date: String!) {
+                          studentSpecificLessons(program_id: ${'$'}program_id, phase_id: ${'$'}phase_id, start_date: ${'$'}start_date, end_date: ${'$'}end_date) {
+                            data { $f }
+                          }
+                        }
+                    """.trimIndent()
+                },
+                variables = mapOf(
+                    "program_id" to programId,
+                    "phase_id" to phaseId,
+                    "start_date" to startDate,
+                    "end_date" to endDate
+                )
+            )
+            val mergedPhase = (listPhaseDate + listPhase)
+                .distinctBy { it.id.ifBlank { "${it.content_id}_${it.start_time}_${it.title}" } }
+            if (mergedPhase.isNotEmpty()) {
+                lessonsCache[cacheKey] = mergedPhase
+                lessonsCache[programId] = mergedPhase
+                LessonCacheManager.saveLessons(mergedPhase, programId = programId)
+                return mergedPhase
             }
         }
 

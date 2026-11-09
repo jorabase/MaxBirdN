@@ -48,14 +48,25 @@ fun ChapterExamScreen(
     lessonId: String,
     examTitle: String,
     chapterName: String,
+    chapterId: String = "",
+    subjectCode: String = "",
+    subjectTitle: String = "",
     viewModel: ChapterExamViewModel,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    LaunchedEffect(sessionId) {
-        viewModel.loadExamInfo(sessionId, lessonId)
+    LaunchedEffect(sessionId, lessonId) {
+        viewModel.loadExamInfo(
+            sessionId = sessionId,
+            lessonId = lessonId,
+            chapterId = chapterId,
+            chapterName = chapterName,
+            subjectCode = subjectCode,
+            subjectTitle = subjectTitle,
+            examTitle = examTitle
+        )
     }
 
     var showExitConfirmDialog by remember { mutableStateOf(false) }
@@ -212,8 +223,10 @@ fun ExamIntroBottomSheet(
 ) {
     val info = uiState.examInfo
     val displayTitle = info?.title ?: defaultTitle
-    val displaySubject = info?.subject?.display ?: "Bangla 1st Paper"
-    val chapterText = info?.chapters?.firstOrNull()?.name ?: defaultChapter
+    val displaySubject = info?.subject?.display?.takeIf { it.isNotBlank() }
+        ?: uiState.subjectTitle.ifBlank { "বিষয়" }
+    val chapterText = info?.chapters?.firstOrNull()?.name?.takeIf { it.isNotBlank() }
+        ?: defaultChapter.ifBlank { displayTitle }
     val totalQ = info?.total_number_of_question ?: 25
 
     val startCal = remember(info?.start_time) { com.example.ui.components.parseIsoToDhakaCalendar(info?.start_time) }
@@ -553,24 +566,69 @@ fun ExamRulesContent(
                         )
                     }
                 }
+
+                if (!uiState.errorMessage.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFFEE2E2),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.ErrorOutline,
+                                contentDescription = null,
+                                tint = Color(0xFFDC2626),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = uiState.errorMessage,
+                                fontSize = 13.sp,
+                                color = Color(0xFFB91C1C),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = onStartExam,
+                enabled = !uiState.isLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0072EC)),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text(
-                    text = "টেস্ট শুরু করো",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "প্রশ্ন লোড হচ্ছে...",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                } else {
+                    Text(
+                        text = "টেস্ট শুরু করো",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
         }
     }
