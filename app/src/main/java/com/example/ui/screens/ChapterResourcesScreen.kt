@@ -98,7 +98,7 @@ fun ChapterResourcesScreen(
     }
 
     // Attachment List Dialog
-    if (uiState.selectedTagAttachments != null) {
+    if (uiState.selectedTagAttachments != null && uiState.activeAttachment == null) {
         AttachmentListDialog(
             attachments = uiState.selectedTagAttachments!!,
             title = uiState.selectedTagTitle ?: "ডকুমেন্ট লিস্ট",
