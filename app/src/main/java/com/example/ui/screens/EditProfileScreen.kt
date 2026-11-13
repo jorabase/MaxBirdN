@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.app.DatePickerDialog
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -95,6 +96,10 @@ fun EditProfileScreen(
         } else {
             onBack()
         }
+    }
+
+    BackHandler(enabled = uiState.hasUnsavedChanges && !uiState.isSaving) {
+        showDiscardDialog = true
     }
 
     Scaffold(

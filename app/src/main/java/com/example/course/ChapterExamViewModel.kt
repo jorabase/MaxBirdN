@@ -67,7 +67,7 @@ class ChapterExamViewModel(
         return LiveExamQuestionItem(
             id = q.id,
             title = q.title,
-            solution = q.description,
+            solution = q.effectiveExplanation,
             markdown_version = q.markdown_version ?: "2",
             mcq_options = q.mcq_options,
             correct_option = q.correct_option
@@ -664,16 +664,28 @@ class ChapterExamViewModel(
                         practiceQuizRepository.getMcqSessionFeedback(state.activeMcqSessionId)
                     }.getOrNull()
                     val feedbackQuestions = feedback?.questions.orEmpty().associateBy { it.id }
-                    if (feedbackQuestions.isNotEmpty()) {
+                    val feedbackAnswers = feedback?.question_answer.orEmpty().associateBy { it.id }
+                    if (feedbackQuestions.isNotEmpty() || feedbackAnswers.isNotEmpty()) {
                         val enrichedQuestions = _uiState.value.questions.map { q ->
                             val fbQ = feedbackQuestions[q.id]
-                            if (fbQ != null) {
-                                q.copy(
-                                    solution = fbQ.description?.takeIf { it.isNotBlank() } ?: q.solution,
-                                    correct_option = fbQ.correct_option?.takeIf { it.isNotBlank() } ?: q.correct_option,
-                                    mcq_options = fbQ.mcq_options?.takeIf { it.isNotEmpty() } ?: q.mcq_options
-                                )
-                            } else q
+                            val fbAns = feedbackAnswers[q.id]
+                            val mergedSol = fbQ?.effectiveExplanation ?: q.solution
+                            val mergedOptions = fbQ?.mcq_options?.takeIf { it.isNotEmpty() } ?: q.mcq_options
+                            val userGiven = state.userAnswers[q.id] ?: fbAns?.given_ans ?: fbQ?.given_ans
+                            val resolvedCorrect = com.example.utils.McqAnswerUtils.resolveCorrectOptionBengali(
+                                directCorrectOption = fbQ?.correct_option ?: q.correct_option,
+                                ansCorrectOption = fbAns?.correct_ans,
+                                solutionText = mergedSol,
+                                optionsDescriptions = mergedOptions?.map { it.description },
+                                userSelectedOptionIndex = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(userGiven),
+                                isUserMarkedCorrectByServer = fbAns?.is_correct
+                            )
+                            q.copy(
+                                title = fbQ?.title?.takeIf { it.isNotBlank() } ?: q.title,
+                                solution = mergedSol,
+                                correct_option = resolvedCorrect.ifBlank { fbQ?.correct_option ?: fbAns?.correct_ans ?: q.correct_option },
+                                mcq_options = mergedOptions
+                            )
                         }
                         _uiState.update { it.copy(questions = enrichedQuestions) }
                     }
@@ -917,18 +929,27 @@ class ChapterExamViewModel(
 
             val finalSolutions = if (items.isNotEmpty()) {
                 val qMap = _uiState.value.questions.associateBy { it.id }
-                items.map { item ->
-                    val origQ = qMap[item.question?.id]
+                items.mapIndexed { idx, item ->
+                    val origQ = qMap[item.question?.id] ?: _uiState.value.questions.getOrNull(idx)
+                    val mergedTitle = item.question?.title?.takeIf { it.isNotBlank() } ?: origQ?.title
                     val mergedOptions = item.question?.mcq_options?.ifEmpty { null } ?: origQ?.mcq_options
                     val solText = item.question?.solution?.ifBlank { null } ?: origQ?.solution ?: ""
                     val directCorrect = item.question?.correct_option ?: origQ?.correct_option
-                    val resolvedCorrect = directCorrect ?: deduceCorrectOption(solText, mergedOptions, directCorrect, item.given_ans)
+                    val givenAns = item.given_ans?.takeIf { it.isNotBlank() }
+                        ?: origQ?.id?.let { _uiState.value.userAnswers[it] }
+                        ?: ""
+                    val resolvedCorrect = directCorrect ?: deduceCorrectOption(solText, mergedOptions, directCorrect, givenAns)
                     item.copy(
+                        given_ans = givenAns,
                         question = item.question?.copy(
+                            title = mergedTitle,
                             mcq_options = mergedOptions,
                             solution = solText,
                             correct_option = resolvedCorrect
-                        ) ?: origQ?.copy(correct_option = resolvedCorrect)
+                        ) ?: origQ?.copy(
+                            title = mergedTitle,
+                            correct_option = resolvedCorrect
+                        )
                     )
                 }
             } else {

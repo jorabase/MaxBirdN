@@ -23,9 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.components.SlideViewerDialog
+import com.example.ui.theme.isAppInDarkTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.random.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +74,8 @@ fun LiveExamResultScreen(
         formatPublishDate(uiState.liveExamPublishTime)
     }
 
+    val isDark = isAppInDarkTheme()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -80,7 +84,7 @@ fun LiveExamResultScreen(
                         text = examTitle,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
@@ -88,22 +92,23 @@ fun LiveExamResultScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFF1E293B)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 10.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Button(
@@ -124,7 +129,7 @@ fun LiveExamResultScreen(
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             // Confetti canvas
@@ -144,8 +149,8 @@ fun LiveExamResultScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -158,14 +163,14 @@ fun LiveExamResultScreen(
                                 text = "অভিনন্দন!",
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E3A8A)
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "তোমার টেস্টটি সফলভাবে সম্পন্ন হয়েছে",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF334155),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
                             )
 
@@ -174,7 +179,9 @@ fun LiveExamResultScreen(
                             // Publish Info Sub-card
                             Card(
                                 shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.28f) else Color(0xFFEFF6FF)
+                                ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(
@@ -192,14 +199,14 @@ fun LiveExamResultScreen(
                                         Text(
                                             text = "তোমার পুরো রেজাল্ট পাবলিশ হবে",
                                             fontSize = 13.sp,
-                                            color = Color(0xFF1E40AF)
+                                            color = if (isDark) Color(0xFFBFDBFE) else Color(0xFF1E40AF)
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = publishTimeDisplay,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1D4ED8)
+                                            color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                                         )
                                     }
                                 }
@@ -212,8 +219,8 @@ fun LiveExamResultScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
@@ -230,13 +237,13 @@ fun LiveExamResultScreen(
                                         Text(
                                             text = "MCQ",
                                             fontSize = 12.sp,
-                                            color = Color(0xFF64748B)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
                                             text = "${formatToBengaliNumber(mcqTotal)}টি প্রশ্ন",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1E293B)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -245,19 +252,19 @@ fun LiveExamResultScreen(
                                     Text(
                                         text = "সময়",
                                         fontSize = 12.sp,
-                                        color = Color(0xFF64748B)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = "৩০ মিনিট",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1E293B)
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))
-                            HorizontalDivider(color = Color(0xFFF1F5F9))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Result Status Header
@@ -270,18 +277,26 @@ fun LiveExamResultScreen(
                                     text = "MCQ এক্সাম রেজাল্ট",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
 
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = if (isPassed) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)
+                                    color = if (isPassed) {
+                                        if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
+                                    } else {
+                                        if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.5f) else Color(0xFFFEE2E2)
+                                    }
                                 ) {
                                     Text(
                                         text = if (isPassed) "পাস" else "ফেল",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isPassed) Color(0xFF15803D) else Color(0xFFB91C1C),
+                                        color = if (isPassed) {
+                                            if (isDark) Color(0xFF6EE7B7) else Color(0xFF15803D)
+                                        } else {
+                                            if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
+                                        },
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                     )
                                 }
@@ -297,19 +312,19 @@ fun LiveExamResultScreen(
                                 ScoreBadgeItem(
                                     icon = "✓",
                                     iconColor = Color(0xFF22C55E),
-                                    bgColor = Color(0xFFDCFCE7),
+                                    bgColor = if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7),
                                     count = mcqCorrect
                                 )
                                 ScoreBadgeItem(
                                     icon = "✕",
                                     iconColor = Color(0xFFEF4444),
-                                    bgColor = Color(0xFFFEE2E2),
+                                    bgColor = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.5f) else Color(0xFFFEE2E2),
                                     count = mcqWrong
                                 )
                                 ScoreBadgeItem(
                                     icon = "⊘",
-                                    iconColor = Color(0xFF64748B),
-                                    bgColor = Color(0xFFF1F5F9),
+                                    iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    bgColor = MaterialTheme.colorScheme.surfaceVariant,
                                     count = mcqUnattempted
                                 )
                             }
@@ -327,8 +342,10 @@ fun LiveExamResultScreen(
                                             uiState.mcqMasterSolutionUrl?.let { activePdfViewerUrl = it }
                                         },
                                         shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF0F9FF)),
-                                        border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = if (isDark) Color(0xFF0C4A6E).copy(alpha = 0.4f) else Color(0xFFF0F9FF)
+                                        ),
+                                        border = BorderStroke(1.dp, if (isDark) Color(0xFF38BDF8).copy(alpha = 0.5f) else Color(0xFFBAE6FD)),
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(44.dp)
@@ -337,7 +354,7 @@ fun LiveExamResultScreen(
                                             text = "মাস্টার সল্যুশন",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0284C7)
+                                            color = if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7)
                                         )
                                     }
                                 }
@@ -369,8 +386,8 @@ fun LiveExamResultScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
@@ -386,13 +403,13 @@ fun LiveExamResultScreen(
                                         Text(
                                             text = "CQ",
                                             fontSize = 12.sp,
-                                            color = Color(0xFF64748B)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
                                             text = "২টি প্রশ্ন",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1E293B)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -401,19 +418,19 @@ fun LiveExamResultScreen(
                                     Text(
                                         text = "সময়",
                                         fontSize = 12.sp,
-                                        color = Color(0xFF64748B)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = "১ ঘণ্টা ৪০ মিনিট",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1E293B)
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))
-                            HorizontalDivider(color = Color(0xFFF1F5F9))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                             Spacer(modifier = Modifier.height(14.dp))
 
                             if (!uiState.cqMasterSolutionUrl.isNullOrBlank()) {
@@ -422,8 +439,10 @@ fun LiveExamResultScreen(
                                         uiState.cqMasterSolutionUrl?.let { activePdfViewerUrl = it }
                                     },
                                     shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xFFF0F9FF)),
-                                    border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (isDark) Color(0xFF0C4A6E).copy(alpha = 0.4f) else Color(0xFFF0F9FF)
+                                    ),
+                                    border = BorderStroke(1.dp, if (isDark) Color(0xFF38BDF8).copy(alpha = 0.5f) else Color(0xFFBAE6FD)),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(44.dp)
@@ -432,7 +451,7 @@ fun LiveExamResultScreen(
                                         text = "মাস্টার সল্যুশন",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0284C7)
+                                        color = if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7)
                                     )
                                 }
                             }
@@ -448,8 +467,8 @@ fun LiveExamResultScreen(
 
                     Card(
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { isSyllabusExpanded = !isSyllabusExpanded }
@@ -464,19 +483,19 @@ fun LiveExamResultScreen(
                                     Text(text = "📘", fontSize = 20.sp)
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
-                                        Text(text = "বিষয়", fontSize = 12.sp, color = Color(0xFF64748B))
-                                        Text(text = "১টি", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                                        Text(text = "বিষয়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(text = "১টি", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                     }
 
                                     Spacer(modifier = Modifier.width(24.dp))
 
                                     Column {
-                                        Text(text = "অধ্যায়", fontSize = 12.sp, color = Color(0xFF64748B))
+                                        Text(text = "অধ্যায়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(
                                             text = "${formatToBengaliNumber(chapterCount)}টি",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1E293B)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -484,28 +503,28 @@ fun LiveExamResultScreen(
                                 Icon(
                                     imageVector = if (isSyllabusExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                     contentDescription = "Expand",
-                                    tint = Color(0xFF64748B)
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
 
                             AnimatedVisibility(visible = isSyllabusExpanded) {
                                 Column(modifier = Modifier.padding(top = 14.dp)) {
-                                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                                     Spacer(modifier = Modifier.height(10.dp))
                                     if (chapters.isNotEmpty()) {
                                         chapters.forEachIndexed { cIdx, ch ->
                                             Text(
                                                 text = "${formatToBengaliNumber(cIdx + 1)}. ${ch.name ?: "অধ্যায়"}",
                                                 fontSize = 13.sp,
-                                                color = Color(0xFF334155),
+                                                color = MaterialTheme.colorScheme.onSurface,
                                                 modifier = Modifier.padding(vertical = 3.dp)
                                             )
                                         }
                                     } else {
                                         Text(
-                                            text = "১. ${info?.title ?: "তথ্য ও যোগাযোগ প্রযুক্তি"}",
+                                            text = "১. ${info?.title ?: "অধ্যায়ভিত্তিক মডেল টেস্ট"}",
                                             fontSize = 13.sp,
-                                            color = Color(0xFF334155)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
@@ -556,7 +575,7 @@ private fun ScoreBadgeItem(
             text = "${formatToBengaliNumber(count)}টি",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -600,20 +619,27 @@ fun ConfettiEffect() {
 }
 
 fun formatPublishDate(rawDateStr: String): String {
+    if (rawDateStr.isBlank()) return "ফলাফল শীঘ্রই প্রকাশিত হবে"
     if (rawDateStr.contains("সেপ্টেম্বর") || rawDateStr.contains("অক্টোবর")) return rawDateStr
     return try {
-        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-        val date = inputFormat.parse(rawDateStr) ?: Date()
-        val cal = java.util.Calendar.getInstance().apply { time = date }
+        val dhakaZone = TimeZone.getTimeZone("Asia/Dhaka")
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val clean = rawDateStr.replace("Z", "").substringBefore(".")
+        val date = inputFormat.parse(clean) ?: return "ফলাফল শীঘ্রই প্রকাশিত হবে"
+        val cal = java.util.Calendar.getInstance(dhakaZone).apply { time = date }
         val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
         val monthNames = arrayOf(
             "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
             "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
         )
-        val month = monthNames.getOrElse(cal.get(java.util.Calendar.MONTH)) { "সেপ্টেম্বর" }
+        val month = monthNames.getOrElse(cal.get(java.util.Calendar.MONTH)) { "" }
         val year = cal.get(java.util.Calendar.YEAR)
-        "${toBengaliDigits(day.toString())} $month, ${toBengaliDigits(year.toString())} | সকাল ১১ টায়"
-    } catch (e: Exception) {
-        "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়"
+        val timeFormat = SimpleDateFormat("hh:mm a", Locale.US).apply { timeZone = dhakaZone }
+        val timeBn = toBengaliDigits(timeFormat.format(date))
+        "${toBengaliDigits(day.toString())} $month, ${toBengaliDigits(year.toString())} | $timeBn"
+    } catch (_: Exception) {
+        "ফলাফল শীঘ্রই প্রকাশিত হবে"
     }
 }

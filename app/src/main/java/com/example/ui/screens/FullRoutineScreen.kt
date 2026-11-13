@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.StudentLessonItem
@@ -587,11 +588,22 @@ fun FullRoutineScreen(
                     set(Calendar.YEAR, year)
                     set(Calendar.MONTH, month)
                     set(Calendar.DAY_OF_MONTH, 1)
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                    while (get(Calendar.DAY_OF_WEEK) != Calendar.SATURDAY) {
+                        add(Calendar.DAY_OF_YEAR, -1)
+                    }
                 }
-                while (newCal.get(Calendar.DAY_OF_WEEK) != Calendar.SATURDAY) {
-                    newCal.add(Calendar.DAY_OF_YEAR, -1)
+                val todayWeekStart = (todayCal.clone() as Calendar).apply {
+                    while (get(Calendar.DAY_OF_WEEK) != Calendar.SATURDAY) {
+                        add(Calendar.DAY_OF_YEAR, -1)
+                    }
                 }
-                val diffWeeks = ((newCal.timeInMillis - todayCal.timeInMillis) / (7L * 24 * 60 * 60 * 1000L)).toInt()
+                val diffWeeks = Math.round(
+                    (newCal.timeInMillis - todayWeekStart.timeInMillis).toDouble() / (7L * 24 * 60 * 60 * 1000L)
+                ).toInt()
                 coroutineScope.launch {
                     pagerState.scrollToPage(initialPage + diffWeeks)
                     selectedDayIndex = 0
@@ -626,7 +638,8 @@ private fun RoutineFilterChip(
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

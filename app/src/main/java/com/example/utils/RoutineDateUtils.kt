@@ -105,8 +105,8 @@ object RoutineDateUtils {
         val startStr = sdf.format(startCal.time).toBengaliDigits()
         if (endCal == null || endCal.timeInMillis <= startCal.timeInMillis) return startStr
 
-        val diffHours = (endCal.timeInMillis - startCal.timeInMillis) / (1000 * 60 * 60)
-        if (diffHours <= 0 || diffHours > 24) return startStr
+        val diffMs = endCal.timeInMillis - startCal.timeInMillis
+        if (diffMs <= 0L || diffMs > 24L * 60 * 60 * 1000L) return startStr
 
         val endStr = sdf.format(endCal.time).toBengaliDigits()
         return "$startStr - $endStr"

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
+import com.example.ui.theme.isAppInDarkTheme
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,6 +39,8 @@ fun LiveCqExamScreen(
     val sec = totalSec % 60
     val timerTextBn = formatBengaliTime(min, sec)
 
+    val isDark = isAppInDarkTheme()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -46,7 +49,7 @@ fun LiveCqExamScreen(
                         text = "CQ",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
@@ -54,13 +57,13 @@ fun LiveCqExamScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFF1E293B)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
                 actions = {
                     Surface(
-                        color = Color(0xFFEFF6FF),
+                        color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
@@ -74,23 +77,24 @@ fun LiveCqExamScreen(
                                 text = timerTextBn,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1D4ED8)
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 10.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Row(
@@ -107,7 +111,7 @@ fun LiveCqExamScreen(
                         Text(
                             text = "তোমার সবগুলো প্রশ্নের উত্তর খাতায় লেখার পর উত্তরপত্র আপলোড করো",
                             fontSize = 13.sp,
-                            color = Color(0xFF475569),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
                         )
                     }
@@ -132,7 +136,7 @@ fun LiveCqExamScreen(
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         LazyColumn(
             contentPadding = PaddingValues(
@@ -148,7 +152,7 @@ fun LiveCqExamScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.5.dp, Color(0xFF6366F1).copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -179,20 +183,20 @@ fun LiveCqExamScreen(
                                     text = "তোমার ইউনিক কোড : ",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = uiState.liveCqUCode.ifBlank { "৪২৮৭" },
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF4F46E5)
+                                    color = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "উত্তর পত্রের প্রতি পৃষ্ঠার সাথে ইউনিক কোডটি খাতায় লিখ",
                                 fontSize = 13.sp,
-                                color = Color(0xFF64748B),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
                             )
                         }
@@ -204,8 +208,8 @@ fun LiveCqExamScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -213,7 +217,7 @@ fun LiveCqExamScreen(
                             text = "টেস্টের নিয়মাবলী",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -261,8 +265,8 @@ fun LiveCqExamScreen(
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Box(
@@ -272,9 +276,9 @@ fun LiveCqExamScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "CQ প্রশ্নপত্র লোড করা হচ্ছে...",
+                                text = "কোনো CQ প্রশ্ন পাওয়া যায়নি",
                                 fontSize = 14.sp,
-                                color = Color(0xFF64748B)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -304,7 +308,7 @@ private fun RuleBulletItem(text: String) {
         Text(
             text = text,
             fontSize = 14.sp,
-            color = Color(0xFF334155),
+            color = MaterialTheme.colorScheme.onSurface,
             lineHeight = 20.sp
         )
     }
@@ -317,8 +321,8 @@ fun LiveCqQuestionCard(
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -335,7 +339,7 @@ fun LiveCqQuestionCard(
                     text = "${formatToBengaliNumber(questionNumber)}.  $stimulusText",
                     fontSize = 15.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
 
@@ -345,14 +349,14 @@ fun LiveCqQuestionCard(
                     text = formatToBengaliNumber(totalMarksInt),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             val subQuestions = question.sub_questions
             if (!subQuestions.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height(14.dp))
-                HorizontalDivider(color = Color(0xFFF1F5F9))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                 Spacer(modifier = Modifier.height(12.dp))
 
                 val defaultKeys = listOf("ক", "খ", "গ", "ঘ")
@@ -372,7 +376,7 @@ fun LiveCqQuestionCard(
                         Text(
                             text = displayQ,
                             fontSize = 14.sp,
-                            color = Color(0xFF334155),
+                            color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 20.sp,
                             modifier = Modifier.weight(1f)
                         )
@@ -381,7 +385,7 @@ fun LiveCqQuestionCard(
                             text = formatToBengaliNumber(marksInt),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF475569)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

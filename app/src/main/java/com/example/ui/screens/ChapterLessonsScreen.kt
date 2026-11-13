@@ -376,22 +376,25 @@ fun ChapterLessonsScreen(
                                     isCompleted = isCompleted,
                                     subjectColor = subjectColor,
                                     onClick = {
-                                        sessionManager.markLessonCompleted(lesson.id)
-                                        if (!lesson.content_id.isNullOrBlank()) sessionManager.markLessonCompleted(lesson.content_id)
-                                        lessonCompletionCounter++
-                                        coroutineScope.launch {
-                                            completedItemRepository?.markCompleted(
-                                                itemId = lesson.id,
-                                                itemType = if (lesson.isExam) "EXAM" else "LESSON",
-                                                title = lesson.title ?: "",
-                                                subjectId = lesson.subject_id ?: "",
-                                                programId = lesson.program_id ?: "",
-                                                chapterId = lesson.chapter_id ?: ""
-                                            )
-                                        }
                                         val isExamLesson = lesson.isExam ||
                                                 lesson.content_type?.contains("EXAM", ignoreCase = true) == true ||
                                                 lesson.class_type?.contains("EXAM", ignoreCase = true) == true
+
+                                        if (!isExamLesson && !lesson.isModelTest) {
+                                            sessionManager.markLessonCompleted(lesson.id)
+                                            if (!lesson.content_id.isNullOrBlank()) sessionManager.markLessonCompleted(lesson.content_id)
+                                            lessonCompletionCounter++
+                                            coroutineScope.launch {
+                                                completedItemRepository?.markCompleted(
+                                                    itemId = lesson.id,
+                                                    itemType = "LESSON",
+                                                    title = lesson.title ?: "",
+                                                    subjectId = lesson.subject_id ?: "",
+                                                    programId = lesson.program_id ?: "",
+                                                    chapterId = lesson.chapter_id ?: ""
+                                                )
+                                            }
+                                        }
 
                                         if (lesson.isModelTest && onOpenLessonDetail != null) {
                                             onOpenLessonDetail(lesson)

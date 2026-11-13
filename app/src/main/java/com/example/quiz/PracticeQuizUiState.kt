@@ -40,6 +40,7 @@ data class PracticeQuizUiState(
     val userAnswers: Map<String, String> = emptyMap(), // questionId -> "A", "B", "C", "D"
     val remainingSeconds: Long = 0L,
     val initialTotalSeconds: Long = 600L,
+    val elapsedTimeSeconds: Long = 0L,
     val isSubmitting: Boolean = false,
     val submitError: String? = null,
     val isQuizFinished: Boolean = false,

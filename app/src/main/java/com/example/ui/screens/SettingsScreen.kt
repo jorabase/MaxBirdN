@@ -494,7 +494,7 @@ fun SettingsScreen(
                     icon = Icons.Default.Wallpaper,
                     iconTint = Color(0xFFEC4899),
                     title = "হেডার ও লাইভ ওয়ালপেপার",
-                    subtitle = "৬টি প্রিমিয়াম সিমলেস অ্যানিমেটেড থিম, গ্যালারি ছবি ও থিম কোড ইমপোর্ট",
+                    subtitle = "${com.example.utils.toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি প্রিমিয়াম সিমলেস অ্যানিমেটেড থিম, গ্যালারি ছবি ও থিম কোড ইমপোর্ট",
                     badgeText = activeWallpaperBadge,
                     isDark = isDark,
                     onClick = onNavigateToHeaderWallpaper,

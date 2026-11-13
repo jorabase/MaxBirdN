@@ -136,6 +136,36 @@ fun PracticeQuizCountSelectionScreen(
                 }
             }
         },
+        bottomBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                ) {
+                    Button(
+                        onClick = { viewModel.openSummarySheet() },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = subjectColor),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .testTag("view_summary_button")
+                    ) {
+                        Text(
+                            text = "কুইজের সামারি দেখুন",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier.testTag("practice_quiz_count_selection_screen")
     ) { paddingValues ->
@@ -143,8 +173,8 @@ fun PracticeQuizCountSelectionScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Title Header
@@ -198,26 +228,6 @@ fun PracticeQuizCountSelectionScreen(
                         modifier = Modifier.padding(14.dp)
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Summary Action Button
-            Button(
-                onClick = { viewModel.openSummarySheet() },
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = subjectColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("view_summary_button")
-            ) {
-                Text(
-                    text = "কুইজের সামারি দেখুন",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
             }
         }
     }

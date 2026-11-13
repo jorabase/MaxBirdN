@@ -33,6 +33,7 @@ import com.example.modeltest.ui.components.ModelTestCountdownTimer
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.modeltest.ui.components.parseIsoDateToMillis
 import com.example.ui.components.SlideViewerDialog
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.toBengaliDigits
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -191,23 +192,24 @@ fun ModelTestDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 1. Live Countdown or Missed/Completed Banner
+                val isDark = isAppInDarkTheme()
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = when {
-                            isLive -> Color(0xFFFEF2F2)
-                            isCompleted -> Color(0xFFF0FDF4)
-                            isMissed -> Color(0xFFF8FAFC)
-                            else -> Color(0xFFEFF6FF)
+                            isLive -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.28f) else Color(0xFFFEF2F2)
+                            isCompleted -> if (isDark) Color(0xFF064E3B).copy(alpha = 0.28f) else Color(0xFFF0FDF4)
+                            isMissed -> MaterialTheme.colorScheme.surface
+                            else -> if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFFEFF6FF)
                         }
                     ),
                     border = BorderStroke(
                         1.2.dp,
                         when {
-                            isLive -> Color(0xFFFCA5A5)
-                            isCompleted -> Color(0xFF86EFAC)
-                            isMissed -> Color(0xFFCBD5E1)
-                            else -> Color(0xFFBFDBFE)
+                            isLive -> if (isDark) Color(0xFFEF4444).copy(alpha = 0.5f) else Color(0xFFFCA5A5)
+                            isCompleted -> if (isDark) Color(0xFF22C55E).copy(alpha = 0.5f) else Color(0xFF86EFAC)
+                            isMissed -> MaterialTheme.colorScheme.outlineVariant
+                            else -> if (isDark) Color(0xFF3B82F6).copy(alpha = 0.5f) else Color(0xFFBFDBFE)
                         }
                     ),
                     modifier = Modifier.fillMaxWidth()
@@ -234,14 +236,14 @@ fun ModelTestDetailScreen(
                                         text = "🔴 লাইভ পরীক্ষা চলছে!",
                                         fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFDC2626)
+                                        color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "নির্ধারিত সময়ে লাইভ টেস্টটি সম্পন্ন করো। সময় শেষ হলে CQ উত্তরপত্র স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।",
                                     fontSize = 13.5.sp,
-                                    color = Color(0xFF7F1D1D),
+                                    color = if (isDark) Color(0xFFFECACA) else Color(0xFF7F1D1D),
                                     textAlign = TextAlign.Center
                                 )
 
@@ -251,7 +253,7 @@ fun ModelTestDetailScreen(
                                         text = "লাইভ পরীক্ষা শেষ হতে বাকি সময়",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF991B1B)
+                                        color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     ModelTestCountdownTimer(
@@ -298,13 +300,13 @@ fun ModelTestDetailScreen(
                                     text = "✅ পরীক্ষা সম্পন্ন হয়েছে",
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF16A34A)
+                                    color = if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "তুমি ইতিমধ্যে এই লাইভ পরীক্ষায় অংশগ্রহণ করেছো। নিচের বাটনগুলো থেকে তোমার ফলাফল ও MCQ উত্তরপত্র দেখে নাও অথবা যেকোনো সময় প্র্যাকটিস টেস্ট দিতে পারো।",
                                     fontSize = 13.5.sp,
-                                    color = Color(0xFF14532D),
+                                    color = if (isDark) Color(0xFFBBF7D0) else Color(0xFF14532D),
                                     textAlign = TextAlign.Center
                                 )
 
@@ -334,9 +336,9 @@ fun ModelTestDetailScreen(
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = Color(0xFF15803D)
+                                        contentColor = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
                                     ),
-                                    border = BorderStroke(1.2.dp, Color(0xFF86EFAC)),
+                                    border = BorderStroke(1.2.dp, if (isDark) Color(0xFF22C55E).copy(alpha = 0.6f) else Color(0xFF86EFAC)),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(46.dp)
@@ -351,13 +353,13 @@ fun ModelTestDetailScreen(
                                     text = "লাইভ পরীক্ষার সময় সমাপ্ত হয়েছে",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF334155)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = "লাইভ টেস্টটি মিস করলেও চিন্তা নেই! নিচে থেকে তুমি আনলিমিটেড প্র্যাকটিস টেস্ট দিয়ে নিজেকে ঝালাই করে নিতে পারো।",
                                     fontSize = 13.5.sp,
-                                    color = Color(0xFF475569),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
                             }
@@ -366,7 +368,7 @@ fun ModelTestDetailScreen(
                                     text = "MCQ এক্সাম শুরু হতে বাকি সময়",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF1E40AF)
+                                    color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 if (startTimeMillis != null) {
@@ -378,23 +380,38 @@ fun ModelTestDetailScreen(
                                     Text(
                                         text = "পরীক্ষার সময়সূচি শীঘ্রই জানানো হবে",
                                         fontSize = 13.sp,
-                                        color = Color(0xFF64748B)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
 
                                 Spacer(modifier = Modifier.height(14.dp))
 
-                                Button(
-                                    onClick = {},
-                                    enabled = false,
+                                Surface(
                                     shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(46.dp)
                                 ) {
-                                    Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("পরীক্ষা শুরুর জন্য অপেক্ষা করো", fontWeight = FontWeight.Bold)
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.AccessTime,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            "পরীক্ষা শুরুর জন্য অপেক্ষা করো",
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -495,7 +512,7 @@ fun ModelTestDetailScreen(
                 
                 val chapterItems = info?.hierarchy?.firstOrNull()?.chapters ?: emptyList()
                 val chapterCount = if (chapterItems.isNotEmpty()) chapterItems.size else 1
-                val subjectCount = if (!info?.subjects.isNullOrEmpty()) info?.subjects!!.size else 1
+                val subjectCount = info?.subjects?.size?.takeIf { it > 0 } ?: 1
 
                 Card(
                     shape = RoundedCornerShape(16.dp),
@@ -513,7 +530,7 @@ fun ModelTestDetailScreen(
                             // Book 3D-styled Icon
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = Color(0xFFEFF6FF),
+                                color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.3f) else Color(0xFFEFF6FF),
                                 modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -571,14 +588,14 @@ fun ModelTestDetailScreen(
                             // Expand Arrow
                             Surface(
                                 shape = CircleShape,
-                                color = Color(0xFFF1F5F9),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = if (isSyllabusExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                         contentDescription = if (isSyllabusExpanded) "Collapse" else "Expand",
-                                        tint = Color(0xFF64748B),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -605,8 +622,8 @@ fun ModelTestDetailScreen(
 
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
-                                    color = Color(0xFFF8FAFC),
-                                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
@@ -614,7 +631,7 @@ fun ModelTestDetailScreen(
                                             text = "📖 $subjectName",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1E293B)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
 
                                         if (chapterItems.isNotEmpty()) {
@@ -623,7 +640,7 @@ fun ModelTestDetailScreen(
                                                 Text(
                                                     text = "• ${chap.name ?: "অধ্যায় ${chap.no}"}",
                                                     fontSize = 12.5.sp,
-                                                    color = Color(0xFF475569),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.padding(vertical = 2.dp)
                                                 )
                                             }
@@ -632,7 +649,7 @@ fun ModelTestDetailScreen(
                                             Text(
                                                 text = "• অধ্যায়ভিত্তিক পূর্ণাঙ্গ মডেল টেস্ট",
                                                 fontSize = 12.5.sp,
-                                                color = Color(0xFF475569)
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
@@ -659,7 +676,7 @@ fun ModelTestDetailScreen(
                                 text = "প্র্যাকটিস টেস্ট দিয়ে নিজেকে যাচাই করে নাও",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E3A8A),
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A),
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -708,8 +725,8 @@ fun ModelTestDetailScreen(
                         // Notice Card (Yellow highlight)
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFFFFBEB),
-                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                            color = if (isDark) Color(0xFF78350F).copy(alpha = 0.28f) else Color(0xFFFFFBEB),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFFF59E0B).copy(alpha = 0.45f) else Color(0xFFFDE68A)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -734,7 +751,7 @@ fun ModelTestDetailScreen(
                                 Text(
                                     text = "প্র্যাকটিস টেস্টের ক্ষেত্রে শুধু MCQ টেস্ট দিতে পারবে এবং ফিডব্যাক পাবে। CQ উত্তরপত্র সাবমিট ও রিভিঊয়ের জন্য তোমাকে নির্ধারিত সময়ে মডেল টেস্ট দিতে হবে।",
                                     fontSize = 12.5.sp,
-                                    color = Color(0xFF92400E),
+                                    color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
                                     lineHeight = 18.sp
                                 )
                             }
@@ -772,7 +789,7 @@ fun ModelTestDetailScreen(
                                         text = "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}",
                                         fontSize = 14.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF1E3A8A)
+                                        color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A)
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
 
@@ -781,10 +798,10 @@ fun ModelTestDetailScreen(
                                         onClick = { onViewFeedback(sid) },
                                         shape = RoundedCornerShape(12.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFFEFF6FF),
-                                            contentColor = Color(0xFF1D4ED8)
+                                            containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+                                            contentColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                                         ),
-                                        border = BorderStroke(1.dp, Color(0xFFDBEAFE)),
+                                        border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6).copy(alpha = 0.5f) else Color(0xFFDBEAFE)),
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .height(44.dp)

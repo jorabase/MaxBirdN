@@ -51,11 +51,25 @@ private fun toBengaliDigits(number: Any): String {
     return builder.toString()
 }
 
-private fun formatSecondsToBengaliTime(seconds: Double?): String {
-    if (seconds == null || seconds <= 0) return "০০:০০ মি."
-    val totalSec = seconds.toLong()
-    val min = totalSec / 60
-    val sec = totalSec % 60
+private fun formatSecondsToBengaliTime(
+    serverSeconds: Double?,
+    localElapsedSeconds: Long = 0L,
+    totalQuestions: Int = 20
+): String {
+    val maxReasonableSec = (totalQuestions.coerceAtLeast(10) * 90).toLong() // max 1.5 min per MCQ
+    val effectiveSec: Long = when {
+        localElapsedSeconds in 1..maxReasonableSec -> localElapsedSeconds
+        serverSeconds == null || serverSeconds <= 0.0 -> localElapsedSeconds.coerceAtLeast(0L)
+        serverSeconds > 10000.0 -> (serverSeconds / 1000.0).toLong().coerceAtLeast(1L) // ms reported as sec
+        serverSeconds > maxReasonableSec -> {
+            val dividedByQuestions = (serverSeconds / totalQuestions.coerceAtLeast(2)).toLong()
+            if (dividedByQuestions in 5..maxReasonableSec) dividedByQuestions else serverSeconds.toLong().coerceAtMost(maxReasonableSec)
+        }
+        else -> serverSeconds.toLong()
+    }
+    if (effectiveSec <= 0L) return "০০:০০ মি."
+    val min = effectiveSec / 60
+    val sec = effectiveSec % 60
     return "${toBengaliDigits(String.format("%02d", min))}:${toBengaliDigits(String.format("%02d", sec))} মি."
 }
 
@@ -391,11 +405,16 @@ fun PracticeQuizResultScreen(
                                 )
 
                                 // Time Spent
+                                val totalQuestionsForTime = if (result.questionsCount > 0) result.questionsCount else uiState.totalQuestionsCount
                                 StatColumnItem(
                                     icon = Icons.Default.AccessTime,
                                     iconTint = Color(0xFF38BDF8),
                                     title = "সময় লেগেছে",
-                                    value = formatSecondsToBengaliTime(result.spentTimeSeconds.toDouble())
+                                    value = formatSecondsToBengaliTime(
+                                        serverSeconds = result.spentTimeSeconds.toDouble(),
+                                        localElapsedSeconds = uiState.elapsedTimeSeconds,
+                                        totalQuestions = totalQuestionsForTime
+                                    )
                                 )
                             }
                         }

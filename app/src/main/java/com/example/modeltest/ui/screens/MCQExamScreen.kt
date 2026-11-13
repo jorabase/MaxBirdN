@@ -34,6 +34,7 @@ import com.example.modeltest.ui.components.ModelTestListSkeleton
 import com.example.modeltest.ui.components.QuestionPaletteBottomSheet
 import com.example.modeltest.ui.components.ScorePopupDialog
 import com.example.ui.components.QuizRichContent
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.toBengaliDigits
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -123,8 +124,8 @@ fun MCQExamScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Progress
-                        val currentNum = uiState.currentQuestionIndex + 1
                         val totalNum = uiState.mcqQuestions.size
+                        val currentNum = if (totalNum > 0) (uiState.currentQuestionIndex + 1).coerceIn(1, totalNum) else 0
                         Text(
                             text = "${toBengaliDigits(currentNum.toString())}/${toBengaliDigits(totalNum.toString())}",
                             fontSize = 15.sp,
@@ -137,11 +138,17 @@ fun MCQExamScreen(
                         val secs = totalSec % 60
                         val formattedTime = "%02d:%02d".format(mins, secs)
                         val isUrgent = totalSec <= 120
+                        val isDark = isAppInDarkTheme()
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isUrgent) Color(0xFFFEF2F2) else Color(0xFFEFF6FF),
-                            border = BorderStroke(1.dp, if (isUrgent) Color(0xFFFCA5A5) else Color(0xFFBFDBFE))
+                            color = when {
+                                isUrgent && isDark -> Color(0xFF7F1D1D).copy(alpha = 0.45f)
+                                isUrgent -> Color(0xFFFEF2F2)
+                                isDark -> Color(0xFF1E3A8A).copy(alpha = 0.35f)
+                                else -> Color(0xFFEFF6FF)
+                            },
+                            border = BorderStroke(1.dp, if (isUrgent) Color(0xFFFCA5A5) else Color(0xFFBFDBFE).copy(alpha = if (isDark) 0.4f else 1f))
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -151,14 +158,14 @@ fun MCQExamScreen(
                                 Icon(
                                     imageVector = Icons.Default.Timer,
                                     contentDescription = null,
-                                    tint = if (isUrgent) Color(0xFFDC2626) else Color(0xFF1D4ED8),
+                                    tint = if (isUrgent) Color(0xFFDC2626) else if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
                                     text = toBengaliDigits(formattedTime),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isUrgent) Color(0xFFDC2626) else Color(0xFF1D4ED8)
+                                    color = if (isUrgent) Color(0xFFDC2626) else if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                                 )
                             }
                         }
@@ -180,57 +187,59 @@ fun MCQExamScreen(
             )
         },
         bottomBar = {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            if (uiState.mcqQuestions.isNotEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    val isFirst = uiState.currentQuestionIndex == 0
-                    val isLast = uiState.currentQuestionIndex >= uiState.mcqQuestions.size - 1
-
-                    OutlinedButton(
-                        onClick = { viewModel.previousQuestion() },
-                        enabled = !isFirst,
-                        shape = RoundedCornerShape(12.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("পূর্ববর্তী")
-                    }
+                        val isFirst = uiState.currentQuestionIndex == 0
+                        val isLast = uiState.currentQuestionIndex >= uiState.mcqQuestions.size - 1
 
-                    if (isLast) {
-                        Button(
-                            onClick = { viewModel.submitFinalMcq(isTimeout = false) },
-                            enabled = !uiState.isSubmittingMcq,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                        ) {
-                            if (uiState.isSubmittingMcq) {
-                                CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("জমা হচ্ছে...")
-                            } else {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("সাবমিট করো", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    } else {
-                        Button(
-                            onClick = { viewModel.nextQuestion() },
+                        OutlinedButton(
+                            onClick = { viewModel.previousQuestion() },
+                            enabled = !isFirst,
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("এগিয়ে যাও")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("পূর্ববর্তী")
+                        }
+
+                        if (isLast) {
+                            Button(
+                                onClick = { viewModel.submitFinalMcq(isTimeout = false) },
+                                enabled = !uiState.isSubmittingMcq,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                            ) {
+                                if (uiState.isSubmittingMcq) {
+                                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("জমা হচ্ছে...")
+                                } else {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("সাবমিট করো", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = { viewModel.nextQuestion() },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("এগিয়ে যাও")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
                 }
@@ -327,6 +336,7 @@ fun MCQExamScreen(
                     // Options List
                     val options = question.options ?: emptyList()
                     val bengaliLetters = listOf("ক", "খ", "গ", "ঘ")
+                    val isDark = isAppInDarkTheme()
 
                     options.forEachIndexed { optIdx, opt ->
                         val optIndex = opt.index ?: optIdx
@@ -336,7 +346,11 @@ fun MCQExamScreen(
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surface
+                                containerColor = if (isSelected) {
+                                    if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF)
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                }
                             ),
                             border = BorderStroke(
                                 width = if (isSelected) 1.5.dp else 1.dp,
@@ -375,7 +389,11 @@ fun MCQExamScreen(
                                 QuizRichContent(
                                     text = opt.text ?: "",
                                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.5.sp),
-                                    textColor = if (isSelected) Color(0xFF1D4ED8) else MaterialTheme.colorScheme.onSurface,
+                                    textColor = if (isSelected) {
+                                        if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     maxImageHeight = 130.dp,
                                     modifier = Modifier.weight(1f)

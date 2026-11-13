@@ -38,6 +38,7 @@ import com.example.course.ChapterExamUiState
 import com.example.course.ChapterExamViewModel
 import com.example.course.ExamStage
 import com.example.ui.components.QuizRichContent
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.toBengaliDigits
 import java.util.Locale
 
@@ -265,6 +266,8 @@ fun ExamIntroBottomSheet(
     val minutesStr = toBengaliDigits(String.format(Locale.US, "%02d", minutes))
     val secondsStr = toBengaliDigits(String.format(Locale.US, "%02d", seconds))
 
+    val isDark = isAppInDarkTheme()
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -278,7 +281,7 @@ fun ExamIntroBottomSheet(
                 .navigationBarsPadding()
                 .clickable(enabled = false) { }
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
         ) {
             Column(
@@ -297,11 +300,15 @@ fun ExamIntroBottomSheet(
                         text = displayTitle,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = Color(0xFF64748B))
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
@@ -311,9 +318,9 @@ fun ExamIntroBottomSheet(
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = when {
-                        isOngoing -> Color(0xFFD1FAE5)
-                        isUpcoming -> Color(0xFFE0F2FE)
-                        else -> Color(0xFFFEE2E2)
+                        isOngoing -> if (isDark) Color(0xFF064E3B) else Color(0xFFD1FAE5)
+                        isUpcoming -> if (isDark) Color(0xFF0C4A6E) else Color(0xFFE0F2FE)
+                        else -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -326,9 +333,9 @@ fun ExamIntroBottomSheet(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = when {
-                            isOngoing -> Color(0xFF059669)
-                            isUpcoming -> Color(0xFF0284C7)
-                            else -> Color(0xFFEF4444)
+                            isOngoing -> if (isDark) Color(0xFF6EE7B7) else Color(0xFF059669)
+                            isUpcoming -> if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7)
+                            else -> if (isDark) Color(0xFFFCA5A5) else Color(0xFFEF4444)
                         },
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(vertical = 8.dp)
@@ -352,7 +359,9 @@ fun ExamIntroBottomSheet(
 
                 // Info Cards
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.45f else 0.6f)
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -361,13 +370,13 @@ fun ExamIntroBottomSheet(
                             text = displaySubject,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0072EC)
+                            color = if (isDark) Color(0xFF60A5FA) else Color(0xFF0072EC)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "অধ্যায়: $chapterText",
                             fontSize = 13.sp,
-                            color = Color(0xFF475569)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         val examDurationMinutes = (uiState.examInfo?.total_number_of_question ?: totalQ).coerceAtLeast(1)
@@ -375,7 +384,7 @@ fun ExamIntroBottomSheet(
                         Text(
                             text = "মোট প্রশ্ন: ${toBengaliDigits(totalQ.toString())} টি | সময়: $examDurationText",
                             fontSize = 13.sp,
-                            color = Color(0xFF64748B)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -410,7 +419,7 @@ fun ExamCountdownBox(value: String, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
             shape = RoundedCornerShape(8.dp),
-            color = Color(0xFFF1F5F9),
+            color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.size(54.dp, 44.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -418,12 +427,12 @@ fun ExamCountdownBox(value: String, label: String) {
                     text = value,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label, fontSize = 11.sp, color = Color(0xFF64748B))
+        Text(text = label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -442,6 +451,8 @@ fun ExamRulesContent(
     val displayTitle = info?.title ?: defaultTitle
     val totalQ = info?.total_number_of_question ?: 25
 
+    val isDark = isAppInDarkTheme()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -450,18 +461,19 @@ fun ExamRulesContent(
                         text = displayTitle,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -479,7 +491,9 @@ fun ExamRulesContent(
                 ) {
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFFEFF6FF)
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
@@ -489,12 +503,12 @@ fun ExamRulesContent(
                             Icon(Icons.Default.HelpOutline, contentDescription = null, tint = Color(0xFF0072EC))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text("প্রশ্ন", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text("প্রশ্ন", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     "${toBengaliDigits(totalQ.toString())} টি",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -502,7 +516,9 @@ fun ExamRulesContent(
 
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDark) Color(0xFF78350F).copy(alpha = 0.28f) else Color(0xFFFEF3C7)
+                        ),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
@@ -514,8 +530,8 @@ fun ExamRulesContent(
                             Column {
                                 val examDurationMinutes = (uiState.examInfo?.total_number_of_question ?: totalQ).coerceAtLeast(1)
                                 val examDurationText = "${toBengaliDigits(examDurationMinutes.coerceAtLeast(1).toString())} মিনিট"
-                                Text("সময়", fontSize = 12.sp, color = Color(0xFF64748B))
-                                Text(examDurationText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                                Text("সময়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(examDurationText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
                     }
@@ -526,7 +542,7 @@ fun ExamRulesContent(
                 // Rules Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -535,13 +551,13 @@ fun ExamRulesContent(
                             text = "টেস্টের নিয়মাবলী",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
                         RuleItem(
-                            iconBg = Color(0xFFFEF3C7),
+                            iconBg = if (isDark) Color(0xFFD97706).copy(alpha = 0.2f) else Color(0xFFFEF3C7),
                             icon = Icons.Default.AccessTime,
                             iconTint = Color(0xFFD97706),
                             text = "প্রতিটি প্রশ্নের জন্য ৪টি করে বিকল্প অপশন থাকবে।"
@@ -550,7 +566,7 @@ fun ExamRulesContent(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         RuleItem(
-                            iconBg = Color(0xDCD1FADF),
+                            iconBg = if (isDark) Color(0xFF059669).copy(alpha = 0.2f) else Color(0xDCD1FADF),
                             icon = Icons.Default.Check,
                             iconTint = Color(0xFF059669),
                             text = "নির্দিষ্ট সময়ের মধ্যে সকল প্রশ্নের উত্তর সাবমিট করতে হবে।"
@@ -559,7 +575,7 @@ fun ExamRulesContent(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         RuleItem(
-                            iconBg = Color(0xFFFFEDD5),
+                            iconBg = if (isDark) Color(0xFFEA580C).copy(alpha = 0.2f) else Color(0xFFFFEDD5),
                             icon = Icons.Default.BarChart,
                             iconTint = Color(0xFFEA580C),
                             text = "টেস্ট শেষে তোমার পারফরম্যান্স এবং সঠিক সমাধান দেখতে পারবে।"
@@ -571,7 +587,7 @@ fun ExamRulesContent(
                     Spacer(modifier = Modifier.height(16.dp))
                     Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFFEE2E2),
+                        color = MaterialTheme.colorScheme.errorContainer,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -581,14 +597,14 @@ fun ExamRulesContent(
                             Icon(
                                 Icons.Default.ErrorOutline,
                                 contentDescription = null,
-                                tint = Color(0xFFDC2626),
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = uiState.errorMessage,
                                 fontSize = 13.sp,
-                                color = Color(0xFFB91C1C),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.weight(1f)
                             )
@@ -650,7 +666,7 @@ fun RuleItem(iconBg: Color, icon: androidx.compose.ui.graphics.vector.ImageVecto
         Text(
             text = text,
             fontSize = 14.sp,
-            color = Color(0xFF334155),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f),
             modifier = Modifier.weight(1f)
         )
     }
@@ -700,10 +716,11 @@ fun ExamQuestionsContent(
                     }
                 },
                 actions = {
+                    val isDark = isAppInDarkTheme()
                     // Timer pill
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFFEF3C7),
+                        color = if (isDark) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFEF3C7),
                         modifier = Modifier.padding(end = 12.dp)
                     ) {
                         Row(
@@ -715,7 +732,7 @@ fun ExamQuestionsContent(
                                 text = formatSeconds,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFD97706)
+                                color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
                             )
                         }
                     }
@@ -792,7 +809,7 @@ fun ExamQuestionsContent(
                         QuizRichContent(
                             text = currentQuestion.title ?: "",
                             textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp),
-                            textColor = Color(0xFF0F172A),
+                            textColor = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.Bold,
                             maxImageHeight = 220.dp
                         )
@@ -834,11 +851,11 @@ fun ExamQuestionsContent(
                             OutlinedButton(
                                 onClick = onPrevious,
                                 shape = RoundedCornerShape(12.dp),
-                                border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFCBD5E1)))
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("পেছনে", color = Color(0xFF475569))
+                                Text("পেছনে", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } else {
                             Spacer(modifier = Modifier.width(1.dp))
@@ -871,6 +888,7 @@ fun McqOptionCard(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val isDark = isAppInDarkTheme()
     val optionLetter = com.example.utils.McqAnswerUtils.toBengaliLetter(option.no).ifBlank {
         com.example.utils.McqAnswerUtils.indexToBengaliLetter(index)
     }
@@ -881,12 +899,16 @@ fun McqOptionCard(
             .clip(RoundedCornerShape(14.dp))
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) Color(0xFF0072EC) else Color(0xFFE2E8F0),
+                color = if (isSelected) Color(0xFF0072EC) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
                 shape = RoundedCornerShape(14.dp)
             )
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0xFFEFF6FF) else Color.White
+            containerColor = if (isSelected) {
+                if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
         )
     ) {
         Row(
@@ -895,7 +917,7 @@ fun McqOptionCard(
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (isSelected) Color(0xFF0072EC) else Color(0xFFF1F5F9),
+                color = if (isSelected) Color(0xFF0072EC) else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.size(30.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -903,7 +925,7 @@ fun McqOptionCard(
                         text = optionLetter,
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else Color(0xFF475569)
+                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -911,9 +933,13 @@ fun McqOptionCard(
             Spacer(modifier = Modifier.width(12.dp))
 
             QuizRichContent(
-                text = option.description ?: "",
+                text = com.example.utils.McqAnswerUtils.cleanOptionText(option.description),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
-                textColor = if (isSelected) Color(0xFF0072EC) else Color(0xFF1E293B),
+                textColor = if (isSelected) {
+                    if (isDark) Color(0xFF93C5FD) else Color(0xFF0072EC)
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 maxImageHeight = 140.dp,
                 modifier = Modifier.weight(1f)
@@ -942,6 +968,8 @@ fun ExamPerformanceContent(
 
     val percentage = if (totalCount > 0) (correctCount.toFloat() / totalCount * 100).toInt() else 0
 
+    val isDark = isAppInDarkTheme()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -950,17 +978,18 @@ fun ExamPerformanceContent(
                         text = "চ্যাপ্টার এক্সামের পারফরমেন্স",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color(0xFF0F172A))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -971,7 +1000,7 @@ fun ExamPerformanceContent(
             // PDF Banner if URL exists
             if (!uiState.pdfAttachmentUrl.isNullOrBlank()) {
                 Surface(
-                    color = Color(0xFFFEF3C7),
+                    color = if (isDark) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFEF3C7),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onOpenPdf(uiState.pdfAttachmentUrl) }
@@ -981,7 +1010,12 @@ fun ExamPerformanceContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Text("📄 পিডিএফ দেখতে এখানে ট্যাপ করো ⬇", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                        Text(
+                            "📄 পিডিএফ দেখতে এখানে ট্যাপ করো ⬇",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
+                        )
                     }
                 }
             }
@@ -991,13 +1025,13 @@ fun ExamPerformanceContent(
                     text = defaultTitle,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "নিচের ড্যাশবোর্ড দেখে তোমার পারফরম্যান্সের ধারণা নাও, আর তোমার দেওয়া উত্তরগুলো মিলিয়ে নাও",
                     fontSize = 13.sp,
-                    color = Color(0xFF64748B)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1005,7 +1039,7 @@ fun ExamPerformanceContent(
                 // Dashboard Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -1015,6 +1049,7 @@ fun ExamPerformanceContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Donut Chart
+                            val trackColor = MaterialTheme.colorScheme.surfaceVariant
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.size(90.dp)
@@ -1022,7 +1057,7 @@ fun ExamPerformanceContent(
                                 Canvas(modifier = Modifier.fillMaxSize()) {
                                     val strokeWidth = 10.dp.toPx()
                                     drawArc(
-                                        color = Color(0xFFE2E8F0),
+                                        color = trackColor,
                                         startAngle = 0f,
                                         sweepAngle = 360f,
                                         useCenter = false,
@@ -1041,12 +1076,12 @@ fun ExamPerformanceContent(
                                         text = "${toBengaliDigits(percentage.toString())}%",
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0F172A)
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
                                         text = "${toBengaliDigits(correctCount.toString())}/${toBengaliDigits(totalCount.toString())}",
                                         fontSize = 11.sp,
-                                        color = Color(0xFF64748B)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -1066,13 +1101,14 @@ fun ExamPerformanceContent(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // Solution Button
+                        val accentBlue = if (isDark) Color(0xFF60A5FA) else Color(0xFF0072EC)
                         OutlinedButton(
                             onClick = onShowSolutions,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
-                            border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFF0072EC)))
+                            border = BorderStroke(1.dp, accentBlue)
                         ) {
-                            Text("সমাধান", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0072EC))
+                            Text("সমাধান", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = accentBlue)
                         }
                     }
                 }
@@ -1097,35 +1133,35 @@ fun ExamPerformanceContent(
                 ) {
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("মোট সময় ব্যয়", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text("মোট সময় ব্যয়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(totalTimeSpentText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                            Text(totalTimeSpentText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
 
                     Card(
                         modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AccessTime, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.AccessTime, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("প্রতি প্রশ্নে সময়", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text("প্রতি প্রশ্নে সময়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Text(avgTimeText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                            Text(avgTimeText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -1156,7 +1192,7 @@ fun PerformanceLine(dotColor: Color, label: String) {
                 .background(dotColor, CircleShape)
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label, fontSize = 13.sp, color = Color(0xFF334155))
+        Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -1290,39 +1326,95 @@ fun ExamSolutionsContent(
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    // Question Number
-                    Text(
-                        text = "${toBengaliDigits((index + 1).toString())}/${toBengaliDigits(solutions.size.toString())}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEC4899)
-                    )
+                    // Question Number & Status Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0072EC).copy(alpha = 0.12f)
+                        ) {
+                            Text(
+                                text = "প্রশ্ন ${toBengaliDigits((index + 1).toString())}/${toBengaliDigits(solutions.size.toString())}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0072EC),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                        val isDark = isAppInDarkTheme()
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = when {
+                                isUserUnanswered -> MaterialTheme.colorScheme.surfaceVariant
+                                isUserCorrect -> if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
+                                else -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2)
+                            }
+                        ) {
+                            Text(
+                                text = when {
+                                    isUserUnanswered -> "উত্তরহীন"
+                                    isUserCorrect -> "সঠিক উত্তর"
+                                    else -> "ভুল উত্তর"
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when {
+                                    isUserUnanswered -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    isUserCorrect -> if (isDark) Color(0xFF6EE7B7) else Color(0xFF059669)
+                                    else -> if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
+                                },
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
 
-                    // Title & Diagrams
-                    QuizRichContent(
-                        text = q?.title ?: "",
-                        textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 24.sp),
-                        textColor = Color(0xFF0F172A),
-                        fontWeight = FontWeight.Bold,
-                        maxImageHeight = 220.dp
-                    )
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    val isDark = isAppInDarkTheme()
+
+                    // Prominent Question Box
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "প্রশ্ন:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF60A5FA) else Color(0xFF0072EC)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            QuizRichContent(
+                                text = q?.title?.takeIf { it.isNotBlank() } ?: "প্রশ্ন নং ${toBengaliDigits((index + 1).toString())}",
+                                textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, lineHeight = 24.sp),
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                maxImageHeight = 220.dp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // User Answer Status Box
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = when {
-                            isUserUnanswered -> Color(0xFFF1F5F9)
-                            isUserCorrect -> Color(0xDCD1FADF)
-                            else -> Color(0xFFFEE2E2)
+                            isUserUnanswered -> MaterialTheme.colorScheme.surfaceVariant
+                            isUserCorrect -> if (isDark) Color(0xFF064E3B).copy(alpha = 0.65f) else Color(0xDCD1FADF)
+                            else -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2)
                         },
-                        border = androidx.compose.foundation.BorderStroke(
+                        border = BorderStroke(
                             1.dp,
                             when {
-                                isUserUnanswered -> Color(0xFFCBD5E1)
+                                isUserUnanswered -> MaterialTheme.colorScheme.outlineVariant
                                 isUserCorrect -> Color(0xFF10B981)
                                 else -> Color(0xFFEF4444)
                             }
@@ -1335,16 +1427,16 @@ fun ExamSolutionsContent(
                         ) {
                             Text(
                                 text = when {
-                                    isUserUnanswered -> "তুমি কোনো উত্তর দেওনি!"
+                                    isUserUnanswered -> "তুমি কোনো উত্তর দেওনি • সঠিক উত্তর: ($resolvedCorrectBengali)"
                                     isUserCorrect -> "তোমার উত্তর সঠিক: ($givenAnsBengali)"
-                                    else -> "তোমার উত্তর: ($givenAnsBengali)"
+                                    else -> "তোমার উত্তর: ($givenAnsBengali) • সঠিক উত্তর: ($resolvedCorrectBengali)"
                                 },
-                                fontSize = 14.sp,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = when {
-                                    isUserUnanswered -> Color(0xFF64748B)
-                                    isUserCorrect -> Color(0xFF047857)
-                                    else -> Color(0xFFB91C1C)
+                                    isUserUnanswered -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    isUserCorrect -> if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
+                                    else -> if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
                                 },
                                 modifier = Modifier.weight(1f)
                             )
@@ -1356,23 +1448,13 @@ fun ExamSolutionsContent(
                                 },
                                 contentDescription = null,
                                 tint = when {
-                                    isUserUnanswered -> Color(0xFF64748B)
+                                    isUserUnanswered -> MaterialTheme.colorScheme.onSurfaceVariant
                                     isUserCorrect -> Color(0xFF10B981)
                                     else -> Color(0xFFEF4444)
                                 }
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Correct Option Banner
-                    Text(
-                        text = "সঠিক উত্তর: ($resolvedCorrectBengali)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF059669)
-                    )
 
                     // Options List in Solution
                     if (options.isNotEmpty()) {
@@ -1382,16 +1464,29 @@ fun ExamSolutionsContent(
                                 com.example.utils.McqAnswerUtils.indexToBengaliLetter(optIdx)
                             }
                             val isThisCorrect = com.example.utils.McqAnswerUtils.isAnswerCorrect(opt.no ?: optLetter, resolvedCorrectBengali) ||
-                                    com.example.utils.McqAnswerUtils.normalizeToOptionIndex(opt.no) == com.example.utils.McqAnswerUtils.normalizeToOptionIndex(resolvedCorrectBengali)
+                                    com.example.utils.McqAnswerUtils.normalizeToOptionIndex(opt.no) == com.example.utils.McqAnswerUtils.normalizeToOptionIndex(resolvedCorrectBengali) ||
+                                    com.example.utils.McqAnswerUtils.normalizeToOptionIndex(resolvedCorrectBengali) == optIdx
                             val isThisUserAns = !isUserUnanswered && (
                                 com.example.utils.McqAnswerUtils.isAnswerCorrect(givenAns, opt.no ?: optLetter) ||
                                 com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenAns) == optIdx
                             )
 
                             val (bgColor, borderColor, badgeColor) = when {
-                                isThisCorrect -> Triple(Color(0xFFDCFCE7), Color(0xFF10B981), Color(0xFF059669))
-                                isThisUserAns && !isThisCorrect -> Triple(Color(0xFFFEE2E2), Color(0xFFEF4444), Color(0xFFDC2626))
-                                else -> Triple(Color(0xFFF8FAFC), Color(0xFFE2E8F0), Color(0xFF64748B))
+                                isThisCorrect -> Triple(
+                                    if (isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFFDCFCE7),
+                                    Color(0xFF10B981),
+                                    if (isDark) Color(0xFF34D399) else Color(0xFF059669)
+                                )
+                                isThisUserAns && !isThisCorrect -> Triple(
+                                    if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2),
+                                    Color(0xFFEF4444),
+                                    if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
+                                )
+                                else -> Triple(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.4f else 0.55f),
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
 
                             Surface(
@@ -1421,12 +1516,12 @@ fun ExamSolutionsContent(
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Spacer(modifier = Modifier.width(12.dp))
 
                                     QuizRichContent(
-                                        text = opt.description ?: "",
+                                        text = com.example.utils.McqAnswerUtils.cleanOptionText(opt.description),
                                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                                        textColor = Color(0xFF1E293B),
+                                        textColor = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = if (isThisCorrect || isThisUserAns) FontWeight.SemiBold else FontWeight.Normal,
                                         maxImageHeight = 120.dp,
                                         modifier = Modifier.weight(1f)
@@ -1447,17 +1542,43 @@ fun ExamSolutionsContent(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     // Explanation Box
+                    val correctIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(resolvedCorrectBengali) ?: 0
+                    val correctOptText = com.example.utils.McqAnswerUtils.cleanOptionText(options.getOrNull(correctIdx)?.description)
+                    val fallbackSolText = if (correctOptText.isNotBlank()) {
+                        "সঠিক উত্তর: ($resolvedCorrectBengali) — $correctOptText"
+                    } else {
+                        "সঠিক উত্তর: ($resolvedCorrectBengali)"
+                    }
+
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lightbulb,
+                                    contentDescription = null,
+                                    tint = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "ব্যাখ্যা ও সমাধান",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
                             QuizRichContent(
-                                text = q?.solution ?: "সঠিক উত্তর: ($resolvedCorrectBengali)",
+                                text = q?.solution?.takeIf { it.isNotBlank() } ?: fallbackSolText,
                                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 22.sp),
-                                textColor = Color(0xFF334155),
+                                textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                                 maxImageHeight = 220.dp
                             )
                         }
@@ -1468,7 +1589,7 @@ fun ExamSolutionsContent(
                     Text(
                         text = "প্রশ্নটি রিপোর্ট করো",
                         fontSize = 13.sp,
-                        color = Color(0xFF0072EC),
+                        color = if (isDark) Color(0xFF60A5FA) else Color(0xFF0072EC),
                         modifier = Modifier
                             .align(Alignment.End)
                             .clip(RoundedCornerShape(6.dp))

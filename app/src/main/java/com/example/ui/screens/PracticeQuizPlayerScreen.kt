@@ -432,7 +432,7 @@ fun PracticeQuizPlayerScreen(
                                     IconButton(
                                         onClick = { viewModel.toggleBookmark(currentQuestion.id) },
                                         modifier = Modifier
-                                            .size(32.dp)
+                                            .size(48.dp)
                                             .testTag("quiz_bookmark_button")
                                     ) {
                                         Icon(
@@ -702,7 +702,7 @@ private fun McqOptionCard(
 
             // Option description / image content
             QuizRichContent(
-                text = option.description ?: "",
+                text = com.example.utils.McqAnswerUtils.cleanOptionText(option.description),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
                 textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,

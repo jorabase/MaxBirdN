@@ -21,9 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import coil.compose.AsyncImage
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.toBengaliDigits
 
 /**
@@ -41,6 +43,10 @@ fun CQExamScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showThankYouDialog by remember { mutableStateOf(false) }
+
+    BackHandler {
+        showThankYouDialog = true
+    }
 
     LaunchedEffect(sessionId) {
         viewModel.loadCqQuestions(sessionId)
@@ -155,22 +161,28 @@ fun CQExamScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Info Banner Box
+                val isDark = isAppInDarkTheme()
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFFEFF6FF),
-                    border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                    color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.28f) else Color(0xFFEFF6FF),
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6).copy(alpha = 0.45f) else Color(0xFFBFDBFE)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(20.dp))
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8),
+                            modifier = Modifier.size(20.dp)
+                        )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "এই টেস্টটি তুমি শুধু প্র্যাকটিসের জন্য দিতে পারবে এবং উত্তরপত্র সাবমিট করতে পারবে না। CQ উত্তরপত্র সাবমিট ও মূল্যায়নের জন্য নির্ধারিত সময়ে মূল মডেল টেস্ট দিতে হবে।",
                             fontSize = 12.5.sp,
-                            color = Color(0xFF1E40AF),
+                            color = if (isDark) Color(0xFFBFDBFE) else Color(0xFF1E40AF),
                             lineHeight = 17.sp
                         )
                     }

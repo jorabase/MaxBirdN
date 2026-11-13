@@ -917,12 +917,18 @@ class ModelTestRepository(
         return result.mapCatching { resp ->
             val session = resp.data?.getMcqSessionFeedback?.session
             if (session != null && !session.questions.isNullOrEmpty()) {
+                val baseQuestionsById = if (session.questions.any { it.title.isNullOrBlank() }) {
+                    getMcqInfoOfModelTest(sessionId).getOrNull()?.questions?.associateBy { it.id }.orEmpty()
+                } else emptyMap()
+
                 val answersMap = session.question_answer?.associateBy { it.id } ?: emptyMap()
                 val items = session.questions.mapIndexed { qIdx, rawQ ->
                     val ans = answersMap[rawQ.id]
-                    val givenLetter = ans?.given_ans
+                    val givenLetter = ans?.given_ans?.takeIf { it.isNotBlank() } ?: rawQ.given_ans
                     val descs = rawQ.mcq_options?.map { it.description }
                     val directCorrect = rawQ.correct_option ?: ans?.correct_ans
+                    val explanationText = rawQ.solution?.takeIf { it.isNotBlank() }
+                        ?: rawQ.description?.takeIf { it.isNotBlank() }
 
                     val userIdx = if (!givenLetter.isNullOrBlank()) {
                         com.example.utils.McqAnswerUtils.normalizeToOptionIndex(givenLetter)
@@ -932,20 +938,23 @@ class ModelTestRepository(
                     val correctIdx = com.example.utils.McqAnswerUtils.resolveCorrectOptionIndex(
                         directCorrectOption = directCorrect,
                         ansCorrectOption = ans?.correct_ans,
-                        solutionText = rawQ.solution,
+                        solutionText = explanationText,
                         optionsDescriptions = descs,
                         userSelectedOptionIndex = userIdx,
                         isUserMarkedCorrectByServer = ans?.is_correct
                     )
 
-                    val isCorrect = (userIdx != null && userIdx == correctIdx) || (ans?.is_correct == true)
+                    val isCorrect = userIdx != null && (
+                        ans?.is_correct == true ||
+                            (ans?.is_correct != false && userIdx == correctIdx)
+                        )
                     val correctLetterBengali = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
 
                     val options = rawQ.mcq_options?.mapIndexed { optIdx, opt ->
                         ModelTestMcqOption(
                             index = optIdx,
                             option_letter = opt.no ?: (('A' + optIdx).toString()),
-                            text = opt.description ?: opt.no ?: "",
+                            text = com.example.utils.McqAnswerUtils.cleanOptionText(opt.description).ifBlank { opt.no ?: "" },
                             image = null
                         )
                     } ?: listOf(
@@ -955,15 +964,26 @@ class ModelTestRepository(
                         ModelTestMcqOption(3, "D", "ঘ")
                     )
 
+                    val resolvedTitle = rawQ.title?.takeIf { it.isNotBlank() }
+                        ?: baseQuestionsById[rawQ.id]?.question?.takeIf { it.isNotBlank() }
+                        ?: "প্রশ্ন ${qIdx + 1}"
+
+                    val correctOptDesc = options.getOrNull(correctIdx)?.text?.takeIf { it.isNotBlank() }
+                    val fallbackSol = if (!correctOptDesc.isNullOrBlank()) {
+                        "সঠিক উত্তর: ($correctLetterBengali) — $correctOptDesc"
+                    } else {
+                        "সঠিক উত্তর: ($correctLetterBengali)"
+                    }
+
                     FeedbackQuestionItem(
                         id = rawQ.id,
-                        question_text = rawQ.title ?: "প্রশ্ন ${qIdx + 1}",
-                        question_image = null,
+                        question_text = resolvedTitle,
+                        question_image = baseQuestionsById[rawQ.id]?.question_image,
                         options = options,
                         user_selected_option = userIdx,
                         correct_option = correctIdx,
                         is_correct = isCorrect,
-                        solution = rawQ.solution ?: "সঠিক উত্তর: ($correctLetterBengali)",
+                        solution = explanationText ?: fallbackSol,
                         solution_image = rawQ.solution_img
                     )
                 }

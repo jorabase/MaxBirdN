@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,10 +18,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.StudentLessonItem
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.ClassTypeUtils
 import com.example.utils.calculateTimeDifference
 import com.example.utils.formatLessonDateDetailed
 import com.example.utils.formatLessonTimeRange
+import com.example.utils.toBengaliDigits
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -48,7 +51,7 @@ fun CountdownBox(value: String, label: String) {
             text = label,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
-            color = Color(0xFF64748B)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -61,6 +64,7 @@ fun UpcomingCountdownScreen(
     subjectColorHex: String?,
     onBack: () -> Unit
 ) {
+    val isDark = isAppInDarkTheme()
     val startTimeStr = lesson.live_class?.start_time ?: lesson.start_time
     val endTimeStr = lesson.live_class?.end_time ?: lesson.end_time
 
@@ -92,28 +96,36 @@ fun UpcomingCountdownScreen(
         formatLessonTimeRange(startTimeStr, endTimeStr)
     }
 
+    val cardBg = MaterialTheme.colorScheme.surface
+    val cardBorder = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.25f)
+
     Scaffold(
         topBar = {
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 2.dp,
-                modifier = Modifier.statusBarsPadding()
+                shadowElevation = 2.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .statusBarsPadding()
                         .height(56.dp)
                         .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = ClassTypeUtils.formatLessonTitle(lesson.title ?: subjectName),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -121,12 +133,13 @@ fun UpcomingCountdownScreen(
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingVals ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingVals)
+                .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -136,8 +149,9 @@ fun UpcomingCountdownScreen(
             // Main Countdown Card
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, cardBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -150,7 +164,7 @@ fun UpcomingCountdownScreen(
                         text = headingText,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF334155)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -160,10 +174,10 @@ fun UpcomingCountdownScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                     ) {
-                        CountdownBox(value = String.format(Locale.getDefault(), "%02d", days), label = "দিন")
-                        CountdownBox(value = String.format(Locale.getDefault(), "%02d", hours), label = "ঘণ্টা")
-                        CountdownBox(value = String.format(Locale.getDefault(), "%02d", minutes), label = "মিনিট")
-                        CountdownBox(value = String.format(Locale.getDefault(), "%02d", seconds), label = "সেকেন্ড")
+                        CountdownBox(value = String.format(Locale.US, "%02d", days).toBengaliDigits(), label = "দিন")
+                        CountdownBox(value = String.format(Locale.US, "%02d", hours).toBengaliDigits(), label = "ঘণ্টা")
+                        CountdownBox(value = String.format(Locale.US, "%02d", minutes).toBengaliDigits(), label = "মিনিট")
+                        CountdownBox(value = String.format(Locale.US, "%02d", seconds).toBengaliDigits(), label = "সেকেন্ড")
                     }
                 }
             }
@@ -173,8 +187,9 @@ fun UpcomingCountdownScreen(
             // Lesson & Subject Info Card
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = cardBg),
+                border = BorderStroke(1.dp, cardBorder),
+                elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -190,7 +205,7 @@ fun UpcomingCountdownScreen(
                             text = subjectName,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF2563EB)
+                            color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
                         )
                         val classTypeBadge = ClassTypeUtils.getClassTypeBadgeStyle(lesson)
                         Surface(
@@ -211,25 +226,25 @@ fun UpcomingCountdownScreen(
                         text = ClassTypeUtils.formatLessonTitle(lesson.title),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
                         text = "তারিখ ও সময়:",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF334155)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = formattedDate,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF0F172A)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     if (formattedTimeRange.isNotBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
@@ -240,13 +255,13 @@ fun UpcomingCountdownScreen(
                             Icon(
                                 imageVector = Icons.Default.Schedule,
                                 contentDescription = null,
-                                tint = Color(0xFF64748B),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 text = formattedTimeRange,
                                 fontSize = 13.sp,
-                                color = Color(0xFF64748B)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

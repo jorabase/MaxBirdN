@@ -124,7 +124,7 @@ fun HeaderWallpaperSettingsScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "৬টি প্রিমিয়াম লাইভ থিম ও কাস্টম কোড",
+                            text = "${com.example.utils.toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি প্রিমিয়াম লাইভ থিম ও কাস্টম কোড",
                             fontSize = 11.5.sp,
                             color = secondaryText,
                             maxLines = 1,
@@ -644,7 +644,7 @@ fun HeaderWallpaperSettingsScreen(
                             modifier = Modifier.size(19.dp)
                         )
                         Text(
-                            text = "প্রিমিয়াম লাইভ অ্যানিমেটেড থিম (${HeaderWallpaperPresets.presets.size}টি)",
+                            text = "প্রিমিয়াম লাইভ অ্যানিমেটেড থিম (${com.example.utils.toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি)",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = primaryText

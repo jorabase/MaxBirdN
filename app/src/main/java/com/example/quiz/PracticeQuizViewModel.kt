@@ -31,6 +31,9 @@ class PracticeQuizViewModel(
 
     private var timerJob: Job? = null
     private var saveAnswerJob: Job? = null
+    private var quizStartTimeMs: Long = 0L
+    private var currentQuestionStartMs: Long = 0L
+    private val questionTimestamps = mutableMapOf<String, Pair<String, String>>() // questionId -> (startIso, submitIso)
 
     init {
         savedItemRepository?.let { repo ->
@@ -235,6 +238,10 @@ class PracticeQuizViewModel(
                 )
 
                 val durationSeconds = (session.questions?.size ?: state.selectedQuestionCount) * 60L
+                val nowMs = System.currentTimeMillis()
+                quizStartTimeMs = nowMs
+                currentQuestionStartMs = nowMs
+                questionTimestamps.clear()
 
                 _uiState.update {
                     it.copy(
@@ -245,6 +252,7 @@ class PracticeQuizViewModel(
                         userAnswers = emptyMap(),
                         remainingSeconds = durationSeconds,
                         initialTotalSeconds = durationSeconds,
+                        elapsedTimeSeconds = 0L,
                         isQuizFinished = false
                     )
                 }
@@ -289,22 +297,24 @@ class PracticeQuizViewModel(
     }
 
     /**
-     * Helper to build properly structured question_answer payload with session qa IDs
+     * Helper to build properly structured question_answer payload with accurate per-question timestamps
      */
     private fun buildQuestionAnswersPayload(
         session: PracticeQuizSessionItem?,
         userAnswers: Map<String, String>
     ): List<Map<String, Any?>> {
-        val nowIso = getIsoUtcString(System.currentTimeMillis())
-        val startIso = getIsoUtcString(System.currentTimeMillis() - 15000L)
+        val nowMs = System.currentTimeMillis()
+        val fallbackNowIso = getIsoUtcString(nowMs)
+        val fallbackStartIso = getIsoUtcString((nowMs - 4000L).coerceAtLeast(quizStartTimeMs))
 
         return userAnswers.mapNotNull { (qId, ans) ->
             if (ans.isNotBlank()) {
+                val pair = questionTimestamps[qId]
                 mapOf(
                     "id" to qId,
                     "given_ans" to ans,
-                    "start_time" to startIso,
-                    "submit_time" to nowIso
+                    "start_time" to (pair?.first ?: fallbackStartIso),
+                    "submit_time" to (pair?.second ?: fallbackNowIso)
                 )
             } else null
         }
@@ -314,6 +324,12 @@ class PracticeQuizViewModel(
      * In Quiz: Select Option & debounce save
      */
     fun selectOption(questionId: String, optionNo: String) {
+        val nowMs = System.currentTimeMillis()
+        val existingStartIso = questionTimestamps[questionId]?.first
+            ?: getIsoUtcString(currentQuestionStartMs.takeIf { it > 0L } ?: (nowMs - 3000L))
+        val submitIso = getIsoUtcString(nowMs)
+        questionTimestamps[questionId] = existingStartIso to submitIso
+
         val updatedAnswers = _uiState.value.userAnswers + (questionId to optionNo)
         _uiState.update {
             it.copy(userAnswers = updatedAnswers)
@@ -344,12 +360,14 @@ class PracticeQuizViewModel(
     fun goToNextQuestion() {
         val total = _uiState.value.session?.questions?.size ?: 0
         if (_uiState.value.currentQuestionIndex < total - 1) {
+            currentQuestionStartMs = System.currentTimeMillis()
             _uiState.update { it.copy(currentQuestionIndex = it.currentQuestionIndex + 1) }
         }
     }
 
     fun goToPreviousQuestion() {
         if (_uiState.value.currentQuestionIndex > 0) {
+            currentQuestionStartMs = System.currentTimeMillis()
             _uiState.update { it.copy(currentQuestionIndex = it.currentQuestionIndex - 1) }
         }
     }
@@ -357,6 +375,7 @@ class PracticeQuizViewModel(
     fun goToQuestionIndex(index: Int) {
         val total = _uiState.value.session?.questions?.size ?: 0
         if (index in 0 until total) {
+            currentQuestionStartMs = System.currentTimeMillis()
             _uiState.update { it.copy(currentQuestionIndex = index) }
         }
     }
@@ -375,7 +394,23 @@ class PracticeQuizViewModel(
             ?: _uiState.value.sessionId.ifBlank { null }
             ?: return
 
-        _uiState.update { it.copy(isSubmitting = true, submitError = null, sessionId = sessionId) }
+        val stateBeforeSubmit = _uiState.value
+        val elapsedByTimer = (stateBeforeSubmit.initialTotalSeconds - stateBeforeSubmit.remainingSeconds).coerceAtLeast(1L)
+        val elapsedByClock = if (quizStartTimeMs > 0L) {
+            ((System.currentTimeMillis() - quizStartTimeMs) / 1000L).coerceAtLeast(1L)
+        } else {
+            elapsedByTimer
+        }
+        val computedElapsedSeconds = minOf(elapsedByTimer, elapsedByClock).coerceAtLeast(1L)
+
+        _uiState.update {
+            it.copy(
+                isSubmitting = true,
+                submitError = null,
+                sessionId = sessionId,
+                elapsedTimeSeconds = computedElapsedSeconds
+            )
+        }
         viewModelScope.launch {
             try {
                 val session = _uiState.value.session
@@ -476,6 +511,8 @@ class PracticeQuizViewModel(
 
     /**
      * Step 5: Load Quiz Feedback / Solutions
+     * Merges server feedback session with in-memory session questions & userAnswers so question titles,
+     * options, explanations, and user selections are always 100% complete.
      */
     fun loadQuizFeedback(sessionId: String) {
         _uiState.update {
@@ -488,20 +525,78 @@ class PracticeQuizViewModel(
 
         viewModelScope.launch {
             try {
-                val session = repository.getMcqSessionFeedback(sessionId)
+                val rawSession = repository.getMcqSessionFeedback(sessionId)
+                val inMemorySession = _uiState.value.session
+                val inMemoryAnswers = _uiState.value.userAnswers
+                val inMemoryQuestionsById = inMemorySession?.questions?.associateBy { it.id }.orEmpty()
+
+                val mergedQuestions = if (!rawSession.questions.isNullOrEmpty()) {
+                    rawSession.questions.mapIndexed { idx, fbQ ->
+                        val origQ = inMemoryQuestionsById[fbQ.id] ?: inMemorySession?.questions?.getOrNull(idx)
+                        val localGivenAns = inMemoryAnswers[fbQ.id]
+                        fbQ.copy(
+                            title = fbQ.title?.takeIf { it.isNotBlank() } ?: origQ?.title,
+                            description = fbQ.description?.takeIf { it.isNotBlank() } ?: origQ?.description,
+                            solution = fbQ.solution?.takeIf { it.isNotBlank() }
+                                ?: fbQ.description?.takeIf { it.isNotBlank() }
+                                ?: origQ?.solution?.takeIf { it.isNotBlank() }
+                                ?: origQ?.description?.takeIf { it.isNotBlank() },
+                            question_no = fbQ.question_no?.takeIf { it.isNotBlank() } ?: origQ?.question_no ?: "${idx + 1}",
+                            source = fbQ.source?.takeIf { it.isNotBlank() } ?: origQ?.source,
+                            chapter = fbQ.chapter ?: origQ?.chapter,
+                            given_ans = fbQ.given_ans?.takeIf { it.isNotBlank() } ?: localGivenAns ?: origQ?.given_ans,
+                            mcq_options = fbQ.mcq_options?.takeIf { it.isNotEmpty() } ?: origQ?.mcq_options
+                        )
+                    }
+                } else {
+                    inMemorySession?.questions.orEmpty()
+                }
+
+                // Also ensure question_answer has entries for any local userAnswers
+                val existingQaById = rawSession.question_answer?.associateBy { it.id }.orEmpty().toMutableMap()
+                inMemoryAnswers.forEach { (qId, givenAns) ->
+                    val existing = existingQaById[qId]
+                    if (existing == null) {
+                        existingQaById[qId] = PracticeQuizQuestionAnswerItem(
+                            id = qId,
+                            given_ans = givenAns,
+                            is_submitted = true
+                        )
+                    } else if (existing.given_ans.isNullOrBlank() && givenAns.isNotBlank()) {
+                        existingQaById[qId] = existing.copy(given_ans = givenAns)
+                    }
+                }
+
+                val enrichedSession = rawSession.copy(
+                    questions = mergedQuestions,
+                    question_answer = existingQaById.values.toList()
+                )
+
                 _uiState.update {
                     it.copy(
                         isFeedbackLoading = false,
-                        feedbackSession = session
+                        feedbackSession = enrichedSession
                     )
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading quiz feedback", e)
-                _uiState.update {
-                    it.copy(
-                        isFeedbackLoading = false,
-                        feedbackError = "ফিডব্যাক লোড করা যায়নি। পুনরায় চেষ্টা করুন।"
-                    )
+                // Fallback to in-memory session if available so user never hits a dead end
+                val fallbackSession = _uiState.value.session
+                if (fallbackSession != null && !fallbackSession.questions.isNullOrEmpty()) {
+                    _uiState.update {
+                        it.copy(
+                            isFeedbackLoading = false,
+                            feedbackSession = fallbackSession,
+                            feedbackError = null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isFeedbackLoading = false,
+                            feedbackError = "ফিডব্যাক লোড করা যায়নি। পুনরায় চেষ্টা করুন।"
+                        )
+                    }
                 }
             }
         }
@@ -544,26 +639,36 @@ class PracticeQuizViewModel(
             try {
                 val session = _uiState.value.session
                 val feedbackSession = _uiState.value.feedbackSession
-                val question = session?.questions?.find { it.id == questionId }
-                    ?: feedbackSession?.questions?.find { it.id == questionId }
+                val fbQ = feedbackSession?.questions?.find { it.id == questionId }
+                val origQ = session?.questions?.find { it.id == questionId }
+                val question = fbQ ?: origQ
+                val qaItem = feedbackSession?.question_answer?.find { it.id == questionId }
 
-                val correctOpt = question?.correct_option
-                    ?: feedbackSession?.question_answer?.find { it.id == questionId }?.correct_ans
                 val userGivenAns = _uiState.value.userAnswers[questionId]
-                    ?: question?.given_ans
-                    ?: feedbackSession?.question_answer?.find { it.id == questionId }?.given_ans
+                    ?: qaItem?.given_ans
+                    ?: fbQ?.given_ans
+                    ?: origQ?.given_ans
 
-                val explanation = question?.description?.takeIf { it.isNotBlank() }
-                val subjectTitle = _uiState.value.subjectTitle.ifBlank { null }
-                val chapterName = question?.chapter?.name ?: _uiState.value.targetChapterName
-
-                val optionsList = question?.mcq_options?.map { opt ->
+                val explanation = fbQ?.effectiveExplanation ?: origQ?.effectiveExplanation
+                val optionsList = (fbQ?.mcq_options?.takeIf { it.isNotEmpty() } ?: origQ?.mcq_options)?.map { opt ->
                     (opt.no ?: "") to (opt.description ?: "")
                 } ?: emptyList()
 
+                val resolvedCorrectOpt = com.example.utils.McqAnswerUtils.resolveCorrectOptionBengali(
+                    directCorrectOption = fbQ?.correct_option ?: origQ?.correct_option,
+                    ansCorrectOption = qaItem?.correct_ans,
+                    solutionText = explanation,
+                    optionsDescriptions = optionsList.map { it.second },
+                    userSelectedOptionIndex = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(userGivenAns),
+                    isUserMarkedCorrectByServer = qaItem?.is_correct
+                )
+
+                val subjectTitle = _uiState.value.subjectTitle.ifBlank { null }
+                val chapterName = fbQ?.chapter?.name ?: origQ?.chapter?.name ?: _uiState.value.targetChapterName
+
                 val contentJson = SavedItemEntity.buildQuestionContentJson(
                     options = optionsList,
-                    correctOption = correctOpt,
+                    correctOption = resolvedCorrectOpt,
                     userGivenAns = userGivenAns,
                     explanation = explanation,
                     chapterName = chapterName
@@ -572,7 +677,9 @@ class PracticeQuizViewModel(
                 val entity = SavedItemEntity(
                     id = questionId,
                     type = SavedItemEntity.TYPE_QUESTION,
-                    title = question?.title?.takeIf { it.isNotBlank() } ?: "প্রশ্ন",
+                    title = fbQ?.title?.takeIf { it.isNotBlank() }
+                        ?: origQ?.title?.takeIf { it.isNotBlank() }
+                        ?: "প্রশ্ন",
                     subtitle = listOfNotNull(subjectTitle, chapterName).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { null },
                     contentJson = contentJson,
                     timestamp = System.currentTimeMillis()
@@ -599,6 +706,9 @@ class PracticeQuizViewModel(
     fun resetQuizFlow() {
         timerJob?.cancel()
         saveAnswerJob?.cancel()
+        quizStartTimeMs = 0L
+        currentQuestionStartMs = 0L
+        questionTimestamps.clear()
         _uiState.update {
             it.copy(
                 session = null,
@@ -606,6 +716,7 @@ class PracticeQuizViewModel(
                 currentQuestionIndex = 0,
                 userAnswers = emptyMap(),
                 remainingSeconds = 0L,
+                elapsedTimeSeconds = 0L,
                 isSubmitting = false,
                 submitError = null,
                 isQuizFinished = false,

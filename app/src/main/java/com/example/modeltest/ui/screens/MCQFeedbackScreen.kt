@@ -233,8 +233,12 @@ fun MCQFeedbackScreen(
                         items = filteredQuestions,
                         key = { idx, item -> item.id.ifBlank { "$idx" } }
                     ) { index, item ->
+                        val originalNo = remember(allQuestions, item, index) {
+                            val idxInAll = allQuestions.indexOf(item)
+                            if (idxInAll >= 0) idxInAll + 1 else index + 1
+                        }
                         FeedbackQuestionCard(
-                            index = index + 1,
+                            index = originalNo,
                             item = item
                         )
                     }
@@ -301,28 +305,46 @@ private fun FeedbackQuestionCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = item.question_text ?: "",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 21.sp
-            )
-
-            if (!item.question_image.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                AsyncImage(
-                    model = item.question_image,
-                    contentDescription = "Question Image",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 200.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "প্রশ্ন:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    QuizRichContent(
+                        text = item.question_text?.takeIf { it.isNotBlank() } ?: "প্রশ্ন নং ${toBengaliDigits(index.toString())}",
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 22.sp
+                        ),
+                        textColor = MaterialTheme.colorScheme.onSurface,
+                        maxImageHeight = 200.dp
+                    )
+                    if (!item.question_image.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        AsyncImage(
+                            model = item.question_image,
+                            contentDescription = "Question Image",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Options
             val options = item.options ?: emptyList()
@@ -370,14 +392,14 @@ private fun FeedbackQuestionCard(
                 ) {
                     Text(
                         text = when {
-                            item.user_selected_option == null -> "তুমি কোনো উত্তর দেওনি"
+                            item.user_selected_option == null -> "তুমি কোনো উত্তর দেওনি • সঠিক উত্তর: (${correctLetter ?: "-"})"
                             isUserCorrect -> "তোমার উত্তর সঠিক: ($userSelectedLetter)"
-                            else -> "তোমার উত্তর: ($userSelectedLetter) • সঠিক উত্তর: ($correctLetter)"
+                            else -> "তোমার উত্তর: ($userSelectedLetter) • সঠিক উত্তর: (${correctLetter ?: "-"})"
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = when {
-                            item.user_selected_option == null -> Color(0xFF64748B)
+                            item.user_selected_option == null -> Color(0xFF475569)
                             isUserCorrect -> Color(0xFF047857)
                             else -> Color(0xFFB91C1C)
                         }
@@ -421,7 +443,7 @@ private fun FeedbackQuestionCard(
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     QuizRichContent(
-                        text = opt.text ?: "",
+                        text = com.example.utils.McqAnswerUtils.cleanOptionText(opt.text),
                         textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
                         textColor = MaterialTheme.colorScheme.onSurface,
                         maxImageHeight = 130.dp,
@@ -463,7 +485,7 @@ private fun FeedbackQuestionCard(
                                 color = Color(0xFFEF4444)
                             ) {
                                 Text(
-                                    text = "তোমার উত্তর",
+                                    text = "তোমার ভুল উত্তর",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -476,40 +498,52 @@ private fun FeedbackQuestionCard(
             }
 
             // Solution & Explanation Section
-            if (!item.solution.isNullOrBlank() || !item.solution_image.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(14.dp))
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "ব্যাখ্যা ও সমাধান:", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                        }
-                        if (!item.solution.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            QuizRichContent(
-                                text = item.solution,
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp),
-                                textColor = Color(0xFF334155),
-                                maxImageHeight = 180.dp
-                            )
-                        }
-                        if (!item.solution_image.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            AsyncImage(
-                                model = item.solution_image,
-                                contentDescription = "Solution",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        }
+            Spacer(modifier = Modifier.height(14.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF8FAFC),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "ব্যাখ্যা ও সমাধান:", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (!item.solution.isNullOrBlank()) {
+                        QuizRichContent(
+                            text = item.solution,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp),
+                            textColor = Color(0xFF334155),
+                            maxImageHeight = 180.dp
+                        )
+                    } else if (item.solution_image.isNullOrBlank()) {
+                        val correctOptText = effectiveCorrectOption?.let { idx ->
+                            com.example.utils.McqAnswerUtils.cleanOptionText(options.getOrNull(idx)?.text)
+                        }?.takeIf { it.isNotBlank() }
+                        Text(
+                            text = if (correctOptText != null && correctLetter != null) {
+                                "এই প্রশ্নের সঠিক উত্তর হলো অপশন ($correctLetter): $correctOptText"
+                            } else {
+                                "এই প্রশ্নের জন্য অতিরিক্ত লিখিত ব্যাখ্যা সংযুক্ত নেই।"
+                            },
+                            fontSize = 13.sp,
+                            color = Color(0xFF475569),
+                            lineHeight = 18.sp
+                        )
+                    }
+                    if (!item.solution_image.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        AsyncImage(
+                            model = item.solution_image,
+                            contentDescription = "Solution",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                        )
                     }
                 }
             }

@@ -244,7 +244,11 @@ class PracticeQuizRepository(
                 session {
                   exam_id expiry_time id is_final_submitted last_submitted_index
                   question_answer { given_ans id is_submitted submit_time }
-                  questions { id mcq_options { description no } title }
+                  questions {
+                    id question_no title description difficulty_level allocated_marks
+                    allocated_time has_math_equation markdown_version question_type source u_code
+                    mcq_options { description no }
+                  }
                   title quiz_type
                 }
               }
@@ -365,7 +369,7 @@ class PracticeQuizRepository(
      * Get full MCQ session feedback (Questions + correct answers + solution/explanations)
      */
     suspend fun getMcqSessionFeedback(sessionId: String): PracticeQuizSessionItem {
-        val queryStr = """
+        val fullQueryStr = """
             query getMcqSessionFeedback(${'$'}sessionId: String!) {
               getMcqSessionFeedback(session_id: ${'$'}sessionId) {
                 message
@@ -379,21 +383,85 @@ class PracticeQuizRepository(
                     class correct_option created_at description difficulty_level given_ans
                     has_math_equation id is_active markdown_version
                     mcq_options { description no }
+                    question_no question_type solution source
+                    subject { code display display_bn }
+                    subscription_type title
+                    topics { id name }
+                    u_code updated_at
                   }
                 }
               }
             }
         """.trimIndent()
 
-        val query = GraphQlQuery(
-            operationName = "getMcqSessionFeedback",
-            query = queryStr,
-            variables = mapOf("sessionId" to sessionId)
-        )
+        val coreQueryStr = """
+            query getMcqSessionFeedback(${'$'}sessionId: String!) {
+              getMcqSessionFeedback(session_id: ${'$'}sessionId) {
+                message
+                session {
+                  exam_id expiry_time id init_time is_final_submitted is_started is_timeout
+                  last_submission_time last_submitted_index
+                  question_answer { correct_ans given_ans id is_correct is_submitted submit_time is_saved }
+                  questions {
+                    allocated_marks allocated_time
+                    chapter { id name no }
+                    class correct_option created_at description difficulty_level given_ans
+                    has_math_equation id is_active markdown_version
+                    mcq_options { description no }
+                    question_no question_type source title u_code
+                  }
+                }
+              }
+            }
+        """.trimIndent()
 
-        val response = apiService.getMcqSessionFeedback(query)
-        return response.data?.getMcqSessionFeedback?.session
-            ?: throw IllegalStateException("সলিউশন লোড করা সম্ভব হয়নি")
+        var session = runCatching {
+            val query = GraphQlQuery(
+                operationName = "getMcqSessionFeedback",
+                query = fullQueryStr,
+                variables = mapOf("sessionId" to sessionId)
+            )
+            apiService.getMcqSessionFeedback(query).data?.getMcqSessionFeedback?.session
+        }.getOrNull()
+
+        if (session == null) {
+            session = runCatching {
+                val fallbackQuery = GraphQlQuery(
+                    operationName = "getMcqSessionFeedback",
+                    query = coreQueryStr,
+                    variables = mapOf("sessionId" to sessionId)
+                )
+                apiService.getMcqSessionFeedback(fallbackQuery).data?.getMcqSessionFeedback?.session
+            }.getOrNull()
+        }
+
+        if (session == null) {
+            throw IllegalStateException("সলিউশন লোড করা সম্ভব হয়নি")
+        }
+
+        // If any question is missing its title, enrich from getMcqSession
+        val hasMissingTitle = session.questions?.any { it.title.isNullOrBlank() } == true
+        if (hasMissingTitle) {
+            val baseSession = runCatching { getMcqSession(sessionId) }.getOrNull()
+            val baseQuestionsById = baseSession?.questions?.associateBy { it.id }.orEmpty()
+            if (baseQuestionsById.isNotEmpty()) {
+                val enrichedQuestions = session.questions?.mapIndexed { idx, q ->
+                    val orig = baseQuestionsById[q.id] ?: baseSession?.questions?.getOrNull(idx)
+                    if (orig != null) {
+                        q.copy(
+                            title = q.title?.takeIf { it.isNotBlank() } ?: orig.title,
+                            description = q.description?.takeIf { it.isNotBlank() } ?: orig.description,
+                            question_no = q.question_no?.takeIf { it.isNotBlank() } ?: orig.question_no,
+                            source = q.source?.takeIf { it.isNotBlank() } ?: orig.source,
+                            mcq_options = q.mcq_options?.takeIf { it.isNotEmpty() } ?: orig.mcq_options
+                        )
+                    } else q
+                }
+                session = session.copy(questions = enrichedQuestions)
+            }
+        }
+
+        return session
     }
 
     /**

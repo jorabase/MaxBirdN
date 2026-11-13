@@ -33,6 +33,7 @@ import coil.compose.AsyncImage
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.LocalCqPageUploadItem
 import com.example.modeltest.ui.ModelTestViewModel
+import com.example.ui.theme.isAppInDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,10 +65,17 @@ fun LiveCqPageUploadScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null) {
-                    viewModel.addPageToActiveQuestion(imageBytes = bytes, localUri = uri.toString())
+                    if (bytes.size > 10 * 1024 * 1024) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "ছবির সাইজ ১০ MB-এর কম হতে হবে",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        viewModel.addPageToActiveQuestion(imageBytes = bytes, localUri = uri.toString())
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -76,6 +84,7 @@ fun LiveCqPageUploadScreen(
     }
 
     var previewImageItem by remember { mutableStateOf<LocalCqPageUploadItem?>(null) }
+    val isDark = isAppInDarkTheme()
 
     Scaffold(
         topBar = {
@@ -85,7 +94,7 @@ fun LiveCqPageUploadScreen(
                         text = "CQ",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
@@ -93,13 +102,13 @@ fun LiveCqPageUploadScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFF1E293B)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
                 actions = {
                     Surface(
-                        color = Color(0xFFEFF6FF),
+                        color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
@@ -113,23 +122,24 @@ fun LiveCqPageUploadScreen(
                                 text = timerTextBn,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1D4ED8)
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 10.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Row(
@@ -146,7 +156,7 @@ fun LiveCqPageUploadScreen(
                         Text(
                             text = "${formatToBengaliNumber(qIndex)} নম্বরের উত্তর সাবমিট করো",
                             fontSize = 13.sp,
-                            color = Color(0xFF475569)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -189,7 +199,7 @@ fun LiveCqPageUploadScreen(
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         LazyColumn(
             contentPadding = PaddingValues(
@@ -205,8 +215,8 @@ fun LiveCqPageUploadScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
@@ -214,13 +224,13 @@ fun LiveCqPageUploadScreen(
                             text = "${formatToBengaliNumber(qIndex)} নম্বর প্রশ্ন",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = question.title?.replace("$", "") ?: "",
                             fontSize = 14.sp,
-                            color = Color(0xFF64748B),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -228,27 +238,27 @@ fun LiveCqPageUploadScreen(
                             text = "সম্পূর্ণ প্রশ্ন দেখো",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2563EB),
+                            color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                             modifier = Modifier
                                 .clickable { viewModel.openViewQuestionDialog(question) }
                                 .padding(vertical = 4.dp)
                         )
 
                         Spacer(modifier = Modifier.height(14.dp))
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                         Spacer(modifier = Modifier.height(14.dp))
 
                         Text(
                             text = "সিরিয়াল অনুযায়ী উত্তরপত্র আপলোড করো",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "সর্বোচ্চ ইমেজ সাইজ ১০ MB",
                             fontSize = 13.sp,
-                            color = Color(0xFF64748B)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -258,8 +268,8 @@ fun LiveCqPageUploadScreen(
             itemsIndexed(uploadedPages) { index, pageItem ->
                 Card(
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -273,7 +283,7 @@ fun LiveCqPageUploadScreen(
                                     text = "${formatToBengaliNumber(pageItem.pageNo)} নম্বর পৃষ্ঠা",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Icon(
@@ -300,8 +310,8 @@ fun LiveCqPageUploadScreen(
                         // Thumbnail Box
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                            color = Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
@@ -346,7 +356,7 @@ fun LiveCqPageUploadScreen(
                                         text = "প্রিভিউ দেখো",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF2563EB)
+                                        color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
                                     )
                                 }
 
@@ -367,8 +377,8 @@ fun LiveCqPageUploadScreen(
             item {
                 Card(
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -376,15 +386,15 @@ fun LiveCqPageUploadScreen(
                             text = "${formatToBengaliNumber(nextPageNum)} নম্বর পৃষ্ঠা",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, Color(0xFF93C5FD)),
-                            color = Color(0xFFF0F9FF),
+                            border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6).copy(alpha = 0.55f) else Color(0xFF93C5FD)),
+                            color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.28f) else Color(0xFFF0F9FF),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp)
@@ -405,7 +415,7 @@ fun LiveCqPageUploadScreen(
                                     text = "ছবি আপলোড করো",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF1E40AF)
+                                    color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
                                 )
 
                                 Icon(
@@ -430,7 +440,9 @@ fun LiveCqPageUploadScreen(
                     },
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, Color(0xFF6366F1)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF4F46E5)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
@@ -461,6 +473,7 @@ fun LiveCqPageUploadScreen(
                         onClick = { previewImageItem = null },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
+                            .statusBarsPadding()
                             .padding(16.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)

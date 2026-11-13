@@ -35,6 +35,9 @@ import com.example.auth.AuthViewModel
 import com.example.gamification.rememberGamificationStats
 import com.example.utils.AvatarUtils
 import com.example.utils.toBengaliDigits
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +53,7 @@ fun ProfileScreen(
 ) {
     val context = LocalContext.current
     var showSessionShareDialog by remember { mutableStateOf(false) }
+    var showLogoutConfirmDialog by remember { mutableStateOf(false) }
     var canViewProfile by remember {
         mutableStateOf(com.example.security.DeviceActivationRepository.isProfileViewPermissionCached(context))
     }
@@ -105,7 +109,7 @@ fun ProfileScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    IconButton(onClick = onLogout) {
+                    IconButton(onClick = { showLogoutConfirmDialog = true }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ExitToApp,
                             contentDescription = "লগআউট",
@@ -191,6 +195,40 @@ fun ProfileScreen(
                     onDismiss = { showSessionShareDialog = false }
                 )
             }
+
+            if (showLogoutConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { showLogoutConfirmDialog = false },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    title = { Text("লগআউট করতে চান?", fontWeight = FontWeight.Bold) },
+                    text = { Text("আপনি কি নিশ্চিত যে আপনার অ্যাকাউন্ট থেকে লগআউট করতে চান?") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showLogoutConfirmDialog = false
+                                onLogout()
+                            }
+                        ) {
+                            Text(
+                                "লগআউট",
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showLogoutConfirmDialog = false }) {
+                            Text("না, থাক")
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -205,10 +243,12 @@ fun ProfileContent(
     onOpenSessionShare: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val stats = rememberGamificationStats(context)
-    var formattedCacheSize by remember {
+    var rawCacheSize by remember {
         mutableStateOf(com.example.utils.AppCacheManager.getFormattedCacheSize(context))
     }
+    var isClearingCache by remember { mutableStateOf(false) }
     val imageRequest = remember(profile.avatar, profile.first_name, context) {
         AvatarUtils.buildImageRequest(context, profile.avatar, profile.first_name)
     }
@@ -603,14 +643,20 @@ fun ProfileContent(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    com.example.utils.AppCacheManager.clearAllAppCache(context)
-                    formattedCacheSize = "0.0 MB"
-                    android.widget.Toast.makeText(
-                        context,
-                        "অ্যাপের সমস্ত ক্যাশ মেমোরি সম্পূর্ণ খালি করা হয়েছে!",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                .clickable(enabled = !isClearingCache) {
+                    isClearingCache = true
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            com.example.utils.AppCacheManager.clearAllAppCache(context)
+                        }
+                        rawCacheSize = "0.0 MB"
+                        isClearingCache = false
+                        android.widget.Toast.makeText(
+                            context,
+                            "অ্যাপের সমস্ত ক্যাশ মেমোরি সম্পূর্ণ খালি করা হয়েছে!",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 },
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -648,11 +694,12 @@ fun ProfileContent(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    val isCacheEmpty = rawCacheSize == "0.0 MB" || rawCacheSize == "0 B" || rawCacheSize.startsWith("0.0 ")
                     Text(
-                        text = if (formattedCacheSize != "0.0 MB") {
-                            "$formattedCacheSize ক্যাশ জমা আছে • খালি করতে ট্যাপ করুন"
-                        } else {
-                            "ক্যাশ মেমোরি সম্পূর্ণ পরিষ্কার আছে (০.০ MB)"
+                        text = when {
+                            isClearingCache -> "ক্যাশ মেমোরি পরিষ্কার করা হচ্ছে..."
+                            !isCacheEmpty -> "${toBengaliDigits(rawCacheSize)} ক্যাশ জমা আছে • খালি করতে ট্যাপ করুন"
+                            else -> "ক্যাশ মেমোরি সম্পূর্ণ পরিষ্কার আছে (০.০ MB)"
                         },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

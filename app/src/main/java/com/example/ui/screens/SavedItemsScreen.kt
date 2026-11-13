@@ -77,7 +77,7 @@ fun SavedItemsScreen(
                             fontSize = 18.sp
                         )
                         Text(
-                            text = "${uiState.items.size}টি আইটেম সংরক্ষিত",
+                            text = "${com.example.utils.toBengaliDigits(uiState.items.size)}টি আইটেম সংরক্ষিত",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -266,7 +266,7 @@ fun SavedItemCard(
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(48.dp)
                         .testTag("delete_saved_item_${item.id}")
                 ) {
                     Icon(
@@ -375,12 +375,11 @@ fun SavedItemCard(
             }
 
             // Action button for NOTE / PDF
-            if ((item.type == SavedItemEntity.TYPE_NOTE || !extractedUrl.isNullOrBlank()) && item.type != SavedItemEntity.TYPE_CLASS) {
+            if (!extractedUrl.isNullOrBlank() && item.type != SavedItemEntity.TYPE_CLASS) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = {
-                        val targetUrl = extractedUrl ?: ""
-                        onOpenPdf?.invoke(targetUrl, item.title)
+                        onOpenPdf?.invoke(extractedUrl, item.title)
                     },
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
@@ -517,7 +516,7 @@ fun SavedOptionRow(
             Spacer(modifier = Modifier.width(10.dp))
 
             QuizRichContent(
-                text = option.description,
+                text = com.example.utils.McqAnswerUtils.cleanOptionText(option.description),
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 textColor = MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isCorrect) FontWeight.Bold else FontWeight.Normal,

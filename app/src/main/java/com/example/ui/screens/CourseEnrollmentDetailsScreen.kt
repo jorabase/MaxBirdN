@@ -13,10 +13,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +37,7 @@ import coil.request.ImageRequest
 import com.example.api.GraphQlQuery
 import com.example.api.ShikhoApiService
 import com.example.auth.SessionManager
+import com.example.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.launch
 
 data class EnrollmentPhaseDisplay(
@@ -171,6 +172,8 @@ fun CourseEnrollmentDetailsScreen(
         }
     }
 
+    val isDark = isAppInDarkTheme()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -179,7 +182,7 @@ fun CourseEnrollmentDetailsScreen(
                         text = "কোর্সে ভর্তি",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
@@ -187,16 +190,16 @@ fun CourseEnrollmentDetailsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFF1E293B)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         },
-        containerColor = Color(0xFFF8FAFC),
+        containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         if (isLoading) {
@@ -212,6 +215,45 @@ fun CourseEnrollmentDetailsScreen(
                     modifier = Modifier.size(36.dp)
                 )
             }
+        } else if (programsList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "কোনো এনরোল করা কোর্স পাওয়া যায়নি",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "আপনার সক্রিয় কোর্সসমূহ এখানে প্রদর্শিত হবে।",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -224,7 +266,7 @@ fun CourseEnrollmentDetailsScreen(
                     items = programsList,
                     key = { it.id }
                 ) { program ->
-                    EnrollmentProgramCard(program = program)
+                    EnrollmentProgramCard(program = program, isDark = isDark)
                 }
             }
         }
@@ -232,15 +274,16 @@ fun CourseEnrollmentDetailsScreen(
 }
 
 @Composable
-private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
+private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay, isDark: Boolean) {
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(true) }
+    val cardBorder = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.35f else 0.45f)
 
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = Color.White,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = if (isDark) 0.dp else 2.dp,
+        border = BorderStroke(1.dp, cardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -293,7 +336,7 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
                     text = program.titleBn,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 22.sp,
@@ -304,7 +347,7 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    tint = Color(0xFF0284C7),
+                    tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -320,7 +363,7 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
 
                     // Dotted/Dashed Line Separator
                     DashedDivider(
-                        color = Color(0xFFE2E8F0),
+                        color = cardBorder,
                         thickness = 1.2.dp,
                         dashLength = 6.dp,
                         dashGap = 4.dp
@@ -341,15 +384,14 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
                                 text = phase.title,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1E293B),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f)
                             )
 
                             // "ভর্তি হয়েছো" Capsule Badge
                             Surface(
                                 shape = RoundedCornerShape(20.dp),
-                                color = Color(0xFF16A34A),
-                                modifier = Modifier.padding(end = 12.dp)
+                                color = Color(0xFF16A34A)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -370,19 +412,11 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
                                     )
                                 }
                             }
-
-                            // Right Arrow Chevron
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                contentDescription = null,
-                                tint = Color(0xFFCBD5E1),
-                                modifier = Modifier.size(14.dp)
-                            )
                         }
 
                         if (index < program.phases.size - 1) {
                             HorizontalDivider(
-                                color = Color(0xFFF1F5F9),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
                                 thickness = 1.dp
                             )
                         }
@@ -391,7 +425,7 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
                     Spacer(modifier = Modifier.height(6.dp))
 
                     HorizontalDivider(
-                        color = Color(0xFFE2E8F0),
+                        color = cardBorder,
                         thickness = 1.dp
                     )
 
@@ -407,14 +441,14 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay) {
                             text = "ভর্তির মেয়াদ",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Text(
                             text = program.expiryDateBn,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF16A34A)
+                            color = if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
                         )
                     }
                 }

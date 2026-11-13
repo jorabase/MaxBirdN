@@ -1889,6 +1889,8 @@ data class PracticeQuizQuestionItem(
     val question_no: String? = null,
     val title: String? = null,
     val description: String? = null,
+    val solution: String? = null,
+    val solution_img: String? = null,
     val difficulty_level: String? = null,
     val allocated_marks: String? = null,
     val allocated_time: String? = null,
@@ -1901,7 +1903,26 @@ data class PracticeQuizQuestionItem(
     val given_ans: String? = null,
     val is_active: Boolean? = null,
     val mcq_options: List<McqOptionItem>? = emptyList(),
-    val chapter: HierarchyChapterRef? = null
+    val chapter: HierarchyChapterRef? = null,
+    val subject: HierarchySubjectRef? = null,
+    val topics: List<HierarchyTopicRef>? = null,
+    val updated_at: String? = null
+) {
+    val effectiveExplanation: String?
+        get() = solution?.takeIf { it.isNotBlank() } ?: description?.takeIf { it.isNotBlank() }
+}
+
+@JsonClass(generateAdapter = true)
+data class HierarchySubjectRef(
+    val code: String? = null,
+    val display: String? = null,
+    val display_bn: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class HierarchyTopicRef(
+    val id: String? = null,
+    val name: String? = null
 )
 
 @JsonClass(generateAdapter = true)

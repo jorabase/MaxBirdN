@@ -116,6 +116,29 @@ object McqAnswerUtils {
     }
 
     /**
+     * Strips redundant leading option prefixes such as "A. ", "B) ", "(A) ", "ক. ", "(ক) "
+     * from option descriptions so UI cards don't display duplicate labels like "ক A. ধনতান্ত্রিক".
+     */
+    fun cleanOptionText(description: String?): String {
+        if (description.isNullOrBlank()) return ""
+        val trimmed = description.trim()
+        if (trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true) ||
+            trimmed.startsWith("![") ||
+            trimmed.startsWith("<img", ignoreCase = true)
+        ) {
+            return trimmed
+        }
+        return trimmed
+            .replace(
+                Regex("""^(?:[\(（\[{]\s*[A-Da-dক-ঘ1-4১-৪]\s*[\)）\]}][\s.।:\-–—]*|[A-Da-dক-ঘ1-4১-৪]\s*[\.।:\)）\]}\-–—]\s+)"""),
+                ""
+            )
+            .trim()
+            .ifBlank { trimmed }
+    }
+
+    /**
      * Strips HTML tags and Markdown formatting from solution text for robust regex parsing.
      */
     private fun sanitizeText(input: String): String {
@@ -187,7 +210,7 @@ object McqAnswerUtils {
                 val remainder = prefixMatches.last().groupValues[1].trim()
                 optionsDescriptions.forEachIndexed { idx, desc ->
                     if (!desc.isNullOrBlank()) {
-                        val cleanDesc = sanitizeText(desc)
+                        val cleanDesc = sanitizeText(cleanOptionText(desc))
                         if (cleanDesc.length >= 2 && remainder.contains(cleanDesc, ignoreCase = true)) {
                             Log.d(TAG, "extractCorrectIndexFromSolution: matched description after prefix -> index $idx ($cleanDesc)")
                             return idx
@@ -200,8 +223,8 @@ object McqAnswerUtils {
             val matchingOptions = optionsDescriptions.mapIndexedNotNull { idx, desc ->
                 if (desc.isNullOrBlank()) null
                 else {
-                    val cleanDesc = sanitizeText(desc)
-                    if (cleanDesc.length >= 3 && clean.contains(cleanDesc, ignoreCase = true)) {
+                    val cleanDesc = sanitizeText(cleanOptionText(desc))
+                    if (cleanDesc.length >= 2 && clean.contains(cleanDesc, ignoreCase = true)) {
                         val lastPos = clean.lastIndexOf(cleanDesc, ignoreCase = true)
                         Pair(idx, lastPos)
                     } else null
@@ -230,9 +253,9 @@ object McqAnswerUtils {
      * 2. Direct ans.correct_ans from submission API
      * 3. Server confirmation (isUserMarkedCorrectByServer == true)
      * 4. Extracted from solution explanation text
-     * 5. Match between user's chosen option and solution text
+     * 5. Match between user's chosen option and solution text (only if server did NOT mark user wrong)
      * 6. Unique option description matching
-     * 7. Fallback to user choice if valid, or 0
+     * 7. Fallback that respects server's isUserMarkedCorrectByServer signal
      */
     fun resolveCorrectOptionIndex(
         directCorrectOption: String?,
@@ -262,35 +285,43 @@ object McqAnswerUtils {
 
         // Priority 4: Extract from explanation / solution text
         val idxFromSol = extractCorrectIndexFromSolution(solutionText, optionsDescriptions)
-        if (idxFromSol != null) {
+        if (idxFromSol != null && !(isUserMarkedCorrectByServer == false && idxFromSol == userSelectedOptionIndex)) {
             return idxFromSol
         }
 
-        // Priority 5: If user selected an option and its description appears in the solution,
-        // it confirms the user's answer
-        if (userSelectedOptionIndex != null && userSelectedOptionIndex in 0..3 && !solutionText.isNullOrBlank()) {
+        // Priority 5: If user selected an option, server did NOT mark it wrong, and its description appears in the solution
+        if (isUserMarkedCorrectByServer != false && userSelectedOptionIndex != null && userSelectedOptionIndex in 0..3 && !solutionText.isNullOrBlank()) {
             val userDesc = optionsDescriptions?.getOrNull(userSelectedOptionIndex)
             if (!userDesc.isNullOrBlank()) {
-                val cleanUserDesc = sanitizeText(userDesc)
-                if (cleanUserDesc.length >= 3 && sanitizeText(solutionText).contains(cleanUserDesc, ignoreCase = true)) {
+                val cleanUserDesc = sanitizeText(cleanOptionText(userDesc))
+                if (cleanUserDesc.length >= 2 && sanitizeText(solutionText).contains(cleanUserDesc, ignoreCase = true)) {
                     Log.d(TAG, "resolveCorrectOptionIndex: user selected option ($userSelectedOptionIndex) matches solution text")
                     return userSelectedOptionIndex
                 }
             }
         }
 
-        // Priority 6: Check options descriptions against solution
+        // Priority 6: Check options descriptions against solution (excluding user's wrong choice if server marked wrong)
         if (!optionsDescriptions.isNullOrEmpty() && !solutionText.isNullOrBlank()) {
             val cleanSol = sanitizeText(solutionText)
             val matched = optionsDescriptions.mapIndexedNotNull { idx, desc ->
-                if (!desc.isNullOrBlank() && cleanSol.contains(sanitizeText(desc), ignoreCase = true)) idx else null
+                if (isUserMarkedCorrectByServer == false && idx == userSelectedOptionIndex) {
+                    null
+                } else if (!desc.isNullOrBlank() && cleanSol.contains(sanitizeText(cleanOptionText(desc)), ignoreCase = true)) {
+                    idx
+                } else null
             }
-            if (matched.size == 1) {
-                return matched.first()
+            if (matched.isNotEmpty()) {
+                return matched.last()
             }
         }
 
-        // Priority 7: If user answered and we have no other counter-evidence, never arbitrarily punish user with 0
+        // Priority 7: If server marked user wrong, never return userSelectedOptionIndex
+        if (isUserMarkedCorrectByServer == false && userSelectedOptionIndex != null) {
+            return if (userSelectedOptionIndex == 0) 1 else 0
+        }
+
+        // Priority 8: If user answered and we have no other counter-evidence, never arbitrarily punish user with 0
         if (userSelectedOptionIndex != null && userSelectedOptionIndex in 0..3 && solutionText.isNullOrBlank()) {
             return userSelectedOptionIndex
         }

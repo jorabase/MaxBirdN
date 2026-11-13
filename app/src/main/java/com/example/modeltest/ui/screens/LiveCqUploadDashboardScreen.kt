@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
+import com.example.ui.theme.isAppInDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +58,9 @@ fun LiveCqUploadDashboardScreen(
 
     val allUploaded = uploadedCount >= totalQuestions && totalQuestions > 0
 
+    val isDark = isAppInDarkTheme()
+    val uploadMins = uiState.liveCqUploadInfo?.getSubmissionDurationMinutes() ?: 40
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,7 +69,7 @@ fun LiveCqUploadDashboardScreen(
                         text = "CQ",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 },
                 navigationIcon = {
@@ -73,13 +77,13 @@ fun LiveCqUploadDashboardScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFF1E293B)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 },
                 actions = {
                     Surface(
-                        color = Color(0xFFEFF6FF),
+                        color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
@@ -93,23 +97,24 @@ fun LiveCqUploadDashboardScreen(
                                 text = timerTextBn,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1D4ED8)
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = {
             Surface(
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 10.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Row(
@@ -126,7 +131,7 @@ fun LiveCqUploadDashboardScreen(
                         Text(
                             text = "${formatToBengaliNumber(totalQuestions)}টা প্রশ্নের উত্তর আপলোড হওয়ার পর একবারে সবগুলো সাবমিট করো",
                             fontSize = 13.sp,
-                            color = Color(0xFF475569),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
                         )
                     }
@@ -139,7 +144,7 @@ fun LiveCqUploadDashboardScreen(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (allUploaded) Color(0xFF4F46E5) else Color(0xFF94A3B8),
-                            disabledContainerColor = Color(0xFFCBD5E1)
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -165,7 +170,7 @@ fun LiveCqUploadDashboardScreen(
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         LazyColumn(
             contentPadding = PaddingValues(
@@ -190,7 +195,7 @@ fun LiveCqUploadDashboardScreen(
                                 .weight(1f)
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFFE2E8F0))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -207,7 +212,7 @@ fun LiveCqUploadDashboardScreen(
                             text = "${formatToBengaliNumber(uploadedCount)}/${formatToBengaliNumber(totalQuestions)}",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (allUploaded) Color(0xFF16A34A) else Color(0xFF15803D)
+                            color = if (isDark) Color(0xFF4ADE80) else if (allUploaded) Color(0xFF16A34A) else Color(0xFF15803D)
                         )
                     }
 
@@ -216,8 +221,8 @@ fun LiveCqUploadDashboardScreen(
                     // Rules Box
                     Card(
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -232,9 +237,9 @@ fun LiveCqUploadDashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "উত্তরপত্র আপলোড করার সময় ৪০ মিনিট",
+                                text = "উত্তরপত্র আপলোড করার সময় ${formatToBengaliNumber(uploadMins)} মিনিট",
                                 fontSize = 13.sp,
-                                color = Color(0xFF334155),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -246,7 +251,7 @@ fun LiveCqUploadDashboardScreen(
                         text = "প্রশ্নের উত্তরপত্র আপলোড করো",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                 }
             }
@@ -260,11 +265,19 @@ fun LiveCqUploadDashboardScreen(
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isUploaded) Color(0xFFF0FDF4) else Color.White
+                        containerColor = if (isUploaded) {
+                            if (isDark) Color(0xFF064E3B).copy(alpha = 0.25f) else Color(0xFFF0FDF4)
+                        } else {
+                            MaterialTheme.colorScheme.surface
+                        }
                     ),
                     border = BorderStroke(
                         1.dp,
-                        if (isUploaded) Color(0xFFBBF7D0) else Color(0xFFE2E8F0)
+                        if (isUploaded) {
+                            if (isDark) Color(0xFF22C55E).copy(alpha = 0.5f) else Color(0xFFBBF7D0)
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                        }
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -280,13 +293,23 @@ fun LiveCqUploadDashboardScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isUploaded) Color(0xFFDCFCE7) else Color(0xFFEFF6FF))
+                                        .background(
+                                            if (isUploaded) {
+                                                if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
+                                            } else {
+                                                if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF)
+                                            }
+                                        )
                                 ) {
                                     Text(
                                         text = formatToBengaliNumber(qNo),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isUploaded) Color(0xFF16A34A) else Color(0xFF2563EB)
+                                        color = if (isUploaded) {
+                                            if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
+                                        } else {
+                                            if (isDark) Color(0xFF93C5FD) else Color(0xFF2563EB)
+                                        }
                                     )
                                 }
 
@@ -296,7 +319,7 @@ fun LiveCqUploadDashboardScreen(
                                     text = "${formatToBengaliNumber(qNo)} নম্বর প্রশ্ন",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1E293B)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
 
@@ -312,7 +335,7 @@ fun LiveCqUploadDashboardScreen(
                                     text = "সম্পূর্ণ প্রশ্ন দেখো",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF2563EB),
+                                    color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
                                     modifier = Modifier
                                         .clickable { viewModel.openViewQuestionDialog(q) }
                                         .padding(4.dp)
@@ -391,7 +414,7 @@ fun LiveCqUploadDashboardScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier
                     .fillMaxWidth(0.92f)
                     .padding(16.dp)
@@ -406,7 +429,7 @@ fun LiveCqUploadDashboardScreen(
                             text = "প্রশ্ন বিবরণী",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E293B)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         IconButton(onClick = { viewModel.closeViewQuestionDialog() }) {
@@ -415,14 +438,14 @@ fun LiveCqUploadDashboardScreen(
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
                         text = q.title?.replace("$", "") ?: "",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
+                        color = MaterialTheme.colorScheme.onSurface,
                         lineHeight = 22.sp
                     )
 
@@ -439,7 +462,7 @@ fun LiveCqUploadDashboardScreen(
                             Text(
                                 text = sq.question?.replace("$", "") ?: "",
                                 fontSize = 14.sp,
-                                color = Color(0xFF334155),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 lineHeight = 20.sp,
                                 modifier = Modifier.weight(1f)
                             )
@@ -448,7 +471,7 @@ fun LiveCqUploadDashboardScreen(
                                 text = formatToBengaliNumber(sq.getEffectiveMarks().toInt()),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -477,7 +500,7 @@ fun LiveCqUploadDashboardScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
@@ -507,7 +530,7 @@ fun LiveCqUploadDashboardScreen(
                         text = "তুমি কি টেস্ট সাবমিট করতে চাও?",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B),
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
 
@@ -516,7 +539,7 @@ fun LiveCqUploadDashboardScreen(
                     Text(
                         text = "একবার সাবমিট করলে আর সাবমিট করতে পারবে না",
                         fontSize = 13.sp,
-                        color = Color(0xFF64748B),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
 
@@ -550,7 +573,7 @@ fun LiveCqUploadDashboardScreen(
                             text = "না, এখন নয়",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF4F46E5)
+                            color = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
                         )
                     }
                 }

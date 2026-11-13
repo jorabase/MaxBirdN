@@ -570,6 +570,8 @@ data class FeedbackQuestionRaw(
     val id: String,
     val question_no: String? = null,
     val title: String? = null,
+    val description: String? = null,
+    val given_ans: String? = null,
     val correct_option: String? = null,
     val difficulty_level: String? = null,
     val solution: String? = null,
