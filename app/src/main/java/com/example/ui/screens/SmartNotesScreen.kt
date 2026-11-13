@@ -235,7 +235,10 @@ fun SmartNotesScreen(
                                             text = "সাবজেক্ট রিসোর্সেস",
                                             fontSize = 13.sp,
                                             fontWeight = if (isTab0) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isTab0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = if (isTab0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -262,7 +265,10 @@ fun SmartNotesScreen(
                                             text = "চ্যাপ্টার রিসোর্সেস",
                                             fontSize = 13.sp,
                                             fontWeight = if (isTab1) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isTab1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = if (isTab1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            softWrap = false
                                         )
                                     }
                                 }

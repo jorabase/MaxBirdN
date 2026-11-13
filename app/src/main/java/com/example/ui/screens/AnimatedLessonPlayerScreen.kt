@@ -1168,6 +1168,8 @@ fun AnimatedLessonPlayerScreen(
                                             color = Color(0xFF34D399),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false,
                                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                         )
                                     }
@@ -1216,7 +1218,9 @@ fun AnimatedLessonPlayerScreen(
                                         text = "ভিডিও (${toBengaliDigits(playlistEntries.size)})",
                                         color = Color.White,
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -1577,7 +1581,7 @@ fun AnimatedLessonPlayerScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(24.dp),
+                                .height(40.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             val bufferedFraction = if (totalDuration > 0) {

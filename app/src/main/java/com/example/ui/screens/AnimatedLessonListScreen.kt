@@ -171,7 +171,9 @@ fun AnimatedLessonListScreen(
                                     text = "${toBengaliDigits(topicsList.size)}টি অ্যানিমেশন",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }

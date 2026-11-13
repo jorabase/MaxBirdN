@@ -140,7 +140,9 @@ private fun ChapterFilterTabItem(
                 text = filter.titleBn,
                 fontSize = 12.5.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false
             )
 
             // Count Badge
@@ -155,7 +157,9 @@ private fun ChapterFilterTabItem(
                     text = toBengaliDigits(count),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = badgeTextColor
+                    color = badgeTextColor,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

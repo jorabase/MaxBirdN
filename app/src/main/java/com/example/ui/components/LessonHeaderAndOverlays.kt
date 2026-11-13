@@ -268,6 +268,7 @@ fun LessonStreamPlaceholder(
 /**
  * Class Header & Info Section with Bengali Date-Time formatting.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LessonDetailHeader(
     lesson: StudentLessonItem?,
@@ -286,13 +287,13 @@ fun LessonDetailHeader(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Badges Row: Subject Tag + Teacher
-        Row(
+        // Badges Row: Subject Tag + Teacher (FlowRow prevents multi-line pill squeezing on narrow screens)
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // 1. Subject Pill (Teal background, white text)
             Surface(
@@ -305,6 +306,9 @@ fun LessonDetailHeader(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 )
             }
@@ -356,7 +360,8 @@ fun LessonDetailHeader(
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
                 }
             }

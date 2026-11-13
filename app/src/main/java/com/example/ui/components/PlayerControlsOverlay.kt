@@ -436,7 +436,9 @@ fun PlayerControlsOverlay(
                                         text = "লক",
                                         color = Color.White,
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -470,7 +472,9 @@ fun PlayerControlsOverlay(
                                     text = resizeModeLabel,
                                     color = Color.White,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -497,7 +501,9 @@ fun PlayerControlsOverlay(
                                     text = selectedQualityLabel,
                                     color = Color.White,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -516,6 +522,8 @@ fun PlayerControlsOverlay(
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                                 )
                             }
@@ -543,7 +551,9 @@ fun PlayerControlsOverlay(
                                     text = "ইকুলাইজার",
                                     color = Color.White,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -573,7 +583,9 @@ fun PlayerControlsOverlay(
                                             text = "${item.progressPercent}%",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -600,7 +612,9 @@ fun PlayerControlsOverlay(
                                             text = "সেভড",
                                             color = Color(0xFF34D399),
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -627,7 +641,9 @@ fun PlayerControlsOverlay(
                                             text = "ডাউনলোড",
                                             color = Color.White,
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }

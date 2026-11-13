@@ -204,6 +204,9 @@ fun ChapterLessonItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .padding(end = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -229,7 +232,9 @@ fun ChapterLessonItemCard(
                                 text = typeTitle,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = typeTagColor
+                                color = typeTagColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -245,6 +250,9 @@ fun ChapterLessonItemCard(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = classTypeBadge.textColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -358,7 +366,9 @@ fun ChapterLessonItemCard(
                         text = actionButtonText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = actionButtonColor
+                        color = actionButtonColor,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Icon(
                         imageVector = Icons.Default.ChevronRight,

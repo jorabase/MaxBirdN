@@ -720,7 +720,7 @@ fun EqualizerBottomSheet(
                                         thumbColor = Color(0xFF0284C7),
                                         activeTrackColor = Color(0xFF0284C7)
                                     ),
-                                    modifier = Modifier.height(28.dp)
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }

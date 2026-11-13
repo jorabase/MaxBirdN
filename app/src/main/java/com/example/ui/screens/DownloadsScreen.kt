@@ -376,7 +376,9 @@ fun DownloadsScreen(
                                     text = "${completedCount.toBengaliDigits()} টি ফাইল",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0284C7)
+                                    color = Color(0xFF0284C7),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -441,13 +443,15 @@ fun DownloadsScreen(
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(34.dp)
+                                    modifier = Modifier.heightIn(min = 38.dp)
                                 ) {
                                     Text(
                                         text = "অনলাইনে যান",
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -485,7 +489,8 @@ fun DownloadsScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Box(
                                         modifier = Modifier
@@ -497,7 +502,9 @@ fun DownloadsScreen(
                                         text = "চলমান ডাউনলোড (${activeDownloads.size.toBengaliDigits()})",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onBackground
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
@@ -510,8 +517,8 @@ fun DownloadsScreen(
                                                 downloadManager.resumeAllDownloads()
                                             }
                                         },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(30.dp)
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        modifier = Modifier.heightIn(min = 36.dp)
                                     ) {
                                         Icon(
                                             imageVector = if (anyDownloading) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -524,7 +531,9 @@ fun DownloadsScreen(
                                             text = if (anyDownloading) "সব পজ করুন" else "সব চালু করুন",
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0284C7)
+                                            color = Color(0xFF0284C7),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }

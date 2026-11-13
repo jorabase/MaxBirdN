@@ -84,7 +84,9 @@ fun ProfileScreen(
                     Text(
                         text = "প্রোফাইল ও অ্যাচিভমেন্ট",
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 },
                 actions = {

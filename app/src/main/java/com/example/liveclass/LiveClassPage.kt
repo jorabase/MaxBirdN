@@ -1690,7 +1690,8 @@ fun LiveClassPage(
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         color = Color.White,
-                                                        maxLines = 1
+                                                        maxLines = 1,
+                                                        softWrap = false
                                                     )
                                                 }
                                             }
@@ -1717,7 +1718,8 @@ fun LiveClassPage(
                                                         fontSize = 10.5.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color.White,
-                                                        maxLines = 1
+                                                        maxLines = 1,
+                                                        softWrap = false
                                                     )
                                                 }
                                             }
@@ -1803,7 +1805,8 @@ fun LiveClassPage(
                                                         fontSize = 10.5.sp,
                                                         fontWeight = FontWeight.ExtraBold,
                                                         color = Color.White,
-                                                        maxLines = 1
+                                                        maxLines = 1,
+                                                        softWrap = false
                                                     )
                                                 }
                                             }
@@ -1835,7 +1838,8 @@ fun LiveClassPage(
                                                             fontSize = 10.5.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = Color.White,
-                                                            maxLines = 1
+                                                            maxLines = 1,
+                                                            softWrap = false
                                                         )
                                                     }
                                                 }

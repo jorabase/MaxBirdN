@@ -35,7 +35,10 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -65,6 +68,7 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -217,7 +221,7 @@ class PdfPageRenderer(
         if (!isInitialized || pageIndex < 0 || pageIndex >= pageCount) return@withContext null
 
         val desiredWidth = if (forceHighRes) {
-            targetWidthPx.coerceIn(1600, 2400)
+            targetWidthPx.coerceIn(1600, 2800)
         } else {
             targetWidthPx.coerceIn(1180, 1720)
         }
@@ -568,6 +572,8 @@ fun PdfViewerContent(
         ReadingTheme.NIGHT -> Color(0xFF000000)
     }
 
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -605,6 +611,7 @@ fun PdfViewerContent(
                     readingTheme = readingTheme,
                     isFullscreen = isFullscreen,
                     isLandscape = isLandscapeMode,
+                    topBarHeightPx = topBarHeightPx,
                     currentSavedPage = currentSavedPage,
                     onCurrentPageChanged = { pageIdx -> currentSavedPage = pageIdx },
                     onToggleFullscreen = { isFullscreen = !isFullscreen },
@@ -724,7 +731,8 @@ fun PdfViewerContent(
                     } else {
                         Toast.makeText(context, "এই ফাইলটি ইতোমধ্যে অ্যাপে অফলাইনে সংরক্ষিত রয়েছে", Toast.LENGTH_SHORT).show()
                     }
-                }
+                },
+                onHeightMeasured = { measured -> topBarHeightPx = measured }
             )
         }
     }
@@ -852,78 +860,17 @@ private fun PdfViewerTopBar(
     onShareClick: () -> Unit,
     onToggleViewMode: () -> Unit,
     onCycleTheme: () -> Unit,
-    onDownloadClick: () -> Unit
+    onDownloadClick: () -> Unit,
+    onHeightMeasured: (Int) -> Unit = {}
 ) {
     Surface(
         color = Color(0xFF0B1120).copy(alpha = 0.96f),
         shadowElevation = 6.dp,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .onSizeChanged { onHeightMeasured(it.height) }
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (!isLandscape) Modifier.statusBarsPadding() else Modifier)
-                .padding(horizontal = 8.dp, vertical = if (isLandscape) 4.dp else 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Back / Close Button
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .testTag("pdf_viewer_close_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "বন্ধ করুন",
-                    tint = Color.White
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Title & Page/Offline Status
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title.ifBlank { "লেকচার স্লাইড ও পিডিএফ" },
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(1.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (isOffline) {
-                        Surface(
-                            color = Color(0xFF10B981).copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = "✓ অফলাইন",
-                                fontSize = 10.sp,
-                                color = Color(0xFF34D399),
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
-
-                    if (pageCount > 0) {
-                        Text(
-                            text = "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}",
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
+        val actionIconsRow: @Composable () -> Unit = {
             // 1. All Pages Grid / Thumbnail Navigator
             if (pageCount > 1) {
                 IconButton(
@@ -1000,7 +947,9 @@ private fun PdfViewerTopBar(
                     )
                 }
             }
+        }
 
+        val downloadAndBookmarkRow: @Composable () -> Unit = {
             // 6. Offline Download Action
             when (downloadedItem?.status) {
                 DownloadedItemEntity.STATUS_DOWNLOADING -> {
@@ -1059,7 +1008,217 @@ private fun PdfViewerTopBar(
                 )
             }
         }
+
+        if (isLandscape) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .testTag("pdf_viewer_close_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "বন্ধ করুন",
+                        tint = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title.ifBlank { "লেকচার স্লাইড ও পিডিএফ" },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (isOffline) {
+                            Surface(
+                                color = Color(0xFF10B981).copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "✓ অফলাইন",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF34D399),
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+
+                        if (pageCount > 0) {
+                            Text(
+                                text = "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}",
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    actionIconsRow()
+                    downloadAndBookmarkRow()
+                }
+            }
+        } else {
+            // Portrait: Spacious 2-Row Top Bar so Title & Offline badge NEVER wrap or crush
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+            ) {
+                // Row 1: Back + Full Title + Download & Bookmark
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .testTag("pdf_viewer_close_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "বন্ধ করুন",
+                            tint = Color.White
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Text(
+                        text = title.ifBlank { "লেকচার স্লাইড ও পিডিএফ" },
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        downloadAndBookmarkRow()
+                    }
+                }
+
+                HorizontalDivider(
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp
+                )
+
+                // Row 2: Offline Status + Page Counter + Scrollable Tools Strip
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 6.dp, top = 3.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (isOffline) {
+                            Surface(
+                                color = Color(0xFF10B981).copy(alpha = 0.2f),
+                                border = BorderStroke(0.6.dp, Color(0xFF34D399).copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "✓ অফলাইন",
+                                    fontSize = 10.5.sp,
+                                    color = Color(0xFF34D399),
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        if (pageCount > 0) {
+                            Text(
+                                text = "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}",
+                                fontSize = 11.5.sp,
+                                color = Color(0xFFCBD5E1),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        actionIconsRow()
+                    }
+                }
+            }
+        }
     }
+}
+
+private fun computeSlideMaxPan(
+    targetScale: Float,
+    aspectRatio: Float,
+    containerW: Float,
+    containerH: Float
+): Pair<Float, Float> {
+    if (targetScale <= 1f || containerW <= 0f || containerH <= 0f) return 0f to 0f
+    val safeAspect = aspectRatio.coerceAtLeast(0.25f)
+    val containerAspect = containerW / containerH
+    val renderedW: Float
+    val renderedH: Float
+    if (safeAspect > containerAspect) {
+        renderedW = containerW
+        renderedH = containerW / safeAspect
+    } else {
+        renderedH = containerH
+        renderedW = containerH * safeAspect
+    }
+    val maxX = ((renderedW * targetScale) - containerW).coerceAtLeast(0f) / 2f
+    val maxY = ((renderedH * targetScale) - containerH).coerceAtLeast(0f) / 2f
+    return maxX to maxY
 }
 
 /**
@@ -1070,6 +1229,7 @@ private fun PdfViewerTopBar(
  * - Preserves exact page position when switching between Vertical Scroll and Horizontal Slide modes
  *   or rotating between Portrait and Landscape.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NativePdfViewerContent(
     renderer: PdfPageRenderer,
@@ -1077,6 +1237,7 @@ private fun NativePdfViewerContent(
     readingTheme: ReadingTheme,
     isFullscreen: Boolean,
     isLandscape: Boolean,
+    topBarHeightPx: Int = 0,
     currentSavedPage: Int,
     onCurrentPageChanged: (Int) -> Unit,
     onToggleFullscreen: () -> Unit,
@@ -1099,28 +1260,6 @@ private fun NativePdfViewerContent(
     var slidePanOffsetY by remember { mutableFloatStateOf(0f) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var showJumpDialog by remember { mutableStateOf(false) }
-
-    // Clamp horizontal pan whenever scale or container width changes
-    val maxPanX = remember(scale, containerSize.width) {
-        if (scale > 1f && containerSize.width > 0) {
-            (containerSize.width * (scale - 1f)) / 2f
-        } else 0f
-    }
-    val maxSlidePanY = remember(scale, containerSize.height) {
-        if (scale > 1f && containerSize.height > 0) {
-            (containerSize.height * (scale - 1f)) / 2f
-        } else 0f
-    }
-
-    LaunchedEffect(maxPanX, maxSlidePanY, scale) {
-        if (scale <= 1.01f) {
-            panOffsetX = 0f
-            slidePanOffsetY = 0f
-        } else {
-            panOffsetX = panOffsetX.coerceIn(-maxPanX, maxPanX)
-            slidePanOffsetY = slidePanOffsetY.coerceIn(-maxSlidePanY, maxSlidePanY)
-        }
-    }
 
     // Sync active page between Vertical Scroll and Horizontal Pager when viewMode changes
     LaunchedEffect(viewMode) {
@@ -1171,6 +1310,34 @@ private fun NativePdfViewerContent(
 
     LaunchedEffect(currentVisiblePageIndex) {
         onCurrentPageChanged(currentVisiblePageIndex)
+    }
+
+    val currentPageAspect = renderer.getAspectRatio(currentVisiblePageIndex).coerceAtLeast(0.25f)
+
+    // Clamp horizontal & slide pan whenever scale, container dimensions, or page aspect changes
+    val maxPanX = remember(scale, viewMode, currentPageAspect, containerSize) {
+        if (scale <= 1f || containerSize.width <= 0) 0f
+        else if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+            (containerSize.width * (scale - 1f)) / 2f
+        } else {
+            computeSlideMaxPan(scale, currentPageAspect, containerSize.width.toFloat(), containerSize.height.toFloat()).first
+        }
+    }
+    val maxSlidePanY = remember(scale, viewMode, currentPageAspect, containerSize) {
+        if (scale <= 1f || viewMode == PdfViewMode.VERTICAL_SCROLL || containerSize.height <= 0) 0f
+        else {
+            computeSlideMaxPan(scale, currentPageAspect, containerSize.width.toFloat(), containerSize.height.toFloat()).second
+        }
+    }
+
+    LaunchedEffect(maxPanX, maxSlidePanY, scale) {
+        if (scale <= 1.01f) {
+            panOffsetX = 0f
+            slidePanOffsetY = 0f
+        } else {
+            panOffsetX = panOffsetX.coerceIn(-maxPanX, maxPanX)
+            slidePanOffsetY = slidePanOffsetY.coerceIn(-maxSlidePanY, maxSlidePanY)
+        }
     }
 
     val currentVisiblePageNumber = currentVisiblePageIndex + 1
@@ -1227,25 +1394,134 @@ private fun NativePdfViewerContent(
         )
     }
 
+    val measuredTopBarDp = with(density) { topBarHeightPx.toDp() }
     val topBarPadding = if (!isFullscreen) {
-        if (isLandscape) 48.dp else 82.dp
+        if (topBarHeightPx > 0) measuredTopBarDp
+        else if (isLandscape) 52.dp else 118.dp
     } else 0.dp
+
+    val bottomContentClearance = if (!isFullscreen) {
+        if (renderer.pageCount > 1 && !isLandscape) 128.dp else 92.dp
+    } else 16.dp
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { containerSize = it }
             .clipToBounds()
-            // Tap & Double-Tap Gesture Detector (Double-tap zooms smoothly into the tapped horizontal point)
-            .pointerInput(viewMode) {
+            // Initial-pass Multi-touch Pinch-Zoom & Smart Pan Handler (never loses pinch to LazyColumn/HorizontalPager!)
+            .pointerInput(viewMode, renderer) {
+                val touchSlop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    var gestureTotalPanX = 0f
+                    var gestureTotalPanY = 0f
+                    var isPinching = false
+                    var lockedHorizontalPan = false
+
+                    do {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        val activePointers = event.changes.count { it.pressed }
+
+                        if (activePointers >= 2) {
+                            isPinching = true
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+                            val centroid = event.calculateCentroid(useCurrent = false)
+
+                            val w = size.width.toFloat().coerceAtLeast(1f)
+                            val h = size.height.toFloat().coerceAtLeast(1f)
+                            val oldScale = scale
+                            val newScale = (oldScale * zoomChange).coerceIn(1f, 4.0f)
+                            val scaleRatio = if (oldScale > 0f) newScale / oldScale else 1f
+
+                            val aspect = renderer.getAspectRatio(currentVisiblePageIndex).coerceAtLeast(0.25f)
+                            val (newMaxX, newMaxSlideY) = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                (if (newScale > 1f) (w * (newScale - 1f)) / 2f else 0f) to 0f
+                            } else {
+                                computeSlideMaxPan(newScale, aspect, w, h)
+                            }
+
+                            val focusX = if (centroid != Offset.Unspecified) centroid.x - w / 2f else 0f
+                            val updatedPanX = (panOffsetX - focusX) * scaleRatio + focusX + panChange.x
+
+                            scale = newScale
+                            panOffsetX = if (newScale > 1.01f) updatedPanX.coerceIn(-newMaxX, newMaxX) else 0f
+
+                            if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                // Keep the vertical point under the pinch fingers anchored smoothly as page height expands
+                                val firstItemTop = verticalListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.toFloat() ?: 0f
+                                val focusYFromTop = if (centroid != Offset.Unspecified) {
+                                    (centroid.y - firstItemTop).coerceIn(0f, h * 2f)
+                                } else h / 2f
+                                val zoomScrollDelta = focusYFromTop * (scaleRatio - 1f)
+                                val combinedDeltaY = (zoomScrollDelta - panChange.y).coerceIn(-h, h)
+                                if (abs(combinedDeltaY) > 0.25f) {
+                                    verticalListState.dispatchRawDelta(combinedDeltaY)
+                                }
+                            } else {
+                                val focusY = if (centroid != Offset.Unspecified) centroid.y - h / 2f else 0f
+                                val updatedPanY = (slidePanOffsetY - focusY) * scaleRatio + focusY + panChange.y
+                                slidePanOffsetY = if (newScale > 1.01f) {
+                                    updatedPanY.coerceIn(-newMaxSlideY, newMaxSlideY)
+                                } else 0f
+                            }
+
+                            // Consume multi-touch events in Initial pass so children never steal pinch
+                            event.changes.forEach { change: PointerInputChange ->
+                                change.consume()
+                            }
+                        } else if (activePointers == 1 && !isPinching && scale > 1.01f) {
+                            val panChange = event.calculatePan()
+                            if (panChange != Offset.Zero) {
+                                gestureTotalPanX += panChange.x
+                                gestureTotalPanY += panChange.y
+                                val w = size.width.toFloat().coerceAtLeast(1f)
+                                val h = size.height.toFloat().coerceAtLeast(1f)
+                                val aspect = renderer.getAspectRatio(currentVisiblePageIndex).coerceAtLeast(0.25f)
+
+                                if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                    val curMaxX = (w * (scale - 1f)) / 2f
+                                    if (!lockedHorizontalPan &&
+                                        abs(gestureTotalPanX) > touchSlop &&
+                                        abs(gestureTotalPanX) > abs(gestureTotalPanY) * 1.15f
+                                    ) {
+                                        lockedHorizontalPan = true
+                                    }
+                                    if (lockedHorizontalPan && curMaxX > 0f) {
+                                        val nextX = (panOffsetX + panChange.x).coerceIn(-curMaxX, curMaxX)
+                                        panOffsetX = nextX
+                                        event.changes.forEach { change ->
+                                            if (change.positionChanged()) change.consume()
+                                        }
+                                    }
+                                } else {
+                                    val (curMaxX, curMaxSlideY) = computeSlideMaxPan(scale, aspect, w, h)
+                                    val pastSlop = abs(gestureTotalPanX) > touchSlop || abs(gestureTotalPanY) > touchSlop
+                                    if (pastSlop) {
+                                        panOffsetX = (panOffsetX + panChange.x).coerceIn(-curMaxX, curMaxX)
+                                        slidePanOffsetY = (slidePanOffsetY + panChange.y).coerceIn(-curMaxSlideY, curMaxSlideY)
+                                        event.changes.forEach { change ->
+                                            if (change.positionChanged()) change.consume()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            // Tap & Double-Tap Gesture Detector (Double-tap zooms smoothly into the tapped focal point)
+            .pointerInput(viewMode, renderer) {
                 detectTapGestures(
                     onTap = {
                         onToggleFullscreen()
                     },
                     onDoubleTap = { tapOffset ->
+                        val oldScale = scale
                         val nextScale = when {
-                            scale < 1.5f -> 2.2f
-                            scale < 2.8f -> 3.2f
+                            oldScale < 1.5f -> 2.2f
+                            oldScale < 2.8f -> 3.2f
                             else -> 1.0f
                         }
                         if (nextScale <= 1.01f) {
@@ -1255,102 +1531,35 @@ private fun NativePdfViewerContent(
                         } else {
                             val w = size.width.toFloat().coerceAtLeast(1f)
                             val h = size.height.toFloat().coerceAtLeast(1f)
-                            val newMaxPanX = (w * (nextScale - 1f)) / 2f
-                            val newMaxPanY = (h * (nextScale - 1f)) / 2f
-                            val tapRelX = (w / 2f) - tapOffset.x
-                            val tapRelY = (h / 2f) - tapOffset.y
+                            val scaleRatio = if (oldScale > 0f) nextScale / oldScale else 1f
+                            val aspect = renderer.getAspectRatio(currentVisiblePageIndex).coerceAtLeast(0.25f)
+                            val (newMaxPanX, newMaxSlidePanY) = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                (w * (nextScale - 1f)) / 2f to 0f
+                            } else {
+                                computeSlideMaxPan(nextScale, aspect, w, h)
+                            }
+                            val focusX = tapOffset.x - w / 2f
+                            val targetPanX = (panOffsetX - focusX) * scaleRatio + focusX
                             scale = nextScale
-                            panOffsetX = (tapRelX * (nextScale - 1f)).coerceIn(-newMaxPanX, newMaxPanX)
-                            slidePanOffsetY = (tapRelY * (nextScale - 1f)).coerceIn(-newMaxPanY, newMaxPanY)
+                            panOffsetX = targetPanX.coerceIn(-newMaxPanX, newMaxPanX)
+
+                            if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                slidePanOffsetY = 0f
+                                val firstItemTop = verticalListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.toFloat() ?: 0f
+                                val focusYFromTop = (tapOffset.y - firstItemTop).coerceIn(0f, h * 2f)
+                                val scrollCompensation = focusYFromTop * (scaleRatio - 1f) + (tapOffset.y - h / 2f) * 0.35f
+                                coroutineScope.launch {
+                                    kotlinx.coroutines.yield()
+                                    verticalListState.scrollBy(scrollCompensation)
+                                }
+                            } else {
+                                val focusY = tapOffset.y - h / 2f
+                                val targetPanY = (slidePanOffsetY - focusY) * scaleRatio + focusY
+                                slidePanOffsetY = targetPanY.coerceIn(-newMaxSlidePanY, newMaxSlidePanY)
+                            }
                         }
                     }
                 )
-            }
-            // Multi-touch Pinch-Zoom & Smart Pan Gesture Handler (never blocks LazyColumn vertical scroll!)
-            .pointerInput(viewMode) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    do {
-                        val event = awaitPointerEvent()
-                        val activePointers = event.changes.count { it.pressed }
-
-                        if (activePointers >= 2) {
-                            // 2-finger pinch-to-zoom + simultaneous pan
-                            val zoomChange = event.calculateZoom()
-                            val panChange = event.calculatePan()
-                            val centroid = event.calculateCentroid(useCurrent = false)
-
-                            if (zoomChange != 1f || panChange != Offset.Zero) {
-                                val oldScale = scale
-                                val newScale = (oldScale * zoomChange).coerceIn(1f, 4.0f)
-                                val scaleRatio = newScale / oldScale
-
-                                val w = size.width.toFloat().coerceAtLeast(1f)
-                                val h = size.height.toFloat().coerceAtLeast(1f)
-                                val newMaxX = if (newScale > 1f) (w * (newScale - 1f)) / 2f else 0f
-                                val newMaxY = if (newScale > 1f) (h * (newScale - 1f)) / 2f else 0f
-
-                                val focusX = if (centroid != Offset.Unspecified) centroid.x - w / 2f else 0f
-                                val updatedPanX = (panOffsetX - focusX) * scaleRatio + focusX + panChange.x
-
-                                scale = newScale
-                                panOffsetX = if (newScale > 1.01f) updatedPanX.coerceIn(-newMaxX, newMaxX) else 0f
-
-                                if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                    // Drive LazyColumn scroll directly during pinch/pan so pages below load naturally!
-                                    if (abs(panChange.y) > 0.5f) {
-                                        verticalListState.dispatchRawDelta(-panChange.y)
-                                    }
-                                } else {
-                                    slidePanOffsetY = if (newScale > 1.01f) {
-                                        (slidePanOffsetY + panChange.y).coerceIn(-newMaxY, newMaxY)
-                                    } else 0f
-                                }
-
-                                event.changes.forEach { change: PointerInputChange ->
-                                    if (change.positionChanged()) {
-                                        change.consume()
-                                    }
-                                }
-                            }
-                        } else if (activePointers == 1 && scale > 1.01f) {
-                            // 1-finger pan while zoomed in:
-                            val panChange = event.calculatePan()
-                            val w = size.width.toFloat().coerceAtLeast(1f)
-                            val h = size.height.toFloat().coerceAtLeast(1f)
-                            val curMaxX = (w * (scale - 1f)) / 2f
-                            val curMaxY = (h * (scale - 1f)) / 2f
-
-                            if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                // Update horizontal pan while letting LazyColumn handle vertical scroll & fling!
-                                if (abs(panChange.x) > 0.5f) {
-                                    val nextX = (panOffsetX + panChange.x).coerceIn(-curMaxX, curMaxX)
-                                    val consumedX = nextX != panOffsetX
-                                    panOffsetX = nextX
-                                    // Only consume if movement is predominantly horizontal so vertical fling is never interrupted
-                                    if (consumedX && abs(panChange.x) > abs(panChange.y) * 1.15f) {
-                                        event.changes.forEach { change ->
-                                            if (change.positionChanged()) change.consume()
-                                        }
-                                    }
-                                }
-                            } else {
-                                // In Horizontal Slide mode while zoomed in, pan both X and Y inside the slide
-                                val nextX = (panOffsetX + panChange.x).coerceIn(-curMaxX, curMaxX)
-                                val nextY = (slidePanOffsetY + panChange.y).coerceIn(-curMaxY, curMaxY)
-                                val hitHorizontalEdge = (panOffsetX <= -curMaxX + 1f && panChange.x < 0f) ||
-                                    (panOffsetX >= curMaxX - 1f && panChange.x > 0f)
-                                panOffsetX = nextX
-                                slidePanOffsetY = nextY
-                                if (!hitHorizontalEdge || abs(panChange.y) > abs(panChange.x)) {
-                                    event.changes.forEach { change ->
-                                        if (change.positionChanged()) change.consume()
-                                    }
-                                }
-                            }
-                        }
-                    } while (event.changes.any { it.pressed })
-                }
             }
     ) {
         val availableWidthDp = maxWidth
@@ -1364,7 +1573,7 @@ private fun NativePdfViewerContent(
                     start = 0.dp,
                     end = 0.dp,
                     top = topBarPadding + 4.dp,
-                    bottom = if (!isFullscreen) 104.dp else 16.dp
+                    bottom = bottomContentClearance
                 ),
                 verticalArrangement = Arrangement.spacedBy((6f * scale).dp),
                 modifier = Modifier
@@ -1408,11 +1617,10 @@ private fun NativePdfViewerContent(
                     .fillMaxSize()
                     .padding(
                         top = topBarPadding,
-                        bottom = if (!isFullscreen) 84.dp else 0.dp
+                        bottom = if (!isFullscreen) (if (renderer.pageCount > 1 && !isLandscape) 120.dp else 84.dp) else 0.dp
                     )
                     .clipToBounds()
             ) { pageIndex ->
-                val aspect = renderer.getAspectRatio(pageIndex).coerceAtLeast(0.25f)
                 PdfPageCard(
                     pageIndex = pageIndex,
                     totalPages = renderer.pageCount,
@@ -1498,7 +1706,7 @@ private fun NativePdfViewerContent(
                         vertical = if (isLandscape) 4.dp else 8.dp
                     )
                 ) {
-                    // Fast Page Scrubber Slider (when document has > 1 page and in Portrait or sufficient height)
+                    // Fast Page Scrubber Slider (no cramped fixed height so thumb & track never collide with controls)
                     if (renderer.pageCount > 1 && !isLandscape) {
                         var sliderValue by remember(currentVisiblePageIndex) {
                             mutableFloatStateOf(currentVisiblePageIndex.toFloat())
@@ -1509,14 +1717,15 @@ private fun NativePdfViewerContent(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(26.dp)
                                 .padding(horizontal = 4.dp)
                         ) {
                             Text(
                                 text = "১",
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8),
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Slider(
                                 value = if (isDraggingSlider) sliderValue else currentVisiblePageIndex.toFloat(),
@@ -1542,6 +1751,15 @@ private fun NativePdfViewerContent(
                                     activeTrackColor = Color(0xFF38BDF8),
                                     inactiveTrackColor = Color.White.copy(alpha = 0.2f)
                                 ),
+                                thumb = {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color(0xFF38BDF8),
+                                        border = BorderStroke(1.5.dp, Color.White),
+                                        shadowElevation = 4.dp,
+                                        modifier = Modifier.size(if (isDraggingSlider) 18.dp else 14.dp)
+                                    ) {}
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .padding(horizontal = 8.dp)
@@ -1550,17 +1768,20 @@ private fun NativePdfViewerContent(
                                 text = toBengaliDigits(renderer.pageCount),
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8),
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
                     }
 
-                    // Bottom Controls Row: Zoom Out | Zoom % Reset | Zoom In | Divider | Prev | Page Pill | Next | Grid
+                    // Bottom Controls Row: Zoom Out | Zoom % Reset | Zoom In | Divider | Prev | Page Pill | Next
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                     ) {
                         // Zoom Out Button
                         IconButton(
@@ -1600,6 +1821,8 @@ private fun NativePdfViewerContent(
                                 color = if (scale > 1.05f) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.9f),
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
@@ -1672,7 +1895,9 @@ private fun NativePdfViewerContent(
                                     text = "${toBengaliDigits(currentVisiblePageNumber)} / ${toBengaliDigits(renderer.pageCount)}",
                                     color = Color.White,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -1740,29 +1965,39 @@ private fun PdfPageCard(
     }
 
     val aspectRatio = renderer.getAspectRatio(pageIndex).coerceAtLeast(0.25f)
-    val needsHighRes = isCurrentVisiblePage && scale >= 1.75f
+    val needsHighRes = isCurrentVisiblePage && scale >= 1.55f
+    val zoomTier = when {
+        isCurrentVisiblePage && scale >= 2.6f -> 2
+        isCurrentVisiblePage && scale >= 1.55f -> 1
+        else -> 0
+    }
 
-    LaunchedEffect(pageIndex, renderer, renderer.isInitialized, targetWidthPx, needsHighRes) {
+    LaunchedEffect(pageIndex, renderer, renderer.isInitialized, targetWidthPx, zoomTier) {
         if (!renderer.isInitialized) return@LaunchedEffect
 
+        val zoomWidthTarget = when (zoomTier) {
+            2 -> (targetWidthPx * 1.75f).roundToInt()
+            1 -> (targetWidthPx * 1.45f).roundToInt()
+            else -> targetWidthPx
+        }
         val currentBmp = pageBitmap
         if (currentBmp == null || currentBmp.isRecycled) {
             if (!isCurrentVisiblePage) {
                 // Brief debounce for off-center pages so fast scrolling cancels intermediate renders
                 delay(45L)
             }
-            var bmp = renderer.renderPage(pageIndex, targetWidthPx, forceHighRes = needsHighRes)
+            var bmp = renderer.renderPage(pageIndex, zoomWidthTarget, forceHighRes = needsHighRes)
             if (bmp == null) {
                 delay(120L)
-                bmp = renderer.renderPage(pageIndex, targetWidthPx, forceHighRes = needsHighRes)
+                bmp = renderer.renderPage(pageIndex, zoomWidthTarget, forceHighRes = needsHighRes)
             }
             if (bmp != null && !bmp.isRecycled) {
                 pageBitmap = bmp
             }
-        } else if (needsHighRes) {
+        } else if (needsHighRes && currentBmp.width < zoomWidthTarget.coerceAtMost(2600)) {
             // Upgrade current zoomed page to crisp high-DPI after user settles on zoom
-            delay(180L)
-            val hiBmp = renderer.renderPage(pageIndex, (targetWidthPx * 1.45f).roundToInt(), forceHighRes = true)
+            delay(160L)
+            val hiBmp = renderer.renderPage(pageIndex, zoomWidthTarget, forceHighRes = true)
             if (hiBmp != null && !hiBmp.isRecycled) {
                 pageBitmap = hiBmp
             }
