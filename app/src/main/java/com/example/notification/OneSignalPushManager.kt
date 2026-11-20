@@ -93,11 +93,24 @@ object OneSignalPushManager {
         }
     }
 
+    @Volatile
+    private var lastSyncTriggerMs: Long = 0L
+    private const val SYNC_THROTTLE_MS = 30_000L
+
     /**
      * Triggers an asynchronous sync of the student's current device, phone number, and FCM token
-     * with OneSignal and Supabase.
+     * with OneSignal and Supabase. Throttled to avoid duplicate burst calls on app startup/resume.
      */
-    fun triggerSyncAsync(context: Context, studentNameOverride: String? = null) {
+    fun triggerSyncAsync(
+        context: Context,
+        studentNameOverride: String? = null,
+        force: Boolean = false
+    ) {
+        val now = System.currentTimeMillis()
+        if (!force && studentNameOverride.isNullOrBlank() && (now - lastSyncTriggerMs) < SYNC_THROTTLE_MS) {
+            return
+        }
+        lastSyncTriggerMs = now
         val appContext = context.applicationContext
         scope.launch {
             acquireFcmAndSync(appContext, studentNameOverride = studentNameOverride)

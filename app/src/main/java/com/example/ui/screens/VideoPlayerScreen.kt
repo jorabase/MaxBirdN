@@ -157,8 +157,9 @@ fun VideoPlayerScreen(
 
     // Fallback URL if passed URL is empty
     val effectivePlaybackUrl = remember(videoUrl, downloadedItem) {
-        val completedLocal = if (downloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED) {
-            val file = File(downloadedItem!!.localFilePath)
+        val currentDownloaded = downloadedItem
+        val completedLocal = if (currentDownloaded?.status == DownloadedItemEntity.STATUS_COMPLETED) {
+            val file = File(currentDownloaded.localFilePath)
             if (file.exists() && file.length() > 0) file.absolutePath else null
         } else null
 
@@ -875,10 +876,10 @@ fun VideoPlayerScreen(
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        if (downloadedItem != null) {
+                        downloadedItem?.let { item ->
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "সাইজ: ${downloadManager.formatFileSize(downloadedItem!!.totalBytes)}",
+                                text = "সাইজ: ${downloadManager.formatFileSize(item.totalBytes)}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

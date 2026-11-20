@@ -1560,8 +1560,7 @@ fun LessonDetailPlayerScreen(
         }
     }
 
-    if (viewingSlideItem != null) {
-        val slide = viewingSlideItem!!
+    viewingSlideItem?.let { slide ->
         val url = slide.downloadUrl ?: ""
         SlideViewerDialog(
             slideUrl = url,

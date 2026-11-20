@@ -130,45 +130,6 @@ fun HomeHeader(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "HeaderGlow")
-    val borderGlowOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "BorderGlow"
-    )
-
-    val courseSwitcherBorderGradient = remember(borderGlowOffset) {
-        Brush.horizontalGradient(
-            colors = listOf(
-                Color(0xFF38BDF8).copy(alpha = 0.65f),
-                Color(0xFF818CF8).copy(alpha = 0.85f),
-                Color(0xFFC084FC).copy(alpha = 0.75f),
-                Color(0xFF38BDF8).copy(alpha = 0.65f)
-            ),
-            startX = borderGlowOffset * 500f,
-            endX = (borderGlowOffset + 1f) * 500f
-        )
-    }
-
-    val switcherInteraction = remember { MutableInteractionSource() }
-    val isSwitcherPressed by switcherInteraction.collectIsPressedAsState()
-    val switcherScale by animateFloatAsState(
-        targetValue = if (isSwitcherPressed) 0.975f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "switcherScale"
-    )
-
-    val avatarGlow by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "avatarGlow"
-    )
-
     Box(
         modifier = modifier.fillMaxWidth()
     ) {
@@ -198,189 +159,294 @@ fun HomeHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 20.dp)
+                .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 26.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                    val fallbackInitial = remember(userName) {
-                        userName.trim().firstOrNull()?.toString()?.uppercase() ?: "U"
-                    }
+                val fallbackInitial = remember(userName) {
+                    userName.trim().firstOrNull()?.toString()?.uppercase() ?: "U"
+                }
 
-                    val imageRequest = remember(avatarUrl, userName, context) {
-                        AvatarUtils.buildImageRequest(context, avatarUrl, userName)
-                    }
+                val imageRequest = remember(avatarUrl, userName, context) {
+                    AvatarUtils.buildImageRequest(context, avatarUrl, userName)
+                }
 
-                    // Profile Avatar with glowing ring + online status badge
-                    Box(
-                        contentAlignment = Alignment.BottomEnd,
-                        modifier = Modifier
-                            .size(50.dp)
-                            .clickable { onAvatarClick() }
+                // Isolated animated profile avatar so header does not recompose 60fps
+                AnimatedProfileAvatar(
+                    imageRequest = imageRequest,
+                    fallbackInitial = fallbackInitial,
+                    isPremium = isPremium,
+                    onClick = onAvatarClick
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    AnimatedRainbowGreetingText(
+                        greetingPrefix = dynamicGreeting,
+                        userName = userName
+                    )
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = subtitle,
+                            color = Color.White.copy(alpha = 0.88f),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Notification Bell Button (48dp accessible touch target + unread count badge)
+                Box(
+                    modifier = Modifier.size(48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        onClick = onNotificationClick,
+                        shape = CircleShape,
+                        color = Color(0xFF051226).copy(alpha = 0.58f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Box(
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "নোটিফিকেশন",
+                                tint = Color.White,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+                    }
+                    if (unreadNotificationCount > 0) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFEF4444),
+                            border = BorderStroke(1.5.dp, Color(0xFF07152B)),
                             modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = avatarGlow }
-                                .shadow(
-                                    elevation = 8.dp,
-                                    shape = CircleShape,
-                                    spotColor = if (isPremium) Color(0xFFF59E0B) else Color(0xFF38BDF8)
-                                )
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        if (isPremium) {
-                                            listOf(Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFF818CF8))
-                                        } else {
-                                            listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
-                                        }
-                                    )
-                                )
-                                .padding(2.4.dp),
-                            contentAlignment = Alignment.Center
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-2).dp, y = 2.dp)
+                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF07152B))
-                            ) {
-                                SubcomposeAsyncImage(
-                                    model = imageRequest,
-                                    contentDescription = "প্রোফাইল ছবি",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop,
-                                    error = { AvatarFallbackBadge(fallbackInitial) },
-                                    loading = { AvatarFallbackBadge(fallbackInitial) }
-                                )
-                            }
-                        }
-
-                        // Online/Verified dot indicator
-                        Box(
-                            modifier = Modifier
-                                .size(13.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF07152B))
-                                .padding(2.dp)
-                                .clip(CircleShape)
-                                .background(if (isPremium) Color(0xFFFBBF24) else Color(0xFF10B981))
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        AnimatedRainbowGreetingText(
-                            greetingPrefix = dynamicGreeting,
-                            userName = userName
-                        )
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Verified,
-                                contentDescription = null,
-                                tint = Color(0xFF38BDF8),
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = subtitle,
-                                color = Color.White.copy(alpha = 0.88f),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-            }
-
-            // Sleek, Compact Glassmorphic Course Switcher Pill
-            if (!activeCourseTitle.isNullOrBlank() && onOpenCourseSwitcher != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(42.dp)
-                        .graphicsLayer { scaleX = switcherScale; scaleY = switcherScale }
-                        .clip(RoundedCornerShape(22.dp))
-                        .clickable(interactionSource = switcherInteraction, indication = null) {
-                            onOpenCourseSwitcher()
-                        },
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xFF051226).copy(alpha = 0.72f),
-                    border = BorderStroke(1.2.dp, courseSwitcherBorderGradient),
-                    shadowElevation = 4.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFF38BDF8).copy(alpha = 0.18f),
-                                modifier = Modifier.size(26.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.School,
-                                        contentDescription = null,
-                                        tint = Color(0xFF38BDF8),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(9.dp))
-                            Text(
-                                text = activeCourseTitle,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = Color(0xFF0284C7).copy(alpha = 0.35f),
-                            border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 4.dp)
                             ) {
                                 Text(
-                                    text = "পরিবর্তন",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFBAE6FD)
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "কোর্স পরিবর্তন",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
+                                    text = if (unreadNotificationCount > 9) "9+" else unreadNotificationCount.toString(),
+                                    color = Color.White,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.ExtraBold
                                 )
                             }
                         }
                     }
+                }
+            }
+
+            // Sleek, Accessible 48dp Glassmorphic Course Switcher Pill
+            if (!activeCourseTitle.isNullOrBlank() && onOpenCourseSwitcher != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                AnimatedCourseSwitcherPill(
+                    activeCourseTitle = activeCourseTitle,
+                    onClick = onOpenCourseSwitcher
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnimatedProfileAvatar(
+    imageRequest: Any,
+    fallbackInitial: String,
+    isPremium: Boolean,
+    onClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "AvatarGlowTransition")
+    val avatarGlow by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "avatarGlow"
+    )
+
+    Box(
+        contentAlignment = Alignment.BottomEnd,
+        modifier = Modifier
+            .size(50.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = avatarGlow }
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    spotColor = if (isPremium) Color(0xFFF59E0B) else Color(0xFF38BDF8)
+                )
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        if (isPremium) {
+                            listOf(Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFF818CF8))
+                        } else {
+                            listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
+                        }
+                    )
+                )
+                .padding(2.4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(Color(0xFF07152B))
+            ) {
+                SubcomposeAsyncImage(
+                    model = imageRequest,
+                    contentDescription = "প্রোফাইল ছবি",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = { AvatarFallbackBadge(fallbackInitial) },
+                    loading = { AvatarFallbackBadge(fallbackInitial) }
+                )
+            }
+        }
+
+        // Online/Verified dot indicator
+        Box(
+            modifier = Modifier
+                .size(13.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF07152B))
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(if (isPremium) Color(0xFFFBBF24) else Color(0xFF10B981))
+        )
+    }
+}
+
+@Composable
+private fun AnimatedCourseSwitcherPill(
+    activeCourseTitle: String,
+    onClick: () -> Unit
+) {
+    val switcherInteraction = remember { MutableInteractionSource() }
+    val isSwitcherPressed by switcherInteraction.collectIsPressedAsState()
+    val switcherScale by animateFloatAsState(
+        targetValue = if (isSwitcherPressed) 0.98f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "switcherScale"
+    )
+
+    val borderGradient = remember {
+        Brush.horizontalGradient(
+            colors = listOf(
+                Color(0xFF38BDF8).copy(alpha = 0.72f),
+                Color(0xFF818CF8).copy(alpha = 0.85f),
+                Color(0xFFC084FC).copy(alpha = 0.75f),
+                Color(0xFF38BDF8).copy(alpha = 0.72f)
+            )
+        )
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .graphicsLayer { scaleX = switcherScale; scaleY = switcherScale }
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(
+                interactionSource = switcherInteraction,
+                indication = ripple(bounded = true, color = Color(0xFF38BDF8))
+            ) {
+                onClick()
+            },
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFF051226).copy(alpha = 0.72f),
+        border = BorderStroke(1.2.dp, borderGradient),
+        shadowElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color(0xFF38BDF8).copy(alpha = 0.18f),
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.School,
+                            contentDescription = null,
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = activeCourseTitle,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color(0xFF0284C7).copy(alpha = 0.35f),
+                border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "পরিবর্তন",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFBAE6FD)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "কোর্স পরিবর্তন",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }

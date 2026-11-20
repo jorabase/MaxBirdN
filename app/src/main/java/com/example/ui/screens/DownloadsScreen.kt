@@ -12,7 +12,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,6 +26,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,25 +46,11 @@ import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.ui.components.SlideViewerDialog
 import com.example.utils.NetworkUtils
+import com.example.utils.toBengaliDigits
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-private fun Int.toBengaliDigits(): String = this.toString().toBengaliDigits()
-
-private fun String.toBengaliDigits(): String {
-    val bnDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    val sb = StringBuilder(this.length)
-    for (ch in this) {
-        if (ch in '0'..'9') {
-            sb.append(bnDigits[ch - '0'])
-        } else {
-            sb.append(ch)
-        }
-    }
-    return sb.toString()
-}
 
 private fun formatDownloadDateBangla(timestampMs: Long): String {
     if (timestampMs <= 0L) return ""
@@ -108,6 +94,7 @@ fun DownloadsScreen(
     onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
     isOfflineOnly: Boolean = false,
     onNavigateOnline: (() -> Unit)? = null,
+    showBackButton: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -116,8 +103,8 @@ fun DownloadsScreen(
     val focusManager = LocalFocusManager.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
 
-    val allDownloads by downloadManager.getAllDownloads().collectAsState(initial = emptyList())
-    val activeSpeeds by downloadManager.activeSpeedsFlow.collectAsState()
+    val allDownloads by downloadManager.getAllDownloads().collectAsStateWithLifecycle(initialValue = emptyList())
+    val activeSpeeds by downloadManager.activeSpeedsFlow.collectAsStateWithLifecycle()
 
     var selectedCategoryIndex by rememberSaveable { mutableIntStateOf(0) } // 0: All, 1: Videos, 2: PDFs
     var selectedSortOrder by rememberSaveable { mutableIntStateOf(0) } // 0: Newest, 1: Largest, 2: Title
@@ -210,8 +197,7 @@ fun DownloadsScreen(
     }
 
     // In-App PDF Viewer
-    if (activePdfViewerItem != null) {
-        val pdfItem = activePdfViewerItem!!
+    activePdfViewerItem?.let { pdfItem ->
         SlideViewerDialog(
             slideUrl = pdfItem.localFilePath,
             title = pdfItem.title,
@@ -221,8 +207,7 @@ fun DownloadsScreen(
     }
 
     // Deletion Confirmation Dialog
-    if (itemToDelete != null) {
-        val item = itemToDelete!!
+    itemToDelete?.let { item ->
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
             icon = {
@@ -302,7 +287,7 @@ fun DownloadsScreen(
                         if (isOfflineOnly) {
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(44.dp)
                                     .clip(CircleShape)
                                     .background(Color(0xFFEF4444).copy(alpha = 0.14f)),
                                 contentAlignment = Alignment.Center
@@ -311,14 +296,14 @@ fun DownloadsScreen(
                                     imageVector = Icons.Default.CloudOff,
                                     contentDescription = "Offline Mode",
                                     tint = Color(0xFFEF4444),
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
-                        } else {
+                        } else if (showBackButton) {
                             IconButton(
                                 onClick = onBack,
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
                                     .testTag("downloads_back_button")
@@ -327,6 +312,21 @@ fun DownloadsScreen(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
                                     tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF0284C7).copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DownloadForOffline,
+                                    contentDescription = "ডাউনলোডস",
+                                    tint = Color(0xFF0284C7),
+                                    modifier = Modifier.size(23.dp)
                                 )
                             }
                         }

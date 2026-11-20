@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 object NotificationDeepLinkDispatcher {
     private const val TAG = "DeepLinkDispatcher"
 
-    private val _deepLinkEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 5)
+    private val _deepLinkEvents = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 5)
     val deepLinkEvents: SharedFlow<String> = _deepLinkEvents.asSharedFlow()
 
     @Volatile
@@ -22,7 +22,9 @@ object NotificationDeepLinkDispatcher {
         if (deeplink.isBlank()) return
         Log.d(TAG, "Queued deep link: $deeplink")
         pendingDeepLink = deeplink
-        _deepLinkEvents.tryEmit(deeplink)
+        if (_deepLinkEvents.tryEmit(deeplink)) {
+            // If an active collector received it immediately, keep pending only until consumed
+        }
     }
 
     fun consumePendingDeepLink(): String? {

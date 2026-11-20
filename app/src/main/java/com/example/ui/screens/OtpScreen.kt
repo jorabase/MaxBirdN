@@ -28,18 +28,7 @@ import com.example.auth.AuthViewModel
 import com.example.ui.components.ResponsiveDigitInputField
 import kotlinx.coroutines.delay
 
-private fun toBengaliDigits(input: String): String {
-    val bengaliDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    val sb = StringBuilder(input.length)
-    for (ch in input) {
-        if (ch in '0'..'9') {
-            sb.append(bengaliDigits[ch - '0'])
-        } else {
-            sb.append(ch)
-        }
-    }
-    return sb.toString()
-}
+private fun toBengaliDigits(input: String): String = com.example.utils.toBengaliDigits(input)
 
 private fun formatBengaliOtpCountdown(totalSeconds: Int): String {
     val safeSec = totalSeconds.coerceAtLeast(0)
@@ -213,10 +202,10 @@ fun OtpScreen(
                             }
                         )
 
-                        if (errorMessage != null) {
+                        errorMessage?.let { errText ->
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = errorMessage!!,
+                                text = errText,
                                 color = Color(0xFFF87171),
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center

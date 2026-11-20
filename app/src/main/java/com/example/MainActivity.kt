@@ -34,8 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.auth.SessionManager
-import com.example.notification.ClassAlarmScheduler
 import com.example.notification.NotificationDeepLinkDispatcher
 import com.example.notification.ShikhoFirebaseMessagingService
 import com.example.notification.ShikhoNotificationManager
@@ -58,11 +61,10 @@ class MainActivity : ComponentActivity() {
     val isPipModeState = mutableStateOf(false)
     private val activeSecurityViolationState = mutableStateOf<SecurityViolation?>(null)
     private val requiredUpdateState = mutableStateOf<AppUpdateInfo?>(null)
+    @Volatile
+    private var hasClearedDownloadedApksThisSession = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // 0. Apply Screenshot & Screen Recording Protection (FLAG_SECURE) if enabled in BuildConfig
-        AntiTamperSecurity.applyScreenshotProtection(this)
-
         super.onCreate(savedInstanceState)
 
         // 0.1 Perform initial Anti-Capture (Reqable/HttpCanary/Proxy) & Anti-Tamper inspection
@@ -71,12 +73,8 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
 
-        // 1. Immediately create notification channels on startup
-        ClassAlarmScheduler.createNotificationChannel(this)
-        ShikhoNotificationManager.createNotificationChannels(this)
-
-        // 1.1 Purge any installed/stale APK files and bloated cache on background IO thread
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        // 1. Purge any installed/stale APK files and bloated cache on background IO thread (lifecycle-aware)
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 com.example.update.InAppApkUpdater.cleanupInstalledOrStaleApks(applicationContext)
                 com.example.utils.AppCacheManager.autoTrimExcessiveCache(applicationContext)
@@ -100,9 +98,45 @@ class MainActivity : ComponentActivity() {
         fetchAndRegisterFcmToken()
         handleNotificationIntent(intent)
 
+        // Lifecycle-aware foreground watchdog for Reqable / HttpCanary / Proxy / Debugger (pauses in background)
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    val detected = withContext(Dispatchers.IO) {
+                        AntiTamperSecurity.inspectSecurityViolation(applicationContext)
+                    }
+                    activeSecurityViolationState.value = detected
+                    delay(8_000L)
+                }
+            }
+        }
+
+        // Lifecycle-aware version enforcement & Kill Switch monitor (pauses in background, polls every 60s)
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    val info = withContext(Dispatchers.IO) {
+                        AppUpdateRepository.fetchLatestUpdate()
+                    }
+                    if (info != null && AppUpdateRepository.shouldBlockApp(info, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME)) {
+                        requiredUpdateState.value = info
+                    } else if (info != null) {
+                        requiredUpdateState.value = null
+                        if (!hasClearedDownloadedApksThisSession) {
+                            hasClearedDownloadedApksThisSession = true
+                            withContext(Dispatchers.IO) {
+                                com.example.update.InAppApkUpdater.clearAllDownloadedApks(applicationContext)
+                            }
+                        }
+                    }
+                    delay(60_000L)
+                }
+            }
+        }
+
         setContent {
-            val sessionManager = remember { SessionManager(applicationContext) }
-            val themeMode by sessionManager.themeModeFlow.collectAsState()
+            val sessionManager = remember { SessionManager.getInstance(applicationContext) }
+            val themeMode by sessionManager.themeModeFlow.collectAsStateWithLifecycle()
             val systemInDark = isSystemInDarkTheme()
             val isDarkTheme = when (themeMode) {
                 "light" -> false
@@ -113,37 +147,8 @@ class MainActivity : ComponentActivity() {
             val currentViolation = activeSecurityViolationState.value
             val currentRequiredUpdate = requiredUpdateState.value
 
-            // Continuous background watchdog for Reqable / HttpCanary / Proxy / Debugger activation while app is running
-            LaunchedEffect(Unit) {
-                while (true) {
-                    val detected = withContext(Dispatchers.IO) {
-                        AntiTamperSecurity.inspectSecurityViolation(applicationContext)
-                    }
-                    activeSecurityViolationState.value = detected
-                    delay(4000L)
-                }
-            }
-
-            // Continuous strict version enforcement & Kill Switch check
             var isRecheckingKillSwitch by remember { mutableStateOf(false) }
             val mainScope = rememberCoroutineScope()
-
-            LaunchedEffect(Unit) {
-                while (true) {
-                    val info = withContext(Dispatchers.IO) {
-                        AppUpdateRepository.fetchLatestUpdate()
-                    }
-                    if (info != null && AppUpdateRepository.shouldBlockApp(info, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME)) {
-                        requiredUpdateState.value = info
-                    } else if (info != null) {
-                        requiredUpdateState.value = null
-                        withContext(Dispatchers.IO) {
-                            com.example.update.InAppApkUpdater.clearAllDownloadedApks(applicationContext)
-                        }
-                    }
-                    delay(15_000L)
-                }
-            }
 
             CompositionLocalProvider(LocalPictureInPictureMode provides isPipModeState.value) {
                 MyApplicationTheme(darkTheme = isDarkTheme) {
@@ -256,7 +261,7 @@ class MainActivity : ComponentActivity() {
                 if (task.isSuccessful && !task.result.isNullOrBlank()) {
                     val token = task.result
                     android.util.Log.d("MainActivity", "Fetched FCM Token: $token")
-                    val sessionManager = SessionManager(applicationContext)
+                    val sessionManager = SessionManager.getInstance(applicationContext)
                     sessionManager.setFcmToken(token)
 
                     // Immediately sync topic subscriptions (SHIKHO_ALL, user, program, phase)
@@ -333,7 +338,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        AntiTamperSecurity.applyScreenshotProtection(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             isPipModeState.value = isInPictureInPictureMode
         }
@@ -344,30 +348,28 @@ class MainActivity : ComponentActivity() {
         // Silent heartbeat verification, version enforcement & push identity sync with Supabase
         try {
             com.example.notification.OneSignalPushManager.triggerSyncAsync(applicationContext)
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    com.example.update.InAppApkUpdater.cleanupInstalledOrStaleApks(applicationContext)
                     val info = AppUpdateRepository.fetchLatestUpdate()
                     if (info != null && AppUpdateRepository.shouldBlockApp(info, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME)) {
-                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             requiredUpdateState.value = info
                         }
                     } else if (info != null) {
-                        com.example.update.InAppApkUpdater.clearAllDownloadedApks(applicationContext)
-                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             requiredUpdateState.value = null
                         }
                     }
                 } catch (_: Throwable) {}
 
                 if (com.example.security.DeviceActivationRepository.isConfigured() &&
-                    com.example.security.DeviceActivationRepository.isDeviceActivated(this@MainActivity)
+                    com.example.security.DeviceActivationRepository.isDeviceActivated(applicationContext)
                 ) {
                     try {
                         val result = com.example.security.DeviceActivationRepository.verifyHeartbeat(applicationContext)
                         if (result is com.example.security.HeartbeatResult.Revoked) {
                             com.example.security.DeviceActivationRepository.clearActivation(applicationContext)
-                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            withContext(Dispatchers.Main) {
                                 recreate()
                             }
                         }

@@ -306,16 +306,5 @@ object ClassTypeUtils {
         }
     }
 
-    private fun toBengaliDigits(numStr: String): String {
-        val bengaliDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-        return buildString {
-            for (ch in numStr) {
-                if (ch in '0'..'9') {
-                    append(bengaliDigits[ch - '0'])
-                } else {
-                    append(ch)
-                }
-            }
-        }
-    }
+    private fun toBengaliDigits(numStr: String): String = com.example.utils.toBengaliDigits(numStr)
 }

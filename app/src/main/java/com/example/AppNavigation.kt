@@ -16,7 +16,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
@@ -305,7 +305,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
-    val sessionManager = remember { SessionManager(context) }
+    val sessionManager = remember { SessionManager.getInstance(context) }
     val apiService = remember { ShikhoApiService.create(sessionManager) }
 
     val authViewModel: AuthViewModel = viewModel(
@@ -358,7 +358,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         factory = ModelTestViewModelFactory(modelTestRepository)
     )
 
-    val authState by authViewModel.authState.collectAsState()
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
     var showSessionExpiredDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -375,72 +375,89 @@ fun AppNavigation(modifier: Modifier = Modifier) {
     }
 
     LaunchedEffect(Unit) {
-        val initialPending = com.example.notification.NotificationDeepLinkDispatcher.consumePendingDeepLink()
-        if (!initialPending.isNullOrBlank()) {
-            com.example.notification.NotificationDeepLinkDispatcher.setPendingDeepLink(initialPending)
-        }
-        com.example.notification.NotificationDeepLinkDispatcher.deepLinkEvents.collect { link ->
-            if (link.isNotBlank()) {
-                try {
-                    val cleanLink = link.trim()
-                    if (cleanLink.startsWith("http://", ignoreCase = true) ||
-                        cleanLink.startsWith("https://", ignoreCase = true)
-                    ) {
-                        val browserIntent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse(cleanLink)
-                        ).apply {
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+        fun handleDeepLink(link: String) {
+            if (link.isBlank()) return
+            try {
+                val cleanLink = link.trim()
+                if (cleanLink.startsWith("http://", ignoreCase = true) ||
+                    cleanLink.startsWith("https://", ignoreCase = true)
+                ) {
+                    val browserIntent = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(cleanLink)
+                    ).apply {
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(browserIntent)
+                } else if (cleanLink.startsWith("lesson_player", ignoreCase = true)) {
+                    val uri = android.net.Uri.parse("shikho://$cleanLink")
+                    val lessonId = uri.getQueryParameter("lesson_id")?.trim()
+                    if (!lessonId.isNullOrBlank()) {
+                        courseViewModel.selectLessonById(lessonId)
+                        navController.navigate(Routes.LESSON_DETAIL_PLAYER) { launchSingleTop = true }
+                    }
+                } else if (cleanLink.startsWith("shikho://", ignoreCase = true)) {
+                    val uri = android.net.Uri.parse(cleanLink)
+                    when (uri.host?.lowercase()) {
+                        "chapter-report", "report", "report_card" -> {
+                            navController.navigate(Routes.REPORT_CARD) { launchSingleTop = true }
                         }
-                        context.startActivity(browserIntent)
-                    } else if (cleanLink.startsWith("shikho://", ignoreCase = true)) {
-                        val uri = android.net.Uri.parse(cleanLink)
-                        when (uri.host?.lowercase()) {
-                            "chapter-report", "report", "report_card" -> {
-                                navController.navigate(Routes.REPORT_CARD) { launchSingleTop = true }
-                            }
-                            "routine", "full-routine", "routine_full" -> {
-                                navController.navigate(Routes.ROUTINE_FULL) { launchSingleTop = true }
-                            }
-                            "live", "live-class" -> {
-                                val classId = uri.getQueryParameter("class_id") ?: uri.getQueryParameter("id") ?: ""
-                                val lessonId = uri.getQueryParameter("lesson_id") ?: classId
-                                val title = uri.getQueryParameter("title") ?: ""
-                                val subject = uri.getQueryParameter("subject") ?: ""
-                                if (classId.isNotBlank()) {
-                                    navController.navigate(
-                                        Routes.liveClassRoute(
-                                            classId = classId,
-                                            lessonId = lessonId,
-                                            lessonTitle = title,
-                                            subjectName = subject
-                                        )
-                                    ) { launchSingleTop = true }
-                                }
-                            }
-                            "downloads" -> {
-                                navController.navigate(Routes.downloadsRoute()) { launchSingleTop = true }
-                            }
-                            else -> {
-                                android.util.Log.w("AppNavigation", "Ignored unknown shikho:// deep link host: ${uri.host}")
+                        "routine", "full-routine", "routine_full" -> {
+                            navController.navigate(Routes.ROUTINE_FULL) { launchSingleTop = true }
+                        }
+                        "lesson_player", "lesson", "class" -> {
+                            val lessonId = uri.getQueryParameter("lesson_id") ?: uri.getQueryParameter("id")
+                            if (!lessonId.isNullOrBlank()) {
+                                courseViewModel.selectLessonById(lessonId.trim())
+                                navController.navigate(Routes.LESSON_DETAIL_PLAYER) { launchSingleTop = true }
                             }
                         }
-                    } else {
-                        when (cleanLink.lowercase()) {
-                            "routine", "full-routine", "routine_full" ->
-                                navController.navigate(Routes.ROUTINE_FULL) { launchSingleTop = true }
-                            "downloads" ->
-                                navController.navigate(Routes.downloadsRoute()) { launchSingleTop = true }
-                            "report", "report_card" ->
-                                navController.navigate(Routes.REPORT_CARD) { launchSingleTop = true }
-                            else ->
-                                android.util.Log.w("AppNavigation", "Ignored unwhitelisted deep link route: $cleanLink")
+                        "live", "live-class" -> {
+                            val classId = uri.getQueryParameter("class_id") ?: uri.getQueryParameter("id") ?: ""
+                            val lessonId = uri.getQueryParameter("lesson_id") ?: classId
+                            val title = uri.getQueryParameter("title") ?: ""
+                            val subject = uri.getQueryParameter("subject") ?: ""
+                            if (classId.isNotBlank()) {
+                                navController.navigate(
+                                    Routes.liveClassRoute(
+                                        classId = classId,
+                                        lessonId = lessonId,
+                                        lessonTitle = title,
+                                        subjectName = subject
+                                    )
+                                ) { launchSingleTop = true }
+                            }
+                        }
+                        "downloads" -> {
+                            navController.navigate(Routes.downloadsRoute()) { launchSingleTop = true }
+                        }
+                        else -> {
+                            android.util.Log.w("AppNavigation", "Ignored unknown shikho:// deep link host: ${uri.host}")
                         }
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("AppNavigation", "Error navigating deep link: $link", e)
+                } else {
+                    when (cleanLink.lowercase()) {
+                        "routine", "full-routine", "routine_full" ->
+                            navController.navigate(Routes.ROUTINE_FULL) { launchSingleTop = true }
+                        "downloads" ->
+                            navController.navigate(Routes.downloadsRoute()) { launchSingleTop = true }
+                        "report", "report_card" ->
+                            navController.navigate(Routes.REPORT_CARD) { launchSingleTop = true }
+                        else ->
+                            android.util.Log.w("AppNavigation", "Ignored unwhitelisted deep link route: $cleanLink")
+                    }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("AppNavigation", "Error navigating deep link: $link", e)
             }
+        }
+
+        com.example.notification.NotificationDeepLinkDispatcher.consumePendingDeepLink()?.let { pending ->
+            handleDeepLink(pending)
+        }
+        com.example.notification.NotificationDeepLinkDispatcher.deepLinkEvents.collect { link ->
+            com.example.notification.NotificationDeepLinkDispatcher.consumePendingDeepLink()
+            handleDeepLink(link)
         }
     }
 
@@ -1150,7 +1167,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             arguments = listOf(navArgument("sessionId") { type = NavType.StringType })
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: ""
-            val modelTestUiState by modelTestViewModel.uiState.collectAsState()
+            val modelTestUiState by modelTestViewModel.uiState.collectAsStateWithLifecycle()
             val isLiveExam = modelTestUiState.liveCqExamId.isNotBlank() ||
                 modelTestUiState.liveExamFinalResult != null ||
                 modelTestUiState.modelTestInfo?.exam_category?.contains("LIVE", ignoreCase = true) == true
@@ -1313,7 +1330,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
 
         animatedComposable(Routes.LESSON_DETAIL_PLAYER, anim = NavAnim.immersive) {
-            val courseUiState by courseViewModel.uiState.collectAsState()
+            val courseUiState by courseViewModel.uiState.collectAsStateWithLifecycle()
             LessonDetailPlayerScreen(
                 lesson = courseUiState.selectedLesson,
                 isLessonLoading = courseUiState.isLessonDetailLoading,
@@ -1484,7 +1501,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             val title = safeUrlDecode(backStackEntry.arguments?.getString("title"))
             val subject = safeUrlDecode(backStackEntry.arguments?.getString("subject"))
             val chapter = safeUrlDecode(backStackEntry.arguments?.getString("chapter"))
-            val courseUiState by courseViewModel.uiState.collectAsState()
+            val courseUiState by courseViewModel.uiState.collectAsStateWithLifecycle()
 
             LaunchedEffect(courseUiState.selectedChapterId, courseUiState.animatedPlaylist.isEmpty()) {
                 if (courseUiState.animatedPlaylist.isEmpty() && courseUiState.selectedChapterId.isNotBlank()) {

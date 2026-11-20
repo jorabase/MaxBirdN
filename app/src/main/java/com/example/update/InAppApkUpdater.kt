@@ -378,6 +378,13 @@ object InAppApkUpdater {
             )
             return
         }
+        if (!isHttpsUrl(rawUrl)) {
+            _downloadState.value = ApkUpdateDownloadState.Error(
+                messageBn = "নিরাপত্তা সতর্কতা: শুধুমাত্র নিরাপদ HTTPS ডাউনলোড লিংক অনুমোদিত।",
+                fallbackUrl = ""
+            )
+            return
+        }
 
         activeDownloadJob?.cancel()
         activeDownloadJob = scope.launch {
@@ -411,6 +418,13 @@ object InAppApkUpdater {
                 )
 
                 val resolvedUrl = normalizeDirectDownloadUrl(rawUrl)
+                if (!isHttpsUrl(resolvedUrl)) {
+                    _downloadState.value = ApkUpdateDownloadState.Error(
+                        messageBn = "নিরাপত্তা সতর্কতা: অনিরাপদ (HTTP) ডাউনলোড লিংক ব্লক করা হয়েছে।",
+                        fallbackUrl = ""
+                    )
+                    return@launch
+                }
                 val tempFile = File(updatesDir, "downloading_${updateInfo.versionCode}_$urlHash.apk.part")
                 if (tempFile.exists()) {
                     tempFile.delete()
@@ -427,8 +441,17 @@ object InAppApkUpdater {
                 if (!isValidApkArchive(appContext, tempFile, expectedVersionCode = null)) {
                     tempFile.delete()
                     _downloadState.value = ApkUpdateDownloadState.Error(
-                        messageBn = "ডাউনলোডকৃত ফাইলটি বৈধ বা সম্পূর্ণ APK নয় (সম্ভবত সরাসরি .apk লিংকের বদলে সাধারণ ওয়েবপেজ লিংক দেওয়া হয়েছে)।",
+                        messageBn = "ডাউনলোডকৃত ফাইলটি এই অ্যাপের বৈধ APK নয় (প্যাকেজ নাম বা ফাইল গঠন মেলেনি)।",
                         fallbackUrl = rawUrl
+                    )
+                    return@launch
+                }
+
+                if (!verifyApkSigningCertificateMatchesInstalledApp(appContext, tempFile)) {
+                    tempFile.delete()
+                    _downloadState.value = ApkUpdateDownloadState.Error(
+                        messageBn = "নিরাপত্তা সতর্কতা: ডাউনলোডকৃত APK-এর ডিজিটাল সিগনেচার আসল অ্যাপের সাথে মেলেনি! এটি অননুমোদিত বা পরিবর্তিত ফাইল হতে পারে।",
+                        fallbackUrl = ""
                     )
                     return@launch
                 }
@@ -578,6 +601,13 @@ object InAppApkUpdater {
             .build()
 
         downloadClient.newCall(request).execute().use { response ->
+            if (!response.request.url.isHttps) {
+                _downloadState.value = ApkUpdateDownloadState.Error(
+                    messageBn = "নিরাপত্তা সতর্কতা: ডাউনলোড রিডাইরেক্টটি অনিরাপদ (HTTP) হওয়ায় বাতিল করা হয়েছে।",
+                    fallbackUrl = ""
+                )
+                return false
+            }
             if (!response.isSuccessful) {
                 _downloadState.value = ApkUpdateDownloadState.Error(
                     messageBn = "সার্ভার থেকে APK ফাইল ডাউনলোড করা যায়নি (HTTP ${response.code})। লিংকটি সচল আছে কিনা যাচাই করুন।",
@@ -593,6 +623,13 @@ object InAppApkUpdater {
                 val htmlPreview = body.string()
                 val confirmedUrl = extractSecondaryDownloadUrl(htmlPreview, initialUrl, fallbackOriginalUrl)
                 if (!confirmedUrl.isNullOrBlank() && confirmedUrl != initialUrl) {
+                    if (!isHttpsUrl(confirmedUrl)) {
+                        _downloadState.value = ApkUpdateDownloadState.Error(
+                            messageBn = "নিরাপত্তা সতর্কতা: সেকেন্ডারি ডাউনলোড লিংকটি HTTPS নয়।",
+                            fallbackUrl = ""
+                        )
+                        return false
+                    }
                     return streamConfirmedUrlToFile(confirmedUrl, destinationFile, fallbackOriginalUrl)
                 }
                 _downloadState.value = ApkUpdateDownloadState.Error(
@@ -611,6 +648,7 @@ object InAppApkUpdater {
         destinationFile: File,
         fallbackOriginalUrl: String
     ): Boolean {
+        if (!isHttpsUrl(confirmedUrl)) return false
         val request = Request.Builder()
             .url(confirmedUrl)
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
@@ -620,6 +658,13 @@ object InAppApkUpdater {
             .build()
 
         downloadClient.newCall(request).execute().use { response ->
+            if (!response.request.url.isHttps) {
+                _downloadState.value = ApkUpdateDownloadState.Error(
+                    messageBn = "নিরাপত্তা সতর্কতা: ডাউনলোড রিডাইরেক্টটি অনিরাপদ (HTTP) হওয়ায় বাতিল করা হয়েছে।",
+                    fallbackUrl = ""
+                )
+                return false
+            }
             if (!response.isSuccessful) {
                 _downloadState.value = ApkUpdateDownloadState.Error(
                     messageBn = "ডিরেক্ট সার্ভার থেকে ফাইল ডাউনলোড ব্যর্থ হয়েছে (HTTP ${response.code})।",
@@ -727,11 +772,14 @@ object InAppApkUpdater {
         currentUrl: String,
         originalUrl: String
     ): String? {
-        // 1. MediaFire direct download button extraction
+        // 1. MediaFire direct download button extraction (always upgrade to HTTPS)
         val mediaFireRegex = Regex("""href=["'](https?://download\d+\.mediafire\.com/[^"']+)["']""")
         val mfMatch = mediaFireRegex.find(html)
         if (mfMatch != null) {
-            return mfMatch.groupValues[1]
+            val rawMf = mfMatch.groupValues[1]
+            return if (rawMf.startsWith("http://", ignoreCase = true)) {
+                "https://" + rawMf.substring(7)
+            } else rawMf
         }
 
         // 2. Google Drive virus-scan form extraction (supports both double and single quotes, plus URL fallback for id)
@@ -806,9 +854,12 @@ object InAppApkUpdater {
                 return false
             }
 
-            // 3. Verify Android PackageManager can parse the APK manifest
+            // 3. Verify Android PackageManager can parse the APK manifest AND packageName strictly matches this app
             val archiveInfo = getApkArchiveInfo(context, file) ?: return false
-            if (archiveInfo.packageName.isNullOrBlank()) return false
+            if (archiveInfo.packageName != context.packageName) {
+                Log.w(TAG, "Security reject: APK packageName (${archiveInfo.packageName}) != installed (${context.packageName})")
+                return false
+            }
 
             if (expectedVersionCode != null && expectedVersionCode > 0) {
                 val apkCode = getArchiveVersionCode(archiveInfo)
@@ -817,11 +868,100 @@ object InAppApkUpdater {
                     return false
                 }
             }
+            // 4. Verify cached/reused APK signing certificate also matches the installed app
+            if (!verifyApkSigningCertificateMatchesInstalledApp(context, file)) {
+                return false
+            }
             true
         } catch (e: Throwable) {
             Log.w(TAG, "APK archive validation failed for ${file.name}: ${e.message}")
             false
         }
+    }
+
+    private fun isHttpsUrl(url: String): Boolean {
+        return url.trim().startsWith("https://", ignoreCase = true)
+    }
+
+    /**
+     * Verifies that the downloaded APK archive is signed with the exact same signing certificate
+     * as the currently installed app. Prevents Trojan/tampered APK installation even if an update
+     * link is hijacked or a third-party file is uploaded.
+     */
+    private fun verifyApkSigningCertificateMatchesInstalledApp(context: Context, apkFile: File): Boolean {
+        return try {
+            val installedCerts = getInstalledAppCertSha256Set(context)
+            val archiveCerts = getArchiveApkCertSha256Set(context, apkFile)
+            if (installedCerts.isEmpty() || archiveCerts.isEmpty()) {
+                Log.w(TAG, "Could not extract signing certificates for comparison (installed=${installedCerts.size}, archive=${archiveCerts.size})")
+                return false
+            }
+            val matches = installedCerts.any { it in archiveCerts }
+            if (!matches) {
+                Log.e(TAG, "🚨 Security Alert: Downloaded APK signing certificate does NOT match installed app!")
+            }
+            matches
+        } catch (e: Throwable) {
+            Log.e(TAG, "APK signing verification error: ${e.message}")
+            false
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getInstalledAppCertSha256Set(context: Context): Set<String> {
+        val pm = context.packageManager
+        val pkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pm.getPackageInfo(
+                context.packageName,
+                PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        } else {
+            pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+        }
+        return extractCertSha256Set(pkgInfo)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getArchiveApkCertSha256Set(context: Context, apkFile: File): Set<String> {
+        val pm = context.packageManager
+        val archiveInfo: PackageInfo = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> pm.getPackageArchiveInfo(
+                apkFile.absolutePath,
+                PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
+            )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> pm.getPackageArchiveInfo(
+                apkFile.absolutePath,
+                PackageManager.GET_SIGNING_CERTIFICATES
+            )
+            else -> pm.getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNATURES)
+        } ?: return emptySet()
+        return extractCertSha256Set(archiveInfo)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun extractCertSha256Set(pkgInfo: PackageInfo): Set<String> {
+        val rawSigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = pkgInfo.signingInfo
+            if (signingInfo?.hasMultipleSigners() == true) {
+                signingInfo.apkContentsSigners
+            } else {
+                signingInfo?.signingCertificateHistory ?: signingInfo?.apkContentsSigners
+            }
+        } else {
+            pkgInfo.signatures
+        } ?: return emptySet()
+
+        val md = MessageDigest.getInstance("SHA-256")
+        return rawSigs.mapNotNull { sig ->
+            try {
+                md.reset()
+                md.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
+            } catch (_: Throwable) {
+                null
+            }
+        }.toSet()
     }
 
     private fun hasZipEndOfCentralDirectory(file: File): Boolean {
@@ -878,7 +1018,13 @@ object InAppApkUpdater {
 
     private fun verifySha256IfRequired(file: File, expectedSha256: String?): Boolean {
         val cleanExpected = expectedSha256?.trim().orEmpty()
-        if (cleanExpected.length != 64) return true
+        // If Admin left checksum blank, signing-certificate + packageName verification still protects integrity.
+        if (cleanExpected.isEmpty()) return true
+        // If a checksum IS provided, strictly reject malformed / truncated / non-hex checksums instead of bypassing.
+        if (cleanExpected.length != 64 || !cleanExpected.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+            Log.w(TAG, "Security reject: malformed SHA-256 checksum length=${cleanExpected.length}")
+            return false
+        }
         return try {
             val digest = MessageDigest.getInstance("SHA-256")
             val buffer = ByteArray(32 * 1024)
@@ -890,7 +1036,10 @@ object InAppApkUpdater {
                 }
             }
             val actualHex = digest.digest().joinToString("") { "%02x".format(it) }
-            actualHex.equals(cleanExpected, ignoreCase = true)
+            MessageDigest.isEqual(
+                actualHex.lowercase(Locale.US).toByteArray(Charsets.UTF_8),
+                cleanExpected.lowercase(Locale.US).toByteArray(Charsets.UTF_8)
+            )
         } catch (_: Throwable) {
             false
         }

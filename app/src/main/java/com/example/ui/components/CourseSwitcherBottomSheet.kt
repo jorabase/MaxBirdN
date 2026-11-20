@@ -48,10 +48,11 @@ fun getProgramBadge(program: EnrolledProgram): ProgramBadgeInfo {
     val isTrial = type == "FullApTrial" || (program.trial_enabled == true && program.is_free != true)
     val isFree = program.is_free == true || type == "FREE"
 
-    val isTrialExpired = if (isTrial && !details?.trial_end_date.isNullOrBlank()) {
+    val trialEndDate = details?.trial_end_date
+    val isTrialExpired = if (isTrial && !trialEndDate.isNullOrBlank()) {
         try {
             val format = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-            val date = format.parse(details!!.trial_end_date!!)
+            val date = format.parse(trialEndDate)
             date != null && date.before(Date())
         } catch (_: Exception) {
             !isActive

@@ -476,18 +476,7 @@ object ShikhoPlayerManager {
         return if (inBengali) toBengaliDigits(formatted) else formatted
     }
 
-    private fun toBengaliDigits(input: String): String {
-        val banglaDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-        val sb = StringBuilder()
-        for (char in input) {
-            if (char in '0'..'9') {
-                sb.append(banglaDigits[char - '0'])
-            } else {
-                sb.append(char)
-            }
-        }
-        return sb.toString()
-    }
+    private fun toBengaliDigits(input: String): String = com.example.utils.toBengaliDigits(input)
 
     /**
      * Converts raw video track height, width, and bitrate into a rich [VideoTrackQuality] with real metadata.
@@ -595,17 +584,22 @@ object ShikhoPlayerManager {
         return result
     }
 
+    private val streamProbeClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(8, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+    }
+
     /**
      * Probes the real HLS master playlist or stream siblings when a direct stream_X URL is passed,
      * so we never show fake hardcoded resolutions that don't exist on the server.
      */
     suspend fun probeRealStreamQualities(streamUrl: String): List<VideoTrackQuality> =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val client = OkHttpClient.Builder()
-                .connectTimeout(8, TimeUnit.SECONDS)
-                .readTimeout(8, TimeUnit.SECONDS)
-                .followRedirects(true)
-                .build()
+            val client = streamProbeClient
 
             val defaultHeaders = okhttp3.Headers.Builder()
                 .add("Origin", "https://app.shikho.com")

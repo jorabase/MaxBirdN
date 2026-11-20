@@ -3,8 +3,7 @@
 # Prevents reverse engineering, decompilation via MT Manager, JADX, Bytecode viewers, and APKTool
 # ============================================================================
 
-# 1. Class & Package Obfuscation Rules (Fast & Secure)
--dontoptimize
+# 1. Class & Package Obfuscation & R8 Optimization Rules
 -repackageclasses ''
 -allowaccessmodification
 -dontusemixedcaseclassnames
@@ -53,30 +52,12 @@
     <fields>;
     <methods>;
 }
--keep class com.example.birdgram.** {
-    <fields>;
-    <methods>;
-}
--keep class com.example.auth.** {
-    <fields>;
-    <methods>;
-}
 -keep class com.example.modeltest.data.** {
     <fields>;
     <methods>;
 }
--keep class com.example.notice.** {
-    <fields>;
-    <methods>;
-}
--keep class com.example.update.** {
-    <fields>;
-    <methods>;
-}
--keep class com.example.course.** {
-    <fields>;
-    <methods>;
-}
+# Note: com.example.auth, com.example.course, com.example.update, com.example.notice, and com.example.security
+# are intentionally obfuscated by R8 in release builds (only @JsonClass / @Keep annotated members remain).
 
 # 6. Retrofit & OkHttp Rules
 -keepattributes *Annotation*,Signature

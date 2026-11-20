@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -49,10 +50,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
-    sessionManager: SessionManager = SessionManager(LocalContext.current),
+    sessionManager: SessionManager = SessionManager.getInstance(LocalContext.current),
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToChangeSyllabus: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
@@ -68,9 +69,9 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val isDark = isAppInDarkTheme()
 
-    val currentThemeMode by sessionManager.themeModeFlow.collectAsState()
-    val currentLeadTime by sessionManager.classNotificationLeadTimeFlow.collectAsState()
-    val currentWallpaper by sessionManager.headerWallpaperFlow.collectAsState()
+    val currentThemeMode by sessionManager.themeModeFlow.collectAsStateWithLifecycle()
+    val currentLeadTime by sessionManager.classNotificationLeadTimeFlow.collectAsStateWithLifecycle()
+    val currentWallpaper by sessionManager.headerWallpaperFlow.collectAsStateWithLifecycle()
 
     var showThemeDialog by remember { mutableStateOf(false) }
     var showEqualizerSheet by remember { mutableStateOf(false) }
@@ -104,8 +105,8 @@ fun SettingsScreen(
     }
 
     // Reactive profile fields
-    val profileUpdateTick by sessionManager.userProfileUpdateFlow.collectAsState()
-    val avatarFromFlow by sessionManager.userAvatarFlow.collectAsState()
+    val profileUpdateTick by sessionManager.userProfileUpdateFlow.collectAsStateWithLifecycle()
+    val avatarFromFlow by sessionManager.userAvatarFlow.collectAsStateWithLifecycle()
 
     val fullName = remember(profileUpdateTick) {
         sessionManager.getUserFullName()
@@ -278,7 +279,8 @@ fun SettingsScreen(
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                     Icon(
                                         imageVector = Icons.Default.Verified,
@@ -294,15 +296,17 @@ fun SettingsScreen(
                                         text = phone,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = Color.White.copy(alpha = 0.85f)
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
                                 Spacer(modifier = Modifier.height(6.dp))
 
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(50),
@@ -313,6 +317,8 @@ fun SettingsScreen(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFBAE6FD),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                         )
                                     }
@@ -325,11 +331,15 @@ fun SettingsScreen(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFFDE68A),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                         )
                                     }
                                 }
                             }
+
+                            Spacer(modifier = Modifier.width(6.dp))
 
                             FilledTonalIconButton(
                                 onClick = onNavigateToEditProfile,
@@ -337,12 +347,12 @@ fun SettingsScreen(
                                     containerColor = Color.White.copy(alpha = 0.18f),
                                     contentColor = Color.White
                                 ),
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Edit Profile",
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -663,11 +673,12 @@ fun SettingsScreen(
                 )
             }
 
-            // App Version Footer — generous bottom clearance above floating dock
+            // App Version Footer — generous bottom clearance above floating dock + nav bars
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp, bottom = 110.dp),
+                    .navigationBarsPadding()
+                    .padding(top = 6.dp, bottom = 116.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Surface(

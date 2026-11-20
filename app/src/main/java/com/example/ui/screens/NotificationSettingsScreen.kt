@@ -43,20 +43,21 @@ import com.example.home.HomeViewModel
 import com.example.notification.ClassAlarmScheduler
 import com.example.notification.ScheduledClassAlarmInfo
 import com.example.ui.theme.isAppInDarkTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NotificationSettingsScreen(
-    sessionManager: SessionManager = SessionManager(LocalContext.current),
+    sessionManager: SessionManager = SessionManager.getInstance(LocalContext.current),
     homeViewModel: HomeViewModel,
     onBack: () -> Unit
 ) {
     BackHandler { onBack() }
 
     val context = LocalContext.current
-    val homeUiState by homeViewModel.uiState.collectAsState()
+    val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     // Permission check for Android 13+
@@ -85,7 +86,7 @@ fun NotificationSettingsScreen(
     var examEnabled by remember { mutableStateOf(sessionManager.isExamNotificationEnabled()) }
     var soundEnabled by remember { mutableStateOf(sessionManager.isNotificationSoundEnabled()) }
     var vibrateEnabled by remember { mutableStateOf(sessionManager.isNotificationVibrateEnabled()) }
-    val leadTimeMinutes by sessionManager.classNotificationLeadTimeFlow.collectAsState()
+    val leadTimeMinutes by sessionManager.classNotificationLeadTimeFlow.collectAsStateWithLifecycle()
     var disabledIds by remember { mutableStateOf(sessionManager.getDisabledAlarmIds()) }
 
     // Clean out any legacy dummy test_* alarms automatically

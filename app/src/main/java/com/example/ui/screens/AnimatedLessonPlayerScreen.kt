@@ -204,8 +204,9 @@ fun AnimatedLessonPlayerScreen(
     var showDeleteDownloadDialog by remember { mutableStateOf(false) }
 
     val effectivePlaybackUrl = remember(activeVideoUrl, downloadedItem) {
-        val completedLocal = if (downloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED) {
-            val file = File(downloadedItem!!.localFilePath)
+        val currentDownloaded = downloadedItem
+        val completedLocal = if (currentDownloaded?.status == DownloadedItemEntity.STATUS_COMPLETED) {
+            val file = File(currentDownloaded.localFilePath)
             if (file.exists() && file.length() > 0) file.absolutePath else null
         } else null
 
@@ -1285,9 +1286,10 @@ fun AnimatedLessonPlayerScreen(
                         }
 
                         // Download Status Button
-                        when (downloadedItem?.status) {
+                        val currentDownload = downloadedItem
+                        when (currentDownload?.status) {
                             DownloadedItemEntity.STATUS_DOWNLOADING -> {
-                                val item = downloadedItem!!
+                                val item = currentDownload
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
                                     color = Color(0xFF0284C7).copy(alpha = 0.35f),
@@ -2470,7 +2472,7 @@ fun AnimatedLessonPlayerScreen(
                             ) {
                                 Text("ফাইল সাইজ:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
-                                    text = downloadManager.formatFileSize(downloadedItem!!.totalBytes),
+                                    text = downloadManager.formatFileSize(downloadedItem?.totalBytes ?: 0L),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary

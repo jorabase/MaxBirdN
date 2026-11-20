@@ -10,13 +10,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,7 +71,7 @@ fun MainContainerScreen(
 
     // Observe active downloads count for live bottom dock badge indicator
     val downloadManager = remember { AppFileDownloadManager.getInstance(context) }
-    val allDownloads by downloadManager.getAllDownloads().collectAsState(initial = emptyList())
+    val allDownloads by downloadManager.getAllDownloads().collectAsStateWithLifecycle(initialValue = emptyList())
     val activeDownloadsCount = remember(allDownloads) {
         allDownloads.count { it.status == DownloadedItemEntity.STATUS_DOWNLOADING }
     }
@@ -200,7 +200,8 @@ fun MainContainerScreen(
                     DownloadsScreen(
                         onBack = { selectedIndex = 0 },
                         onPlayVideo = onPlayVideo,
-                        onOpenPdf = onOpenPdf
+                        onOpenPdf = onOpenPdf,
+                        showBackButton = false
                     )
                 }
                 3 -> {
@@ -267,7 +268,13 @@ fun MainContainerScreen(
 /**
  * Premium Floating Dock — glow shadow, icon bounce spring, gradient shine border, and live download indicator
  */
-private data class TabTheme(val pillBg: Color, val border: Color, val icon: Color)
+private data class TabTheme(
+    val darkPillBg: Color,
+    val lightPillBg: Color,
+    val border: Color,
+    val darkIcon: Color,
+    val lightIcon: Color
+)
 
 @Composable
 fun ElementalFloatingBottomBar(
@@ -275,129 +282,202 @@ fun ElementalFloatingBottomBar(
     onTabSelected: (Int) -> Unit,
     activeDownloadsCount: Int = 0
 ) {
+    val isDark = com.example.ui.theme.isAppInDarkTheme()
     val themes = remember {
         listOf(
-            TabTheme(Color(0xFF281A07), Color(0xFFF59E0B), Color(0xFFFBBF24)), // Amber (Home)
-            TabTheme(Color(0xFF072541), Color(0xFF0284C7), Color(0xFF38BDF8)), // Azure (Courses)
-            TabTheme(Color(0xFF0B243E), Color(0xFF38BDF8), Color(0xFF7DD3FC)), // Sky (Downloads)
-            TabTheme(Color(0xFF21123A), Color(0xFFA855F7), Color(0xFFC084FC))  // Violet (Settings)
+            TabTheme(Color(0xFF281A07), Color(0xFFFEF3C7), Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFFB45309)), // Amber (Home)
+            TabTheme(Color(0xFF072541), Color(0xFFE0F2FE), Color(0xFF0284C7), Color(0xFF38BDF8), Color(0xFF0369A1)), // Azure (Courses)
+            TabTheme(Color(0xFF0B243E), Color(0xFFE0F2FE), Color(0xFF0EA5E9), Color(0xFF7DD3FC), Color(0xFF0284C7)), // Sky (Downloads)
+            TabTheme(Color(0xFF21123A), Color(0xFFF3E8FF), Color(0xFFA855F7), Color(0xFFC084FC), Color(0xFF7E22CE))  // Violet (Settings)
         )
     }
 
-    Surface(
+    val dockBg = if (isDark) Color(0xFF071428) else Color(0xFFFFFFFF)
+    val dockBorderColors = if (isDark) {
+        listOf(
+            Color(0xFF1E3A5F).copy(alpha = 0.9f),
+            Color(0xFF38BDF8).copy(alpha = 0.45f),
+            Color(0xFF1E3A5F).copy(alpha = 0.9f)
+        )
+    } else {
+        listOf(
+            Color(0xFFCBD5E1).copy(alpha = 0.85f),
+            Color(0xFF38BDF8).copy(alpha = 0.45f),
+            Color(0xFFCBD5E1).copy(alpha = 0.85f)
+        )
+    }
+    val unselectedTint = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val selectedTextColor = if (isDark) Color.White else Color(0xFF0F172A)
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-            .height(62.dp)
-            .shadow(
-                elevation = 22.dp,
-                shape = RoundedCornerShape(31.dp),
-                spotColor = Color.Black.copy(alpha = 0.55f)
-            ),
-        shape = RoundedCornerShape(31.dp),
-        color = Color(0xFF071428),
-        border = BorderStroke(
-            1.dp,
-            Brush.horizontalGradient(
-                listOf(
-                    Color(0xFF1E3A5F).copy(alpha = 0.9f),
-                    Color(0xFF38BDF8).copy(alpha = 0.45f),
-                    Color(0xFF1E3A5F).copy(alpha = 0.9f)
-                )
-            )
-        )
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Top specular highlight line
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 36.dp)
-                    .height(1.dp)
-                    .width(130.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color.Transparent, Color.White.copy(alpha = 0.28f), Color.Transparent)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 520.dp)
+                .height(66.dp)
+                .shadow(
+                    elevation = if (isDark) 22.dp else 14.dp,
+                    shape = RoundedCornerShape(33.dp),
+                    spotColor = Color.Black.copy(alpha = if (isDark) 0.55f else 0.16f)
+                ),
+            shape = RoundedCornerShape(33.dp),
+            color = dockBg,
+            border = BorderStroke(1.dp, Brush.horizontalGradient(dockBorderColors))
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Top specular highlight line
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 36.dp)
+                        .height(1.dp)
+                        .width(130.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    (if (isDark) Color.White else Color(0xFF38BDF8)).copy(alpha = 0.28f),
+                                    Color.Transparent
+                                )
+                            )
                         )
-                    )
-            )
+                )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                NavigationItem.items.forEachIndexed { index, item ->
-                    val isSelected = selectedIndex == index
-                    val theme = themes.getOrElse(index) { themes.last() }
-                    val showDownloadBadge = index == 2 && activeDownloadsCount > 0
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    NavigationItem.items.forEachIndexed { index, item ->
+                        val isSelected = selectedIndex == index
+                        val theme = themes.getOrElse(index) { themes.last() }
+                        val showDownloadBadge = index == 2 && activeDownloadsCount > 0
+                        val activeIconColor = if (isDark) theme.darkIcon else theme.lightIcon
+                        val activePillBg = if (isDark) theme.darkPillBg else theme.lightPillBg
 
-                    val iconScale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.05f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        ),
-                        label = "iconScale$index"
-                    )
+                        val iconScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.06f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "iconScale$index"
+                        )
 
-                    val iconTint by animateColorAsState(
-                        targetValue = if (isSelected) theme.icon else Color(0xFF94A3B8),
-                        animationSpec = tween(250),
-                        label = "iconTint$index"
-                    )
+                        val iconTint by animateColorAsState(
+                            targetValue = if (isSelected) activeIconColor else unselectedTint,
+                            animationSpec = tween(220),
+                            label = "iconTint$index"
+                        )
 
-                    val interaction = remember { MutableInteractionSource() }
-                    val isPressed by interaction.collectIsPressedAsState()
-                    val itemScale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.92f else 1f,
-                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                        label = "itemScale$index"
-                    )
+                        val interaction = remember { MutableInteractionSource() }
+                        val isPressed by interaction.collectIsPressedAsState()
+                        val itemScale by animateFloatAsState(
+                            targetValue = if (isPressed) 0.94f else 1f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            label = "itemScale$index"
+                        )
 
-                    AnimatedContent(
-                        targetState = isSelected,
-                        transitionSpec = {
-                            (fadeIn(tween(200)) + scaleIn(
-                                initialScale = 0.92f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                            )).togetherWith(fadeOut(tween(140)))
-                        },
-                        label = "TabPillTransition$index"
-                    ) { selected ->
-                        if (selected) {
-                            Surface(
-                                shape = RoundedCornerShape(22.dp),
-                                color = theme.pillBg,
-                                border = BorderStroke(
-                                    1.2.dp,
-                                    Brush.horizontalGradient(
-                                        listOf(theme.border, theme.border.copy(alpha = 0.55f), theme.border)
-                                    )
-                                ),
-                                shadowElevation = 6.dp,
-                                modifier = Modifier
-                                    .height(40.dp)
-                                    .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
-                                    .clickable(interactionSource = interaction, indication = null) {
-                                        onTabSelected(index)
+                        val slotWeight = if (isSelected) 1.32f else 1f
+
+                        Box(
+                            modifier = Modifier
+                                .weight(slotWeight)
+                                .fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Surface(
+                                    shape = RoundedCornerShape(24.dp),
+                                    color = activePillBg,
+                                    border = BorderStroke(
+                                        1.2.dp,
+                                        Brush.horizontalGradient(
+                                            listOf(theme.border, theme.border.copy(alpha = 0.55f), theme.border)
+                                        )
+                                    ),
+                                    shadowElevation = if (isDark) 6.dp else 2.dp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .clickable(
+                                            interactionSource = interaction,
+                                            indication = ripple(bounded = true, color = theme.border)
+                                        ) {
+                                            onTabSelected(index)
+                                        }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Box {
+                                            Icon(
+                                                imageVector = item.selectedIcon,
+                                                contentDescription = item.title,
+                                                tint = activeIconColor,
+                                                modifier = Modifier
+                                                    .size(19.dp)
+                                                    .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+                                            )
+                                            if (showDownloadBadge) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(7.dp)
+                                                        .align(Alignment.TopEnd)
+                                                        .offset(x = 2.dp, y = (-2).dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(0xFF10B981))
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = item.title,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = selectedTextColor,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+                                }
+                            } else {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 48.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
+                                        .clickable(
+                                            interactionSource = interaction,
+                                            indication = ripple(bounded = true)
+                                        ) {
+                                            onTabSelected(index)
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 4.dp)
                                 ) {
                                     Box {
                                         Icon(
-                                            imageVector = item.selectedIcon,
+                                            imageVector = item.unselectedIcon,
                                             contentDescription = item.title,
-                                            tint = theme.icon,
+                                            tint = iconTint,
                                             modifier = Modifier
-                                                .size(18.dp)
+                                                .size(20.dp)
                                                 .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                                         )
                                         if (showDownloadBadge) {
@@ -405,63 +485,23 @@ fun ElementalFloatingBottomBar(
                                                 modifier = Modifier
                                                     .size(7.dp)
                                                     .align(Alignment.TopEnd)
-                                                    .offset(x = 2.dp, y = (-2).dp)
+                                                    .offset(x = 3.dp, y = (-2).dp)
                                                     .clip(CircleShape)
-                                                    .background(Color(0xFF10B981))
+                                                    .background(Color(0xFF38BDF8))
                                             )
                                         }
                                     }
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = item.title,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = iconTint,
                                         maxLines = 1,
+                                        softWrap = false,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                            }
-                        } else {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
-                                    .clickable(interactionSource = interaction, indication = null) {
-                                        onTabSelected(index)
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Box {
-                                    Icon(
-                                        imageVector = item.unselectedIcon,
-                                        contentDescription = item.title,
-                                        tint = iconTint,
-                                        modifier = Modifier
-                                            .size(19.dp)
-                                            .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
-                                    )
-                                    if (showDownloadBadge) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(7.dp)
-                                                .align(Alignment.TopEnd)
-                                                .offset(x = 3.dp, y = (-2).dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF38BDF8))
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = item.title,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = iconTint,
-                                    maxLines = 1
-                                )
                             }
                         }
                     }

@@ -39,6 +39,7 @@ class LiveClassWebSocketManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val client: OkHttpClient = OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(15, TimeUnit.SECONDS)

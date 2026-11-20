@@ -177,12 +177,6 @@ interface ShikhoApiService {
     suspend fun createSavedQuestion(@Body query: GraphQlQuery): CreateSavedQuestionResponse
 
     @GET("https://analytics.shikho.com/api/v1/results/quarterly/quarter/{programId}/{phaseId}")
-    suspend fun getQuarterlyResults(
-        @Path("programId") programId: String,
-        @Path("phaseId") phaseId: String
-    ): QuarterlyResultResponse
-
-    @GET("https://analytics.shikho.com/api/v1/results/quarterly/quarter/{programId}/{phaseId}")
     suspend fun getQuarterlyReport(
         @Path("programId") programId: String,
         @Path("phaseId") phaseId: String
@@ -202,9 +196,25 @@ interface ShikhoApiService {
 
     companion object {
         private const val BASE_URL = "https://api.shikho.com"
+        private const val SHIKHO_USER_AGENT =
+            "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)"
 
         @Volatile
         private var cachedInstance: ShikhoApiService? = null
+
+        @Volatile
+        private var sharedRefreshClient: OkHttpClient? = null
+
+        private fun getRefreshClient(appContext: android.content.Context): OkHttpClient {
+            return sharedRefreshClient ?: synchronized(this) {
+                sharedRefreshClient ?: OkHttpClient.Builder()
+                    .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, appContext) }
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(10, TimeUnit.SECONDS)
+                    .build()
+                    .also { sharedRefreshClient = it }
+            }
+        }
 
         fun create(sessionManager: SessionManager): ShikhoApiService {
             cachedInstance?.let { return it }
@@ -221,7 +231,7 @@ interface ShikhoApiService {
                         .header("Content-Type", "application/json")
                         .header("X-User-Timezone", "Asia/Dhaka")
                         .header("Build-Version", "(607) 6.0.7")
-                        .header("User-Agent", "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)")
+                        .header("User-Agent", SHIKHO_USER_AGENT)
 
                     if (!token.isNullOrBlank() && !isUnauthenticatedAuthEndpoint) {
                         reqBuilder.header("Authorization", "Bearer $token")
@@ -291,11 +301,7 @@ interface ShikhoApiService {
                         if (refreshToken.isNullOrBlank()) return null
 
                         try {
-                            val refreshClient = OkHttpClient.Builder()
-                                .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, sessionManager.appContext) }
-                                .connectTimeout(10, TimeUnit.SECONDS)
-                                .readTimeout(10, TimeUnit.SECONDS)
-                                .build()
+                            val refreshClient = getRefreshClient(sessionManager.appContext)
 
                             val jsonPayload = org.json.JSONObject().apply {
                                 put("token", refreshToken)
@@ -305,29 +311,30 @@ interface ShikhoApiService {
                                 .url("https://api.shikho.com/auth/v2/token/refresh")
                                 .header("Accept", "application/json")
                                 .header("Content-Type", "application/json")
-                                .header("User-Agent", "Shikho/(607) 6.0.7 (Android 12; V2029; vivo 2027; en; WIFI; edac7970-6299-4e14-9b98-8c64d3ca4c09)")
+                                .header("User-Agent", SHIKHO_USER_AGENT)
                                 .post(jsonPayload.toRequestBody("application/json".toMediaType()))
                                 .build()
 
-                            val refreshRes = refreshClient.newCall(refreshReq).execute()
-                            if (refreshRes.isSuccessful) {
-                                val resBody = refreshRes.body?.string()
-                                if (!resBody.isNullOrBlank()) {
-                                    val jsonObj = org.json.JSONObject(resBody)
-                                    val tokensObj = jsonObj.optJSONObject("tokens")
-                                    val newAccessToken = tokensObj?.optString("access_token")
-                                    val newRefreshToken = tokensObj?.optString("refresh_token")
-                                    if (!newAccessToken.isNullOrBlank()) {
-                                        sessionManager.updateAuthTokens(
-                                            accessToken = newAccessToken,
-                                            refreshToken = if (!newRefreshToken.isNullOrBlank()) newRefreshToken else refreshToken
-                                        )
-                                        android.util.Log.i("ShikhoApiService", "✅ Token successfully refreshed automatically!")
-                                        return newAccessToken
+                            refreshClient.newCall(refreshReq).execute().use { refreshRes ->
+                                if (refreshRes.isSuccessful) {
+                                    val resBody = refreshRes.body?.string()
+                                    if (!resBody.isNullOrBlank()) {
+                                        val jsonObj = org.json.JSONObject(resBody)
+                                        val tokensObj = jsonObj.optJSONObject("tokens")
+                                        val newAccessToken = tokensObj?.optString("access_token")
+                                        val newRefreshToken = tokensObj?.optString("refresh_token")
+                                        if (!newAccessToken.isNullOrBlank()) {
+                                            sessionManager.updateAuthTokens(
+                                                accessToken = newAccessToken,
+                                                refreshToken = if (!newRefreshToken.isNullOrBlank()) newRefreshToken else refreshToken
+                                            )
+                                            android.util.Log.i("ShikhoApiService", "✅ Token successfully refreshed automatically!")
+                                            return newAccessToken
+                                        }
                                     }
+                                } else {
+                                    android.util.Log.w("ShikhoApiService", "Token refresh endpoint returned HTTP ${refreshRes.code}")
                                 }
-                            } else {
-                                android.util.Log.w("ShikhoApiService", "Token refresh endpoint returned HTTP ${refreshRes.code}")
                             }
                         } catch (e: Exception) {
                             android.util.Log.w("ShikhoApiService", "Token refresh attempt encountered error: ${e.message}")

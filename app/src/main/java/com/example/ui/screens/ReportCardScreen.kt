@@ -47,34 +47,76 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.api.*
 import com.example.reportcard.ReportCardUiState
 import com.example.reportcard.ReportCardViewModel
 import com.example.reportcard.ReportTab
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.AvatarUtils
 import com.example.utils.SubjectColorUtils
+import com.example.utils.toBengaliDigits
 
-// Bengali digit conversion helpers
-private fun Number?.toBn(): String {
-    if (this == null) return "০"
-    val digits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    val str = this.toString()
-    val sb = StringBuilder()
-    for (ch in str) {
-        if (ch in '0'..'9') sb.append(digits[ch - '0']) else sb.append(ch)
-    }
-    return sb.toString()
-}
+// Bengali digit conversion helpers (delegating to central utility)
+private fun Number?.toBn(): String = if (this == null) "০" else toBengaliDigits(this)
 
-private fun String?.toBn(): String {
-    if (this == null) return ""
-    val digits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    val sb = StringBuilder()
-    for (ch in this) {
-        if (ch in '0'..'9') sb.append(digits[ch - '0']) else sb.append(ch)
-    }
-    return sb.toString()
-}
+private fun String?.toBn(): String = if (this == null) "" else toBengaliDigits(this)
+
+private data class ReportCardPalette(
+    val isDark: Boolean,
+    val pageBg: Color,
+    val cardBg: Color,
+    val subtleSurface: Color,
+    val border: Color,
+    val borderStrong: Color,
+    val textPrimary: Color,
+    val textHeading: Color,
+    val textBody: Color,
+    val textSecondary: Color,
+    val tabTrack: Color,
+    val tabSelectedBg: Color,
+    val tabSelectedContent: Color,
+    val accentBg: Color,
+    val accentText: Color
+)
+
+private val LightReportCardPalette = ReportCardPalette(
+    isDark = false,
+    pageBg = Color(0xFFF8FAFC),
+    cardBg = Color.White,
+    subtleSurface = Color(0xFFF1F5F9),
+    border = Color(0xFFE2E8F0),
+    borderStrong = Color(0xFFCBD5E1),
+    textPrimary = Color(0xFF0F172A),
+    textHeading = Color(0xFF1E293B),
+    textBody = Color(0xFF334155),
+    textSecondary = Color(0xFF64748B),
+    tabTrack = Color(0xFFE2E8F0).copy(alpha = 0.7f),
+    tabSelectedBg = Color.White,
+    tabSelectedContent = Color(0xFF1E3A8A),
+    accentBg = Color(0xFFEFF6FF),
+    accentText = Color(0xFF2563EB)
+)
+
+private val DarkReportCardPalette = ReportCardPalette(
+    isDark = true,
+    pageBg = Color(0xFF070D19),
+    cardBg = Color(0xFF111C2D),
+    subtleSurface = Color(0xFF1E293B),
+    border = Color(0xFF1E293B),
+    borderStrong = Color(0xFF334155),
+    textPrimary = Color(0xFFF8FAFC),
+    textHeading = Color(0xFFF1F5F9),
+    textBody = Color(0xFFCBD5E1),
+    textSecondary = Color(0xFF94A3B8),
+    tabTrack = Color(0xFF1E293B),
+    tabSelectedBg = Color(0xFF0F172A),
+    tabSelectedContent = Color(0xFF60A5FA),
+    accentBg = Color(0xFF1E3A8A).copy(alpha = 0.35f),
+    accentText = Color(0xFF60A5FA)
+)
+
+private val LocalReportCardPalette = staticCompositionLocalOf { LightReportCardPalette }
 
 // =========================================================================
 // শিক্ষার্থী প্রোফাইল পপআপ ডায়নামিক পারমিশন (STUDENT PROFILE DYNAMIC PERMISSION)
@@ -90,8 +132,10 @@ fun ReportCardScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isDark = isAppInDarkTheme()
+    val palette = if (isDark) DarkReportCardPalette else LightReportCardPalette
     val pullRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     var selectedStudentForProfile by remember { mutableStateOf<LeaderboardUserItem?>(null) }
@@ -120,7 +164,10 @@ fun ReportCardScreen(
         }
     }
 
-    CompositionLocalProvider(LocalCanViewProfiles provides uiState.canViewProfiles) {
+    CompositionLocalProvider(
+        LocalCanViewProfiles provides uiState.canViewProfiles,
+        LocalReportCardPalette provides palette
+    ) {
         Scaffold(
         topBar = {
             ReportCardTopBar(
@@ -131,20 +178,24 @@ fun ReportCardScreen(
                     val shareText = if (uiState.selectedTab == ReportTab.RESULT_DETAILS) {
                         val score = uiState.reportData?.performance_report?.total_score?.percentage ?: 0
                         val rank = uiState.reportData?.performance_report?.class_rank?.rank ?: 0
-                        "আমার কোয়ার্টার রিপোর্ট কার্ড:\nমোট স্কোর: ${score}%\nর‍্যাঙ্ক: ${rank}তম\nশিখো অ্যাপে আমার সাথে যুক্ত হও!"
+                        "আমার কোয়ার্টার রিপোর্ট কার্ড:\nমোট স্কোর: ${score}%\nর‍্যাঙ্ক: ${rank}তম\nMaxBird অ্যাপে আমার সাথে যুক্ত হও!"
                     } else {
                         val rank = uiState.leaderboardData?.user_rank ?: 0
                         val marks = uiState.leaderboardData?.user_marks ?: 0
                         val subName = uiState.selectedLeaderboardSubject?.display_bn ?: "সকল বিষয়"
-                        "বিষয়: $subName | আমার মেধা র‍্যাঙ্ক: ${rank}তম (প্রাপ্ত নম্বর: ${marks}%)\nশিখো অ্যাপ থেকে।"
+                        "বিষয়: $subName | আমার মেধা র‍্যাঙ্ক: ${rank}তম (প্রাপ্ত নম্বর: ${marks}%)\nMaxBird অ্যাপ থেকে।"
                     }
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                        type = "text/plain"
+                    runCatching {
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                            type = "text/plain"
+                        }
+                        val shareIntent = Intent.createChooser(sendIntent, "রিপোর্ট কার্ড শেয়ার করো")
+                        context.startActivity(shareIntent)
+                    }.onFailure {
+                        Toast.makeText(context, "শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
                     }
-                    val shareIntent = Intent.createChooser(sendIntent, "রিপোর্ট কার্ড শেয়ার করো")
-                    context.startActivity(shareIntent)
                 }
             )
         },
@@ -179,19 +230,23 @@ fun ReportCardScreen(
                         val rank = uiState.leaderboardData?.user_rank ?: 0
                         val marks = uiState.leaderboardData?.user_marks ?: 0
                         val subName = uiState.selectedLeaderboardSubject?.display_bn ?: "সকল বিষয়"
-                        val shareText = "বিষয়: $subName\nআমার জাতীয় মেধা র‍্যাঙ্ক: ${rank}তম\nপ্রাপ্ত নম্বর: ${marks}%\nশিখো লাইভ ক্লাসে অংশ নাও!"
-                        val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, shareText)
-                            type = "text/plain"
+                        val shareText = "বিষয়: $subName\nআমার জাতীয় মেধা র‍্যাঙ্ক: ${rank}তম\nপ্রাপ্ত নম্বর: ${marks}%\nMaxBird লাইভ ক্লাসে অংশ নাও!"
+                        runCatching {
+                            val sendIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                type = "text/plain"
+                            }
+                            val shareIntent = Intent.createChooser(sendIntent, "লিডারবোর্ড শেয়ার করো")
+                            context.startActivity(shareIntent)
+                        }.onFailure {
+                            Toast.makeText(context, "শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
                         }
-                        val shareIntent = Intent.createChooser(sendIntent, "লিডারবোর্ড শেয়ার করো")
-                        context.startActivity(shareIntent)
                     }
                 )
             }
         },
-        containerColor = Color(0xFFF8FAFC),
+        containerColor = palette.pageBg,
         modifier = modifier
     ) { innerPadding ->
         PullToRefreshBox(
@@ -323,10 +378,12 @@ fun ReportCardScreen(
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = Color.White,
-                                unfocusedContainerColor = Color.White,
-                                focusedBorderColor = Color(0xFF2563EB),
-                                unfocusedBorderColor = Color(0xFFCBD5E1)
+                                focusedContainerColor = palette.cardBg,
+                                unfocusedContainerColor = palette.cardBg,
+                                focusedTextColor = palette.textPrimary,
+                                unfocusedTextColor = palette.textPrimary,
+                                focusedBorderColor = palette.accentText,
+                                unfocusedBorderColor = palette.borderStrong
                             )
                         )
                     }
@@ -368,15 +425,15 @@ fun ReportCardScreen(
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Surface(
-                                            color = Color(0xFFEFF6FF),
+                                            color = palette.accentBg,
                                             shape = RoundedCornerShape(8.dp),
-                                            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                                            border = BorderStroke(1.dp, palette.accentText.copy(alpha = 0.35f))
                                         ) {
                                             Text(
                                                 text = "সরাসরি ডাটাবেজ সার্চ",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1D4ED8),
+                                                color = palette.accentText,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                             )
                                         }
@@ -385,7 +442,7 @@ fun ReportCardScreen(
                                             text = "ফলাফল (${filteredUsers.size.toBn()} জন)",
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF334155)
+                                            color = palette.textBody
                                         )
                                     }
 
@@ -480,7 +537,7 @@ fun ReportCardScreen(
                                             text = "অন্যান্য শীর্ষ মেধাবী শিক্ষার্থী (${filteredUsers.size.toBn()} জন)",
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF1E293B),
+                                            color = palette.textHeading,
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                                         )
                                     }
@@ -598,8 +655,9 @@ fun ReportCardTopBar(
     onBack: () -> Unit,
     onShare: () -> Unit
 ) {
+    val palette = LocalReportCardPalette.current
     Surface(
-        color = Color.White,
+        color = palette.cardBg,
         shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -613,14 +671,14 @@ fun ReportCardTopBar(
             IconButton(
                 onClick = onBack,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFF1F5F9))
+                    .background(palette.subtleSurface)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color(0xFF1E293B)
+                    tint = palette.textHeading
                 )
             }
 
@@ -631,7 +689,7 @@ fun ReportCardTopBar(
                     text = title,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
+                    color = palette.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -639,7 +697,7 @@ fun ReportCardTopBar(
                     Text(
                         text = subtitle,
                         fontSize = 12.sp,
-                        color = Color(0xFF64748B),
+                        color = palette.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -649,14 +707,14 @@ fun ReportCardTopBar(
             IconButton(
                 onClick = onShare,
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFEFF6FF))
+                    .background(palette.accentBg)
             ) {
                 Icon(
                     imageVector = Icons.Default.Share,
                     contentDescription = "Share",
-                    tint = Color(0xFF2563EB),
+                    tint = palette.accentText,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -670,6 +728,7 @@ fun QuarterSwitcherSection(
     selectedPhase: PhaseItem?,
     onSelectPhase: (PhaseItem) -> Unit
 ) {
+    val palette = LocalReportCardPalette.current
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -686,11 +745,11 @@ fun QuarterSwitcherSection(
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
                     .clickable { onSelectPhase(phase) },
-                color = if (isSelected) Color(0xFF1E3A8A) else Color.White,
+                color = if (isSelected) Color(0xFF1E3A8A) else palette.cardBg,
                 shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(
                     1.dp,
-                    if (isSelected) Color(0xFF1E3A8A) else Color(0xFFE2E8F0)
+                    if (isSelected) Color(0xFF3B82F6) else palette.border
                 ),
                 shadowElevation = if (isSelected) 3.dp else 1.dp
             ) {
@@ -718,13 +777,13 @@ fun QuarterSwitcherSection(
                             text = phase.title ?: "কোয়ার্টার",
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                            color = if (isSelected) Color.White else Color(0xFF1E293B)
+                            color = if (isSelected) Color.White else palette.textHeading
                         )
                         if (phase.course_progress_percentage != null && phase.course_progress_percentage > 0) {
                             Text(
                                 text = "অগ্রগতি: ${phase.course_progress_percentage.toInt().toBn()}%",
                                 fontSize = 11.sp,
-                                color = if (isSelected) Color(0xFF93C5FD) else Color(0xFF64748B)
+                                color = if (isSelected) Color(0xFF93C5FD) else palette.textSecondary
                             )
                         }
                     }
@@ -739,12 +798,13 @@ fun ReportTabSwitcher(
     selectedTab: ReportTab,
     onTabSelected: (ReportTab) -> Unit
 ) {
+    val palette = LocalReportCardPalette.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFFE2E8F0).copy(alpha = 0.7f)
+        color = palette.tabTrack
     ) {
         Row(
             modifier = Modifier
@@ -757,7 +817,7 @@ fun ReportTabSwitcher(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isTab1) Color.White else Color.Transparent)
+                    .background(if (isTab1) palette.tabSelectedBg else Color.Transparent)
                     .clickable { onTabSelected(ReportTab.RESULT_DETAILS) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -766,7 +826,7 @@ fun ReportTabSwitcher(
                     Icon(
                         imageVector = Icons.Default.Description,
                         contentDescription = null,
-                        tint = if (isTab1) Color(0xFF1E3A8A) else Color(0xFF64748B),
+                        tint = if (isTab1) palette.tabSelectedContent else palette.textSecondary,
                         modifier = Modifier.size(17.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -774,7 +834,7 @@ fun ReportTabSwitcher(
                         text = "রেজাল্টের বিস্তারিত",
                         fontSize = 13.sp,
                         fontWeight = if (isTab1) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isTab1) Color(0xFF1E3A8A) else Color(0xFF64748B)
+                        color = if (isTab1) palette.tabSelectedContent else palette.textSecondary
                     )
                 }
             }
@@ -785,7 +845,7 @@ fun ReportTabSwitcher(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (isTab2) Color.White else Color.Transparent)
+                    .background(if (isTab2) palette.tabSelectedBg else Color.Transparent)
                     .clickable { onTabSelected(ReportTab.LEADERBOARD) }
                     .padding(vertical = 10.dp),
                 contentAlignment = Alignment.Center
@@ -794,7 +854,7 @@ fun ReportTabSwitcher(
                     Icon(
                         imageVector = Icons.Default.Leaderboard,
                         contentDescription = null,
-                        tint = if (isTab2) Color(0xFF1E3A8A) else Color(0xFF64748B),
+                        tint = if (isTab2) palette.tabSelectedContent else palette.textSecondary,
                         modifier = Modifier.size(17.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -802,7 +862,7 @@ fun ReportTabSwitcher(
                         text = "বিষয়ভিত্তিক লিডারবোর্ড",
                         fontSize = 13.sp,
                         fontWeight = if (isTab2) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isTab2) Color(0xFF1E3A8A) else Color(0xFF64748B)
+                        color = if (isTab2) palette.tabSelectedContent else palette.textSecondary
                     )
                 }
             }
@@ -997,10 +1057,13 @@ fun ProgressCircularCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalReportCardPalette.current
+    val trackColor = if (palette.isDark) primaryColor.copy(alpha = 0.22f) else secondaryColor
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = palette.cardBg),
+        border = if (palette.isDark) BorderStroke(1.dp, palette.border) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -1017,7 +1080,7 @@ fun ProgressCircularCard(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(secondaryColor),
+                        .background(trackColor),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -1032,7 +1095,7 @@ fun ProgressCircularCard(
                     text = title,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B),
+                    color = palette.textHeading,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1049,7 +1112,7 @@ fun ProgressCircularCard(
                     val strokeW = 8.dp.toPx()
                     // Background Track
                     drawArc(
-                        color = secondaryColor,
+                        color = trackColor,
                         startAngle = 135f,
                         sweepAngle = 270f,
                         useCenter = false,
@@ -1070,7 +1133,7 @@ fun ProgressCircularCard(
                     text = "${percentage.toBn()}%",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF0F172A)
+                    color = palette.textPrimary
                 )
             }
 
@@ -1080,13 +1143,13 @@ fun ProgressCircularCard(
                 text = valueText,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A)
+                color = palette.textPrimary
             )
 
             Text(
                 text = subText,
                 fontSize = 11.sp,
-                color = Color(0xFF64748B)
+                color = palette.textSecondary
             )
         }
     }
@@ -1100,6 +1163,7 @@ fun LearningActivitySummarySection(
     val resourceCount = summary?.learning_resource_viewed ?: 0
     val animatedCount = summary?.animated_lessons_watched ?: 0
 
+    val palette = LocalReportCardPalette.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1109,7 +1173,7 @@ fun LearningActivitySummarySection(
             text = "লার্নিং এক্টিভিটির হিসাব",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B)
+            color = palette.textHeading
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -1159,11 +1223,12 @@ fun ActivityChip(
     iconColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalReportCardPalette.current
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        color = palette.cardBg,
+        border = BorderStroke(1.dp, palette.border),
         shadowElevation = 1.dp
     ) {
         Column(
@@ -1174,7 +1239,7 @@ fun ActivityChip(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(iconBg),
+                    .background(if (palette.isDark) iconColor.copy(alpha = 0.2f) else iconBg),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1191,7 +1256,7 @@ fun ActivityChip(
                 text = "${count.toBn()}টি",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF0F172A)
+                color = palette.textPrimary
             )
 
             Spacer(modifier = Modifier.height(2.dp))
@@ -1199,7 +1264,7 @@ fun ActivityChip(
             Text(
                 text = label,
                 fontSize = 11.sp,
-                color = Color(0xFF64748B),
+                color = palette.textSecondary,
                 lineHeight = 14.sp
             )
         }
@@ -1215,12 +1280,14 @@ fun PerformanceTrendCard(
     activeMetric: String,
     onMetricChange: (String) -> Unit
 ) {
+    val palette = LocalReportCardPalette.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = palette.cardBg),
+        border = if (palette.isDark) BorderStroke(1.dp, palette.border) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -1238,13 +1305,13 @@ fun PerformanceTrendCard(
                         text = "পারফরম্যান্স ট্রেন্ড",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = palette.textHeading
                     )
                     val avg = trendData?.summary?.current_average ?: 0
                     Text(
                         text = "বর্তমান গড়: ${avg.toBn()}%",
                         fontSize = 12.sp,
-                        color = Color(0xFF3B82F6),
+                        color = palette.accentText,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -1252,7 +1319,7 @@ fun PerformanceTrendCard(
                 // Metric Switcher Segmented Button
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFF1F5F9)
+                    color = palette.subtleSurface
                 ) {
                     Row(modifier = Modifier.padding(2.dp)) {
                         val isClass = activeMetric == "class_completion"
@@ -1267,7 +1334,7 @@ fun PerformanceTrendCard(
                                 text = "ক্লাস",
                                 fontSize = 11.sp,
                                 fontWeight = if (isClass) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isClass) Color.White else Color(0xFF64748B)
+                                color = if (isClass) Color.White else palette.textSecondary
                             )
                         }
 
@@ -1283,7 +1350,7 @@ fun PerformanceTrendCard(
                                 text = "এক্সাম",
                                 fontSize = 11.sp,
                                 fontWeight = if (isExam) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isExam) Color.White else Color(0xFF64748B)
+                                color = if (isExam) Color.White else palette.textSecondary
                             )
                         }
                     }
@@ -1428,6 +1495,7 @@ fun PerformanceTrendCard(
 fun SubjectWisePerformanceSection(
     container: SubjectWisePerformanceContainer?
 ) {
+    val palette = LocalReportCardPalette.current
     val groups = container?.groups ?: emptyList()
 
     Column(
@@ -1439,7 +1507,7 @@ fun SubjectWisePerformanceSection(
             text = "আমার বিষয়ভিত্তিক পারফরম্যান্স",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B)
+            color = palette.textHeading
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -1453,7 +1521,7 @@ fun SubjectWisePerformanceSection(
             ) {
                 Text(
                     text = "কোনো বিষয়ভিত্তিক তথ্য পাওয়া যায়নি",
-                    color = Color(0xFF64748B),
+                    color = palette.textSecondary,
                     fontSize = 13.sp
                 )
             }
@@ -1470,17 +1538,30 @@ fun SubjectWisePerformanceSection(
 fun PerformanceGroupBlock(
     group: PerformanceGroupItem
 ) {
+    val palette = LocalReportCardPalette.current
     val level = group.performance_level?.lowercase() ?: "moderate"
     val (badgeBg, badgeTextColor, headerBorder) = when {
-        level.contains("need") || level.contains("improvement") -> Triple(Color(0xFFFEE2E2), Color(0xFFDC2626), Color(0xFFFECACA))
-        level.contains("good") || level.contains("excellent") -> Triple(Color(0xFFD1FAE5), Color(0xFF059669), Color(0xFFA7F3D0))
-        else -> Triple(Color(0xFFFEF3C7), Color(0xFFD97706), Color(0xFFFDE68A))
+        level.contains("need") || level.contains("improvement") -> Triple(
+            if (palette.isDark) Color(0xFF7F1D1D).copy(alpha = 0.45f) else Color(0xFFFEE2E2),
+            if (palette.isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
+            if (palette.isDark) Color(0xFF991B1B).copy(alpha = 0.55f) else Color(0xFFFECACA)
+        )
+        level.contains("good") || level.contains("excellent") -> Triple(
+            if (palette.isDark) Color(0xFF064E3B).copy(alpha = 0.45f) else Color(0xFFD1FAE5),
+            if (palette.isDark) Color(0xFF6EE7B7) else Color(0xFF059669),
+            if (palette.isDark) Color(0xFF065F46).copy(alpha = 0.55f) else Color(0xFFA7F3D0)
+        )
+        else -> Triple(
+            if (palette.isDark) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFEF3C7),
+            if (palette.isDark) Color(0xFFFCD34D) else Color(0xFFD97706),
+            if (palette.isDark) Color(0xFF92400E).copy(alpha = 0.55f) else Color(0xFFFDE68A)
+        )
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = palette.cardBg),
         border = BorderStroke(1.dp, headerBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -1508,7 +1589,7 @@ fun PerformanceGroupBlock(
                 Text(
                     text = "${count.toBn()}টি বিষয়",
                     fontSize = 11.sp,
-                    color = Color(0xFF64748B),
+                    color = palette.textSecondary,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -1519,7 +1600,7 @@ fun PerformanceGroupBlock(
                 SubjectPerformanceItemRow(item = item)
                 if (index < (group.subjects.size - 1)) {
                     HorizontalDivider(
-                        color = Color(0xFFF1F5F9),
+                        color = palette.border,
                         modifier = Modifier.padding(vertical = 10.dp)
                     )
                 }
@@ -1532,6 +1613,7 @@ fun PerformanceGroupBlock(
 fun SubjectPerformanceItemRow(
     item: SubjectPerformanceItem
 ) {
+    val palette = LocalReportCardPalette.current
     var isExpanded by remember { mutableStateOf(false) }
     val studentScore = item.student_avg_score ?: 0
     val topperScore = item.topper_score ?: 90
@@ -1575,19 +1657,19 @@ fun SubjectPerformanceItemRow(
                         text = item.title ?: "বিষয়",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E293B)
+                        color = palette.textHeading
                     )
                     if (isTopper) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
-                            color = Color(0xFFFEF3C7),
+                            color = if (palette.isDark) Color(0xFF78350F).copy(alpha = 0.6f) else Color(0xFFFEF3C7),
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
                                 text = "টপার 👑",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFB45309),
+                                color = if (palette.isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
                         }
@@ -1605,14 +1687,14 @@ fun SubjectPerformanceItemRow(
                         text = "তোমার: ${studentScore.toBn()}%",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (studentScore >= 70) Color(0xFF059669) else Color(0xFFDC2626)
+                        color = if (studentScore >= 70) Color(0xFF10B981) else Color(0xFFEF4444)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "টপার: ${topperScore.toBn()}%",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF64748B)
+                        color = palette.textSecondary
                     )
                 }
             }
@@ -1620,12 +1702,12 @@ fun SubjectPerformanceItemRow(
             // Expand / Collapse Icon
             IconButton(
                 onClick = { isExpanded = !isExpanded },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = Color(0xFF64748B)
+                    contentDescription = if (isExpanded) "সংকুচিত করুন" else "বিস্তারিত দেখুন",
+                    tint = palette.textSecondary
                 )
             }
         }
@@ -1637,7 +1719,7 @@ fun SubjectPerformanceItemRow(
                     .fillMaxWidth()
                     .padding(top = 10.dp, start = 48.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFF8FAFC))
+                    .background(palette.subtleSurface)
                     .padding(12.dp)
             ) {
                 // Live class completed
@@ -1647,12 +1729,12 @@ fun SubjectPerformanceItemRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = "লাইভ ক্লাস সম্পন্ন", fontSize = 12.sp, color = Color(0xFF64748B))
+                    Text(text = "লাইভ ক্লাস সম্পন্ন", fontSize = 12.sp, color = palette.textSecondary)
                     Text(
                         text = "${completedLive.toBn()}/${totalLive.toBn()}টি",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = palette.textPrimary
                     )
                 }
 
@@ -1665,12 +1747,12 @@ fun SubjectPerformanceItemRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = "চ্যাপ্টার এক্সাম নম্বর", fontSize = 12.sp, color = Color(0xFF64748B))
+                    Text(text = "চ্যাপ্টার এক্সাম নম্বর", fontSize = 12.sp, color = palette.textSecondary)
                     Text(
                         text = "${obtainedExam.toBn()}/${totalExam.toBn()}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = palette.textPrimary
                     )
                 }
             }
@@ -1687,6 +1769,7 @@ fun SubjectPickerChips(
     selectedSubject: AcademicSubjectItem?,
     onSelectSubject: (AcademicSubjectItem) -> Unit
 ) {
+    val palette = LocalReportCardPalette.current
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
@@ -1703,10 +1786,10 @@ fun SubjectPickerChips(
                     .clip(RoundedCornerShape(20.dp))
                     .clickable { onSelectSubject(subject) },
                 shape = RoundedCornerShape(20.dp),
-                color = if (isSelected) chipColor else Color.White,
+                color = if (isSelected) chipColor else palette.cardBg,
                 border = BorderStroke(
                     1.dp,
-                    if (isSelected) chipColor else Color(0xFFCBD5E1)
+                    if (isSelected) chipColor else palette.borderStrong
                 ),
                 shadowElevation = if (isSelected) 2.dp else 0.dp
             ) {
@@ -1718,7 +1801,7 @@ fun SubjectPickerChips(
                         Icon(
                             imageVector = Icons.Default.AllInclusive,
                             contentDescription = null,
-                            tint = if (isSelected) Color.White else Color(0xFF64748B),
+                            tint = if (isSelected) Color.White else palette.textSecondary,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -1727,7 +1810,7 @@ fun SubjectPickerChips(
                         text = subject.display_bn ?: subject.code ?: "বিষয়",
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else Color(0xFF334155)
+                        color = if (isSelected) Color.White else palette.textBody
                     )
                 }
             }
@@ -1741,6 +1824,7 @@ fun LeaderboardPodiumView(
     onUserClick: (LeaderboardUserItem) -> Unit = {}
 ) {
     if (topUsers.isEmpty()) return
+    val palette = LocalReportCardPalette.current
 
     val first = topUsers.getOrNull(0)
     val second = topUsers.getOrNull(1)
@@ -1751,7 +1835,8 @@ fun LeaderboardPodiumView(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = palette.cardBg),
+        border = if (palette.isDark) BorderStroke(1.dp, palette.border) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -1764,7 +1849,7 @@ fun LeaderboardPodiumView(
                 text = "🏆 শীর্ষ ৩ মেধাবী শিক্ষার্থী",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E293B)
+                color = palette.textHeading
             )
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -1891,11 +1976,12 @@ fun PodiumColumn(
         Spacer(modifier = Modifier.height(6.dp))
 
         // Student Name
+        val podiumPalette = LocalReportCardPalette.current
         Text(
             text = name,
             fontSize = if (isWinner) 13.sp else 11.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF0F172A),
+            color = podiumPalette.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
@@ -1906,7 +1992,7 @@ fun PodiumColumn(
             Text(
                 text = school,
                 fontSize = 9.sp,
-                color = Color(0xFF64748B),
+                color = podiumPalette.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
@@ -1996,6 +2082,7 @@ fun LeaderboardUserRowItem(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalReportCardPalette.current
     val rank = userItem.rank ?: 0
     val score = userItem.effectiveScore
     val user = userItem.user
@@ -2010,8 +2097,8 @@ fun LeaderboardUserRowItem(
                 if (LocalCanViewProfiles.current) Modifier.clickable { onClick() } else Modifier
             ),
         shape = RoundedCornerShape(14.dp),
-        color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFFF1F5F9)),
+        color = palette.cardBg,
+        border = BorderStroke(1.dp, palette.border),
         shadowElevation = 1.dp
     ) {
         Row(
@@ -2025,14 +2112,14 @@ fun LeaderboardUserRowItem(
                 modifier = Modifier
                     .size(30.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFF1F5F9)),
+                    .background(palette.subtleSurface),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "${rank.toBn()}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF475569)
+                    color = palette.textBody
                 )
             }
 
@@ -2043,7 +2130,7 @@ fun LeaderboardUserRowItem(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFE2E8F0)),
+                    .background(palette.borderStrong),
                 contentAlignment = Alignment.Center
             ) {
                 val formattedAvatar = AvatarUtils.formatAvatarUrl(avatar, name)
@@ -2056,7 +2143,7 @@ fun LeaderboardUserRowItem(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                     loading = {
-                        Box(modifier = Modifier.fillMaxSize().background(Color(0xFFE2E8F0)), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.fillMaxSize().background(palette.subtleSurface), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
                         }
                     },
@@ -2077,7 +2164,7 @@ fun LeaderboardUserRowItem(
                     text = name,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A),
+                    color = palette.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2085,7 +2172,7 @@ fun LeaderboardUserRowItem(
                     Text(
                         text = school,
                         fontSize = 11.sp,
-                        color = Color(0xFF64748B),
+                        color = palette.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -2095,13 +2182,13 @@ fun LeaderboardUserRowItem(
             // Score Pill
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFEFF6FF)
+                color = palette.accentBg
             ) {
                 Text(
                     text = "${score.toBn()}%",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF2563EB),
+                    color = palette.accentText,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
@@ -2279,7 +2366,7 @@ fun FullScreenImageViewerDialog(
                 IconButton(
                     onClick = onDismiss,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.2f))
                 ) {
@@ -2415,11 +2502,13 @@ fun SocialContactSection(
         else -> rawDigits
     }
 
+    val palette = LocalReportCardPalette.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        colors = CardDefaults.cardColors(containerColor = palette.subtleSurface),
+        border = BorderStroke(1.dp, palette.border)
     ) {
         Column(
             modifier = Modifier
@@ -2439,11 +2528,11 @@ fun SocialContactSection(
                     text = "সরাসরি যোগাযোগ করুন",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
+                    color = palette.textPrimary
                 )
             }
 
-            HorizontalDivider(color = Color(0xFFE2E8F0))
+            HorizontalDivider(color = palette.border)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2648,10 +2737,12 @@ fun StudentProfileDetailDialog(
         )
     }
 
+    val palette = LocalReportCardPalette.current
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color.White,
+        containerColor = palette.cardBg,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         Column(
@@ -2667,7 +2758,7 @@ fun StudentProfileDetailDialog(
                     .width(40.dp)
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFCBD5E1))
+                    .background(palette.borderStrong)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -2678,11 +2769,14 @@ fun StudentProfileDetailDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Badge,
                         contentDescription = null,
-                        tint = Color(0xFF2563EB),
+                        tint = palette.accentText,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -2690,14 +2784,19 @@ fun StudentProfileDetailDialog(
                         text = "শিক্ষার্থীর সম্পূর্ণ প্রোফাইল",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
+                        color = palette.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = onDismiss) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "বন্ধ করুন",
-                        tint = Color(0xFF64748B)
+                        tint = palette.textSecondary
                     )
                 }
             }
@@ -2709,9 +2808,9 @@ fun StudentProfileDetailDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    color = Color(0xFFEFF6FF),
+                    color = palette.accentBg,
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                    border = BorderStroke(1.dp, palette.accentText.copy(alpha = 0.35f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -2719,14 +2818,14 @@ fun StudentProfileDetailDialog(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            color = Color(0xFF2563EB),
+                            color = palette.accentText,
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "সার্ভার থেকে সম্পূর্ণ প্রোফাইল তথ্য লোড হচ্ছে...",
                             fontSize = 12.sp,
-                            color = Color(0xFF1D4ED8),
+                            color = palette.accentText,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -2737,9 +2836,9 @@ fun StudentProfileDetailDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    color = Color(0xFFFFFBEB),
+                    color = if (palette.isDark) Color(0xFF78350F).copy(alpha = 0.28f) else Color(0xFFFFFBEB),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFFFDE68A))
+                    border = BorderStroke(1.dp, if (palette.isDark) Color(0xFFD97706).copy(alpha = 0.5f) else Color(0xFFFDE68A))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
@@ -2749,11 +2848,11 @@ fun StudentProfileDetailDialog(
                         Text(
                             text = "সম্পূর্ণ বিবরণ লোড করা যায়নি",
                             fontSize = 12.sp,
-                            color = Color(0xFFB45309),
+                            color = if (palette.isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
                             fontWeight = FontWeight.Medium
                         )
                         TextButton(onClick = onRetry) {
-                            Text("পুনরায় চেষ্টা করুন", fontSize = 12.sp, color = Color(0xFF2563EB), fontWeight = FontWeight.Bold)
+                            Text("পুনরায় চেষ্টা করুন", fontSize = 12.sp, color = palette.accentText, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2772,8 +2871,8 @@ fun StudentProfileDetailDialog(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                    border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    colors = CardDefaults.cardColors(containerColor = palette.subtleSurface),
+                    border = BorderStroke(1.dp, palette.border)
                 ) {
                     Column(
                         modifier = Modifier
@@ -2838,7 +2937,7 @@ fun StudentProfileDetailDialog(
                         Text(
                             text = "🔍 ছবিতে চাপ দিয়ে বড় করুন ও ডাউনলোড করুন",
                             fontSize = 11.sp,
-                            color = Color(0xFF2563EB),
+                            color = palette.accentText,
                             fontWeight = FontWeight.Medium
                         )
 
@@ -2848,7 +2947,7 @@ fun StudentProfileDetailDialog(
                             text = name,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF0F172A),
+                            color = palette.textPrimary,
                             textAlign = TextAlign.Center
                         )
 
@@ -3110,28 +3209,30 @@ fun StudentProfileDetailDialog(
                                 (score?.let { "📊 স্কোর: ${it}% " } ?: "") +
                                 (rank?.let { "(র‍্যাংক #${it})\n" } ?: "\n") +
                                 (phone?.let { "📱 মোবাইল: $it" } ?: "")
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, shareText.trim())
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText.trim())
+                            }
+                            context.startActivity(Intent.createChooser(intent, "প্রোফাইল শেয়ার করুন"))
                         }
-                        context.startActivity(Intent.createChooser(intent, "প্রোফাইল শেয়ার করুন"))
                     },
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, Color(0xFF2563EB))
+                    border = BorderStroke(1.dp, palette.accentText)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "শেয়ার",
-                        tint = Color(0xFF2563EB),
+                        tint = palette.accentText,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "শেয়ার করুন",
-                        color = Color(0xFF2563EB),
+                        color = palette.accentText,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -3143,7 +3244,9 @@ fun StudentProfileDetailDialog(
                         .weight(1f)
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (palette.isDark) Color(0xFF2563EB) else Color(0xFF0F172A)
+                    )
                 ) {
                     Text(
                         text = "বন্ধ করুন",
@@ -3164,11 +3267,12 @@ private fun ProfileSectionCard(
     sectionColor: Color,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val palette = LocalReportCardPalette.current
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        colors = CardDefaults.cardColors(containerColor = palette.cardBg),
+        border = BorderStroke(1.dp, palette.border)
     ) {
         Column(
             modifier = Modifier
@@ -3188,11 +3292,11 @@ private fun ProfileSectionCard(
                     text = sectionTitle,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
+                    color = palette.textPrimary
                 )
             }
 
-            HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
+            HorizontalDivider(color = palette.border, thickness = 1.dp)
 
             content()
         }
@@ -3209,6 +3313,7 @@ private fun ProfileInfoRow(
     isClickable: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
+    val palette = LocalReportCardPalette.current
     val displayValue = if (!value.isNullOrBlank() && value != "null") value else missingText
     val isMissing = value.isNullOrBlank() || value == "null"
 
@@ -3226,7 +3331,7 @@ private fun ProfileInfoRow(
             modifier = Modifier
                 .size(36.dp)
                 .clip(CircleShape)
-                .background(iconTint.copy(alpha = 0.1f)),
+                .background(iconTint.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -3244,13 +3349,13 @@ private fun ProfileInfoRow(
                 text = label,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF64748B)
+                color = palette.textSecondary
             )
             Text(
                 text = displayValue,
                 fontSize = 14.sp,
                 fontWeight = if (isMissing) FontWeight.Normal else FontWeight.SemiBold,
-                color = if (isMissing) Color(0xFF94A3B8) else Color(0xFF0F172A),
+                color = if (isMissing) palette.textSecondary else palette.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -3260,7 +3365,7 @@ private fun ProfileInfoRow(
             Icon(
                 imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = null,
-                tint = Color(0xFF94A3B8),
+                tint = palette.textSecondary,
                 modifier = Modifier.size(14.dp)
             )
         }

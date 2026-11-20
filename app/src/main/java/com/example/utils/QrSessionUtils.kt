@@ -27,6 +27,9 @@ object QrSessionUtils {
 
     private const val SESSION_PREFIX = "SHIKHO_SESSION_V1:"
     private const val SESSION_PREFIX_GZ = "SHIKHO_SESSION_GZ:"
+    private const val MAX_DECOMPRESSED_BYTES = 64 * 1024 // 64 KB cap against GZIP bombs
+    private const val MAX_SESSION_PAYLOAD_AGE_MS = 24L * 60L * 60L * 1000L // 24 hours
+    private const val MAX_FUTURE_CLOCK_SKEW_MS = 5L * 60L * 1000L // 5 minutes
 
     private fun gzipCompressToBase64(input: String): String {
         val bos = ByteArrayOutputStream()
@@ -37,9 +40,24 @@ object QrSessionUtils {
     }
 
     private fun gunzipFromBase64(base64Str: String): String {
+        if (base64Str.length > MAX_DECOMPRESSED_BYTES) {
+            throw IllegalArgumentException("Payload exceeds safe size limit")
+        }
         val compressed = Base64.decode(base64Str, Base64.DEFAULT)
         GZIPInputStream(ByteArrayInputStream(compressed)).use { gis ->
-            return gis.bufferedReader(StandardCharsets.UTF_8).readText()
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(2048)
+            var total = 0
+            while (true) {
+                val n = gis.read(buf)
+                if (n == -1) break
+                total += n
+                if (total > MAX_DECOMPRESSED_BYTES) {
+                    throw IllegalArgumentException("Decompressed payload exceeds 64KB security cap")
+                }
+                out.write(buf, 0, n)
+            }
+            return out.toString(StandardCharsets.UTF_8.name())
         }
     }
 
@@ -187,6 +205,16 @@ object QrSessionUtils {
             val json = JSONObject(jsonString)
             val token = json.optString("token", "").ifBlank { json.optString("access_token", "") }
             if (token.isBlank()) return false
+
+            // Enforce 24-hour validity window on timestamped session backups so leaked QR/text cannot be reused indefinitely
+            val payloadTimestamp = json.optLong("timestamp", 0L)
+            if (payloadTimestamp > 0L) {
+                val now = System.currentTimeMillis()
+                if (now - payloadTimestamp > MAX_SESSION_PAYLOAD_AGE_MS || payloadTimestamp - now > MAX_FUTURE_CLOCK_SKEW_MS) {
+                    Log.w("QrSessionUtils", "Rejected expired or invalid-timestamp session payload")
+                    return false
+                }
+            }
 
             val refreshToken = json.optString("refresh_token", "")
             val userId = json.optString("user_id", "user_${System.currentTimeMillis()}")

@@ -127,7 +127,10 @@ object DeviceSecurityManager {
                 if (token.isBlank() || timestamp.isBlank() || signature.isBlank()) return false
                 val payload = "$token###$timestamp"
                 val expectedSignature = computeHmac(payload, deviceHardwareHash)
-                signature == expectedSignature
+                MessageDigest.isEqual(
+                    signature.toByteArray(Charsets.UTF_8),
+                    expectedSignature.toByteArray(Charsets.UTF_8)
+                )
             } else {
                 val parts = signedToken.split(":")
                 if (parts.size != 3) return false
@@ -137,7 +140,10 @@ object DeviceSecurityManager {
                 if (token.isBlank() || timestamp.isBlank() || signature.isBlank()) return false
                 val payload = "$token:$timestamp"
                 val expectedSignature = computeHmac(payload, deviceHardwareHash)
-                signature == expectedSignature
+                MessageDigest.isEqual(
+                    signature.toByteArray(Charsets.UTF_8),
+                    expectedSignature.toByteArray(Charsets.UTF_8)
+                )
             }
         } catch (_: Throwable) {
             false

@@ -41,19 +41,7 @@ import com.example.api.McqOptionItem
 import com.example.quiz.PracticeQuizViewModel
 import com.example.ui.components.QuizRichContent
 
-private fun toBengaliDigits(number: Any): String {
-    val english = number.toString()
-    val banglaDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    val builder = StringBuilder()
-    for (char in english) {
-        if (char in '0'..'9') {
-            builder.append(banglaDigits[char - '0'])
-        } else {
-            builder.append(char)
-        }
-    }
-    return builder.toString()
-}
+private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
 private fun toBengaliOptionLetter(optionNo: String?): String {
     return com.example.utils.McqAnswerUtils.toBengaliLetter(optionNo)

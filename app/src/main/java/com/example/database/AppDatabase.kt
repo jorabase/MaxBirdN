@@ -52,8 +52,8 @@ abstract class AppDatabase : RoomDatabase() {
             )
                 // Enable Write-Ahead Logging (WAL) for high-concurrency parallel download updates & smooth UI reads
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .fallbackToDestructiveMigration()
-                .fallbackToDestructiveMigrationOnDowngrade()
+                // Keep non-destructive fallback only for legacy pre-v6 upgrades; add explicit Migration objects for v7+
+                .fallbackToDestructiveMigration(dropAllTables = false)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)

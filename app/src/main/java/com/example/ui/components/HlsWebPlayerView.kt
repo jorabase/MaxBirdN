@@ -1,7 +1,10 @@
 package com.example.ui.components
 
+import android.net.http.SslError
 import android.view.ViewGroup
+import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -109,7 +112,13 @@ fun HlsWebPlayerView(
                         mediaPlaybackRequiresUserGesture = false
                         allowFileAccess = false
                         allowContentAccess = false
-                        mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                        @Suppress("DEPRECATION")
+                        allowFileAccessFromFileURLs = false
+                        @Suppress("DEPRECATION")
+                        allowUniversalAccessFromFileURLs = false
+                        @Suppress("DEPRECATION")
+                        saveFormData = false
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
                     setOnLongClickListener { true }
                     isLongClickable = false
@@ -118,10 +127,31 @@ fun HlsWebPlayerView(
                         override fun onPageFinished(view: WebView?, url: String?) {
                             isLoading = false
                         }
+
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean {
+                            // Keep the embedded player sandboxed; block arbitrary navigations
+                            return true
+                        }
+
+                        @Suppress("OVERRIDE_DEPRECATION")
+                        override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                            return true
+                        }
+
+                        override fun onReceivedSslError(
+                            view: WebView?,
+                            handler: SslErrorHandler?,
+                            error: SslError?
+                        ) {
+                            handler?.cancel()
+                        }
                     }
                     val baseUrl = try {
                         val uri = android.net.Uri.parse(streamUrl)
-                        if (uri.scheme != null && uri.host != null) "${uri.scheme}://${uri.host}" else "https://app.shikho.com"
+                        if (!uri.host.isNullOrBlank()) "https://${uri.host}" else "https://app.shikho.com"
                     } catch (_: Exception) {
                         "https://app.shikho.com"
                     }
@@ -135,7 +165,7 @@ fun HlsWebPlayerView(
                     lastLoadedUrl = streamUrl
                     val baseUrl = try {
                         val uri = android.net.Uri.parse(streamUrl)
-                        if (uri.scheme != null && uri.host != null) "${uri.scheme}://${uri.host}" else "https://app.shikho.com"
+                        if (!uri.host.isNullOrBlank()) "https://${uri.host}" else "https://app.shikho.com"
                     } catch (_: Exception) {
                         "https://app.shikho.com"
                     }

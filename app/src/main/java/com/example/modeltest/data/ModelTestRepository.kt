@@ -1237,17 +1237,21 @@ class ModelTestRepository(
         }
     }
 
+    private val s3UploadClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, sessionManager?.appContext) }
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
+
     // -------------------------------------------------------------
     // 16. Upload Image to AWS S3 via Pre-Signed URL
     // -------------------------------------------------------------
     suspend fun uploadImageToS3(uploadUrl: String, imageBytes: ByteArray): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             val body = imageBytes.toRequestBody("image/jpeg".toMediaType())
-            val s3Client = OkHttpClient.Builder()
-                .connectTimeout(60, TimeUnit.SECONDS)
-                .writeTimeout(60, TimeUnit.SECONDS)
-                .readTimeout(60, TimeUnit.SECONDS)
-                .build()
 
             val request = Request.Builder()
                 .url(uploadUrl)
@@ -1255,11 +1259,12 @@ class ModelTestRepository(
                 .header("Content-Type", "image/jpeg")
                 .build()
 
-            val response = s3Client.newCall(request).execute()
-            if (response.isSuccessful) {
-                Result.success(true)
-            } else {
-                Result.failure(Exception("S3 upload failed with code ${response.code}"))
+            s3UploadClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception("S3 upload failed with code ${response.code}"))
+                }
             }
         } catch (e: Exception) {
             Log.e("ModelTestRepository", "Error uploading image to S3: ${e.message}", e)

@@ -168,10 +168,10 @@ fun PinScreen(
                             }
                         )
 
-                        if (errorMessage != null) {
+                        errorMessage?.let { errText ->
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = errorMessage!!,
+                                text = errText,
                                 color = Color(0xFFF87171),
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center

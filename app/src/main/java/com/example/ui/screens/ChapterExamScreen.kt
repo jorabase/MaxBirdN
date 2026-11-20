@@ -73,9 +73,10 @@ fun ChapterExamScreen(
     var showExitConfirmDialog by remember { mutableStateOf(false) }
     var activeSolutionPdfUrl by remember { mutableStateOf<String?>(null) }
 
-    if (!activeSolutionPdfUrl.isNullOrBlank()) {
+    val currentSolutionPdfUrl = activeSolutionPdfUrl
+    if (!currentSolutionPdfUrl.isNullOrBlank()) {
         com.example.ui.components.SlideViewerDialog(
-            slideUrl = activeSolutionPdfUrl!!,
+            slideUrl = currentSolutionPdfUrl,
             title = "${uiState.examInfo?.title ?: examTitle} - সমাধান শিট",
             onDismiss = { activeSolutionPdfUrl = null }
         )

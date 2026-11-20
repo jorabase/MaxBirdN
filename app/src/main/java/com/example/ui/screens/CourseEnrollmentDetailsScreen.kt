@@ -500,18 +500,8 @@ private fun formatToBanglaDate(dateString: String?): String {
             )
             val monthName = monthsBn.getOrElse(monthInt - 1) { "ডিসেম্বর" }
 
-            fun toBanglaDigits(str: String): String {
-                val enDigits = arrayOf('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
-                val bnDigits = arrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-                var result = str
-                for (i in enDigits.indices) {
-                    result = result.replace(enDigits[i], bnDigits[i])
-                }
-                return result
-            }
-
-            val dayBn = toBanglaDigits(dayStr.toIntOrNull()?.toString() ?: dayStr)
-            val yearBn = toBanglaDigits(yearStr)
+            val dayBn = com.example.utils.toBengaliDigits(dayStr.toIntOrNull()?.toString() ?: dayStr)
+            val yearBn = com.example.utils.toBengaliDigits(yearStr)
 
             "$dayBn $monthName, $yearBn"
         } else {

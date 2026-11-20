@@ -240,9 +240,9 @@ fun LiveClassPage(
 
     val effectiveLessonTitle = serverRoomTitle.ifBlank { lessonTitle }
 
-    if (!activeLiveSlideUrl.isNullOrBlank()) {
+    activeLiveSlideUrl?.takeIf { it.isNotBlank() }?.let { slideUrl ->
         com.example.ui.components.SlideViewerDialog(
-            slideUrl = activeLiveSlideUrl!!,
+            slideUrl = slideUrl,
             title = "$effectiveLessonTitle - লেকচার স্লাইড",
             onDismiss = { activeLiveSlideUrl = null }
         )
@@ -1812,14 +1812,15 @@ fun LiveClassPage(
                                             }
 
                                             // Active Poll shortcut if live
-                                            if (activePoll?.isLive == true) {
+                                            val livePoll = activePoll
+                                            if (livePoll?.isLive == true) {
                                                 Surface(
                                                     shape = RoundedCornerShape(8.dp),
                                                     color = Color(0xFFDC2626),
                                                     modifier = Modifier.clickable {
                                                         lastUserInteractionTime = System.currentTimeMillis()
-                                                        wsManager.loadFullPollDetails(activePoll!!.pollId)
-                                                        selectedPollIdForQuestion = activePoll!!.pollId
+                                                        wsManager.loadFullPollDetails(livePoll.pollId)
+                                                        selectedPollIdForQuestion = livePoll.pollId
                                                     }
                                                 ) {
                                                     Row(
@@ -2274,7 +2275,8 @@ fun LiveClassPage(
                                     modifier = Modifier
                                         .align(Alignment.CenterEnd)
                                         .fillMaxHeight()
-                                        .width(320.dp)
+                                        .fillMaxWidth(0.42f)
+                                        .widthIn(min = 240.dp, max = 320.dp)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null

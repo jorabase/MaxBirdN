@@ -15,7 +15,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -25,8 +24,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.example.utils.toBengaliDigits
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,6 +51,7 @@ import com.example.ui.components.HomeHeader
 import com.example.ui.components.SubjectFilterDialog
 import com.example.ui.components.WeeklyRoutineSection
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -69,8 +71,8 @@ fun HomeScreen(
     onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val wallpaperConfig by viewModel.wallpaperConfigFlow.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val wallpaperConfig by viewModel.wallpaperConfigFlow.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
@@ -91,21 +93,6 @@ fun HomeScreen(
                 handleNoticeAction(context, notice, onOpenPdf)
             }
         )
-    }
-
-    // ===== LOGIC: Scroll-driven collapsible header (unchanged) =====
-    var isHeaderVisible by remember { mutableStateOf(true) }
-    var previousScrollOffset by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(scrollState.value) {
-        val currentOffset = scrollState.value
-        val delta = currentOffset - previousScrollOffset
-        if (delta > 20 && currentOffset > 80) {
-            isHeaderVisible = false
-        } else if (delta < -20 || currentOffset <= 40) {
-            isHeaderVisible = true
-        }
-        previousScrollOffset = currentOffset
     }
 
     // Entrance animation
@@ -230,58 +217,65 @@ fun HomeScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
-        Column(
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.loadData(isRefresh = true) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(scrollState),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            HomeHeader(
-                userName = displayName,
-                subtitle = subtitle,
-                avatarUrl = uiState.userAvatar ?: "",
-                isPremium = uiState.isPremium,
-                activeCourseTitle = uiState.activeProgram?.title_bn ?: "কোর্স নির্বাচন করো",
-                onOpenCourseSwitcher = { viewModel.setCourseSwitcherVisible(true) },
-                onAvatarClick = { onNavigateToProfile() },
-                unreadNotificationCount = activeNoticesCount,
-                onNotificationClick = {
-                    onNavigateToNotificationHistory()
-                },
-                wallpaperConfig = wallpaperConfig
-            )
-
-            // Content Container with smooth rounded top corners & glassmorphic top rim
-            Surface(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .offset(y = (-14).dp)
-                    .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
-                shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
-                color = MaterialTheme.colorScheme.background,
-                border = BorderStroke(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.28f else 0.15f),
-                            Color.Transparent
-                        )
-                    )
-                ),
-                shadowElevation = 8.dp
+                    .fillMaxSize()
+                    .verticalScroll(scrollState),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
+                HomeHeader(
+                    userName = displayName,
+                    subtitle = subtitle,
+                    avatarUrl = uiState.userAvatar ?: "",
+                    isPremium = uiState.isPremium,
+                    activeCourseTitle = uiState.activeProgram?.title_bn ?: "কোর্স নির্বাচন করো",
+                    onOpenCourseSwitcher = { viewModel.setCourseSwitcherVisible(true) },
+                    onAvatarClick = { onNavigateToProfile() },
+                    unreadNotificationCount = activeNoticesCount,
+                    onNotificationClick = {
+                        onNavigateToNotificationHistory()
+                    },
+                    wallpaperConfig = wallpaperConfig
+                )
+
+                // Content Container with smooth rounded top corners & glassmorphic top rim
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)
-                        .graphicsLayer {
-                            alpha = contentAlpha
-                            translationY = contentTranslation
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                        .offset(y = (-16).dp)
+                        .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)),
+                    shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+                    color = MaterialTheme.colorScheme.background,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.28f else 0.15f),
+                                Color.Transparent
+                            )
+                        )
+                    ),
+                    shadowElevation = 8.dp
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 640.dp)
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)
+                            .graphicsLayer {
+                                alpha = contentAlpha
+                                translationY = contentTranslation
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
                     // ===== LOGIC: Banner condition (unchanged) =====
                     if (displayName == "শিক্ষার্থী" || uiState.userFirstName.isBlank()) {
                         AccountCompletionBanner(onCompleteClick = onNavigateToEditProfile)
@@ -416,8 +410,9 @@ fun HomeScreen(
                 }
             }
 
-            // Bottom spacing for floating nav bar
-            Spacer(modifier = Modifier.height(110.dp))
+                // Bottom spacing for floating nav bar
+                Spacer(modifier = Modifier.height(104.dp))
+            }
         }
     }
 }
@@ -458,24 +453,24 @@ private fun HomeBottomFeaturesSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Max),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Card 1: সর্বমোট স্কোর -> রিপোর্ট কার্ড দেখো
             Card(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(22.dp))
                     .clickable(onClick = onOpenReportCard)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(cardGradient)
-                        .padding(18.dp)
+                        .padding(14.dp)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxSize(),
@@ -483,46 +478,47 @@ private fun HomeBottomFeaturesSection(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color(0xFFF59E0B),
-                                modifier = Modifier.size(26.dp)
+                                modifier = Modifier.size(24.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.WorkspacePremium,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
                             Text(
                                 text = "সর্বমোট স্কোর",
-                                fontSize = 15.5.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Column {
                             Text(
                                 text = "${toBengaliDigits(totalScorePercent)}%",
-                                fontSize = 32.sp,
+                                fontSize = 30.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(9.dp)
+                                    .height(8.dp)
                                     .clip(RoundedCornerShape(50))
                                     .background(Color(0xFF141D66))
                             ) {
@@ -539,7 +535,7 @@ private fun HomeBottomFeaturesSection(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -548,15 +544,18 @@ private fun HomeBottomFeaturesSection(
                         ) {
                             Text(
                                 text = "রিপোর্ট কার্ড দেখো",
-                                fontSize = 15.sp,
+                                fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
@@ -565,20 +564,20 @@ private fun HomeBottomFeaturesSection(
 
             // Card 2: প্র্যাকটিস কুইজ
             Card(
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(22.dp))
                     .clickable(onClick = onOpenPracticeQuiz)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(cardGradient)
-                        .padding(18.dp)
+                        .padding(14.dp)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxSize(),
@@ -586,55 +585,59 @@ private fun HomeBottomFeaturesSection(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Surface(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 color = Color.White.copy(alpha = 0.16f),
                                 border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.55f)),
-                                modifier = Modifier.size(54.dp)
+                                modifier = Modifier.size(46.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Quiz,
                                         contentDescription = null,
                                         tint = Color(0xFF4ADE80),
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
                             Surface(
                                 shape = CircleShape,
                                 color = Color(0xFF141D66).copy(alpha = 0.65f),
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Bolt,
                                         contentDescription = null,
                                         tint = Color(0xFFFBBF24),
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Column {
                             Text(
                                 text = "প্র্যাকটিস কুইজ",
-                                fontSize = 17.sp,
+                                fontSize = 15.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(5.dp))
                             Text(
                                 text = "বিষয়, অধ্যায় ও টপিক নির্বাচন করে কুইজ প্র্যাকটিস করো",
-                                fontSize = 12.5.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White.copy(alpha = 0.88f),
-                                lineHeight = 18.sp
+                                lineHeight = 17.sp,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }

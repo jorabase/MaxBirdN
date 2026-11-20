@@ -56,6 +56,7 @@ import com.example.ui.components.getProgramBadge
 import com.example.utils.SubjectIconBadge
 import com.example.utils.SubjectColorUtils
 import androidx.compose.ui.draw.blur
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,9 +67,9 @@ fun CourseSubjectsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedProgram = uiState.selectedCourseProgram
-    val sessionManager = remember(context) { SessionManager(context) }
+    val sessionManager = remember(context) { SessionManager.getInstance(context) }
 
     // State for Confirmation Dialog before sending Course Access Request
     var confirmAccessProgram by remember { mutableStateOf<OtherProgram?>(null) }
@@ -158,7 +159,7 @@ fun CourseSubjectsScreen(
                         IconButton(
                             onClick = { viewModel.closeCourseDetails() },
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(48.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surface)
                                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)

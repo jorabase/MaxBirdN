@@ -281,10 +281,10 @@ class PdfPageRenderer(
             }
         }
 
-        if (detectedAspect != null) {
+        detectedAspect?.let { aspect ->
             withContext(Dispatchers.Main.immediate) {
-                if (pageAspectRatios[pageIndex] != detectedAspect) {
-                    pageAspectRatios[pageIndex] = detectedAspect!!
+                if (pageAspectRatios[pageIndex] != aspect) {
+                    pageAspectRatios[pageIndex] = aspect
                 }
             }
         }
@@ -429,10 +429,11 @@ fun PdfViewerContent(
             }
             effectiveDownloadedItem?.status == DownloadedItemEntity.STATUS_COMPLETED &&
                     !effectiveDownloadedItem.localFilePath.isNullOrBlank() -> {
-                val f = File(effectiveDownloadedItem.localFilePath!!)
-                if (f.exists() && f.length() > 0) f else null
+                val localPath = effectiveDownloadedItem.localFilePath
+                val f = if (!localPath.isNullOrBlank()) File(localPath) else null
+                if (f != null && f.exists() && f.length() > 0) f else null
             }
-            cachedFileState != null && cachedFileState!!.exists() && cachedFileState!!.length() > 0 -> {
+            cachedFileState?.let { it.exists() && it.length() > 0 } == true -> {
                 cachedFileState
             }
             else -> null
@@ -447,11 +448,6 @@ fun PdfViewerContent(
             remoteErrorMessage = null
 
             try {
-                val okHttpClient = OkHttpClient.Builder()
-                    .connectTimeout(30, TimeUnit.SECONDS)
-                    .readTimeout(60, TimeUnit.SECONDS)
-                    .build()
-
                 val cacheDir = File(context.cacheDir, "pdf_preview_cache").apply { mkdirs() }
                 val safeFileName = "slide_${abs(remoteCandidateUrl.hashCode())}.pdf"
                 val tempFile = File(cacheDir, safeFileName)
@@ -468,41 +464,42 @@ fun PdfViewerContent(
                         .header("User-Agent", "Mozilla/5.0 (Android) ShikhoApp/1.0")
                         .build()
 
-                    val response = okHttpClient.newCall(request).execute()
-                    if (!response.isSuccessful) {
-                        throw Exception("সার্ভার থেকে ফাইলটি লোড করা যায়নি (HTTP ${response.code})")
-                    }
+                    sharedSlidePdfHttpClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            throw Exception("সার্ভার থেকে ফাইলটি লোড করা যায়নি (HTTP ${response.code})")
+                        }
 
-                    val body = response.body ?: throw Exception("সার্ভার থেকে খালি রেসপন্স এসেছে")
-                    val contentLength = body.contentLength()
-                    val inputStream: InputStream = body.byteStream()
-                    val partFile = File(cacheDir, "${safeFileName}.part")
-                    val outputStream = FileOutputStream(partFile)
+                        val body = response.body ?: throw Exception("সার্ভার থেকে খালি রেসপন্স এসেছে")
+                        val contentLength = body.contentLength()
+                        val inputStream: InputStream = body.byteStream()
+                        val partFile = File(cacheDir, "${safeFileName}.part")
+                        val outputStream = FileOutputStream(partFile)
 
-                    val buffer = ByteArray(16 * 1024)
-                    var bytesRead: Int
-                    var totalRead = 0L
+                        val buffer = ByteArray(16 * 1024)
+                        var bytesRead: Int
+                        var totalRead = 0L
 
-                    inputStream.use { input ->
-                        outputStream.use { output ->
-                            while (input.read(buffer).also { bytesRead = it } != -1) {
-                                ensureActive()
-                                output.write(buffer, 0, bytesRead)
-                                totalRead += bytesRead
-                                if (contentLength > 0) {
-                                    val prog = totalRead.toFloat() / contentLength.toFloat()
-                                    withContext(Dispatchers.Main) {
-                                        remoteDownloadProgress = prog
+                        inputStream.use { input ->
+                            outputStream.use { output ->
+                                while (input.read(buffer).also { bytesRead = it } != -1) {
+                                    ensureActive()
+                                    output.write(buffer, 0, bytesRead)
+                                    totalRead += bytesRead
+                                    if (contentLength > 0) {
+                                        val prog = totalRead.toFloat() / contentLength.toFloat()
+                                        withContext(Dispatchers.Main) {
+                                            remoteDownloadProgress = prog
+                                        }
                                     }
                                 }
+                                output.flush()
                             }
-                            output.flush()
                         }
-                    }
 
-                    if (partFile.exists() && partFile.length() > 0L) {
-                        if (tempFile.exists()) tempFile.delete()
-                        partFile.renameTo(tempFile)
+                        if (partFile.exists() && partFile.length() > 0L) {
+                            if (tempFile.exists()) tempFile.delete()
+                            partFile.renameTo(tempFile)
+                        }
                     }
                 }
 
@@ -2257,9 +2254,10 @@ private fun PdfThumbnailsBottomSheet(
                                     .background(Color.White),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (thumbBitmap != null && !thumbBitmap!!.isRecycled) {
+                                val safeThumb = thumbBitmap
+                                if (safeThumb != null && !safeThumb.isRecycled) {
                                     Image(
-                                        bitmap = thumbBitmap!!.asImageBitmap(),
+                                        bitmap = safeThumb.asImageBitmap(),
                                         contentDescription = "পৃষ্ঠা ${pageIdx + 1}",
                                         contentScale = ContentScale.Fit,
                                         modifier = Modifier.fillMaxSize()
@@ -2702,16 +2700,12 @@ private fun PdfErrorCard(
     }
 }
 
-private fun toBengaliDigits(number: Int): String {
-    val bnDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    val str = number.toString()
-    val sb = java.lang.StringBuilder()
-    for (ch in str) {
-        if (ch in '0'..'9') {
-            sb.append(bnDigits[ch - '0'])
-        } else {
-            sb.append(ch)
-        }
-    }
-    return sb.toString()
+private val sharedSlidePdfHttpClient: OkHttpClient by lazy {
+    OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
 }
+
+private fun toBengaliDigits(number: Int): String = com.example.utils.toBengaliDigits(number)

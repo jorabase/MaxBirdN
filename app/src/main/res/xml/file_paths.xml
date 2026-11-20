@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <files-path name="internal_files" path="." />
-    <cache-path name="cache_files" path="." />
-    <external-files-path name="external_files" path="." />
-    <external-cache-path name="external_cache" path="." />
+    <files-path name="apk_updates_internal" path="apk_updates/" />
+    <files-path name="secured_media_vault" path="secured_media_vault/" />
+    <cache-path name="apk_updates_cache" path="apk_updates/" />
+    <cache-path name="pdf_preview_cache" path="pdf_preview_cache/" />
+    <external-cache-path name="apk_updates_ext_cache" path="apk_updates/" />
 </paths>

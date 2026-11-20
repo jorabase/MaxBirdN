@@ -793,10 +793,11 @@ fun CoursePurchasePaymentBottomSheet(
                     .testTag("payment_trx_id_input")
             )
 
-            if (!validationError.isNullOrBlank()) {
+            val currentValidationError = validationError
+            if (!currentValidationError.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = validationError!!,
+                    text = currentValidationError,
                     color = Color(0xFFDC2626),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold

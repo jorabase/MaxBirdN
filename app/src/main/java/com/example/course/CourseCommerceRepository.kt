@@ -2,12 +2,16 @@ package com.example.course
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.SystemClock
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.example.auth.SessionManager
 import com.example.security.DeviceActivationRepository
 import com.example.security.DeviceSecurityManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -102,14 +106,14 @@ data class CourseCommerceItemState(
             accessState == CourseAccessState.ACTIVE &&
             paidAmount <= 0.0 &&
             trialEndsAtMillis != null &&
-            System.currentTimeMillis() < trialEndsAtMillis
+            CourseCommerceRepository.currentTrustedTimeMillis() < trialEndsAtMillis
 
     /**
      * True if the student used a Free Trial whose time has now expired (and hasn't paid for the course yet).
      */
     val isTrialExpiredNow: Boolean
         get() = paidAmount <= 0.0 && (
-            (trialEndsAtMillis != null && System.currentTimeMillis() >= trialEndsAtMillis) ||
+            (trialEndsAtMillis != null && CourseCommerceRepository.currentTrustedTimeMillis() >= trialEndsAtMillis) ||
             (isTrialUsed && !isTrialCurrentlyActive && trialEndsAtMillis != null)
         )
 
@@ -134,7 +138,7 @@ data class CourseCommerceItemState(
             // যদি পেমেন্ট ছাড়া শুধু ট্রায়াল হয়ে থাকে এবং ট্রায়ালের মেয়াদ শেষ হয়ে যায়, তবে সাথে সাথে লক!
             if (paidAmount <= 0.0 && isTrialExpiredNow) return false
             // যদি কিস্তিতে কেনা হয় এবং বকেয়া থাকে (dueAmount > 0), তবে নির্দিষ্ট সময়ের মধ্যে কিস্তি না দিলে এক্সেস বন্ধ!
-            if (dueAmount > 0.0 && nextDueDateMillis != null && System.currentTimeMillis() > nextDueDateMillis) {
+            if (dueAmount > 0.0 && nextDueDateMillis != null && CourseCommerceRepository.currentTrustedTimeMillis() > nextDueDateMillis) {
                 return false
             }
             return true
@@ -143,7 +147,7 @@ data class CourseCommerceItemState(
     val isOverdueNow: Boolean
         get() {
             if (accessState == CourseAccessState.INSTALLMENT_OVERDUE) return true
-            if (accessState == CourseAccessState.ACTIVE && paidAmount > 0.0 && dueAmount > 0.0 && nextDueDateMillis != null && System.currentTimeMillis() > nextDueDateMillis) {
+            if (accessState == CourseAccessState.ACTIVE && paidAmount > 0.0 && dueAmount > 0.0 && nextDueDateMillis != null && CourseCommerceRepository.currentTrustedTimeMillis() > nextDueDateMillis) {
                 return true
             }
             return false
@@ -171,7 +175,7 @@ data class CourseCommerceItemState(
 
     fun getRemainingTrialTimeTextBn(): String {
         val endMs = trialEndsAtMillis ?: return ""
-        val diff = endMs - System.currentTimeMillis()
+        val diff = endMs - CourseCommerceRepository.currentTrustedTimeMillis()
         if (diff <= 0L) return "ট্রায়ালের মেয়াদ শেষ!"
         val totalMinutes = (diff / (1000L * 60)).toInt().coerceAtLeast(1)
         val days = totalMinutes / (60 * 24)
@@ -188,7 +192,7 @@ data class CourseCommerceItemState(
 
     fun getRemainingDaysTextBn(): String {
         val dueMs = nextDueDateMillis ?: return ""
-        val diff = dueMs - System.currentTimeMillis()
+        val diff = dueMs - CourseCommerceRepository.currentTrustedTimeMillis()
         if (diff <= 0L) return "মেয়াদ শেষ!"
         val days = (diff / (1000L * 60 * 60 * 24)).toInt()
         val hours = ((diff % (1000L * 60 * 60 * 24)) / (1000L * 60 * 60)).toInt()
@@ -215,14 +219,7 @@ data class CourseCommerceItemState(
     }
 
     companion object {
-        fun toBanglaDigits(input: String): String {
-            val en = "0123456789"
-            val bn = "০১২৩৪৫৬৭৮৯"
-            return input.map { ch ->
-                val idx = en.indexOf(ch)
-                if (idx >= 0) bn[idx] else ch
-            }.joinToString("")
-        }
+        fun toBanglaDigits(input: String): String = com.example.utils.toBengaliDigits(input)
 
         fun formatTakaBn(amount: Double): String {
             val longVal = amount.toLong()
@@ -283,11 +280,53 @@ data class CourseCommerceSnapshot(
 object CourseCommerceRepository {
     private const val TAG = "CourseCommerceRepo"
     private const val PREFS_NAME = "course_commerce_cache_prefs"
+    private const val PREFS_NAME_ENCRYPTED = "course_commerce_cache_enc"
+    private const val KEY_MIGRATED_TO_ENC = "key_migrated_to_enc_v1"
     private const val KEY_CACHED_SNAPSHOT_JSON = "key_cached_snapshot_json"
     private const val KEY_CACHED_FOR_UID = "key_cached_for_uid"
 
+    private val prefsLock = Any()
+    @Volatile
+    private var cachedPrefs: SharedPreferences? = null
+
+    // Monotonic server-synced clock to prevent local device clock rollback bypass on Free Trials & Installments
+    @Volatile
+    private var serverAnchorEpochMs: Long = 0L
+    @Volatile
+    private var serverAnchorElapsedMs: Long = 0L
+
+    fun currentTrustedTimeMillis(): Long {
+        val anchorEpoch = serverAnchorEpochMs
+        val anchorElapsed = serverAnchorElapsedMs
+        return if (anchorEpoch > 0L && anchorElapsed > 0L) {
+            val delta = (SystemClock.elapsedRealtime() - anchorElapsed).coerceAtLeast(0L)
+            anchorEpoch + delta
+        } else {
+            System.currentTimeMillis()
+        }
+    }
+
+    private fun syncServerClockFromHttpDate(dateHeader: String?) {
+        if (dateHeader.isNullOrBlank()) return
+        try {
+            val sdf = SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("GMT")
+            }
+            val parsed = sdf.parse(dateHeader.trim()) ?: return
+            if (parsed.time > 1_700_000_000_000L) {
+                serverAnchorEpochMs = parsed.time
+                serverAnchorElapsedMs = SystemClock.elapsedRealtime()
+            }
+        } catch (_: Throwable) {}
+    }
+
     private val httpClient = OkHttpClient.Builder()
         .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+        .addInterceptor(Interceptor { chain ->
+            val response = chain.proceed(chain.request())
+            syncServerClockFromHttpDate(response.header("Date"))
+            response
+        })
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
@@ -319,7 +358,41 @@ object CourseCommerceRepository {
     }
 
     private fun getPrefs(context: Context): SharedPreferences {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        cachedPrefs?.let { return it }
+        return synchronized(prefsLock) {
+            cachedPrefs?.let { return@synchronized it }
+            val appCtx = context.applicationContext
+            val resolved = try {
+                val masterKey = MasterKey.Builder(appCtx)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                val encPrefs = EncryptedSharedPreferences.create(
+                    appCtx,
+                    PREFS_NAME_ENCRYPTED,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                if (!encPrefs.getBoolean(KEY_MIGRATED_TO_ENC, false)) {
+                    val legacy = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    val editor = encPrefs.edit()
+                    legacy.getString(KEY_CACHED_SNAPSHOT_JSON, null)?.let {
+                        editor.putString(KEY_CACHED_SNAPSHOT_JSON, it)
+                    }
+                    legacy.getString(KEY_CACHED_FOR_UID, null)?.let {
+                        editor.putString(KEY_CACHED_FOR_UID, it)
+                    }
+                    editor.putBoolean(KEY_MIGRATED_TO_ENC, true).commit()
+                    legacy.edit().clear().apply()
+                }
+                encPrefs
+            } catch (e: Throwable) {
+                Log.w(TAG, "EncryptedSharedPreferences unavailable for commerce cache, using fallback: ${e.message}")
+                appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            }
+            cachedPrefs = resolved
+            resolved
+        }
     }
 
     private fun parseIsoTimestampMillis(iso: String?): Long? {
@@ -514,11 +587,12 @@ object CourseCommerceRepository {
                 ?: obj.optString("trial_end_date", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
         )
         val trialEndsMillis = parseIsoTimestampMillis(trialEndsIso)
+        val nowTrustedMs = currentTrustedTimeMillis()
         val trialEnabled = when {
             obj.has("trial_enabled") && obj.optBoolean("trial_enabled", false) -> true
             obj.has("allow_free_trial") && obj.optBoolean("allow_free_trial", false) -> true
             rawStatus == "TRIAL_ACTIVE" -> true
-            trialEndsMillis != null && System.currentTimeMillis() < trialEndsMillis -> true
+            trialEndsMillis != null && nowTrustedMs < trialEndsMillis -> true
             rawTrialDays > 0 || rawTrialHours > 0 -> true
             else -> obj.optBoolean("trial_enabled", obj.optBoolean("allow_free_trial", false))
         }
@@ -527,7 +601,7 @@ object CourseCommerceRepository {
             obj.optBoolean("trial_used", false) ||
             trialStartedIso != null ||
             rawStatus == "TRIAL_EXPIRED" ||
-            (trialEndsMillis != null && System.currentTimeMillis() >= trialEndsMillis)
+            (trialEndsMillis != null && nowTrustedMs >= trialEndsMillis)
 
         val requestedIso = obj.optString("requested_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
         val approvedIso = obj.optString("approved_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
@@ -553,7 +627,7 @@ object CourseCommerceRepository {
             paidAmount <= 0.0 &&
             unlockedIso == null &&
             approvedIso == null &&
-            (trialEndsMillis == null || System.currentTimeMillis() >= trialEndsMillis)
+            (trialEndsMillis == null || nowTrustedMs >= trialEndsMillis)
         )
 
         val effectiveRawStatus = if (isHijackedRequestRow) "REQUESTED" else rawStatus
@@ -562,7 +636,7 @@ object CourseCommerceRepository {
             "REQUESTED", "ACCESS_REQUESTED", "PENDING_APPROVAL" -> CourseAccessState.ACCESS_REQUESTED
             "APPROVED_TO_BUY", "APPROVED_UNPAID", "TRIAL_EXPIRED" -> CourseAccessState.APPROVED_TO_BUY
             "TRIAL_ACTIVE" -> {
-                if (trialEndsMillis != null && System.currentTimeMillis() < trialEndsMillis) {
+                if (trialEndsMillis != null && nowTrustedMs < trialEndsMillis) {
                     CourseAccessState.ACTIVE
                 } else {
                     CourseAccessState.APPROVED_TO_BUY
@@ -571,9 +645,9 @@ object CourseCommerceRepository {
             "PAYMENT_PENDING", "PENDING_VERIFICATION" -> CourseAccessState.PAYMENT_PENDING
             "PAYMENT_REJECTED", "REJECTED" -> CourseAccessState.PAYMENT_REJECTED
             "ACTIVE" -> {
-                if (paidAmount <= 0.0 && trialEndsMillis != null && System.currentTimeMillis() >= trialEndsMillis) {
+                if (paidAmount <= 0.0 && trialEndsMillis != null && nowTrustedMs >= trialEndsMillis) {
                     CourseAccessState.APPROVED_TO_BUY
-                } else if (paidAmount > 0.0 && dueAmount > 0.0 && nextDueMillis != null && System.currentTimeMillis() > nextDueMillis) {
+                } else if (paidAmount > 0.0 && dueAmount > 0.0 && nextDueMillis != null && nowTrustedMs > nextDueMillis) {
                     CourseAccessState.INSTALLMENT_OVERDUE
                 } else {
                     CourseAccessState.ACTIVE
@@ -1081,7 +1155,7 @@ object CourseCommerceRepository {
                 ) || (
                     rStat in listOf("ACTIVE", "TRIAL_ACTIVE", "APPROVED_TO_BUY", "APPROVED_UNPAID") &&
                     rPaid <= 0.0 && rUnlMs == null && rAppMs == null &&
-                    (rTrEndMs == null || System.currentTimeMillis() >= rTrEndMs)
+                    (rTrEndMs == null || currentTrustedTimeMillis() >= rTrEndMs)
                 )
 
                 if (needsStatusResetToRequested) {
@@ -1907,12 +1981,12 @@ object CourseCommerceRepository {
             }
             if (alreadyUsed) {
                 val existingEndMs = parseIsoTimestampMillis(existingRow?.optString("trial_ends_at", ""))
-                if (existingEndMs != null && System.currentTimeMillis() >= existingEndMs) {
+                if (existingEndMs != null && currentTrustedTimeMillis() >= existingEndMs) {
                     return@withContext Result.failure(Exception("আপনার ফ্রি ট্রায়ালের মেয়াদ ইতিমধ্যে শেষ হয়েছে। কোর্সটি চালিয়ে যেতে ভর্তি হোন।"))
                 }
             }
 
-            val nowMs = System.currentTimeMillis()
+            val nowMs = currentTrustedTimeMillis()
             val durationMs = when {
                 trialDays > 0 && trialHours > 0 -> (trialDays * 24L + trialHours) * 3600L * 1000L
                 trialDays > 0 -> trialDays * 24L * 3600L * 1000L

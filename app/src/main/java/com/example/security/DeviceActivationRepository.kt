@@ -3,6 +3,8 @@ package com.example.security
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,6 +39,8 @@ object DeviceActivationRepository {
 
     private const val TAG = "DeviceActivation"
     private const val PREFS_FILE = "maxbird_device_activation"
+    private const val PREFS_FILE_ENCRYPTED = "maxbird_device_activation_enc"
+    private const val KEY_MIGRATED_TO_ENC = "key_migrated_to_enc_v1"
     private const val KEY_SIGNED_TOKEN = "key_signed_token"
     private const val KEY_ACTIVATED_AT = "key_activated_at"
     private const val KEY_LAST_HEARTBEAT_AT = "key_last_heartbeat_at"
@@ -44,6 +48,10 @@ object DeviceActivationRepository {
     private const val KEY_LAST_PROFILE_PERMISSION_CHECK = "key_last_profile_permission_check"
     private const val KEY_PENDING_REQUESTED_LOCAL = "key_pending_requested_local"
     private const val KEY_SAVED_STUDENT_NAME = "key_saved_student_name"
+
+    private val prefsLock = Any()
+    @Volatile
+    private var cachedPrefs: SharedPreferences? = null
 
     private val httpClient = OkHttpClient.Builder()
         .applyAntiCaptureSecurity()
@@ -54,15 +62,66 @@ object DeviceActivationRepository {
         .build()
 
     private fun getPrefs(context: Context): SharedPreferences {
-        return try {
-            context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-        } catch (_: Throwable) {
-            context.getSharedPreferences("${PREFS_FILE}_fallback", Context.MODE_PRIVATE)
+        cachedPrefs?.let { return it }
+        return synchronized(prefsLock) {
+            cachedPrefs?.let { return@synchronized it }
+            val appCtx = context.applicationContext
+            val resolved = try {
+                val masterKey = MasterKey.Builder(appCtx)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                val encPrefs = EncryptedSharedPreferences.create(
+                    appCtx,
+                    PREFS_FILE_ENCRYPTED,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                migrateLegacyPrefsIfNeeded(appCtx, encPrefs)
+                encPrefs
+            } catch (e: Throwable) {
+                Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back safely: ${e.message}")
+                try {
+                    appCtx.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+                } catch (_: Throwable) {
+                    appCtx.getSharedPreferences("${PREFS_FILE}_fallback", Context.MODE_PRIVATE)
+                }
+            }
+            cachedPrefs = resolved
+            resolved
+        }
+    }
+
+    private fun migrateLegacyPrefsIfNeeded(appCtx: Context, encPrefs: SharedPreferences) {
+        try {
+            if (encPrefs.getBoolean(KEY_MIGRATED_TO_ENC, false)) return
+            val legacy = appCtx.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
+            val allEntries = legacy.all
+            val editor = encPrefs.edit()
+            if (allEntries.isNotEmpty()) {
+                for ((key, value) in allEntries) {
+                    if (encPrefs.contains(key)) continue
+                    when (value) {
+                        is String -> editor.putString(key, value)
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Float -> editor.putFloat(key, value)
+                    }
+                }
+            }
+            editor.putBoolean(KEY_MIGRATED_TO_ENC, true).commit()
+            if (allEntries.isNotEmpty()) {
+                legacy.edit().clear().apply()
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Legacy activation prefs migration skipped: ${e.message}")
         }
     }
 
     /**
      * Checks if Supabase URL and Anon Key are present in BuildConfig and sanitizes them.
+     * Always enforces HTTPS so credentials and requests can never travel in cleartext.
      */
     fun getSupabaseConfig(): Pair<String, String> {
         val rawUrl = try {
@@ -76,7 +135,8 @@ object DeviceActivationRepository {
         val cleanUrl = rawUrl.trim().removeSurrounding("\"").removeSurrounding("'").trim()
         val formattedUrl = when {
             cleanUrl.isBlank() -> ""
-            cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://") -> cleanUrl
+            cleanUrl.startsWith("https://", ignoreCase = true) -> cleanUrl
+            cleanUrl.startsWith("http://", ignoreCase = true) -> "https://" + cleanUrl.substring(7)
             !cleanUrl.contains(".") -> "https://$cleanUrl.supabase.co"
             else -> "https://$cleanUrl"
         }
@@ -631,35 +691,71 @@ object DeviceActivationRepository {
             val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
 
             var canView = false
+            var resolvedByRpc = false
 
-            // Check `devices` table by device_hash, device_id, or display_device_id
+            // 1. Primary (Zero-Trust RLS compatible): Call `check_student_verification_status` RPC
             try {
-                val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$deviceHardwareHash,device_id.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=can_view_profiles,status,is_banned,is_blocked"
-                val devReq = Request.Builder()
-                    .url(devUrl)
+                val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/check_student_verification_status"
+                val rpcPayload = JSONObject().apply {
+                    put("p_device_hash", deviceHardwareHash)
+                    put("p_display_device_id", displayDeviceId)
+                }
+                val rpcReq = Request.Builder()
+                    .url(rpcUrl)
                     .addHeader("apikey", anonKey)
                     .addHeader("Authorization", "Bearer $anonKey")
-                    .get()
+                    .addHeader("Content-Type", "application/json")
+                    .post(rpcPayload.toString().toRequestBody("application/json".toMediaType()))
                     .build()
-                val devResp = httpClient.newCall(devReq).execute()
-                if (devResp.isSuccessful) {
-                    val devBody = devResp.body?.string() ?: "[]"
-                    val devArr = org.json.JSONArray(devBody)
-                    for (i in 0 until devArr.length()) {
-                        val obj = devArr.getJSONObject(i)
-                        val isBanned = obj.optBoolean("is_banned", false)
-                        val isBlocked = obj.optBoolean("is_blocked", false)
-                        val status = obj.optString("status", "active")
-                        if (isDeviceBlockedState(status, isBanned, isBlocked)) {
-                            canView = false
-                            break
-                        }
-                        if (obj.optBoolean("can_view_profiles", false)) {
-                            canView = true
+                httpClient.newCall(rpcReq).execute().use { rpcResp ->
+                    if (rpcResp.isSuccessful) {
+                        val rpcBody = rpcResp.body?.string() ?: ""
+                        if (rpcBody.trim().startsWith("{")) {
+                            val json = JSONObject(rpcBody)
+                            if (json.has("can_view_profiles")) {
+                                val isBanned = json.optBoolean("is_banned", false) || json.optBoolean("banned", false)
+                                val isBlocked = json.optBoolean("is_blocked", false) || json.optBoolean("blocked", false)
+                                val status = json.optString("status", "active")
+                                canView = !isDeviceBlockedState(status, isBanned, isBlocked) &&
+                                    json.optBoolean("can_view_profiles", false)
+                                resolvedByRpc = true
+                            }
                         }
                     }
                 }
             } catch (_: Throwable) {}
+
+            // 2. Fallback: Check `devices` table directly (used only if Phase 1 SQL hasn't been run yet)
+            if (!resolvedByRpc) {
+                try {
+                    val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$deviceHardwareHash,device_id.eq.$deviceHardwareHash,display_device_id.eq.$displayDeviceId)&select=can_view_profiles,status,is_banned,is_blocked"
+                    val devReq = Request.Builder()
+                        .url(devUrl)
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .get()
+                        .build()
+                    httpClient.newCall(devReq).execute().use { devResp ->
+                        if (devResp.isSuccessful) {
+                            val devBody = devResp.body?.string() ?: "[]"
+                            val devArr = org.json.JSONArray(devBody)
+                            for (i in 0 until devArr.length()) {
+                                val obj = devArr.getJSONObject(i)
+                                val isBanned = obj.optBoolean("is_banned", false)
+                                val isBlocked = obj.optBoolean("is_blocked", false)
+                                val status = obj.optString("status", "active")
+                                if (isDeviceBlockedState(status, isBanned, isBlocked)) {
+                                    canView = false
+                                    break
+                                }
+                                if (obj.optBoolean("can_view_profiles", false)) {
+                                    canView = true
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
 
             prefs.edit()
                 .putBoolean(KEY_CAN_VIEW_PROFILES, canView)

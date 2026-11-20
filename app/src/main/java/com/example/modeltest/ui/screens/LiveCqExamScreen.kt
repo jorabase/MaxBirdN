@@ -404,10 +404,4 @@ fun formatToBengaliNumber(number: Int): String {
     return toBengaliDigits(number.toString())
 }
 
-fun toBengaliDigits(input: String): String {
-    val bnDigits = mapOf(
-        '0' to '০', '1' to '১', '2' to '২', '3' to '৩', '4' to '৪',
-        '5' to '৫', '6' to '৬', '7' to '৭', '8' to '৮', '9' to '৯'
-    )
-    return input.map { bnDigits[it] ?: it }.joinToString("")
-}
+fun toBengaliDigits(input: String): String = com.example.utils.toBengaliDigits(input)

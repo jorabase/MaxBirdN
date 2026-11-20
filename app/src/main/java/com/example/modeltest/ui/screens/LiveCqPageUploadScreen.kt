@@ -458,8 +458,7 @@ fun LiveCqPageUploadScreen(
     }
 
     // 5. Image Preview Modal
-    if (previewImageItem != null) {
-        val item = previewImageItem!!
+    previewImageItem?.let { item ->
         Dialog(
             onDismissRequest = { previewImageItem = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)

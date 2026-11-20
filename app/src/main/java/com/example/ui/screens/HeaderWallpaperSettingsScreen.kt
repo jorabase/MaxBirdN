@@ -50,18 +50,19 @@ import com.example.ui.theme.ImportedWallpaperTheme
 import com.example.ui.theme.LiveHeaderBackground
 import com.example.ui.theme.WallpaperPresetItem
 import com.example.ui.theme.isAppInDarkTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HeaderWallpaperSettingsScreen(
-    sessionManager: SessionManager = SessionManager(LocalContext.current),
+    sessionManager: SessionManager = SessionManager.getInstance(LocalContext.current),
     onBack: () -> Unit
 ) {
     BackHandler { onBack() }
 
     val context = LocalContext.current
-    val currentConfig by sessionManager.headerWallpaperFlow.collectAsState()
-    val importedThemes by sessionManager.importedCustomThemesFlow.collectAsState()
+    val currentConfig by sessionManager.headerWallpaperFlow.collectAsStateWithLifecycle()
+    val importedThemes by sessionManager.importedCustomThemesFlow.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
     var selectedCategory by remember { mutableStateOf("সব থিম") }
@@ -1127,9 +1128,9 @@ private fun ThemeCodeStudioDialog(
                         }
                     }
 
-                    if (errorMessage != null) {
+                    errorMessage?.let { err ->
                         Text(
-                            text = errorMessage!!,
+                            text = err,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFEF4444)

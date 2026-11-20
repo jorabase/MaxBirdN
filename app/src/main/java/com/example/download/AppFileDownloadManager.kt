@@ -59,6 +59,7 @@ class AppFileDownloadManager private constructor(
             maxRequestsPerHost = 64
         }
         OkHttpClient.Builder()
+            .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, context) }
             .dispatcher(dispatcher)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -1078,10 +1079,10 @@ class AppFileDownloadManager private constructor(
                     .build()
 
                 httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful || response.body == null) {
+                    val body = response.body
+                    if (!response.isSuccessful || body == null) {
                         throw Exception("HTTP chunk error ${response.code}")
                     }
-                    val body = response.body!!
                     tempFile.outputStream().buffered(BUFFER_SIZE).use { out ->
                         val buffer = ByteArray(BUFFER_SIZE)
                         val input = body.byteStream().buffered(BUFFER_SIZE)
@@ -1242,7 +1243,8 @@ class AppFileDownloadManager private constructor(
                             .build()
 
                         httpClient.newCall(rangeRequest).execute().use { response ->
-                            if (!response.isSuccessful || response.body == null) {
+                            val responseBody = response.body
+                            if (!response.isSuccessful || responseBody == null) {
                                 throw Exception("Chunk download error ${response.code}")
                             }
 
@@ -1253,7 +1255,7 @@ class AppFileDownloadManager private constructor(
 
                             FileOutputStream(partFile, appendMode).buffered(BUFFER_SIZE).use { out ->
                                 val buffer = ByteArray(BUFFER_SIZE)
-                                val inStream = response.body!!.byteStream().buffered(BUFFER_SIZE)
+                                val inStream = responseBody.byteStream().buffered(BUFFER_SIZE)
                                 var bytesRead: Int
                                 while (inStream.read(buffer).also { bytesRead = it } != -1) {
                                     ensureActive()
@@ -1346,7 +1348,8 @@ class AppFileDownloadManager private constructor(
             }
 
             httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful || response.body == null) {
+                val responseBody = response.body
+                if (!response.isSuccessful || responseBody == null) {
                     throw Exception("HTTP download failed with code: ${response.code}")
                 }
 
@@ -1356,7 +1359,7 @@ class AppFileDownloadManager private constructor(
                 FileOutputStream(tempFile, isResumed).buffered(BUFFER_SIZE).use { outputStream ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     var bytesRead: Int
-                    val inputStream = response.body!!.byteStream().buffered(BUFFER_SIZE)
+                    val inputStream = responseBody.byteStream().buffered(BUFFER_SIZE)
 
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                         ensureActive()

@@ -49,12 +49,7 @@ import com.example.smartnotes.SmartNotesViewModel
 import com.example.ui.components.AttachmentListDialog
 import com.example.ui.components.SlideViewerDialog
 
-private fun toBengaliDigits(number: Any): String {
-    val bnDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-    return number.toString().map { char ->
-        if (char in '0'..'9') bnDigits[char - '0'] else char
-    }.joinToString("")
-}
+private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,8 +103,7 @@ fun SmartNotesScreen(
     }
 
     // In-app PDF Viewer Dialog
-    if (uiState.activeAttachment != null) {
-        val attachment = uiState.activeAttachment!!
+    uiState.activeAttachment?.let { attachment ->
         SlideViewerDialog(
             slideUrl = attachment.url ?: "",
             title = attachment.title ?: "ই-বুক / স্মার্ট নোট",
@@ -120,9 +114,10 @@ fun SmartNotesScreen(
     }
 
     // Attachment List Dialog
-    if (uiState.selectedTagAttachments != null && uiState.activeAttachment == null) {
+    val tagAttachments = uiState.selectedTagAttachments
+    if (tagAttachments != null && uiState.activeAttachment == null) {
         AttachmentListDialog(
-            attachments = uiState.selectedTagAttachments!!,
+            attachments = tagAttachments,
             title = uiState.selectedTagTitle ?: "ডকুমেন্ট লিস্ট",
             accentColor = parsedSubjectColor,
             onAttachmentClick = { attachment ->

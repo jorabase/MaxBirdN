@@ -406,8 +406,9 @@ fun LiveCqUploadDashboardScreen(
     }
 
     // 3. Question Detail Dialog ("সম্পূর্ণ প্রশ্ন দেখো")
-    if (uiState.showViewQuestionDialog && uiState.dialogViewingQuestion != null) {
-        val q = uiState.dialogViewingQuestion!!
+    val dialogViewingQuestion = uiState.dialogViewingQuestion
+    if (uiState.showViewQuestionDialog && dialogViewingQuestion != null) {
+        val q = dialogViewingQuestion
         Dialog(
             onDismissRequest = { viewModel.closeViewQuestionDialog() },
             properties = DialogProperties(usePlatformDefaultWidth = false)

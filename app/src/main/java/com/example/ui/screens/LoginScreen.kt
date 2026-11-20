@@ -30,7 +30,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -67,7 +66,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -79,11 +77,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
-import kotlin.math.cos
-import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,7 +101,7 @@ fun LoginScreen(
     var canViewProfile by remember {
         mutableStateOf(com.example.security.DeviceActivationRepository.isProfileViewPermissionCached(context))
     }
-    val hasRateLimitPendingOtp by viewModel.hasRateLimitPendingOtp.collectAsState()
+    val hasRateLimitPendingOtp by viewModel.hasRateLimitPendingOtp.collectAsStateWithLifecycle()
     val keyboardController = LocalSoftwareKeyboardController.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
 
@@ -145,29 +142,6 @@ fun LoginScreen(
     val secondary = MaterialTheme.colorScheme.secondary
     val successColor = if (isDark) Color(0xFF34D399) else Color(0xFF059669)
 
-    // ---------- Ambient animations ----------
-    val ambient = rememberInfiniteTransition(label = "ambient")
-    val blob1X by ambient.animateFloat(-35f, 45f, infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse), label = "b1x")
-    val blob1Y by ambient.animateFloat(-25f, 35f, infiniteRepeatable(tween(7000, easing = LinearEasing), RepeatMode.Reverse), label = "b1y")
-    val blob2X by ambient.animateFloat(30f, -40f, infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Reverse), label = "b2x")
-    val blob2Y by ambient.animateFloat(25f, -30f, infiniteRepeatable(tween(10000, easing = LinearEasing), RepeatMode.Reverse), label = "b2y")
-    val glowAlpha by ambient.animateFloat(0.45f, 1f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow")
-    val floatY by ambient.animateFloat(-6f, 6f, infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "floatY")
-    val ringAngle by ambient.animateFloat(0f, 360f, infiniteRepeatable(tween(5000, easing = LinearEasing)), label = "ring")
-
-    // ---------- Animated gradient border (rotating) ----------
-    val density = LocalDensity.current
-    val logoBoxPx = with(density) { 84.dp.toPx() }
-    val center = logoBoxPx / 2f
-    val rad = Math.toRadians(ringAngle.toDouble())
-    val dx = (cos(rad) * logoBoxPx).toFloat()
-    val dy = (sin(rad) * logoBoxPx).toFloat()
-    val ringBrush = Brush.linearGradient(
-        colors = listOf(primary, secondary, primary.copy(alpha = 0.3f), secondary.copy(alpha = 0.6f), primary),
-        start = Offset(center - dx, center - dy),
-        end = Offset(center + dx, center + dy)
-    )
-
     val backgroundGradient = remember(isDark) {
         if (isDark) {
             Brush.verticalGradient(listOf(Color(0xFF060B19), Color(0xFF020617), Color(0xFF0B132B)))
@@ -200,45 +174,11 @@ fun LoginScreen(
             .navigationBarsPadding()
             .imePadding()
     ) {
-        // Moving aurora blobs
-        Box(
-            modifier = Modifier
-                .size(380.dp)
-                .align(Alignment.TopStart)
-                .graphicsLayer { translationX = blob1X; translationY = blob1Y }
-                .offset(x = (-100).dp, y = (-80).dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(primary.copy(alpha = if (isDark) 0.24f else 0.15f), Color.Transparent)
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .size(340.dp)
-                .align(Alignment.BottomEnd)
-                .graphicsLayer { translationX = blob2X; translationY = blob2Y }
-                .offset(x = 95.dp, y = 95.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(secondary.copy(alpha = if (isDark) 0.22f else 0.13f), Color.Transparent)
-                    )
-                )
-        )
-        // Soft center glow behind card
-        Box(
-            modifier = Modifier
-                .size(440.dp)
-                .align(Alignment.Center)
-                .graphicsLayer { alpha = glowAlpha }
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(primary.copy(alpha = if (isDark) 0.09f else 0.06f), Color.Transparent)
-                    )
-                )
+        // Isolated ambient background blobs so login form never recomposes 60fps
+        LoginAmbientAuroraBackground(
+            primary = primary,
+            secondary = secondary,
+            isDark = isDark
         )
 
         Column(
@@ -259,76 +199,11 @@ fun LoginScreen(
                 )
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(106.dp)
-                            .graphicsLayer { translationY = floatY }
-                    ) {
-                        // Outer rotating orbital arc
-                        Canvas(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .rotate(ringAngle)
-                        ) {
-                            drawArc(
-                                brush = Brush.sweepGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        primary.copy(alpha = 0.65f),
-                                        Color.Transparent,
-                                        secondary.copy(alpha = 0.65f),
-                                        Color.Transparent
-                                    )
-                                ),
-                                startAngle = 0f,
-                                sweepAngle = 360f,
-                                useCenter = false,
-                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                            )
-                        }
-
-                        // Soft radial glow behind logo
-                        Box(
-                            modifier = Modifier
-                                .size(92.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.radialGradient(
-                                        listOf(
-                                            primary.copy(alpha = if (isDark) 0.3f else 0.2f),
-                                            Color.Transparent
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Main 3D Squircle Logo Box
-                        Box(
-                            modifier = Modifier
-                                .size(78.dp)
-                                .shadow(
-                                    elevation = if (isDark) 18.dp else 12.dp,
-                                    shape = RoundedCornerShape(24.dp),
-                                    spotColor = primary,
-                                    ambientColor = secondary
-                                )
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(
-                                    if (isDark) Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
-                                    else Brush.linearGradient(listOf(Color.White, Color(0xFFF1F5F9)))
-                                )
-                                .border(2.2.dp, ringBrush, RoundedCornerShape(24.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
-                                contentDescription = "MaxBird Logo",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(48.dp)
-                            )
-                        }
-                    }
+                    LoginAnimatedLogoBadge(
+                        primary = primary,
+                        secondary = secondary,
+                        isDark = isDark
+                    )
 
                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -807,7 +682,7 @@ fun LoginScreen(
                                 .height(56.dp)
                                 .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
                                 .shadow(
-                                    elevation = if (isEnabled) (8.dp + 6.dp * glowAlpha) else 0.dp,
+                                    elevation = if (isEnabled) 10.dp else 0.dp,
                                     shape = RoundedCornerShape(18.dp),
                                     spotColor = primary,
                                     ambientColor = secondary
@@ -976,19 +851,153 @@ fun LoginScreen(
     }
 }
 
-// ---------- Helper: English ↔ Bengali digits & Input Sanitizer ----------
-private val bnDigits = mapOf(
-    '0' to '০', '1' to '১', '2' to '২', '3' to '৩', '4' to '৪',
-    '5' to '৫', '6' to '৬', '7' to '৭', '8' to '৮', '9' to '৯'
-)
+@Composable
+private fun LoginAmbientAuroraBackground(
+    primary: Color,
+    secondary: Color,
+    isDark: Boolean
+) {
+    val ambient = rememberInfiniteTransition(label = "ambientBg")
+    val blob1X by ambient.animateFloat(-35f, 45f, infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse), label = "b1x")
+    val blob1Y by ambient.animateFloat(-25f, 35f, infiniteRepeatable(tween(7000, easing = LinearEasing), RepeatMode.Reverse), label = "b1y")
+    val blob2X by ambient.animateFloat(30f, -40f, infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Reverse), label = "b2x")
+    val blob2Y by ambient.animateFloat(25f, -30f, infiniteRepeatable(tween(10000, easing = LinearEasing), RepeatMode.Reverse), label = "b2y")
+    val glowAlpha by ambient.animateFloat(0.45f, 1f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "glow")
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .size(380.dp)
+                .align(Alignment.TopStart)
+                .graphicsLayer { translationX = blob1X; translationY = blob1Y }
+                .offset(x = (-100).dp, y = (-80).dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(primary.copy(alpha = if (isDark) 0.24f else 0.15f), Color.Transparent)
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(340.dp)
+                .align(Alignment.BottomEnd)
+                .graphicsLayer { translationX = blob2X; translationY = blob2Y }
+                .offset(x = 95.dp, y = 95.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(secondary.copy(alpha = if (isDark) 0.22f else 0.13f), Color.Transparent)
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(440.dp)
+                .align(Alignment.Center)
+                .graphicsLayer { alpha = glowAlpha }
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(primary.copy(alpha = if (isDark) 0.09f else 0.06f), Color.Transparent)
+                    )
+                )
+        )
+    }
+}
+
+@Composable
+private fun LoginAnimatedLogoBadge(
+    primary: Color,
+    secondary: Color,
+    isDark: Boolean
+) {
+    val transition = rememberInfiniteTransition(label = "logoAnim")
+    val floatY by transition.animateFloat(-6f, 6f, infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "floatY")
+    val ringAngle by transition.animateFloat(0f, 360f, infiniteRepeatable(tween(5000, easing = LinearEasing)), label = "ring")
+
+    val borderBrush = remember(primary, secondary) {
+        Brush.linearGradient(
+            colors = listOf(primary, secondary, primary.copy(alpha = 0.45f), secondary.copy(alpha = 0.7f), primary)
+        )
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(106.dp)
+            .graphicsLayer { translationY = floatY }
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { rotationZ = ringAngle }
+        ) {
+            drawArc(
+                brush = Brush.sweepGradient(
+                    listOf(
+                        Color.Transparent,
+                        primary.copy(alpha = 0.65f),
+                        Color.Transparent,
+                        secondary.copy(alpha = 0.65f),
+                        Color.Transparent
+                    )
+                ),
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(92.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            primary.copy(alpha = if (isDark) 0.3f else 0.2f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .size(78.dp)
+                .shadow(
+                    elevation = if (isDark) 18.dp else 12.dp,
+                    shape = RoundedCornerShape(24.dp),
+                    spotColor = primary,
+                    ambientColor = secondary
+                )
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    if (isDark) Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
+                    else Brush.linearGradient(listOf(Color.White, Color(0xFFF1F5F9)))
+                )
+                .border(2.2.dp, borderBrush, RoundedCornerShape(24.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
+                contentDescription = "MaxBird Logo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(48.dp)
+            )
+        }
+    }
+}
+
+// ---------- Helper: Bengali ↔ English Input Sanitizer ----------
 private val bnToEnDigits = mapOf(
     '০' to '0', '১' to '1', '২' to '2', '৩' to '3', '৪' to '4',
     '৫' to '5', '৬' to '6', '৭' to '7', '৮' to '8', '৯' to '9'
 )
 
-private fun Int.toBengaliDigits(): String =
-    toString().map { bnDigits[it] ?: it }.joinToString("")
+private fun Int.toBengaliDigits(): String = com.example.utils.toBengaliDigits(this)
 
 /**
  * Converts Bengali digits to English digits, strips spaces/hyphens/+88 prefixes on paste,

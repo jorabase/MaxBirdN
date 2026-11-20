@@ -289,9 +289,9 @@ fun QuizRichContent(
     }
 
     // Fullscreen Zoom Dialog on click
-    if (selectedZoomImageUrl != null) {
+    selectedZoomImageUrl?.let { zoomUrl ->
         QuizImageZoomDialog(
-            imageUrl = selectedZoomImageUrl!!,
+            imageUrl = zoomUrl,
             onDismiss = { selectedZoomImageUrl = null }
         )
     }

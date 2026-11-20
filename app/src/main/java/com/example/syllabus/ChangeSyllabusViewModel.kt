@@ -347,8 +347,8 @@ class ChangeSyllabusViewModel(
                     // Network exception / timeout → propagate (mask করা হবে না)
                 }
 
-                if (tokenPayload == null && lastException != null) {
-                    throw lastException!!
+                if (tokenPayload == null) {
+                    lastException?.let { throw it }
                 }
 
                 // ===== 2) Token update =====

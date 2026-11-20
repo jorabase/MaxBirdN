@@ -1,9 +1,12 @@
 package com.example.ui.dialogs
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
+import android.os.PersistableBundle
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,12 +26,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
 import com.example.auth.SessionManager
+import com.example.security.AntiTamperSecurity
 import com.example.utils.QrSessionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -59,6 +65,10 @@ fun SessionShareDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            AntiTamperSecurity.applyWindowSecureFlag(dialogWindow)
+        }
         Surface(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
@@ -152,8 +162,13 @@ fun SessionShareDialog(
                         if (!text.isNullOrBlank()) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clip = ClipData.newPlainText("Session Code", text)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                clip.description.extras = PersistableBundle().apply {
+                                    putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                                }
+                            }
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "সেশন কোড সফলভাবে কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "সেশন কোড সুরক্ষিতভাবে কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -199,7 +214,7 @@ fun SessionShareDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "সতর্কতা: আপনার সেশন কিউআর কোড অনাকাঙ্ক্ষিত কারও সাথে শেয়ার করবেন না।",
+                            text = "সতর্কতা: আপনার সেশন কিউআর কোড কারও সাথে শেয়ার করবেন না। নিরাপত্তার জন্য এই কোডের মেয়াদ ২৪ ঘণ্টা।",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             lineHeight = 15.sp

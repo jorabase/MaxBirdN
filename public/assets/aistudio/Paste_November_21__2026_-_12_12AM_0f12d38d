@@ -1,0 +1,951 @@
+{
+    "tables": {
+        "devices": [
+            "id (uuid)",
+            "device_hash (text)",
+            "display_device_id (text)",
+            "device_model (text)",
+            "device_brand (text)",
+            "device_manufacturer (text)",
+            "android_version (text)",
+            "sdk_version (integer)",
+            "app_version (text)",
+            "applied_code (text)",
+            "is_banned (boolean)",
+            "ban_reason (text)",
+            "banned_at (timestamp with time zone)",
+            "status (text)",
+            "last_seen (timestamp with time zone)",
+            "created_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)",
+            "can_view_profiles (boolean)",
+            "student_note (text)",
+            "session_token (text)",
+            "requested_at (timestamp with time zone)",
+            "approved_at (timestamp with time zone)",
+            "onesignal_player_id (text)",
+            "fcm_token (text)",
+            "device_id (text)",
+            "is_blocked (boolean)",
+            "rejection_reason (text)",
+            "student_name (text)",
+            "student_phone (text)",
+            "is_access_restricted (boolean)",
+            "bound_shikho_user_id (text)",
+            "bound_user_phone (text)",
+            "allowed_classes (ARRAY)",
+            "allowed_groups (ARRAY)",
+            "allowed_batches (ARRAY)",
+            "allowed_programs (ARRAY)"
+        ],
+        "app_notices": [
+            "id (uuid)",
+            "title (text)",
+            "description (text)",
+            "image_url (text)",
+            "action_url (text)",
+            "action_button_text (text)",
+            "priority (integer)",
+            "is_active (boolean)",
+            "show_as_popup (boolean)",
+            "created_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "app_updates": [
+            "id (uuid)",
+            "latest_version_name (text)",
+            "latest_version_code (integer)",
+            "min_supported_version_code (integer)",
+            "is_force_update (boolean)",
+            "title (text)",
+            "changelog (text)",
+            "download_url (text)",
+            "button_text (text)",
+            "apk_checksum_sha256 (text)",
+            "is_active (boolean)",
+            "created_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)",
+            "is_kill_switch (boolean)",
+            "is_maintenance (boolean)",
+            "kill_switch_title (text)",
+            "kill_switch_message (text)",
+            "estimated_back_time (text)",
+            "file_size_mb (double precision)"
+        ],
+        "ai_agent_tasks": [
+            "id (text)",
+            "user_phone (text)",
+            "device_hash (text)",
+            "title (text)",
+            "prompt (text)",
+            "action_type (text)",
+            "status (text)",
+            "program_id (text)",
+            "program_title (text)",
+            "phase_id (text)",
+            "subject_code (text)",
+            "subject_title (text)",
+            "chapter_id (text)",
+            "target_telegram_chat_id (text)",
+            "target_telegram_title (text)",
+            "telegram_invite_link (text)",
+            "video_quality (text)",
+            "include_videos (boolean)",
+            "include_slides (boolean)",
+            "create_new_channel (boolean)",
+            "use_forum_topics (boolean)",
+            "total_items (integer)",
+            "completed_items (integer)",
+            "failed_items (integer)",
+            "last_uploaded_lesson_id (text)",
+            "uploaded_lesson_ids (jsonb)",
+            "status_message (text)",
+            "github_run_id (text)",
+            "github_run_url (text)",
+            "bundled_lessons_json (jsonb)",
+            "created_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "ai_agent_configs": [
+            "id (uuid)",
+            "user_phone (text)",
+            "device_hash (text)",
+            "github_pat (text)",
+            "github_owner (text)",
+            "github_repo (text)",
+            "github_branch (text)",
+            "github_username (text)",
+            "github_avatar_url (text)",
+            "telegram_api_id (text)",
+            "telegram_api_hash (text)",
+            "telegram_phone (text)",
+            "telegram_session_string (text)",
+            "telegram_bot_token (text)",
+            "telegram_default_chat_id (text)",
+            "telegram_account_name (text)",
+            "telegram_auth_state (text)",
+            "telegram_auth_message (text)",
+            "telegram_phone_code_hash (text)",
+            "telegram_partial_session (text)",
+            "telegram_otp_code (text)",
+            "telegram_2fa_password (text)",
+            "enabled_extensions (jsonb)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "onesignal_config": [
+            "id (integer)",
+            "onesignal_app_id (text)",
+            "onesignal_rest_api_key (text)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "admin_push_devices": [
+            "id (bigint)",
+            "admin_device_id (text)",
+            "onesignal_player_id (text)",
+            "fcm_token (text)",
+            "admin_label (text)",
+            "is_active (boolean)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "ai_agent_schedules": [
+            "id (text)",
+            "user_phone (text)",
+            "device_hash (text)",
+            "title (text)",
+            "prompt (text)",
+            "cron_expression (text)",
+            "time_display_bn (text)",
+            "program_id (text)",
+            "program_title (text)",
+            "phase_id (text)",
+            "subject_code (text)",
+            "target_telegram_chat_id (text)",
+            "target_telegram_title (text)",
+            "video_quality (text)",
+            "include_videos (boolean)",
+            "include_slides (boolean)",
+            "is_enabled (boolean)",
+            "last_run_at (timestamp with time zone)",
+            "last_run_status (text)",
+            "synced_lesson_ids (jsonb)",
+            "created_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "student_notifications": [
+            "id (bigint)",
+            "title (text)",
+            "message (text)",
+            "image_url (text)",
+            "deeplink (text)",
+            "notification_type (text)",
+            "target_type (text)",
+            "target_value (text)",
+            "is_active (boolean)",
+            "created_at (timestamp with time zone)"
+        ],
+        "device_shikho_accounts": [
+            "id (bigint)",
+            "device_hash (text)",
+            "display_device_id (text)",
+            "shikho_user_id (text)",
+            "user_phone (text)",
+            "is_access_granted (boolean)",
+            "is_access_restricted (boolean)",
+            "allowed_classes (ARRAY)",
+            "allowed_groups (ARRAY)",
+            "allowed_batches (ARRAY)",
+            "allowed_programs (ARRAY)",
+            "last_seen_at (timestamp with time zone)",
+            "created_at (timestamp with time zone)"
+        ],
+        "course_payment_settings": [
+            "id (integer)",
+            "bkash_number (text)",
+            "nagad_number (text)",
+            "rocket_number (text)",
+            "payment_instructions_bn (text)",
+            "default_course_price (integer)",
+            "updated_at (timestamp with time zone)",
+            "payment_instruction_bn (text)"
+        ],
+        "activation_support_links": [
+            "id (uuid)",
+            "title (text)",
+            "subtitle (text)",
+            "icon_type (text)",
+            "url (text)",
+            "color_hex (text)",
+            "is_active (boolean)",
+            "priority (integer)",
+            "created_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)"
+        ],
+        "course_access_enrollments": [
+            "id (bigint)",
+            "device_id (text)",
+            "shikho_account_key (text)",
+            "student_name (text)",
+            "student_phone (text)",
+            "student_class (text)",
+            "student_group (text)",
+            "program_id (text)",
+            "program_title (text)",
+            "class_code (text)",
+            "group_code (text)",
+            "batch_id (text)",
+            "status (text)",
+            "total_price (integer)",
+            "paid_amount (integer)",
+            "due_amount (integer)",
+            "installment_enabled (boolean)",
+            "selected_plan_id (text)",
+            "selected_plan_title (text)",
+            "total_installments (integer)",
+            "completed_installments (integer)",
+            "next_installment_amount (integer)",
+            "installment_interval_days (integer)",
+            "next_due_date (timestamp with time zone)",
+            "installment_plans_json (jsonb)",
+            "rejection_reason (text)",
+            "admin_note (text)",
+            "requested_at (timestamp with time zone)",
+            "approved_at (timestamp with time zone)",
+            "unlocked_at (timestamp with time zone)",
+            "updated_at (timestamp with time zone)",
+            "device_hash (text)",
+            "display_device_id (text)",
+            "shikho_user_id (text)",
+            "user_phone (text)",
+            "banner_url (text)",
+            "allow_installments (boolean)",
+            "active_plan_id (text)",
+            "active_plan_title (text)",
+            "last_transaction_id (text)",
+            "last_payment_amount (numeric)",
+            "last_sender_mobile (text)",
+            "last_payment_method (text)",
+            "pending_installment_tx_id (text)",
+            "pending_installment_amount (numeric)",
+            "trial_enabled (boolean)",
+            "trial_days (integer)",
+            "trial_hours (integer)",
+            "trial_started_at (timestamp with time zone)",
+            "trial_ends_at (timestamp with time zone)",
+            "is_trial_used (boolean)",
+            "onesignal_player_id (text)",
+            "fcm_token (text)",
+            "student_key (text)",
+            "next_installment_due_at (timestamp with time zone)",
+            "installment_plans (jsonb)",
+            "access_status (text)",
+            "course_id (text)",
+            "course_title (text)",
+            "trial_used (boolean)",
+            "trial_days_granted (integer)",
+            "total_fee (integer)",
+            "trial_expires_at (timestamp with time zone)"
+        ],
+        "course_payment_transactions": [
+            "id (bigint)",
+            "enrollment_id (bigint)",
+            "device_id (text)",
+            "shikho_account_key (text)",
+            "student_name (text)",
+            "program_id (text)",
+            "program_title (text)",
+            "plan_id (text)",
+            "plan_title (text)",
+            "installment_number (integer)",
+            "total_installments (integer)",
+            "payment_method (text)",
+            "sender_mobile (text)",
+            "amount (integer)",
+            "transaction_id (text)",
+            "status (text)",
+            "rejection_reason (text)",
+            "submitted_at (timestamp with time zone)",
+            "reviewed_at (timestamp with time zone)",
+            "device_hash (text)",
+            "display_device_id (text)",
+            "shikho_user_id (text)",
+            "user_phone (text)",
+            "payment_type (text)",
+            "selected_plan_id (text)",
+            "selected_plan_title (text)",
+            "interval_days (integer)",
+            "created_at (timestamp with time zone)",
+            "student_phone (text)",
+            "course_id (text)",
+            "course_title (text)"
+        ]
+    },
+    "policies": [
+        {
+            "cmd": "SELECT",
+            "qual": "(is_active = true)",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "activation_support_links",
+            "policy": "Allow public read access for activation support links"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "activation_support_links",
+            "policy": "Service role full activation_support_links"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "admin_push_devices",
+            "policy": "Service role only admin_push_devices"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "ai_agent_configs",
+            "policy": "Allow public all on ai_agent_configs"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "ai_agent_schedules",
+            "policy": "Allow public all on ai_agent_schedules"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "ai_agent_tasks",
+            "policy": "Allow public all on ai_agent_tasks"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "(is_active = true)",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "app_notices",
+            "policy": "Allow public read active notices"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "app_notices",
+            "policy": "Service role full app_notices"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "(is_active = true)",
+            "roles": [
+                "public"
+            ],
+            "table": "app_updates",
+            "policy": "Allow public read active app updates"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "app_updates",
+            "policy": "Service role full app_updates"
+        },
+        {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "course_access_enrollments",
+            "policy": "Allow student insert enrollments"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "course_access_enrollments",
+            "policy": "Allow student read enrollments"
+        },
+        {
+            "cmd": "UPDATE",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "course_access_enrollments",
+            "policy": "Allow student update enrollments"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "course_access_enrollments",
+            "policy": "Service role full enrollments"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "course_payment_settings",
+            "policy": "Public read course_payment_settings"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "course_payment_settings",
+            "policy": "Service role full course_payment_settings"
+        },
+        {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "course_payment_transactions",
+            "policy": "Allow student insert payment_tx"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "course_payment_transactions",
+            "policy": "Allow student read payment_tx"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "course_payment_transactions",
+            "policy": "Service role full payment_tx"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "device_shikho_accounts",
+            "policy": "Public read device_shikho_accounts"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "device_shikho_accounts",
+            "policy": "Service role full device_shikho_accounts"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "devices",
+            "policy": "Allow public read devices"
+        },
+        {
+            "cmd": "INSERT",
+            "qual": null,
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "devices",
+            "policy": "Allow student insert devices"
+        },
+        {
+            "cmd": "UPDATE",
+            "qual": "true",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "devices",
+            "policy": "Allow student update devices"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "devices",
+            "policy": "Service role full devices"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "false",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "onesignal_config",
+            "policy": "Block anon direct access to onesignal_config"
+        },
+        {
+            "cmd": "SELECT",
+            "qual": "(is_active = true)",
+            "roles": [
+                "anon",
+                "authenticated"
+            ],
+            "table": "student_notifications",
+            "policy": "Allow public read student_notifications"
+        },
+        {
+            "cmd": "ALL",
+            "qual": "true",
+            "roles": [
+                "service_role"
+            ],
+            "table": "student_notifications",
+            "policy": "Service role full student_notifications"
+        }
+    ],
+    "triggers": [
+        {
+            "event": "INSERT",
+            "table": "course_access_enrollments",
+            "timing": "AFTER",
+            "trigger": "trg_course_enrollments_onesignal_notify"
+        },
+        {
+            "event": "UPDATE",
+            "table": "course_access_enrollments",
+            "timing": "AFTER",
+            "trigger": "trg_course_enrollments_onesignal_notify"
+        },
+        {
+            "event": "UPDATE",
+            "table": "course_access_enrollments",
+            "timing": "BEFORE",
+            "trigger": "trg_guard_enrollments_direct_tamper"
+        },
+        {
+            "event": "INSERT",
+            "table": "course_access_enrollments",
+            "timing": "BEFORE",
+            "trigger": "trg_guard_enrollments_direct_tamper"
+        },
+        {
+            "event": "INSERT",
+            "table": "course_access_enrollments",
+            "timing": "BEFORE",
+            "trigger": "trg_sync_course_enrollment_columns"
+        },
+        {
+            "event": "UPDATE",
+            "table": "course_access_enrollments",
+            "timing": "BEFORE",
+            "trigger": "trg_sync_course_enrollment_columns"
+        },
+        {
+            "event": "INSERT",
+            "table": "course_payment_transactions",
+            "timing": "AFTER",
+            "trigger": "trg_course_payments_onesignal_notify"
+        },
+        {
+            "event": "UPDATE",
+            "table": "course_payment_transactions",
+            "timing": "AFTER",
+            "trigger": "trg_course_payments_onesignal_notify"
+        },
+        {
+            "event": "INSERT",
+            "table": "course_payment_transactions",
+            "timing": "BEFORE",
+            "trigger": "trg_guard_payment_tx_direct_tamper"
+        },
+        {
+            "event": "UPDATE",
+            "table": "course_payment_transactions",
+            "timing": "BEFORE",
+            "trigger": "trg_guard_payment_tx_direct_tamper"
+        },
+        {
+            "event": "INSERT",
+            "table": "course_payment_transactions",
+            "timing": "BEFORE",
+            "trigger": "trg_sync_course_payment_tx_columns"
+        },
+        {
+            "event": "UPDATE",
+            "table": "course_payment_transactions",
+            "timing": "BEFORE",
+            "trigger": "trg_sync_course_payment_tx_columns"
+        },
+        {
+            "event": "INSERT",
+            "table": "devices",
+            "timing": "AFTER",
+            "trigger": "trg_devices_onesignal_notify"
+        },
+        {
+            "event": "UPDATE",
+            "table": "devices",
+            "timing": "AFTER",
+            "trigger": "trg_devices_onesignal_notify"
+        },
+        {
+            "event": "UPDATE",
+            "table": "devices",
+            "timing": "BEFORE",
+            "trigger": "trg_guard_devices_direct_tamper"
+        },
+        {
+            "event": "INSERT",
+            "table": "devices",
+            "timing": "BEFORE",
+            "trigger": "trg_guard_devices_direct_tamper"
+        },
+        {
+            "event": "UPDATE",
+            "table": "devices",
+            "timing": "BEFORE",
+            "trigger": "trg_sync_devices_columns"
+        },
+        {
+            "event": "INSERT",
+            "table": "devices",
+            "timing": "BEFORE",
+            "trigger": "trg_sync_devices_columns"
+        },
+        {
+            "event": "INSERT",
+            "table": "student_notifications",
+            "timing": "AFTER",
+            "trigger": "trg_student_notifications_onesignal"
+        }
+    ],
+    "functions": [
+        {
+            "args": "p_enrollment_id bigint, p_total_price integer, p_installment_enabled boolean, p_installment_plans_json jsonb, p_admin_note text, p_instant_free_unlock boolean",
+            "name": "admin_approve_course_access_request",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_student_key text, p_program_id text, p_total_price numeric, p_allow_installments boolean, p_installment_plans jsonb, p_trial_enabled boolean, p_trial_days integer, p_trial_hours integer, p_start_trial_immediately boolean, p_admin_note text",
+            "name": "admin_approve_course_access_with_trial",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_student_note text",
+            "name": "admin_approve_device_verification",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_student_key text, p_program_id text, p_action text, p_days integer, p_hours integer",
+            "name": "admin_manage_course_trial",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_version_name text, p_version_code integer, p_download_url text, p_changelog text, p_title text, p_button_text text, p_checksum_sha256 text",
+            "name": "admin_publish_app_update",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_transaction_id bigint, p_approve boolean, p_rejection_reason text, p_custom_next_due_days integer",
+            "name": "admin_review_course_payment",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_shikho_user_id text, p_user_phone text, p_is_access_granted boolean, p_is_restricted boolean, p_allowed_classes text[], p_allowed_groups text[], p_allowed_batches text[], p_allowed_programs text[], p_revoke_other_accounts boolean",
+            "name": "admin_set_account_course_permissions",
+            "returns": "json",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_is_banned boolean, p_reason text",
+            "name": "admin_set_device_block_status",
+            "returns": "void",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_is_restricted boolean, p_allowed_classes text[], p_allowed_groups text[], p_allowed_batches text[], p_allowed_programs text[]",
+            "name": "admin_set_device_course_permissions",
+            "returns": "json",
+            "security_definer": true
+        },
+        {
+            "args": "p_enabled boolean, p_title text, p_message text, p_estimated_time text",
+            "name": "admin_set_kill_switch",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_is_banned boolean, p_reason text",
+            "name": "admin_toggle_device_ban",
+            "returns": "json",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_device_model text, p_device_brand text, p_android_version text, p_app_version text",
+            "name": "check_device_status",
+            "returns": "json",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text",
+            "name": "check_device_status",
+            "returns": "json",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_device_model text, p_device_brand text, p_android_version text, p_app_version text",
+            "name": "check_student_verification_status",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "enforce_overdue_course_installments",
+            "returns": "integer",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "fn_enforce_mandatory_app_update",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "fn_guard_devices_direct_tamper",
+            "returns": "trigger",
+            "security_definer": false
+        },
+        {
+            "args": "",
+            "name": "fn_guard_enrollments_direct_tamper",
+            "returns": "trigger",
+            "security_definer": false
+        },
+        {
+            "args": "",
+            "name": "fn_guard_payment_tx_direct_tamper",
+            "returns": "trigger",
+            "security_definer": false
+        },
+        {
+            "args": "",
+            "name": "fn_sync_course_enrollment_columns",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "fn_sync_course_payment_tx_columns",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "fn_sync_devices_columns",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "get_onesignal_public_app_id",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "get_required_app_version_name",
+            "returns": "text",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_id text, p_shikho_account_key text, p_shikho_user_id text, p_user_phone text",
+            "name": "get_student_course_commerce_status",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "is_global_kill_switch_active",
+            "returns": "boolean",
+            "security_definer": true
+        },
+        {
+            "args": "p_raw text",
+            "name": "normalize_bd_phone",
+            "returns": "text",
+            "security_definer": false
+        },
+        {
+            "args": "p_title text, p_message text, p_event_type text, p_extra_data jsonb",
+            "name": "notify_admin_via_onesignal",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_onesignal_player_id text, p_device_hash text, p_student_phone text, p_title text, p_message text, p_event_type text, p_extra_data jsonb",
+            "name": "notify_student_via_onesignal",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_id text, p_shikho_account_key text, p_student_name text, p_student_phone text, p_student_class text, p_student_group text, p_program_id text, p_program_title text",
+            "name": "request_course_purchase_access",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_device_model text, p_device_brand text, p_android_version text, p_app_version text, p_student_note text, p_app_signature text",
+            "name": "request_student_verification",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_student_key text, p_program_id text, p_program_title text",
+            "name": "start_course_free_trial",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_id text, p_shikho_account_key text, p_student_name text, p_program_id text, p_program_title text, p_plan_id text, p_plan_title text, p_total_installments integer, p_installment_interval_days integer, p_payment_method text, p_sender_mobile text, p_amount integer, p_transaction_id text",
+            "name": "submit_course_payment_transaction",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_student_phone text, p_student_key text, p_onesignal_player_id text, p_fcm_token text, p_app_version text",
+            "name": "sync_student_push_identity",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "trg_fn_course_enrollments_onesignal_notify",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "trg_fn_course_payments_onesignal_notify",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "trg_fn_devices_onesignal_notify",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "",
+            "name": "trg_fn_student_notifications_onesignal",
+            "returns": "trigger",
+            "security_definer": true
+        },
+        {
+            "args": "p_app_id text, p_rest_api_key text",
+            "name": "update_onesignal_config_secure",
+            "returns": "jsonb",
+            "security_definer": true
+        },
+        {
+            "args": "p_device_hash text, p_token text, p_app_version text",
+            "name": "verify_device_heartbeat",
+            "returns": "jsonb",
+            "security_definer": true
+        }
+    ]
+}

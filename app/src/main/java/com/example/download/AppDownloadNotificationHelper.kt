@@ -292,16 +292,5 @@ object AppDownloadNotificationHelper {
         }
     }
 
-    private fun String.toBengaliDigits(): String {
-        val bnDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
-        val sb = StringBuilder(this.length)
-        for (ch in this) {
-            if (ch in '0'..'9') {
-                sb.append(bnDigits[ch - '0'])
-            } else {
-                sb.append(ch)
-            }
-        }
-        return sb.toString()
-    }
+    private fun String.toBengaliDigits(): String = com.example.utils.toBengaliDigits(this)
 }

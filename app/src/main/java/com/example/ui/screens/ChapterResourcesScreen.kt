@@ -86,8 +86,7 @@ fun ChapterResourcesScreen(
     }
 
     // In-app PDF Viewer Dialog
-    if (uiState.activeAttachment != null) {
-        val attachment = uiState.activeAttachment!!
+    uiState.activeAttachment?.let { attachment ->
         SlideViewerDialog(
             slideUrl = attachment.url ?: "",
             title = attachment.title ?: chapterName,
@@ -98,9 +97,10 @@ fun ChapterResourcesScreen(
     }
 
     // Attachment List Dialog
-    if (uiState.selectedTagAttachments != null && uiState.activeAttachment == null) {
+    val tagAttachments = uiState.selectedTagAttachments
+    if (tagAttachments != null && uiState.activeAttachment == null) {
         AttachmentListDialog(
-            attachments = uiState.selectedTagAttachments!!,
+            attachments = tagAttachments,
             title = uiState.selectedTagTitle ?: "ডকুমেন্ট লিস্ট",
             accentColor = parsedSubjectColor,
             onAttachmentClick = { attachment ->

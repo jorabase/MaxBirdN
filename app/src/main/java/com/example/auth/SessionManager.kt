@@ -16,61 +16,27 @@ import java.util.UUID
 
 class SessionManager(context: Context) {
     val appContext: Context = context.applicationContext
-    private val fallbackPrefs: SharedPreferences =
-        context.getSharedPreferences("shikho_prefs_fallback", Context.MODE_PRIVATE)
 
-    private val sharedPreferences: SharedPreferences = try {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+    private val prefsHolder: PrefsHolder = getOrInitPrefs(appContext)
+    private val fallbackPrefs: SharedPreferences get() = prefsHolder.fallbackPrefs
+    private val sharedPreferences: SharedPreferences get() = prefsHolder.sharedPrefs
+    private val isEncryptedStorageActive: Boolean get() = prefsHolder.isEncrypted
 
-        EncryptedSharedPreferences.create(
-            context,
-            "shikho_secure_prefs",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    } catch (e: Throwable) {
-        android.util.Log.e(
-            "SessionManager",
-            "Failed to initialize EncryptedSharedPreferences, falling back to standard SharedPreferences: ${e.message}",
-            e
-        )
-        fallbackPrefs
-    }
-
-    private val isEncryptedStorageActive: Boolean = (sharedPreferences !== fallbackPrefs)
+    private class PrefsHolder(
+        val fallbackPrefs: SharedPreferences,
+        val sharedPrefs: SharedPreferences,
+        val isEncrypted: Boolean
+    )
 
     init {
-        // Migrate any legacy tokens from fallbackPrefs into EncryptedSharedPreferences,
-        // and scrub plaintext tokens from fallbackPrefs when encrypted storage is active.
-        try {
-            val secureToken = sharedPreferences.getString("access_token", null)
-            val fallbackToken = fallbackPrefs.getString("access_token", null)
-            if (isEncryptedStorageActive) {
-                if (secureToken.isNullOrBlank() && !fallbackToken.isNullOrBlank()) {
-                    sharedPreferences.edit()
-                        .putString("access_token", fallbackToken)
-                        .putString("refresh_token", fallbackPrefs.getString("refresh_token", null))
-                        .putString("id_token", fallbackPrefs.getString("id_token", null))
-                        .putString("user_id", fallbackPrefs.getString("user_id", null))
-                        .commit()
-                }
-                if (fallbackPrefs.contains("access_token") ||
-                    fallbackPrefs.contains("refresh_token") ||
-                    fallbackPrefs.contains("id_token")
-                ) {
-                    fallbackPrefs.edit()
-                        .remove("access_token")
-                        .remove("refresh_token")
-                        .remove("id_token")
-                        .apply()
+        if (!hasSyncedInitialFlows) {
+            synchronized(prefsLock) {
+                if (!hasSyncedInitialFlows) {
+                    syncCompanionFlowsFromPrefs()
+                    hasSyncedInitialFlows = true
                 }
             }
-        } catch (_: Exception) {
         }
-        syncCompanionFlowsFromPrefs()
     }
 
     private fun syncCompanionFlowsFromPrefs() {
@@ -156,6 +122,86 @@ class SessionManager(context: Context) {
             val normA = normalizePhone(phoneA)
             val normB = normalizePhone(phoneB)
             return normA.isNotBlank() && normA == normB
+        }
+
+        private val prefsLock = Any()
+
+        @Volatile
+        private var cachedPrefsHolder: PrefsHolder? = null
+
+        @Volatile
+        private var hasSyncedInitialFlows: Boolean = false
+
+        @Volatile
+        private var singletonInstance: SessionManager? = null
+
+        fun getInstance(context: Context): SessionManager {
+            return singletonInstance ?: synchronized(prefsLock) {
+                singletonInstance ?: SessionManager(context.applicationContext).also {
+                    singletonInstance = it
+                }
+            }
+        }
+
+        private fun getOrInitPrefs(appContext: Context): PrefsHolder {
+            cachedPrefsHolder?.let { return it }
+            return synchronized(prefsLock) {
+                cachedPrefsHolder?.let { return@synchronized it }
+                val fallback = appContext.getSharedPreferences("shikho_prefs", Context.MODE_PRIVATE)
+                var encrypted = false
+                val prefs: SharedPreferences = try {
+                    val masterKey = MasterKey.Builder(appContext)
+                        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                        .build()
+                    val encPrefs = EncryptedSharedPreferences.create(
+                        appContext,
+                        "shikho_secure_prefs",
+                        masterKey,
+                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                    )
+                    encrypted = true
+                    encPrefs
+                } catch (_: Throwable) {
+                    encrypted = false
+                    fallback
+                }
+
+                // One-time migration of legacy plaintext tokens/keys into EncryptedSharedPreferences
+                if (encrypted && !prefs.getBoolean("migrated_from_fallback_v1", false)) {
+                    try {
+                        val encEditor = prefs.edit()
+                        val fbEditor = fallback.edit()
+                        val sensitiveKeys = setOf("access_token", "refresh_token", "id_token")
+                        for ((key, value) in fallback.all) {
+                            if (prefs.contains(key)) continue
+                            when (value) {
+                                is String -> encEditor.putString(key, value)
+                                is Boolean -> encEditor.putBoolean(key, value)
+                                is Int -> encEditor.putInt(key, value)
+                                is Long -> encEditor.putLong(key, value)
+                                is Float -> encEditor.putFloat(key, value)
+                                is Set<*> -> {
+                                    @Suppress("UNCHECKED_CAST")
+                                    val strSet = (value as? Set<String>)?.let { HashSet(it) }
+                                    if (strSet != null) encEditor.putStringSet(key, strSet)
+                                }
+                            }
+                        }
+                        for (sKey in sensitiveKeys) {
+                            fbEditor.remove(sKey)
+                        }
+                        encEditor.putBoolean("migrated_from_fallback_v1", true)
+                        encEditor.apply()
+                        fbEditor.apply()
+                    } catch (_: Throwable) {
+                    }
+                }
+
+                PrefsHolder(fallback, prefs, encrypted).also {
+                    cachedPrefsHolder = it
+                }
+            }
         }
 
         internal val _sharedThemeModeFlow = MutableStateFlow("system")

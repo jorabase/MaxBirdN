@@ -8,7 +8,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -125,9 +124,9 @@ fun SplashScreen(
         val isReachable = NetworkUtils.isInternetReachable(context, timeoutMs = 2500)
         detectedOnline = isReachable
 
-        // 2. Ensure user experiences the full delightful animation (minimum 1900ms)
+        // 2. Ensure smooth logo entrance without artificial multi-second startup wait
         val elapsed = System.currentTimeMillis() - startTime
-        val remainingWait = (1900L - elapsed).coerceAtLeast(0L)
+        val remainingWait = (850L - elapsed).coerceAtLeast(0L)
         if (remainingWait > 0) {
             delay(remainingWait)
         }
@@ -136,12 +135,12 @@ fun SplashScreen(
 
         if (isReachable) {
             connectionStatusText = "স্বাগতম! লোড হচ্ছে..."
-            delay(350)
+            delay(150)
             val isLoggedIn = sessionManager.getAccessToken() != null
             onNavigateOnline(isLoggedIn)
         } else {
             connectionStatusText = "অফলাইন মোডে প্রবেশ করা হচ্ছে..."
-            delay(600)
+            delay(300)
             onNavigateOffline()
         }
     }

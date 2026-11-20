@@ -52,6 +52,7 @@ private const val TAG = "LivePlayer"
 
 private val hlsResolutionHttpClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
+        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .followRedirects(true)

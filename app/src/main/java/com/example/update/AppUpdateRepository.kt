@@ -159,7 +159,12 @@ object AppUpdateRepository {
 
     fun openDownloadUrl(context: Context, url: String) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            val cleanUrl = url.trim()
+            if (!cleanUrl.startsWith("https://", ignoreCase = true)) {
+                Log.w(TAG, "Blocked non-HTTPS update URL")
+                return
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(cleanUrl)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
