@@ -71,18 +71,22 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
         val notification = remoteMessage.notification
 
         // 1. If this notification came from a course-specific Shikho topic (`LIVE_ShikhoNotification_...`),
-        // verify it matches the student's currently selected course on the Home Screen.
-        // If it belongs to an old course the student switched away from, auto-unsubscribe and ignore it.
+        // allow it for ANY of the student's active (non-expired) enrolled courses.
+        // Only auto-unsubscribe and ignore if the course is expired or no longer enrolled.
         if (fromTopicOrSender.startsWith("/topics/LIVE_ShikhoNotification_")) {
             val rawTopicName = fromTopicOrSender.removePrefix("/topics/")
             val topicProgramId = PROGRAM_TOPIC_REGEX.find(rawTopicName)?.groupValues?.getOrNull(1)
-            val activeProgramId = sessionManager.getActiveProgramId()?.trim()
+            val activeEnrolledIds = sessionManager.getActiveEnrolledProgramIds()
 
             if (!topicProgramId.isNullOrBlank() &&
-                !activeProgramId.isNullOrBlank() &&
-                !topicProgramId.equals(activeProgramId, ignoreCase = true)
+                activeEnrolledIds.isNotEmpty() &&
+                activeEnrolledIds.none { it.equals(topicProgramId, ignoreCase = true) }
             ) {
-                Log.d(TAG, "Ignoring notification from old switched-away course topic: $rawTopicName (active=$activeProgramId)")
+                Log.d(TAG, "Ignoring notification from expired/un-enrolled course topic: $rawTopicName (activeCourses=$activeEnrolledIds)")
+                ShikhoNotificationManager.logTerminal(
+                    "WARN",
+                    "🗑️ Auto-unsubscribing expired/un-enrolled course push topic: $rawTopicName"
+                )
                 try {
                     FirebaseMessaging.getInstance().unsubscribeFromTopic(rawTopicName)
                 } catch (_: Throwable) {}

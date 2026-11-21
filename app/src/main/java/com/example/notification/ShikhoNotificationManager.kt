@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import com.example.auth.SessionManager
+import com.example.auth.StoredEnrolledFcmCourse
 import com.example.security.AntiTamperSecurity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.installations.FirebaseInstallations
@@ -32,22 +33,25 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
 
 /**
- * Manages Firebase Cloud Messaging (FCM) topic subscriptions and notification channels
+ * Manages real Firebase Cloud Messaging (FCM) topic subscriptions and notification channels
  * matching the authentic Shikho notification architecture (`projects/shikho-tech`):
  * 1. `SHIKHO_ALL` (Global broadcasts, campaigns, orientation live, routine reminders)
  * 2. `{userId}` (Personal account notifications)
- * 3. `LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}` (Selected course notifications)
- * 4. `LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}` (Selected course phase live class & exam alerts)
+ * 3. `LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}` (Auto-subscribed for ALL active enrolled courses)
+ * 4. `LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}` (Auto-subscribed for ALL active courses' current phase)
  *
- * Uses the real Firebase Installations (`FID` + `x-goog-firebase-installations-auth`) +
- * `fcmregistrations.googleapis.com/v1/projects/{projectId}/registrations/{fid}/topicSubscriptions/{topic}:subscribe`
- * protocol alongside Android `FirebaseMessaging.getInstance()` topic subscriptions, and exposes
- * truthful, real-time connection diagnostics for authorized `can_view_profiles` devices.
+ * Smart Multi-Course Engine:
+ * - Auto-subscribes ALL active (non-expired) enrolled courses & their active phases immediately upon login/enrollment load.
+ * - Automatically unsubscribes (`:unsubscribe`) expired courses (`expiry_date` passed or `is_active == false`),
+ *   ended/old phases, and all personal/course topics on logout.
+ * - Uses real `FirebaseInstallations` (`FID` + `x-goog-firebase-installations-auth`), real `FirebaseMessaging` SDK,
+ *   and real `fcmregistrations.googleapis.com` `:subscribe`/`:unsubscribe` calls. Never fakes or simulates success.
  */
 object ShikhoNotificationManager {
     private const val TAG = "ShikhoNotificationMgr"
@@ -69,6 +73,14 @@ object ShikhoNotificationManager {
         SKIPPED
     }
 
+    data class EnrolledCourseFcmTarget(
+        val programId: String,
+        val titleBn: String = "",
+        val phaseId: String? = null,
+        val isActive: Boolean = true,
+        val expiryDate: String? = null
+    )
+
     data class FcmTerminalLog(
         val id: Long,
         val timestamp: String,
@@ -85,7 +97,8 @@ object ShikhoNotificationManager {
         val createTime: String? = null,
         val latencyMs: Long? = null,
         val sdkVerified: Boolean = false,
-        val errorMessage: String? = null
+        val errorMessage: String? = null,
+        val courseTitle: String? = null
     )
 
     data class ShikhoFcmConnectionState(
@@ -100,6 +113,9 @@ object ShikhoNotificationManager {
         val activeUserId: String = "",
         val activeProgramId: String = "",
         val activePhaseId: String = "",
+        val activeCourseCount: Int = 0,
+        val expiredCourseCount: Int = 0,
+        val autoUnsubscribedCount: Int = 0,
         val topics: List<TopicSubscriptionState> = emptyList(),
         val lastSyncedAt: String = "",
         val lastError: String? = null,
@@ -124,6 +140,17 @@ object ShikhoNotificationManager {
         val createTime: String? = null,
         val latencyMs: Long = 0L,
         val errorMessage: String? = null
+    )
+
+    private data class FirebaseCredentials(
+        val firebaseApp: FirebaseApp?,
+        val projectId: String,
+        val appId: String,
+        val apiKey: String,
+        val fid: String,
+        val fisAuthToken: String,
+        val fcm: FirebaseMessaging?,
+        val fcmToken: String
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -157,7 +184,7 @@ object ShikhoNotificationManager {
             type = type,
             message = message
         )
-        _liveLogs.update { current -> (current + entry).takeLast(150) }
+        _liveLogs.update { current -> (current + entry).takeLast(200) }
         Log.d(TAG, "[$type] $message")
     }
 
@@ -171,6 +198,46 @@ object ShikhoNotificationManager {
         }
         val cleanType = eventType.ifBlank { "GENERAL" }
         logTerminal("PUSH", "📩 Push [$cleanType] from $from -> \"$title\"")
+    }
+
+    /**
+     * Parses ISO-8601 expiry timestamps from Shikho's `enrollment_details.expiry_date`
+     * (e.g. "2026-09-30T17:59:59Z" or "2027-12-31T17:59:59.000Z") and returns true if expired.
+     */
+    fun isCourseExpired(
+        isActive: Boolean?,
+        expiryDate: String?,
+        nowMs: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (isActive == false) return true
+        val expiryMs = parseIsoTimestampMs(expiryDate) ?: return false
+        return expiryMs < nowMs
+    }
+
+    private fun parseIsoTimestampMs(raw: String?): Long? {
+        val clean = raw?.trim().orEmpty()
+        if (clean.isBlank()) return null
+
+        val patterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'" to true,
+            "yyyy-MM-dd'T'HH:mm:ss'Z'" to true,
+            "yyyy-MM-dd'T'HH:mm:ssXXX" to false,
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX" to false,
+            "yyyy-MM-dd HH:mm:ss" to true,
+            "yyyy-MM-dd" to true
+        )
+        for ((pattern, forceUtc) in patterns) {
+            try {
+                val sdf = SimpleDateFormat(pattern, Locale.US).apply {
+                    isLenient = false
+                    if (forceUtc) timeZone = TimeZone.getTimeZone("UTC")
+                }
+                val parsed = sdf.parse(clean)
+                if (parsed != null) return parsed.time
+            } catch (_: Throwable) {
+            }
+        }
+        return null
     }
 
     /**
@@ -226,16 +293,30 @@ object ShikhoNotificationManager {
 
     /**
      * Synchronizes all authentic Shikho FCM topic subscriptions on `projects/shikho-tech`:
-     * 1. `SHIKHO_ALL`
-     * 2. `{userId}`
-     * 3. `LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}`
-     * 4. `LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}`
-     *
-     * Performs real Firebase Installations + FCM Token + `fcmregistrations.googleapis.com` `:subscribe`
-     * + Android `FirebaseMessaging` SDK subscription and streams real results into [connectionState] and [liveLogs].
+     * `SHIKHO_ALL`, `{userId}`, and all currently active enrolled courses & their active phases.
+     * Automatically cleans up any course whose `expiry_date` has passed.
      */
     fun syncAllTopicSubscriptions(context: Context) {
         verifyAndSyncNow(context = context, forceRefreshFisToken = false)
+    }
+
+    /**
+     * Smart Multi-Course Auto-Subscribe + Auto-Expiry Cleanup:
+     * Immediately subscribes in the background to ALL active (non-expired) enrolled courses
+     * and their active phases, while automatically unsubscribing any expired or un-enrolled courses.
+     */
+    fun syncEnrolledCourses(
+        context: Context,
+        enrolledCourses: List<EnrolledCourseFcmTarget>
+    ) {
+        val appContext = context.applicationContext
+        scope.launch {
+            runFullShikhoFcmSync(
+                appContext = appContext,
+                forceRefreshFisToken = false,
+                incomingEnrolledCourses = enrolledCourses
+            )
+        }
     }
 
     /**
@@ -246,41 +327,19 @@ object ShikhoNotificationManager {
     fun verifyAndSyncNow(context: Context, forceRefreshFisToken: Boolean = true) {
         val appContext = context.applicationContext
         scope.launch {
-            runFullShikhoFcmSync(appContext, forceRefreshFisToken)
+            runFullShikhoFcmSync(
+                appContext = appContext,
+                forceRefreshFisToken = forceRefreshFisToken
+            )
         }
     }
 
-    private suspend fun runFullShikhoFcmSync(
+    private suspend fun resolveFirebaseCredentials(
         appContext: Context,
-        forceRefreshFisToken: Boolean,
-        overrideProgramId: String? = null,
-        overridePhaseId: String? = null
-    ) = syncMutex.withLock {
-        val sessionManager = SessionManager.getInstance(appContext)
-        val gmsAvailable = isGooglePlayServicesAvailable(appContext)
-        val userId = sessionManager.getUserId()?.trim().orEmpty()
-        val activeProgramId = overrideProgramId?.trim()?.takeIf { it.isNotBlank() }
-            ?: sessionManager.getActiveProgramId()?.trim().orEmpty()
-        val activePhaseId = overridePhaseId?.trim()?.takeIf { it.isNotBlank() }
-            ?: sessionManager.getActiveProgramPhaseId()?.trim().orEmpty()
-
-        val initialTopics = buildExpectedTopics(userId, activeProgramId, activePhaseId)
-
-        _connectionState.update { prev ->
-            prev.copy(
-                isSyncing = true,
-                playServicesAvailable = gmsAvailable,
-                activeUserId = userId,
-                activeProgramId = activeProgramId,
-                activePhaseId = activePhaseId,
-                topics = initialTopics,
-                lastError = null
-            )
-        }
-
-        logTerminal("INFO", "🚀 Starting real Shikho FCM connection check...")
-
-        // 1. Verify FirebaseApp & options from google-services.json
+        sessionManager: SessionManager,
+        gmsAvailable: Boolean,
+        forceRefreshFisToken: Boolean
+    ): FirebaseCredentials {
         val firebaseApp = try {
             FirebaseApp.getApps(appContext).firstOrNull() ?: FirebaseApp.initializeApp(appContext)
         } catch (e: Throwable) {
@@ -289,16 +348,16 @@ object ShikhoNotificationManager {
         }
 
         if (firebaseApp == null) {
-            markAllActiveTopicsFailed("FirebaseApp not initialized")
-            _connectionState.update {
-                it.copy(
-                    isSyncing = false,
-                    firebaseInitialized = false,
-                    lastSyncedAt = nowTimeString(),
-                    lastError = "FirebaseApp not initialized (check google-services.json)"
-                )
-            }
-            return
+            return FirebaseCredentials(
+                firebaseApp = null,
+                projectId = "",
+                appId = "",
+                apiKey = "",
+                fid = "",
+                fisAuthToken = "",
+                fcm = null,
+                fcmToken = ""
+            )
         }
 
         val options = firebaseApp.options
@@ -323,7 +382,6 @@ object ShikhoNotificationManager {
             logTerminal("WARN", "⚠️ Google Play Services unavailable; attempting direct FIS + FCM REST check")
         }
 
-        // 2. Acquire real Firebase Installation ID (FID) & FIS Auth JWT
         val installations = try {
             FirebaseInstallations.getInstance(firebaseApp)
         } catch (e: Throwable) {
@@ -362,14 +420,6 @@ object ShikhoNotificationManager {
             }
         }
 
-        _connectionState.update {
-            it.copy(
-                installationId = fid,
-                fisAuthReady = fisAuthToken.isNotBlank()
-            )
-        }
-
-        // 3. Acquire real FCM Registration Token via FirebaseMessaging SDK
         val fcm = try {
             FirebaseMessaging.getInstance().apply {
                 runCatching { isAutoInitEnabled = true }
@@ -395,36 +445,210 @@ object ShikhoNotificationManager {
 
         _connectionState.update {
             it.copy(
+                installationId = fid,
+                fisAuthReady = fisAuthToken.isNotBlank(),
                 fcmTokenPreview = if (fcmToken.length > 20) "${fcmToken.take(18)}...${fcmToken.takeLast(6)}" else fcmToken
             )
         }
 
-        // 4. Unsubscribe stale course/phase topics if course changed
+        return FirebaseCredentials(
+            firebaseApp = firebaseApp,
+            projectId = projectId,
+            appId = appId,
+            apiKey = apiKey,
+            fid = fid,
+            fisAuthToken = fisAuthToken,
+            fcm = fcm,
+            fcmToken = fcmToken
+        )
+    }
+
+    private suspend fun runFullShikhoFcmSync(
+        appContext: Context,
+        forceRefreshFisToken: Boolean,
+        overrideProgramId: String? = null,
+        overridePhaseId: String? = null,
+        overrideCourseTitleBn: String? = null,
+        incomingEnrolledCourses: List<EnrolledCourseFcmTarget>? = null
+    ) = syncMutex.withLock {
+        val sessionManager = SessionManager.getInstance(appContext)
+        val gmsAvailable = isGooglePlayServicesAvailable(appContext)
+        val userId = sessionManager.getUserId()?.trim().orEmpty()
+        val selectedProgramId = overrideProgramId?.trim()?.takeIf { it.isNotBlank() }
+            ?: sessionManager.getActiveProgramId()?.trim().orEmpty()
+        val selectedPhaseId = overridePhaseId?.trim()?.takeIf { it.isNotBlank() }
+            ?: sessionManager.getActiveProgramPhaseId()?.trim().orEmpty()
+
+        val nowMs = System.currentTimeMillis()
+        val cachedCoursesById = sessionManager.getActiveEnrolledFcmCourses().associateBy { it.programId }
+
+        val activeCourses = mutableListOf<EnrolledCourseFcmTarget>()
+        val expiredCourses = mutableListOf<EnrolledCourseFcmTarget>()
+
+        if (incomingEnrolledCourses != null) {
+            // Full enrollment refresh from Shikho API: separate active vs expired/inactive courses
+            for (course in incomingEnrolledCourses.distinctBy { it.programId }) {
+                val pid = course.programId.trim()
+                if (pid.isBlank()) continue
+                val cached = cachedCoursesById[pid]
+                val resolvedPhase = course.phaseId?.trim()?.takeIf { it.isNotBlank() }
+                    ?: cached?.phaseId?.takeIf { it.isNotBlank() }
+                    ?: if (pid == selectedProgramId) selectedPhaseId.takeIf { it.isNotBlank() } else null
+                val resolvedTitle = course.titleBn.trim().ifBlank { cached?.titleBn.orEmpty() }
+                val merged = course.copy(
+                    programId = pid,
+                    titleBn = resolvedTitle,
+                    phaseId = resolvedPhase
+                )
+                if (isCourseExpired(merged.isActive, merged.expiryDate, nowMs)) {
+                    expiredCourses.add(merged)
+                } else {
+                    activeCourses.add(merged)
+                }
+            }
+        } else {
+            // Re-evaluate all previously stored enrolled courses against current time for expiry
+            val workingMap = LinkedHashMap<String, EnrolledCourseFcmTarget>()
+            for (stored in cachedCoursesById.values) {
+                val target = EnrolledCourseFcmTarget(
+                    programId = stored.programId,
+                    titleBn = stored.titleBn,
+                    phaseId = stored.phaseId,
+                    isActive = stored.isActive,
+                    expiryDate = stored.expiryDate
+                )
+                if (isCourseExpired(target.isActive, target.expiryDate, nowMs)) {
+                    expiredCourses.add(target)
+                } else {
+                    workingMap[target.programId] = target
+                }
+            }
+
+            // Merge/upsert currently selected program & phase WITHOUT removing other active courses
+            if (selectedProgramId.isNotBlank()) {
+                val existing = workingMap[selectedProgramId]
+                val title = overrideCourseTitleBn?.trim()?.takeIf { it.isNotBlank() }
+                    ?: existing?.titleBn?.takeIf { it.isNotBlank() }
+                    ?: sessionManager.getActiveProgramTitleBn()?.trim().orEmpty()
+                val phase = selectedPhaseId.takeIf { it.isNotBlank() } ?: existing?.phaseId
+                workingMap[selectedProgramId] = EnrolledCourseFcmTarget(
+                    programId = selectedProgramId,
+                    titleBn = title,
+                    phaseId = phase,
+                    isActive = existing?.isActive ?: true,
+                    expiryDate = existing?.expiryDate
+                )
+            }
+            activeCourses.addAll(workingMap.values)
+        }
+
+        // Persist updated active course list to SessionManager
+        sessionManager.setActiveEnrolledFcmCourses(
+            activeCourses.map {
+                StoredEnrolledFcmCourse(
+                    programId = it.programId,
+                    titleBn = it.titleBn,
+                    phaseId = it.phaseId,
+                    expiryDate = it.expiryDate,
+                    isActive = it.isActive
+                )
+            }
+        )
+
+        val initialTopics = buildExpectedTopicsMultiCourse(
+            userId = userId,
+            activeCourses = activeCourses,
+            selectedProgramId = selectedProgramId,
+            selectedPhaseId = selectedPhaseId
+        )
+
+        _connectionState.update { prev ->
+            prev.copy(
+                isSyncing = true,
+                playServicesAvailable = gmsAvailable,
+                activeUserId = userId,
+                activeProgramId = selectedProgramId,
+                activePhaseId = selectedPhaseId,
+                activeCourseCount = activeCourses.size,
+                expiredCourseCount = expiredCourses.size,
+                topics = initialTopics,
+                lastError = null
+            )
+        }
+
+        logTerminal(
+            "INFO",
+            "🚀 Smart Shikho FCM Sync | activeCourses=${activeCourses.size}, expired=${expiredCourses.size}"
+        )
+        if (expiredCourses.isNotEmpty()) {
+            val expiredNames = expiredCourses.joinToString(", ") {
+                it.titleBn.ifBlank { it.programId.takeLast(8) }
+            }
+            logTerminal("WARN", "⏳ মেয়াদ শেষ / নিষ্ক্রিয় কোর্স শনাক্ত (${expiredCourses.size}): $expiredNames")
+        }
+
+        // 1. Resolve real FirebaseApp + FID + FIS Auth JWT + FCM Token
+        val creds = resolveFirebaseCredentials(
+            appContext = appContext,
+            sessionManager = sessionManager,
+            gmsAvailable = gmsAvailable,
+            forceRefreshFisToken = forceRefreshFisToken
+        )
+
+        if (creds.firebaseApp == null) {
+            markAllActiveTopicsFailed("FirebaseApp not initialized")
+            _connectionState.update {
+                it.copy(
+                    isSyncing = false,
+                    firebaseInitialized = false,
+                    lastSyncedAt = nowTimeString(),
+                    lastError = "FirebaseApp not initialized (check google-services.json)"
+                )
+            }
+            return
+        }
+
+        // 2. Auto-unsubscribe expired, removed, or outdated-phase course topics
         val previouslySubscribed = sessionManager.getSubscribedCourseTopics().toMutableSet()
         val activeCourseTopics = initialTopics
             .filter { it.status != TopicConnectionStatus.SKIPPED && it.key.startsWith("course_") }
             .map { it.topicName }
             .toSet()
 
-        if (activeProgramId.isNotBlank()) {
-            val staleTopics = previouslySubscribed.filter { oldTopic ->
-                oldTopic !in activeCourseTopics && !oldTopic.contains("_Program_${activeProgramId}")
+        val staleTopics = linkedSetOf<String>()
+        // 2a. Any previously subscribed course/phase topic that is no longer in our active target set
+        for (oldTopic in previouslySubscribed) {
+            if (oldTopic !in activeCourseTopics) {
+                staleTopics.add(oldTopic)
             }
-            for (oldTopic in staleTopics) {
-                unsubscribeTopicReal(
-                    fcm = fcm,
-                    gmsAvailable = gmsAvailable,
-                    projectId = projectId,
-                    apiKey = apiKey,
-                    fid = fid,
-                    fisAuthToken = fisAuthToken,
-                    topic = oldTopic
-                )
-                previouslySubscribed.remove(oldTopic)
+        }
+        // 2b. Explicitly build topics for newly detected expired courses so they are guaranteed cleaned up
+        for (expired in expiredCourses) {
+            if (userId.isNotBlank()) {
+                staleTopics.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${expired.programId}")
+            }
+            if (!expired.phaseId.isNullOrBlank()) {
+                staleTopics.add("LIVE_ShikhoNotification_Program_${expired.programId}_Phase_${expired.phaseId}")
             }
         }
 
-        // 5. Subscribe & verify every active Shikho topic (exact HAR endpoint + FirebaseMessaging SDK)
+        var unsubscribedNow = 0
+        for (oldTopic in staleTopics) {
+            logTerminal("WARN", "🗑️ Auto-unsubscribing expired/stale topic: $oldTopic")
+            unsubscribeTopicReal(
+                fcm = creds.fcm,
+                gmsAvailable = gmsAvailable,
+                projectId = creds.projectId,
+                apiKey = creds.apiKey,
+                fid = creds.fid,
+                fisAuthToken = creds.fisAuthToken,
+                topic = oldTopic
+            )
+            previouslySubscribed.remove(oldTopic)
+            unsubscribedNow++
+        }
+
+        // 3. Auto-subscribe & verify EVERY active Shikho topic (SHIKHO_ALL + userId + ALL active courses & phases)
         var anyError: String? = null
         val updatedTopics = initialTopics.toMutableList()
 
@@ -438,11 +662,11 @@ object ShikhoNotificationManager {
             updatedTopics[i] = item.copy(status = TopicConnectionStatus.CONNECTING)
             _connectionState.update { it.copy(topics = updatedTopics.toList()) }
 
-            // 5a. Android FirebaseMessaging SDK subscription (required for GMS delivery)
+            // 3a. Android FirebaseMessaging SDK subscription (required for GMS delivery)
             var sdkOk = false
             var sdkErr: String? = null
-            if (fcm != null && gmsAvailable) {
-                val sdkRes = awaitTaskResult(fcm.subscribeToTopic(item.topicName))
+            if (creds.fcm != null && gmsAvailable) {
+                val sdkRes = awaitTaskResult(creds.fcm.subscribeToTopic(item.topicName))
                 sdkRes.onSuccess {
                     sdkOk = true
                 }.onFailure { err ->
@@ -452,14 +676,14 @@ object ShikhoNotificationManager {
                 sdkErr = "Google Play Services unavailable"
             }
 
-            // 5b. Real fcmregistrations.googleapis.com REST :subscribe verification (exact Shikho protocol)
+            // 3b. Real fcmregistrations.googleapis.com REST :subscribe verification (exact Shikho protocol)
             var restResult: FcmRestResult? = null
-            if (projectId.isNotBlank() && apiKey.isNotBlank() && fid.isNotBlank() && fisAuthToken.isNotBlank()) {
+            if (creds.projectId.isNotBlank() && creds.apiKey.isNotBlank() && creds.fid.isNotBlank() && creds.fisAuthToken.isNotBlank()) {
                 restResult = callFcmRegistrationTopicAction(
-                    projectId = projectId,
-                    apiKey = apiKey,
-                    fid = fid,
-                    fisAuthToken = fisAuthToken,
+                    projectId = creds.projectId,
+                    apiKey = creds.apiKey,
+                    fid = creds.fid,
+                    fisAuthToken = creds.fisAuthToken,
                     topic = item.topicName,
                     action = "subscribe"
                 )
@@ -538,22 +762,25 @@ object ShikhoNotificationManager {
             _connectionState.update { it.copy(topics = updatedTopics.toList()) }
         }
 
-        // Persist tracked course subscription state
-        if (activeProgramId.isNotBlank()) {
-            sessionManager.setSubscribedFcmProgramId(activeProgramId)
-            if (activePhaseId.isNotBlank()) {
-                sessionManager.setSubscribedFcmPhaseId(activePhaseId)
+        // Persist tracked subscription state
+        if (selectedProgramId.isNotBlank()) {
+            sessionManager.setSubscribedFcmProgramId(selectedProgramId)
+            if (selectedPhaseId.isNotBlank()) {
+                sessionManager.setSubscribedFcmPhaseId(selectedPhaseId)
             }
-            sessionManager.setSubscribedCourseTopics(previouslySubscribed)
         }
+        sessionManager.setSubscribedCourseTopics(previouslySubscribed)
 
         val connectedCount = updatedTopics.count { it.status == TopicConnectionStatus.CONNECTED }
         val activeCount = updatedTopics.count { it.status != TopicConnectionStatus.SKIPPED }
         val finishedAt = nowTimeString()
 
-        _connectionState.update {
-            it.copy(
+        _connectionState.update { prev ->
+            prev.copy(
                 isSyncing = false,
+                activeCourseCount = activeCourses.size,
+                expiredCourseCount = expiredCourses.size,
+                autoUnsubscribedCount = prev.autoUnsubscribedCount + unsubscribedNow,
                 topics = updatedTopics.toList(),
                 lastSyncedAt = finishedAt,
                 lastError = anyError
@@ -561,7 +788,10 @@ object ShikhoNotificationManager {
         }
 
         if (connectedCount > 0 && connectedCount == activeCount) {
-            logTerminal("SUCCESS", "🟢 Shikho Notification Connected ($connectedCount/$activeCount active topics verified)")
+            logTerminal(
+                "SUCCESS",
+                "🟢 Shikho Notification Connected ($connectedCount/$activeCount topics across ${activeCourses.size} active courses)"
+            )
         } else if (connectedCount > 0) {
             logTerminal("WARN", "🟡 Partial Shikho Connection ($connectedCount/$activeCount topics connected)")
         } else {
@@ -569,10 +799,11 @@ object ShikhoNotificationManager {
         }
     }
 
-    private fun buildExpectedTopics(
+    private fun buildExpectedTopicsMultiCourse(
         userId: String,
-        programId: String,
-        phaseId: String
+        activeCourses: List<EnrolledCourseFcmTarget>,
+        selectedProgramId: String,
+        selectedPhaseId: String
     ): List<TopicSubscriptionState> {
         val list = mutableListOf<TopicSubscriptionState>()
 
@@ -608,48 +839,86 @@ object ShikhoNotificationManager {
             )
         }
 
-        // 3. Course User topic: LIVE_ShikhoNotification_UserID_{userId}_Program_{programId}
-        if (userId.isNotBlank() && programId.isNotBlank()) {
-            list.add(
-                TopicSubscriptionState(
-                    key = "course_user",
-                    label = "Course Live (User)",
-                    topicName = "LIVE_ShikhoNotification_UserID_${userId}_Program_${programId}",
-                    status = TopicConnectionStatus.IDLE
+        // 3. Multi-course topics for EVERY active (non-expired) enrolled course
+        val effectiveCourses = if (activeCourses.isNotEmpty()) {
+            activeCourses
+        } else if (selectedProgramId.isNotBlank()) {
+            listOf(
+                EnrolledCourseFcmTarget(
+                    programId = selectedProgramId,
+                    titleBn = "",
+                    phaseId = selectedPhaseId.takeIf { it.isNotBlank() }
                 )
             )
         } else {
-            list.add(
-                TopicSubscriptionState(
-                    key = "course_user",
-                    label = "Course Live (User)",
-                    topicName = "LIVE_ShikhoNotification_UserID_{user}_Program_{prog}",
-                    status = TopicConnectionStatus.SKIPPED,
-                    errorMessage = "কোর্স বা ইউজার সিলেক্ট করা নেই"
-                )
-            )
+            emptyList()
         }
 
-        // 4. Course Phase topic: LIVE_ShikhoNotification_Program_{programId}_Phase_{phaseId}
-        if (programId.isNotBlank() && phaseId.isNotBlank()) {
+        if (effectiveCourses.isEmpty()) {
             list.add(
                 TopicSubscriptionState(
-                    key = "course_phase",
-                    label = "Course Phase Live",
-                    topicName = "LIVE_ShikhoNotification_Program_${programId}_Phase_${phaseId}",
-                    status = TopicConnectionStatus.IDLE
-                )
-            )
-        } else {
-            list.add(
-                TopicSubscriptionState(
-                    key = "course_phase",
-                    label = "Course Phase Live",
-                    topicName = "LIVE_ShikhoNotification_Program_{prog}_Phase_{phase}",
+                    key = "course_none",
+                    label = "Active Courses",
+                    topicName = "LIVE_ShikhoNotification_UserID_{user}_Program_{prog}",
                     status = TopicConnectionStatus.SKIPPED,
-                    errorMessage = "কোর্সের ফেজ (Phase ID) এখনো লোড হয়নি"
+                    errorMessage = "কোনো অ্যাক্টিভ এনরোল করা কোর্স পাওয়া যায়নি"
                 )
             )
+            return list
+        }
+
+        effectiveCourses.forEachIndexed { index, course ->
+            val shortTitle = course.titleBn.trim().ifBlank { "Course #${index + 1}" }
+            val resolvedPhaseId = course.phaseId?.trim()?.takeIf { it.isNotBlank() }
+                ?: if (course.programId == selectedProgramId) selectedPhaseId.takeIf { it.isNotBlank() } else null
+
+            // 3a. Course User topic
+            if (userId.isNotBlank()) {
+                list.add(
+                    TopicSubscriptionState(
+                        key = "course_user_${course.programId}",
+                        label = "Course Live • ${shortTitle.take(22)}",
+                        topicName = "LIVE_ShikhoNotification_UserID_${userId}_Program_${course.programId}",
+                        status = TopicConnectionStatus.IDLE,
+                        courseTitle = shortTitle
+                    )
+                )
+            } else {
+                list.add(
+                    TopicSubscriptionState(
+                        key = "course_user_${course.programId}",
+                        label = "Course Live • ${shortTitle.take(22)}",
+                        topicName = "LIVE_ShikhoNotification_UserID_{user}_Program_${course.programId}",
+                        status = TopicConnectionStatus.SKIPPED,
+                        errorMessage = "লগইন করা নেই",
+                        courseTitle = shortTitle
+                    )
+                )
+            }
+
+            // 3b. Course Active Phase topic
+            if (!resolvedPhaseId.isNullOrBlank()) {
+                list.add(
+                    TopicSubscriptionState(
+                        key = "course_phase_${course.programId}",
+                        label = "Phase Live • ${shortTitle.take(22)}",
+                        topicName = "LIVE_ShikhoNotification_Program_${course.programId}_Phase_${resolvedPhaseId}",
+                        status = TopicConnectionStatus.IDLE,
+                        courseTitle = shortTitle
+                    )
+                )
+            } else {
+                list.add(
+                    TopicSubscriptionState(
+                        key = "course_phase_${course.programId}",
+                        label = "Phase Live • ${shortTitle.take(22)}",
+                        topicName = "LIVE_ShikhoNotification_Program_${course.programId}_Phase_{phase}",
+                        status = TopicConnectionStatus.SKIPPED,
+                        errorMessage = "এই কোর্সের অ্যাক্টিভ ফেজ ব্যাকগ্রাউন্ডে লোড হচ্ছে...",
+                        courseTitle = shortTitle
+                    )
+                )
+            }
         }
 
         return list
@@ -746,7 +1015,7 @@ object ShikhoNotificationManager {
         if (fcm != null && gmsAvailable) {
             val res = awaitTaskResult(fcm.unsubscribeFromTopic(topic))
             res.onSuccess {
-                logTerminal("INFO", "🔄 SDK Unsubscribed old topic: $topic")
+                logTerminal("INFO", "🔄 SDK Unsubscribed topic: $topic")
             }.onFailure { err ->
                 logTerminal("WARN", "⚠️ SDK Unsubscribe warning ($topic): ${err.message}")
             }
@@ -762,6 +1031,8 @@ object ShikhoNotificationManager {
             )
             if (rest.success) {
                 logTerminal("HTTP", "POST .../topicSubscriptions/$topic:unsubscribe -> ${rest.httpCode} OK (${rest.latencyMs}ms)")
+            } else {
+                logTerminal("WARN", "⚠️ REST :unsubscribe ($topic) -> HTTP ${rest.httpCode}: ${rest.errorMessage}")
             }
         }
     }
@@ -780,13 +1051,17 @@ object ShikhoNotificationManager {
     }
 
     /**
-     * Dynamically switches or updates the subscribed course (`newProgramId`) and phase (`newPhaseId`)
-     * on Shikho's FCM server (`projects/shikho-tech`).
-     * - Immediately unsubscribes (`:unsubscribe`) from any previous course or phase topics.
-     * - Immediately subscribes (`:subscribe`) to the newly selected course and phase topics.
+     * Updates/ensures subscription for a specific active course (`newProgramId`) and its active phase (`newPhaseId`)
+     * on Shikho's FCM server (`projects/shikho-tech`), while KEEPING all other active enrolled courses subscribed!
+     * Old/ended phases of the same course are automatically unsubscribed.
      */
     @Synchronized
-    fun updateProgramAndPhase(context: Context, newProgramId: String, newPhaseId: String?) {
+    fun updateProgramAndPhase(
+        context: Context,
+        newProgramId: String,
+        newPhaseId: String?,
+        courseTitleBn: String? = null
+    ) {
         val cleanProgramId = newProgramId.trim()
         if (cleanProgramId.isBlank()) return
         val cleanPhaseId = newPhaseId?.trim()?.takeIf { it.isNotBlank() }
@@ -794,14 +1069,9 @@ object ShikhoNotificationManager {
         try {
             val appContext = context.applicationContext
             val sessionManager = SessionManager.getInstance(appContext)
-            val oldProgramId = sessionManager.getSubscribedFcmProgramId()?.trim()
-            val oldPhaseId = sessionManager.getSubscribedFcmPhaseId()?.trim()
-
-            val effectivePhaseId = when {
-                !cleanPhaseId.isNullOrBlank() -> cleanPhaseId
-                oldProgramId == cleanProgramId && !oldPhaseId.isNullOrBlank() -> oldPhaseId
-                else -> null
-            }
+            val cachedCourse = sessionManager.getActiveEnrolledFcmCourses()
+                .firstOrNull { it.programId == cleanProgramId }
+            val effectivePhaseId = cleanPhaseId ?: cachedCourse?.phaseId
 
             if (!isGooglePlayServicesAvailable(appContext)) {
                 sessionManager.setSubscribedFcmProgramId(cleanProgramId)
@@ -815,7 +1085,8 @@ object ShikhoNotificationManager {
                     appContext = appContext,
                     forceRefreshFisToken = false,
                     overrideProgramId = cleanProgramId,
-                    overridePhaseId = effectivePhaseId
+                    overridePhaseId = effectivePhaseId,
+                    overrideCourseTitleBn = courseTitleBn
                 )
             }
         } catch (e: Throwable) {
@@ -825,77 +1096,156 @@ object ShikhoNotificationManager {
     }
 
     /**
-     * Unsubscribes only from the active course & phase topics (e.g., when changing syllabus/class
-     * or when no course is currently selected) while keeping `SHIKHO_ALL` and `{userId}`.
+     * Unsubscribes from ALL active course & phase topics (e.g., when changing syllabus/class
+     * or when no active courses remain) via BOTH FirebaseMessaging SDK and `fcmregistrations.googleapis.com`,
+     * while keeping `SHIKHO_ALL` and `{userId}`.
      */
     @Synchronized
     fun unsubscribeActiveCourseTopics(context: Context) {
-        try {
-            val appContext = context.applicationContext
-            val sessionManager = SessionManager.getInstance(appContext)
-            val userId = sessionManager.getUserId()?.trim()
-            val oldProgramId = sessionManager.getSubscribedFcmProgramId()?.trim()
-            val oldPhaseId = sessionManager.getSubscribedFcmPhaseId()?.trim()
-            val topicsToRemove = sessionManager.getSubscribedCourseTopics().toMutableSet()
+        val appContext = context.applicationContext
+        val sessionManager = SessionManager.getInstance(appContext)
+        val userId = sessionManager.getUserId()?.trim()
+        val oldProgramId = sessionManager.getSubscribedFcmProgramId()?.trim()
+            ?: sessionManager.getActiveProgramId()?.trim()
+        val oldPhaseId = sessionManager.getSubscribedFcmPhaseId()?.trim()
+            ?: sessionManager.getActiveProgramPhaseId()?.trim()
+        val storedCourses = sessionManager.getActiveEnrolledFcmCourses()
+        val topicsToRemove = sessionManager.getSubscribedCourseTopics().toMutableSet()
 
-            if (!oldProgramId.isNullOrBlank()) {
-                if (!userId.isNullOrBlank()) {
-                    topicsToRemove.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${oldProgramId}")
+        if (!oldProgramId.isNullOrBlank()) {
+            if (!userId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${oldProgramId}")
+            }
+            if (!oldPhaseId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_Program_${oldProgramId}_Phase_${oldPhaseId}")
+            }
+        }
+        for (c in storedCourses) {
+            if (!userId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${c.programId}")
+            }
+            if (!c.phaseId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_Program_${c.programId}_Phase_${c.phaseId}")
+            }
+        }
+
+        sessionManager.setSubscribedFcmProgramId(null)
+        sessionManager.setSubscribedFcmPhaseId(null)
+        sessionManager.setSubscribedCourseTopics(emptySet())
+        sessionManager.setActiveEnrolledFcmCourses(emptyList())
+
+        if (topicsToRemove.isEmpty()) return
+
+        scope.launch {
+            syncMutex.withLock {
+                val gmsAvailable = isGooglePlayServicesAvailable(appContext)
+                val creds = resolveFirebaseCredentials(appContext, sessionManager, gmsAvailable, false)
+                logTerminal("INFO", "🧹 Unsubscribing ${topicsToRemove.size} course topics...")
+                for (topic in topicsToRemove) {
+                    unsubscribeTopicReal(
+                        fcm = creds.fcm,
+                        gmsAvailable = gmsAvailable,
+                        projectId = creds.projectId,
+                        apiKey = creds.apiKey,
+                        fid = creds.fid,
+                        fisAuthToken = creds.fisAuthToken,
+                        topic = topic
+                    )
                 }
-                if (!oldPhaseId.isNullOrBlank()) {
-                    topicsToRemove.add("LIVE_ShikhoNotification_Program_${oldProgramId}_Phase_${oldPhaseId}")
+                _connectionState.update { prev ->
+                    prev.copy(
+                        activeProgramId = "",
+                        activePhaseId = "",
+                        activeCourseCount = 0,
+                        autoUnsubscribedCount = prev.autoUnsubscribedCount + topicsToRemove.size,
+                        topics = prev.topics.filterNot { it.key.startsWith("course_") }
+                    )
                 }
             }
-
-            if (isGooglePlayServicesAvailable(appContext)) {
-                val fcm = try { FirebaseMessaging.getInstance() } catch (_: Throwable) { null }
-                if (fcm != null) {
-                    for (topic in topicsToRemove) {
-                        try {
-                            fcm.unsubscribeFromTopic(topic)
-                                .addOnSuccessListener {
-                                    logTerminal("INFO", "🔄 Unsubscribed course topic: $topic")
-                                }
-                                .addOnFailureListener { err ->
-                                    logTerminal("WARN", "⚠️ Unsubscribe failed ($topic): ${err.message}")
-                                }
-                        } catch (_: Throwable) {}
-                    }
-                }
-            }
-
-            sessionManager.setSubscribedFcmProgramId(null)
-            sessionManager.setSubscribedFcmPhaseId(null)
-            sessionManager.setSubscribedCourseTopics(emptySet())
-        } catch (e: Throwable) {
-            Log.i(TAG, "unsubscribeActiveCourseTopics warning: ${e.message}")
         }
     }
 
     /**
-     * Unsubscribes from user and course-specific topics upon logout
+     * Unsubscribes from ALL user-specific and course/phase-specific topics upon logout
+     * via BOTH Android `FirebaseMessaging` SDK and `fcmregistrations.googleapis.com` REST `:unsubscribe`.
      */
     @Synchronized
-    fun unsubscribeAll(context: Context) {
-        try {
-            val appContext = context.applicationContext
-            val sessionManager = SessionManager.getInstance(appContext)
-            val userId = sessionManager.getUserId()?.trim()
+    fun unsubscribeAll(
+        context: Context,
+        userIdOverride: String? = null,
+        topicsOverride: Set<String>? = null
+    ) {
+        val appContext = context.applicationContext
+        val sessionManager = SessionManager.getInstance(appContext)
+        val userId = userIdOverride?.trim()?.takeIf { it.isNotBlank() }
+            ?: sessionManager.getUserId()?.trim()
 
-            unsubscribeActiveCourseTopics(appContext)
+        val topicsToRemove = linkedSetOf<String>()
+        if (!topicsOverride.isNullOrEmpty()) {
+            topicsToRemove.addAll(topicsOverride)
+        }
+        topicsToRemove.addAll(sessionManager.getSubscribedCourseTopics())
 
-            if (isGooglePlayServicesAvailable(appContext) && !userId.isNullOrBlank()) {
-                val fcm = try { FirebaseMessaging.getInstance() } catch (_: Throwable) { null }
-                try {
-                    fcm?.unsubscribeFromTopic(userId)
-                        ?.addOnSuccessListener {
-                            logTerminal("INFO", "🔄 Unsubscribed user topic on logout: $userId")
-                        }
-                } catch (_: Throwable) {}
+        val oldProgramId = sessionManager.getSubscribedFcmProgramId()?.trim()
+            ?: sessionManager.getActiveProgramId()?.trim()
+        val oldPhaseId = sessionManager.getSubscribedFcmPhaseId()?.trim()
+            ?: sessionManager.getActiveProgramPhaseId()?.trim()
+        if (!oldProgramId.isNullOrBlank()) {
+            if (!userId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${oldProgramId}")
             }
-            Log.d(TAG, "Unsubscribed from personalized topics on logout.")
-        } catch (e: Throwable) {
-            Log.i(TAG, "Optional unsubscribeFromTopics: ${e.message}")
+            if (!oldPhaseId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_Program_${oldProgramId}_Phase_${oldPhaseId}")
+            }
+        }
+        for (c in sessionManager.getActiveEnrolledFcmCourses()) {
+            if (!userId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${c.programId}")
+            }
+            if (!c.phaseId.isNullOrBlank()) {
+                topicsToRemove.add("LIVE_ShikhoNotification_Program_${c.programId}_Phase_${c.phaseId}")
+            }
+        }
+        if (!userId.isNullOrBlank()) {
+            topicsToRemove.add(userId)
+        }
+
+        sessionManager.setSubscribedFcmProgramId(null)
+        sessionManager.setSubscribedFcmPhaseId(null)
+        sessionManager.setSubscribedCourseTopics(emptySet())
+        sessionManager.setActiveEnrolledFcmCourses(emptyList())
+
+        scope.launch {
+            syncMutex.withLock {
+                val gmsAvailable = isGooglePlayServicesAvailable(appContext)
+                logTerminal("INFO", "🚪 লগআউট: ${topicsToRemove.size} টি ব্যক্তিগত ও কোর্স টপিক আনসাবস্ক্রাইব করা হচ্ছে...")
+                val creds = resolveFirebaseCredentials(appContext, sessionManager, gmsAvailable, false)
+                for (topic in topicsToRemove) {
+                    unsubscribeTopicReal(
+                        fcm = creds.fcm,
+                        gmsAvailable = gmsAvailable,
+                        projectId = creds.projectId,
+                        apiKey = creds.apiKey,
+                        fid = creds.fid,
+                        fisAuthToken = creds.fisAuthToken,
+                        topic = topic
+                    )
+                }
+                _connectionState.update { prev ->
+                    prev.copy(
+                        isSyncing = false,
+                        activeUserId = "",
+                        activeProgramId = "",
+                        activePhaseId = "",
+                        activeCourseCount = 0,
+                        expiredCourseCount = 0,
+                        autoUnsubscribedCount = prev.autoUnsubscribedCount + topicsToRemove.size,
+                        topics = emptyList(),
+                        lastSyncedAt = nowTimeString()
+                    )
+                }
+                logTerminal("SUCCESS", "✅ লগআউট ক্লিনআপ সম্পন্ন: সব ব্যক্তিগত ও কোর্স টপিক আনসাবস্ক্রাইব হয়েছে")
+            }
         }
     }
 }

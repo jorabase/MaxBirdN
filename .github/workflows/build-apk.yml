@@ -126,7 +126,8 @@ jobs:
       - name: Setup Google Services Configuration
         run: |
           mkdir -p app
-          SHIKHO_FB_KEY="$(echo 'QUl6YVN5QVZqbVBBWUtWdE9henBhcC1Ycnk4M1BGYzhxNUoxczhN' | base64 --decode)"
+          # Exact shikho-tech API key (verified lowercase 'y' in PAyKVt -> AIzaSyAVjmPAyKVtOazpap-Xry83PFc8q5J1s8M)
+          SHIKHO_FB_KEY="$(echo 'QUl6YVN5QVZqbVBBeUtWdE9henBhcC1Ycnk4M1BGYzhxNUoxczhN' | base64 --decode)"
           cat << EOF > app/google-services.json
           {
             "project_info": {
@@ -158,7 +159,9 @@ jobs:
             "configuration_version": "1"
           }
           EOF
-          echo "✅ app/google-services.json (shikho-tech primary + maxbird-notification secondary) configured successfully."
+          if grep -q '"project_id": "shikho-tech"' app/google-services.json; then
+            echo "✅ app/google-services.json (shikho-tech) configured successfully."
+          fi
 
       # -----------------------------------------------------------
       # 1. PREPARE ENVIRONMENT & KEYSTORES (MANDATORY BEFORE ANY BUILD)

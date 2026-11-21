@@ -408,6 +408,54 @@ class SessionManager(context: Context) {
         sharedPreferences.edit().putStringSet("subscribed_fcm_course_topics", HashSet(topics)).apply()
     }
 
+    fun getActiveEnrolledFcmCourses(): List<StoredEnrolledFcmCourse> {
+        val raw = sharedPreferences.getString("active_enrolled_fcm_courses", "[]") ?: "[]"
+        val list = mutableListOf<StoredEnrolledFcmCourse>()
+        try {
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val pid = obj.optString("programId", "").trim()
+                if (pid.isBlank()) continue
+                list.add(
+                    StoredEnrolledFcmCourse(
+                        programId = pid,
+                        titleBn = obj.optString("titleBn", "").trim(),
+                        phaseId = obj.optString("phaseId", "").trim().takeIf { it.isNotBlank() },
+                        expiryDate = obj.optString("expiryDate", "").trim().takeIf { it.isNotBlank() },
+                        isActive = obj.optBoolean("isActive", true)
+                    )
+                )
+            }
+        } catch (_: Exception) {}
+        return list
+    }
+
+    fun setActiveEnrolledFcmCourses(courses: List<StoredEnrolledFcmCourse>) {
+        val arr = JSONArray()
+        courses.distinctBy { it.programId }.forEach { item ->
+            if (item.programId.isBlank()) return@forEach
+            val obj = JSONObject().apply {
+                put("programId", item.programId)
+                put("titleBn", item.titleBn)
+                put("phaseId", item.phaseId ?: "")
+                put("expiryDate", item.expiryDate ?: "")
+                put("isActive", item.isActive)
+            }
+            arr.put(obj)
+        }
+        sharedPreferences.edit().putString("active_enrolled_fcm_courses", arr.toString()).apply()
+    }
+
+    fun getActiveEnrolledProgramIds(): Set<String> {
+        val ids = linkedSetOf<String>()
+        getActiveEnrolledFcmCourses().forEach { c ->
+            if (c.programId.isNotBlank()) ids.add(c.programId)
+        }
+        getActiveProgramId()?.trim()?.takeIf { it.isNotBlank() }?.let { ids.add(it) }
+        return ids
+    }
+
     fun saveUserAcademicInfo(
         batchId: String?,
         className: String?,
@@ -896,6 +944,7 @@ class SessionManager(context: Context) {
             "live_custom_student_name", "just_signed_up",
             "completed_lessons", "completed_model_tests",
             "subscribed_fcm_program_id", "subscribed_fcm_phase_id",
+            "subscribed_fcm_course_topics", "active_enrolled_fcm_courses",
             "subscribed_fcm_topics", "is_account_completed",
             "custom_alarms_list", "disabled_alarm_ids"
         )
@@ -939,4 +988,12 @@ data class CustomAlarmData(
     val message: String,
     val triggerTimeMs: Long,
     val isEnabled: Boolean = true
+)
+
+data class StoredEnrolledFcmCourse(
+    val programId: String,
+    val titleBn: String = "",
+    val phaseId: String? = null,
+    val expiryDate: String? = null,
+    val isActive: Boolean = true
 )

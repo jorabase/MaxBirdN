@@ -12,6 +12,10 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -131,11 +135,12 @@ class HomeViewModel(
             phaseId = null
         )
 
-        // Immediately unsubscribe previous course topics and subscribe new course program topic on shikho-tech
+        // Ensure newly selected course is synced while keeping all other active enrolled courses subscribed
         com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
             context = getApplication(),
             newProgramId = program.id,
-            newPhaseId = null
+            newPhaseId = null,
+            courseTitleBn = program.title_bn
         )
 
         // Load saved subject filter for this course if any
@@ -593,15 +598,20 @@ class HomeViewModel(
                     batchId = active.enrollment_details?.batch_id,
                     classCode = active.classes?.firstOrNull()
                 )
-                com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
-                    context = getApplication(),
-                    newProgramId = active.id,
-                    newPhaseId = sessionManager.getActiveProgramPhaseId()
-                )
             } else if (allPrograms.isEmpty() && unfilteredAllPrograms.isNotEmpty()) {
                 com.example.notification.ClassAlarmScheduler.cancelAllAlarms(getApplication())
                 com.example.notification.ShikhoNotificationManager.unsubscribeActiveCourseTopics(getApplication())
                 sessionManager.clearActiveProgram()
+            }
+
+            // Smart Multi-Course Auto-Subscribe + Auto-Unsubscribe Expired Courses (Background)
+            // লগইনের সাথে সাথে সব অ্যাক্টিভ এনরোল করা কোর্স ও তাদের অ্যাক্টিভ ফেজ একসাথে সাবস্ক্রাইব হবে
+            // এবং মেয়াদ শেষ হওয়া কোর্সগুলো অটোমেটিক আনসাবস্ক্রাইব হয়ে যাবে।
+            if (enrolled.isNotEmpty() || allPrograms.isNotEmpty()) {
+                syncAllEnrolledCoursesFcmInBackground(
+                    enrolledFromShikho = enrolled,
+                    unlockedPrograms = allPrograms
+                )
             }
 
             val hasActiveEnrollment = active != null
@@ -634,6 +644,98 @@ class HomeViewModel(
             _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false)
         }
     }
+
+    /**
+     * Automatically subscribes all active (non-expired) enrolled courses + their current active phases
+     * to Shikho's FCM topics in the background, and unsubscribes expired/inactive courses.
+     */
+    private fun syncAllEnrolledCoursesFcmInBackground(
+        enrolledFromShikho: List<EnrolledProgram>,
+        unlockedPrograms: List<EnrolledProgram>
+    ) {
+        val unlockedIds = unlockedPrograms.map { it.id }.toSet()
+        val combinedPrograms = (enrolledFromShikho + unlockedPrograms).distinctBy { it.id }
+
+        val initialTargets = combinedPrograms.map { prog ->
+            val details = prog.enrollment_details
+            val expiredByShikho = com.example.notification.ShikhoNotificationManager.isCourseExpired(
+                isActive = details?.is_active,
+                expiryDate = details?.expiry_date
+            )
+            val isEffectiveActive = (prog.id in unlockedIds) && !expiredByShikho
+            com.example.notification.ShikhoNotificationManager.EnrolledCourseFcmTarget(
+                programId = prog.id,
+                titleBn = prog.title_bn?.trim().orEmpty(),
+                phaseId = if (prog.id == sessionManager.getActiveProgramId()) {
+                    sessionManager.getActiveProgramPhaseId()
+                } else null,
+                isActive = isEffectiveActive,
+                expiryDate = details?.expiry_date
+            )
+        }
+
+        // Step 1: Immediately subscribe global + user + all active course UserID_Program topics (and clean up expired)
+        com.example.notification.ShikhoNotificationManager.syncEnrolledCourses(
+            context = getApplication(),
+            enrolledCourses = initialTargets
+        )
+
+        val activeTargets = initialTargets.filter { it.isActive }
+        if (activeTargets.isEmpty()) return
+
+        // Step 2: Resolve current active Phase ID for EVERY active enrolled course in parallel (no app restart needed)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resolvedPhasesMap = coroutineScope {
+                    activeTargets.map { target ->
+                        async {
+                            val phaseQuery = GraphQlQuery(
+                                operationName = "ProgramPhasesByStudent",
+                                query = """
+                                    query ProgramPhasesByStudent(${'$'}program_id: String!, ${'$'}course_progress_percentage: Boolean) {
+                                      programPhasesByStudent(program_id: ${'$'}program_id, course_progress_percentage: ${'$'}course_progress_percentage) {
+                                        data {
+                                          id
+                                          is_current
+                                          status
+                                          title
+                                        }
+                                      }
+                                    }
+                                """.trimIndent(),
+                                variables = mapOf(
+                                    "program_id" to target.programId,
+                                    "course_progress_percentage" to false
+                                )
+                            )
+                            val phaseRes = runCatching { apiService.getProgramPhases(phaseQuery) }.getOrNull()
+                            val phases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
+                            val currentPhase = phases.firstOrNull { it.is_current == true }
+                                ?: phases.firstOrNull { it.status.equals("ACTIVE", ignoreCase = true) }
+                                ?: phases.firstOrNull()
+                            target.programId to currentPhase?.id?.trim()?.takeIf { it.isNotBlank() }
+                        }
+                    }.awaitAll().toMap()
+                }
+
+                val fullTargets = initialTargets.map { target ->
+                    val resolvedPhaseId = resolvedPhasesMap[target.programId] ?: target.phaseId
+                    if (target.programId == sessionManager.getActiveProgramId() && !resolvedPhaseId.isNullOrBlank()) {
+                        sessionManager.saveActiveProgramPhaseId(resolvedPhaseId)
+                    }
+                    target.copy(phaseId = resolvedPhaseId)
+                }
+
+                com.example.notification.ShikhoNotificationManager.syncEnrolledCourses(
+                    context = getApplication(),
+                    enrolledCourses = fullTargets
+                )
+            } catch (_: Throwable) {
+                // Step 1 already subscribed all active program topics; ignore transient phase fetch errors
+            }
+        }
+    }
+
     private fun fetchWeeklyRoutine(program: EnrolledProgram) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRoutineLoading = true)
@@ -691,9 +793,10 @@ class HomeViewModel(
                 if (programId == sessionManager.getActiveProgramId() || _uiState.value.activeProgram?.id == programId) {
                     sessionManager.saveActiveProgramPhaseId(currentPhase.id)
                     com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
-                        getApplication(),
-                        programId,
-                        currentPhase.id
+                        context = getApplication(),
+                        newProgramId = programId,
+                        newPhaseId = currentPhase.id,
+                        courseTitleBn = program.title_bn
                     )
                     // ফেজ আইডি পাওয়ার সাথে সাথে এই কোর্সের সঠিক বিষয়সমূহ লোড করা
                     loadCourseSubjects(program, currentPhase.id)
@@ -825,9 +928,10 @@ class HomeViewModel(
                 if (programId == sessionManager.getActiveProgramId() || _uiState.value.activeProgram?.id == programId) {
                     sessionManager.saveActiveProgramPhaseId(currentPhase.id)
                     com.example.notification.ShikhoNotificationManager.updateProgramAndPhase(
-                        getApplication(),
-                        programId,
-                        currentPhase.id
+                        context = getApplication(),
+                        newProgramId = programId,
+                        newPhaseId = currentPhase.id,
+                        courseTitleBn = _uiState.value.activeProgram?.title_bn
                     )
                 }
 

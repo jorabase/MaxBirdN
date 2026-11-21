@@ -275,7 +275,20 @@ fun ShikhoNotificationTerminalCard(
                         valueColor = Color(0xFFCBD5E1)
                     )
                     TerminalMetaRow(
-                        label = "COURSE / PHASE",
+                        label = "COURSES SYNC",
+                        value = buildString {
+                            append("${connectionState.activeCourseCount} Active")
+                            if (connectionState.expiredCourseCount > 0) {
+                                append(" • ${connectionState.expiredCourseCount} Expired")
+                            }
+                            if (connectionState.autoUnsubscribedCount > 0) {
+                                append(" • ${connectionState.autoUnsubscribedCount} Unsub")
+                            }
+                        },
+                        valueColor = if (connectionState.activeCourseCount > 0) Color(0xFF34D399) else Color(0xFFFBBF24)
+                    )
+                    TerminalMetaRow(
+                        label = "SELECTED COURSE",
                         value = buildString {
                             append(connectionState.activeProgramId.ifBlank { "None" })
                             append(" / ")
@@ -412,8 +425,8 @@ fun ShikhoNotificationTerminalCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "TOPIC SUBSCRIPTIONS (${connectionState.connectedTopicCount}/${connectionState.activeTargetTopicCount})",
-                                fontSize = 11.sp,
+                                text = "TOPIC SUBSCRIPTIONS (${connectionState.connectedTopicCount}/${connectionState.activeTargetTopicCount}) • ${connectionState.activeCourseCount} COURSES",
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = FontFamily.Monospace,
                                 color = Color(0xFFE2E8F0)
@@ -675,7 +688,8 @@ private fun copyTerminalReport(
         appendLine("FIS Auth JWT: ${if (state.fisAuthReady) "READY" else "MISSING"}")
         appendLine("FCM Token: ${state.fcmTokenPreview}")
         appendLine("User ID: ${state.activeUserId}")
-        appendLine("Program/Phase: ${state.activeProgramId} / ${state.activePhaseId}")
+        appendLine("Courses: ${state.activeCourseCount} Active, ${state.expiredCourseCount} Expired, ${state.autoUnsubscribedCount} Auto-Unsubscribed")
+        appendLine("Selected Program/Phase: ${state.activeProgramId} / ${state.activePhaseId}")
         appendLine("Topics:")
         state.topics.forEach { t ->
             appendLine("  - [${t.status}] ${t.topicName} (http=${t.httpCode ?: "-"}, sdk=${t.sdkVerified}, createTime=${t.createTime ?: "-"}, err=${t.errorMessage ?: "-"})")

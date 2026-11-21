@@ -526,6 +526,31 @@ class AuthViewModel(
     }
 
     fun logout() {
+        val logoutUserId = sessionManager.getUserId()?.trim()
+        val logoutProgramId = sessionManager.getSubscribedFcmProgramId()?.trim()
+            ?: sessionManager.getActiveProgramId()?.trim()
+        val logoutPhaseId = sessionManager.getSubscribedFcmPhaseId()?.trim()
+            ?: sessionManager.getActiveProgramPhaseId()?.trim()
+        val logoutEnrolledCourses = sessionManager.getActiveEnrolledFcmCourses()
+        val logoutTopics = sessionManager.getSubscribedCourseTopics().toMutableSet().apply {
+            if (!logoutProgramId.isNullOrBlank()) {
+                if (!logoutUserId.isNullOrBlank()) {
+                    add("LIVE_ShikhoNotification_UserID_${logoutUserId}_Program_${logoutProgramId}")
+                }
+                if (!logoutPhaseId.isNullOrBlank()) {
+                    add("LIVE_ShikhoNotification_Program_${logoutProgramId}_Phase_${logoutPhaseId}")
+                }
+            }
+            logoutEnrolledCourses.forEach { course ->
+                if (!logoutUserId.isNullOrBlank() && course.programId.isNotBlank()) {
+                    add("LIVE_ShikhoNotification_UserID_${logoutUserId}_Program_${course.programId}")
+                }
+                if (course.programId.isNotBlank() && !course.phaseId.isNullOrBlank()) {
+                    add("LIVE_ShikhoNotification_Program_${course.programId}_Phase_${course.phaseId}")
+                }
+            }
+        }
+
         try {
             com.example.course.CourseCommerceRepository.clearCache(sessionManager.appContext)
         } catch (_: Throwable) {}
@@ -536,10 +561,14 @@ class AuthViewModel(
         _authState.value = AuthState.Idle
         viewModelScope.launch {
             try {
-                com.example.utils.AppCacheManager.wipeAllAccountAndCacheOnLogout(sessionManager.appContext)
+                com.example.notification.ShikhoNotificationManager.unsubscribeAll(
+                    context = com.example.ShikhoApp.instance,
+                    userIdOverride = logoutUserId,
+                    topicsOverride = logoutTopics
+                )
             } catch (_: Throwable) {}
             try {
-                com.example.notification.ShikhoNotificationManager.unsubscribeAll(com.example.ShikhoApp.instance)
+                com.example.utils.AppCacheManager.wipeAllAccountAndCacheOnLogout(sessionManager.appContext)
             } catch (_: Throwable) {}
             try {
                 apiService.logout()
