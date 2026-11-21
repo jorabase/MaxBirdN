@@ -52,8 +52,9 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d(TAG, "Refreshed FCM Token: $token")
-        val sessionManager = SessionManager(applicationContext)
+        val sessionManager = SessionManager.getInstance(applicationContext)
         sessionManager.setFcmToken(token)
+        ShikhoNotificationManager.logTerminal("INFO", "🔄 FCM Token Refreshed: ${token.take(20)}...")
 
         // Sync all subscriptions with the new token (Shikho FCM topics + OneSignal Player + Supabase)
         ShikhoNotificationManager.syncAllTopicSubscriptions(applicationContext)
@@ -165,6 +166,12 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
                 ?: oneSignalAdditionalData?.optString("title", "")?.takeIf { it.isNotBlank() }
                 ?: "শিখো নোটিফিকেশন"
             ).trim()
+
+        ShikhoNotificationManager.recordIncomingPush(
+            from = fromTopicOrSender.ifBlank { "shikho-tech" },
+            title = title,
+            eventType = eventType
+        )
 
         val body = (
             notification?.body

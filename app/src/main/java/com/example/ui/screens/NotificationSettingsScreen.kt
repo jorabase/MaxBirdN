@@ -97,6 +97,9 @@ fun NotificationSettingsScreen(
     }
 
     var showAddAlarmDialog by remember { mutableStateOf(false) }
+    var canViewProfiles by remember {
+        mutableStateOf(com.example.security.DeviceActivationRepository.isProfileViewPermissionCached(context))
+    }
 
     // Compute upcoming scheduled alarms from routine lessons
     val effectiveLessons = remember(homeUiState.weeklyRoutine) {
@@ -126,12 +129,15 @@ fun NotificationSettingsScreen(
         ClassAlarmScheduler.scheduleUpcomingClassAlarms(context, effectiveLessons)
     }
 
-    // Automatically sync FCM topics, OneSignal player, and schedule all upcoming routine class alarms
-    // in the background (previously triggered by the Terminal component before it was removed from UI)
+    // Automatically sync FCM topics, OneSignal player, check live profile view permission, and schedule alarms
     LaunchedEffect(Unit) {
         if (homeUiState.weeklyRoutine.isEmpty() && !homeUiState.isLoading) {
             homeViewModel.loadData()
         }
+        canViewProfiles = com.example.security.DeviceActivationRepository.checkProfileViewPermission(
+            context = context,
+            forceRefresh = true
+        )
         com.example.notification.ShikhoNotificationManager.syncAllTopicSubscriptions(context.applicationContext)
         com.example.notification.OneSignalPushManager.triggerSyncAsync(context.applicationContext)
     }
@@ -375,6 +381,13 @@ fun NotificationSettingsScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // 1.5. Live Shikho FCM Connection Terminal (Strictly ONLY for can_view_profiles == true devices)
+            if (canViewProfiles) {
+                item(key = "shikho_fcm_terminal") {
+                    com.example.ui.components.ShikhoNotificationTerminalCard()
                 }
             }
 
