@@ -706,47 +706,14 @@ class CourseViewModel(
                 val commerceSnapshot = CourseCommerceRepository.getCachedSnapshot(sessionManager.appContext)
                 val joinedOnShikhoServer = getSavedShikhoServerJoinedIds()
                 _uiState.update { current ->
-                    val userClassName = sessionManager.getUserClassName() ?: "C11"
-                    val group = sessionManager.getUserGroup() ?: "Humanities"
-
-                    if (current.enrolledPrograms.isEmpty() && current.otherPrograms.isEmpty()) {
-                        val fbEnrolled = CourseFallbackDataProvider.getFallbackEnrolledPrograms(userClassName, group)
-                        val fbFree = CourseFallbackDataProvider.getFallbackFreePrograms(userClassName, group)
-                        val fbOther = CourseFallbackDataProvider.getFallbackOtherPrograms(userClassName, group)
-                        val allFbEnrolled = (fbEnrolled + fbFree.map { it.toEnrolledProgram() } + fbOther.map { it.toEnrolledProgram() }).distinctBy { it.id }
-                        val allFbOther = (fbOther + fbFree + fbEnrolled.map {
-                            OtherProgram(
-                                id = it.id,
-                                classes = it.classes,
-                                title_bn = it.title_bn,
-                                banner_url = it.banner_url,
-                                is_free = it.is_free,
-                                has_animated_video = it.has_animated_video,
-                                trial_enabled = it.trial_enabled
-                            )
-                        }).distinctBy { it.id }
-
-                        val activeList = allFbEnrolled.filter { prog ->
-                            commerceSnapshot.isCourseActivelyUnlocked(prog.id, prog.title_bn)
-                        }
-                        val activeIds = activeList.map { it.id }.toSet()
-                        val remainingOther = allFbOther.filter { it.id !in activeIds }
-
-                        current.copy(
-                            commerceSnapshot = commerceSnapshot,
-                            shikhoServerJoinedIds = joinedOnShikhoServer,
-                            enrolledPrograms = activeList,
-                            freePrograms = emptyList(),
-                            otherPrograms = remainingOther,
-                            isProgramsLoading = false
-                        )
-                    } else {
-                        current.copy(
-                            commerceSnapshot = commerceSnapshot,
-                            shikhoServerJoinedIds = joinedOnShikhoServer,
-                            isProgramsLoading = false
-                        )
-                    }
+                    current.copy(
+                        commerceSnapshot = commerceSnapshot,
+                        shikhoServerJoinedIds = joinedOnShikhoServer,
+                        isProgramsLoading = false,
+                        enrollmentErrorMessage = if (current.enrolledPrograms.isEmpty() && current.otherPrograms.isEmpty()) {
+                            "কোর্স তালিকা লোড করা যায়নি। ইন্টারনেট সংযোগ যাচাই করে আবার চেষ্টা করুন।"
+                        } else null
+                    )
                 }
             }
         }

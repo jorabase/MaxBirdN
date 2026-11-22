@@ -208,11 +208,7 @@ class ReportCardViewModel(
                     phaseList = phaseRes.data?.programPhasesByStudent?.data ?: emptyList()
                 } catch (_: Exception) {}
 
-                if (phaseList.isEmpty()) {
-                    phaseList = createDefaultPhases(actualProgramId)
-                }
-
-                // 3. Fetch Subjects
+                // 3. Fetch Subjects (real API data only — zero dummy subjects)
                 var subjectList: List<AcademicSubjectItem> = emptyList()
                 try {
                     val subQuery = GraphQlQuery(
@@ -235,10 +231,6 @@ class ReportCardViewModel(
                     val subRes = apiService.getAcademicSubjects(subQuery)
                     subjectList = subRes.data?.academicProgram?.subjects ?: emptyList()
                 } catch (_: Exception) {}
-
-                if (subjectList.isEmpty()) {
-                    subjectList = createDefaultSubjects()
-                }
 
                 val allSubject = AcademicSubjectItem(
                     code = "ALL",
@@ -280,41 +272,35 @@ class ReportCardViewModel(
                 _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             }
             try {
-                // 1. Fetch Quarterly Report
-                var report: QuarterlyReportResponse? = null
-                try {
-                    report = apiService.getQuarterlyReport(programId, phaseId)
+                // 1. Fetch real Quarterly Report (no fake/dummy fallback scores)
+                val report: QuarterlyReportResponse? = try {
+                    apiService.getQuarterlyReport(programId, phaseId)
                 } catch (_: Exception) {
-                    // Try fallback
+                    null
                 }
 
-                if (report == null || (report.performance_report == null && report.subject_wise_performance == null)) {
-                    report = generateFallbackReport(phaseId)
-                }
-
-                // 2. Fetch Trend
-                var trend: PerformanceTrendResponse? = null
-                try {
-                    trend = apiService.getPerformanceTrend(phaseId, _uiState.value.trendMetric)
-                } catch (_: Exception) {}
-
-                if (trend == null || trend.current_phase?.data_points.isNullOrEmpty()) {
-                    trend = generateFallbackTrend(phaseId, _uiState.value.trendMetric)
+                // 2. Fetch real Performance Trend (no fake/dummy chart points)
+                val trend: PerformanceTrendResponse? = try {
+                    apiService.getPerformanceTrend(phaseId, _uiState.value.trendMetric)
+                } catch (_: Exception) {
+                    null
                 }
 
                 _uiState.value = _uiState.value.copy(
                     reportData = report,
                     trendData = trend,
                     isLoading = false,
-                    isRefreshing = false
+                    isRefreshing = false,
+                    errorMessage = if (report == null) "এই কোয়ার্টারের রিপোর্ট ডেটা এখনো পাওয়া যায়নি।" else null
                 )
 
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    reportData = generateFallbackReport(phaseId),
-                    trendData = generateFallbackTrend(phaseId, _uiState.value.trendMetric),
+                    reportData = null,
+                    trendData = null,
                     isLoading = false,
-                    isRefreshing = false
+                    isRefreshing = false,
+                    errorMessage = e.message ?: "রিপোর্ট কার্ড লোড করা যায়নি।"
                 )
             }
         }
@@ -324,13 +310,11 @@ class ReportCardViewModel(
         viewModelScope.launch {
             try {
                 val trend = apiService.getPerformanceTrend(phaseId, metric)
-                if (trend.current_phase?.data_points.isNullOrEmpty()) {
-                    _uiState.value = _uiState.value.copy(trendData = generateFallbackTrend(phaseId, metric))
-                } else {
-                    _uiState.value = _uiState.value.copy(trendData = trend)
-                }
+                _uiState.value = _uiState.value.copy(
+                    trendData = trend.takeUnless { it.current_phase?.data_points.isNullOrEmpty() }
+                )
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(trendData = generateFallbackTrend(phaseId, metric))
+                _uiState.value = _uiState.value.copy(trendData = null)
             }
         }
     }
@@ -1147,228 +1131,7 @@ class ReportCardViewModel(
         }
     }
 
-    // ==========================================
-    // Fallback Mock Data Generators
-    // ==========================================
-    private fun createDefaultPhases(programId: String): List<PhaseItem> {
-        return listOf(
-            PhaseItem(
-                id = "phase_1",
-                academic_program_id = programId,
-                title = "কোয়ার্টার ১: সেপ্টেম্বর'২৫ - ডিসেম্বর'২৫",
-                status = "COMPLETED",
-                is_current = false,
-                course_progress_percentage = 94.0,
-                start_date = "2025-09-01",
-                end_date = "2025-12-31"
-            ),
-            PhaseItem(
-                id = "phase_2",
-                academic_program_id = programId,
-                title = "কোয়ার্টার ২: জানুয়ারী'২৬ - মার্চ'২৬",
-                status = "ACTIVE",
-                is_current = true,
-                course_progress_percentage = 42.0,
-                start_date = "2026-01-01",
-                end_date = "2026-03-31"
-            ),
-            PhaseItem(
-                id = "phase_3",
-                academic_program_id = programId,
-                title = "কোয়ার্টার ৩: এপ্রিল'২৬ - জুন'২৬",
-                status = "UPCOMING",
-                is_current = false,
-                course_progress_percentage = 0.0,
-                start_date = "2026-04-01",
-                end_date = "2026-06-30"
-            ),
-            PhaseItem(
-                id = "phase_4",
-                academic_program_id = programId,
-                title = "কোয়ার্টার ৪: জুলাই'২৬ - সেপ্টেম্বর'২৬",
-                status = "UPCOMING",
-                is_current = false,
-                course_progress_percentage = 0.0,
-                start_date = "2026-07-01",
-                end_date = "2026-09-30"
-            )
-        )
-    }
-
-    private fun createDefaultSubjects(): List<AcademicSubjectItem> {
-        return listOf(
-            AcademicSubjectItem(code = "PHY", display_bn = "পদার্থবিজ্ঞান", color_code = "#0EA5E9"),
-            AcademicSubjectItem(code = "CHE", display_bn = "রসায়ন", color_code = "#10B981"),
-            AcademicSubjectItem(code = "MAT", display_bn = "উচ্চতর গণিত", color_code = "#8B5CF6"),
-            AcademicSubjectItem(code = "BIO", display_bn = "জীববিজ্ঞান", color_code = "#F59E0B"),
-            AcademicSubjectItem(code = "BAN", display_bn = "বাংলা", color_code = "#EC4899"),
-            AcademicSubjectItem(code = "ENG", display_bn = "ইংরেজি", color_code = "#6366F1"),
-            AcademicSubjectItem(code = "ICT", display_bn = "আইসিটি", color_code = "#14B8A6")
-        )
-    }
-
-    private fun generateFallbackReport(phaseId: String): QuarterlyReportResponse {
-        val isPhase1 = phaseId.contains("1")
-        val score = if (isPhase1) 78 else 38
-        val rank = if (isPhase1) 142 else 309
-        val totalStudents = 4850
-        val attended = if (isPhase1) 84 else 17
-        val totalClasses = if (isPhase1) 90 else 230
-        val examObtained = if (isPhase1) 412 else 128
-        val examTotal = if (isPhase1) 500 else 400
-
-        val needsImpList = listOf(
-            SubjectPerformanceItem(
-                subject_id = "CHE",
-                title = "রসায়ন ১ম পত্র",
-                student_avg_score = 28,
-                topper_score = 83,
-                is_topper = false,
-                icon = "https://cdn.shikho.com/app/subjects/chemistry.png",
-                color_code = "#10B981",
-                total_live_class = 45,
-                completed_live_class = 12,
-                total_exam_score = 100,
-                total_obtained_score = 28
-            ),
-            SubjectPerformanceItem(
-                subject_id = "MAT",
-                title = "উচ্চতর গণিত ১ম পত্র",
-                student_avg_score = 34,
-                topper_score = 92,
-                is_topper = false,
-                icon = "https://cdn.shikho.com/app/subjects/math.png",
-                color_code = "#8B5CF6",
-                total_live_class = 50,
-                completed_live_class = 16,
-                total_exam_score = 100,
-                total_obtained_score = 34
-            )
-        )
-
-        val moderateList = listOf(
-            SubjectPerformanceItem(
-                subject_id = "PHY",
-                title = "পদার্থবিজ্ঞান ১ম পত্র",
-                student_avg_score = 56,
-                topper_score = 88,
-                is_topper = false,
-                icon = "https://cdn.shikho.com/app/subjects/physics.png",
-                color_code = "#0EA5E9",
-                total_live_class = 48,
-                completed_live_class = 28,
-                total_exam_score = 100,
-                total_obtained_score = 56
-            ),
-            SubjectPerformanceItem(
-                subject_id = "ICT",
-                title = "তথ্য ও যোগাযোগ প্রযুক্তি",
-                student_avg_score = 62,
-                topper_score = 94,
-                is_topper = false,
-                icon = "https://cdn.shikho.com/app/subjects/ict.png",
-                color_code = "#14B8A6",
-                total_live_class = 30,
-                completed_live_class = 20,
-                total_exam_score = 100,
-                total_obtained_score = 62
-            )
-        )
-
-        val goodList = listOf(
-            SubjectPerformanceItem(
-                subject_id = "BIO",
-                title = "জীববিজ্ঞান ১ম পত্র",
-                student_avg_score = 82,
-                topper_score = 96,
-                is_topper = false,
-                icon = "https://cdn.shikho.com/app/subjects/biology.png",
-                color_code = "#F59E0B",
-                total_live_class = 36,
-                completed_live_class = 31,
-                total_exam_score = 100,
-                total_obtained_score = 82
-            ),
-            SubjectPerformanceItem(
-                subject_id = "ENG",
-                title = "English 1st Paper",
-                student_avg_score = 88,
-                topper_score = 90,
-                is_topper = true,
-                icon = "https://cdn.shikho.com/app/subjects/english.png",
-                color_code = "#6366F1",
-                total_live_class = 25,
-                completed_live_class = 24,
-                total_exam_score = 100,
-                total_obtained_score = 88
-            )
-        )
-
-        val groups = listOf(
-            PerformanceGroupItem(
-                performance_level = "needs_improvement",
-                label = "উন্নতির প্রয়োজন",
-                subjects = needsImpList
-            ),
-            PerformanceGroupItem(
-                performance_level = "moderate",
-                label = "মাঝারি",
-                subjects = moderateList
-            ),
-            PerformanceGroupItem(
-                performance_level = "good",
-                label = "ভালো",
-                subjects = goodList
-            )
-        )
-
-        return QuarterlyReportResponse(
-            performance_report = PerformanceReportContainer(
-                total_score = ScorePercentage(percentage = score),
-                class_rank = ClassRankData(rank = rank, total_students = totalStudents)
-            ),
-            learning_progress = LearningProgressContainer(
-                class_completion = ClassCompletionProgress(
-                    percentage = ((attended.toDouble() / totalClasses) * 100).toInt(),
-                    attended_classes = attended,
-                    total_classes = totalClasses
-                ),
-                chapter_exam_score = ChapterExamProgress(
-                    percentage = ((examObtained.toDouble() / examTotal) * 100).toInt(),
-                    obtained = examObtained,
-                    total = examTotal
-                )
-            ),
-            subject_wise_performance = SubjectWisePerformanceContainer(groups = groups),
-            learning_activity_summary = LearningActivitySummary(
-                animated_lessons_watched = 24,
-                practice_quiz_attempted = 12,
-                learning_resource_viewed = 38
-            )
-        )
-    }
-
-    private fun generateFallbackTrend(phaseId: String, metric: String): PerformanceTrendResponse {
-        val xLabels = listOf("W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W11", "W12", "W13", "W14")
-        val dataPoints = if (metric == "class_completion") {
-            listOf(10f, 15f, 22f, 28f, 35f, 40f, 48f, 52f, 60f, 65f, 70f, 74f, 80f, 85f)
-        } else {
-            listOf(25f, 30f, 28f, 45f, 50f, 48f, 62f, 58f, 70f, 68f, 75f, 82f, 80f, 88f)
-        }
-
-        return PerformanceTrendResponse(
-            metric_type = metric,
-            x_labels = xLabels,
-            current_phase = PhaseDataPoints(
-                phase_id = phaseId,
-                data_points = dataPoints
-            ),
-            summary = TrendSummary(
-                current_average = dataPoints.average().toInt(),
-                compare_average = 52
-            )
-        )
-    }
+    // Removed legacy fallback mock data generators — Report Card now renders 100% authentic API data only.
 }
 
 class ReportCardViewModelFactory(

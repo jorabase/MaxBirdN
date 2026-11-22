@@ -120,8 +120,8 @@ fun ShikhoNotificationTerminalCard(
 
     val statusCodeBadge = when {
         connectionState.isSyncing -> "SYNCING"
-        connectionState.isConnected -> "CONNECTED (${connectionState.connectedTopicCount}/${connectionState.activeTargetTopicCount})"
-        else -> "DISCONNECTED"
+        connectionState.isConnected -> "${connectionState.connectedTopicCount}/${connectionState.activeTargetTopicCount} LIVE"
+        else -> "OFFLINE"
     }
 
     val consoleScrollState = rememberScrollState()
@@ -167,21 +167,21 @@ fun ShikhoNotificationTerminalCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
                                 .background(statusColor.copy(alpha = 0.16f))
-                                .border(1.dp, statusColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp)),
+                                .border(1.dp, statusColor.copy(alpha = 0.4f), RoundedCornerShape(11.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Terminal,
                                 contentDescription = "Shikho Notification Terminal",
                                 tint = statusColor,
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
@@ -193,7 +193,7 @@ fun ShikhoNotificationTerminalCard(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "SHIKHO FCM টার্মিনাল",
-                                    fontSize = 13.5.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontFamily = FontFamily.Monospace,
                                     color = Color(0xFFF8FAFC),
@@ -204,7 +204,7 @@ fun ShikhoNotificationTerminalCard(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = statusLabel,
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = statusColor,
                                 maxLines = 1,
@@ -213,9 +213,11 @@ fun ShikhoNotificationTerminalCard(
                         }
                     }
 
-                    // Live status chip
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Compact live status chip (never crowds Bengali title)
                     Surface(
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(9.dp),
                         color = statusColor.copy(alpha = 0.16f),
                         border = BorderStroke(1.dp, statusColor.copy(alpha = 0.5f))
                     ) {
@@ -286,6 +288,22 @@ fun ShikhoNotificationTerminalCard(
                             }
                         },
                         valueColor = if (connectionState.activeCourseCount > 0) Color(0xFF34D399) else Color(0xFFFBBF24)
+                    )
+                    if (connectionState.expiredCourseNames.isNotEmpty()) {
+                        TerminalMetaRow(
+                            label = "EXPIRED CLEANED",
+                            value = connectionState.expiredCourseNames.joinToString(", "),
+                            valueColor = Color(0xFFFBBF24)
+                        )
+                    }
+                    TerminalMetaRow(
+                        label = "ONESIGNAL",
+                        value = if (connectionState.oneSignalConnected && connectionState.oneSignalPlayerId.isNotBlank()) {
+                            "Active (${connectionState.oneSignalPlayerId.take(12)}...)"
+                        } else {
+                            "Pending / Not Linked"
+                        },
+                        valueColor = if (connectionState.oneSignalConnected) Color(0xFF38BDF8) else Color(0xFF94A3B8)
                     )
                     TerminalMetaRow(
                         label = "SELECTED COURSE",
@@ -689,6 +707,10 @@ private fun copyTerminalReport(
         appendLine("FCM Token: ${state.fcmTokenPreview}")
         appendLine("User ID: ${state.activeUserId}")
         appendLine("Courses: ${state.activeCourseCount} Active, ${state.expiredCourseCount} Expired, ${state.autoUnsubscribedCount} Auto-Unsubscribed")
+        if (state.expiredCourseNames.isNotEmpty()) {
+            appendLine("Expired Cleaned: ${state.expiredCourseNames.joinToString(", ")}")
+        }
+        appendLine("OneSignal: ${if (state.oneSignalConnected) "ACTIVE (${state.oneSignalPlayerId})" else "NOT LINKED"}")
         appendLine("Selected Program/Phase: ${state.activeProgramId} / ${state.activePhaseId}")
         appendLine("Topics:")
         state.topics.forEach { t ->

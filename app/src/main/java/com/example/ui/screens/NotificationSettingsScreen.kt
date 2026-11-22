@@ -138,7 +138,10 @@ fun NotificationSettingsScreen(
             context = context,
             forceRefresh = true
         )
-        com.example.notification.ShikhoNotificationManager.syncAllTopicSubscriptions(context.applicationContext)
+        val currentFcm = com.example.notification.ShikhoNotificationManager.connectionState.value
+        if (!currentFcm.isConnected && !currentFcm.isSyncing) {
+            com.example.notification.ShikhoNotificationManager.syncAllTopicSubscriptions(context.applicationContext)
+        }
         com.example.notification.OneSignalPushManager.triggerSyncAsync(context.applicationContext)
     }
 
@@ -209,7 +212,7 @@ fun NotificationSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 128.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 0. Permission Banner if not granted on Android 13+
@@ -347,14 +350,15 @@ fun NotificationSettingsScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(Color.Black.copy(alpha = 0.24f))
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 AlarmStatPill(
                                     icon = Icons.Default.Schedule,
                                     label = "অগ্রিম সময়",
-                                    value = "$leadTimeMinutes মিনিট আগে"
+                                    value = "$leadTimeMinutes মি. আগে",
+                                    modifier = Modifier.weight(1f)
                                 )
                                 Box(
                                     modifier = Modifier
@@ -365,7 +369,8 @@ fun NotificationSettingsScreen(
                                 AlarmStatPill(
                                     icon = Icons.Default.EventAvailable,
                                     label = "রুটিন অ্যালার্ম",
-                                    value = "${activeRoutineAlarmCount}টি সক্রিয়"
+                                    value = "${activeRoutineAlarmCount}টি সক্রিয়",
+                                    modifier = Modifier.weight(1f)
                                 )
                                 Box(
                                     modifier = Modifier
@@ -375,8 +380,9 @@ fun NotificationSettingsScreen(
                                 )
                                 AlarmStatPill(
                                     icon = Icons.Default.AlarmOn,
-                                    label = "নিজস্ব রিমাইন্ডার",
-                                    value = "${customAlarms.count { it.isEnabled }}টি সেট"
+                                    label = "রিমাইন্ডার",
+                                    value = "${customAlarms.count { it.isEnabled }}টি সেট",
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -776,29 +782,35 @@ fun NotificationSettingsScreen(
 private fun AlarmStatPill(
     icon: ImageVector,
     label: String,
-    value: String
+    value: String,
+    modifier: Modifier = Modifier
 ) {
     Row(
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color(0xFF38BDF8),
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(15.dp)
         )
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
-                fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.7f)
+                fontSize = 9.5.sp,
+                color = Color.White.copy(alpha = 0.72f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = value,
-                fontSize = 11.5.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.White
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

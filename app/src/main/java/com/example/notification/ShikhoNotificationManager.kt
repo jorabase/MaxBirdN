@@ -115,7 +115,11 @@ object ShikhoNotificationManager {
         val activePhaseId: String = "",
         val activeCourseCount: Int = 0,
         val expiredCourseCount: Int = 0,
+        val expiredCourseNames: List<String> = emptyList(),
         val autoUnsubscribedCount: Int = 0,
+        val oneSignalConnected: Boolean = false,
+        val oneSignalPlayerId: String = "",
+        val oneSignalKey: String = "",
         val topics: List<TopicSubscriptionState> = emptyList(),
         val lastSyncedAt: String = "",
         val lastError: String? = null,
@@ -156,6 +160,14 @@ object ShikhoNotificationManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val syncMutex = Mutex()
     private val logIdSeq = AtomicLong(1L)
+
+    // Session-scoped smart diff cache so automatic background syncs avoid redundant HTTP calls
+    // for topics already verified CONNECTED (manual "আবার চেক ও কানেক্ট" always forces full live re-check).
+    private var verifiedCacheIdentity: String = ""
+    private val verifiedTopicCache = mutableMapOf<String, TopicSubscriptionState>()
+    private val unsubscribedSessionTopics = mutableSetOf<String>()
+    private var lastSyncedCredentials: FirebaseCredentials? = null
+    private var lastCredentialsResolvedAtMs: Long = 0L
 
     private val httpClient: OkHttpClient by lazy {
         AntiTamperSecurity.applyToOkHttpBuilder(
@@ -198,6 +210,19 @@ object ShikhoNotificationManager {
         }
         val cleanType = eventType.ifBlank { "GENERAL" }
         logTerminal("PUSH", "📩 Push [$cleanType] from $from -> \"$title\"")
+    }
+
+    fun updateOneSignalStatus(playerId: String, externalKey: String) {
+        val cleanPlayerId = playerId.trim()
+        val cleanKey = externalKey.trim()
+        if (cleanPlayerId.isBlank()) return
+        _connectionState.update { state ->
+            state.copy(
+                oneSignalConnected = true,
+                oneSignalPlayerId = cleanPlayerId,
+                oneSignalKey = cleanKey
+            )
+        }
     }
 
     /**
@@ -562,6 +587,144 @@ object ShikhoNotificationManager {
             selectedPhaseId = selectedPhaseId
         )
 
+        val expiredNamesList = expiredCourses.map {
+            it.titleBn.ifBlank { it.programId.takeLast(8) }
+        }.distinct()
+
+        // 1. Resolve real FirebaseApp + FID + FIS Auth JWT + FCM Token
+        // Reuse recent credentials (< 5 min) during automatic syncs unless forceRefreshFisToken == true
+        val nowCredMs = System.currentTimeMillis()
+        val cachedCreds = lastSyncedCredentials
+        val creds = if (!forceRefreshFisToken &&
+            cachedCreds != null &&
+            cachedCreds.firebaseApp != null &&
+            cachedCreds.fid.isNotBlank() &&
+            cachedCreds.fisAuthToken.isNotBlank() &&
+            (nowCredMs - lastCredentialsResolvedAtMs) < 5 * 60 * 1000L
+        ) {
+            cachedCreds
+        } else {
+            resolveFirebaseCredentials(
+                appContext = appContext,
+                sessionManager = sessionManager,
+                gmsAvailable = gmsAvailable,
+                forceRefreshFisToken = forceRefreshFisToken
+            ).also { resolved ->
+                if (resolved.firebaseApp != null && resolved.fid.isNotBlank() && resolved.fisAuthToken.isNotBlank()) {
+                    lastSyncedCredentials = resolved
+                    lastCredentialsResolvedAtMs = System.currentTimeMillis()
+                }
+            }
+        }
+
+        if (creds.firebaseApp == null) {
+            _connectionState.update { prev ->
+                prev.copy(
+                    isSyncing = false,
+                    firebaseInitialized = false,
+                    playServicesAvailable = gmsAvailable,
+                    activeUserId = userId,
+                    activeProgramId = selectedProgramId,
+                    activePhaseId = selectedPhaseId,
+                    activeCourseCount = activeCourses.size,
+                    expiredCourseCount = expiredCourses.size,
+                    expiredCourseNames = expiredNamesList,
+                    topics = initialTopics.map { topic ->
+                        if (topic.status == TopicConnectionStatus.SKIPPED) topic
+                        else topic.copy(status = TopicConnectionStatus.FAILED, errorMessage = "FirebaseApp not initialized")
+                    },
+                    lastSyncedAt = nowTimeString(),
+                    lastError = "FirebaseApp not initialized (check google-services.json)"
+                )
+            }
+            return
+        }
+
+        // Invalidate session topic cache if user/FID changed or manual force-check was requested
+        val currentIdentity = "${creds.fid}|$userId"
+        if (forceRefreshFisToken || verifiedCacheIdentity != currentIdentity) {
+            verifiedTopicCache.clear()
+            if (verifiedCacheIdentity != currentIdentity) {
+                unsubscribedSessionTopics.clear()
+            }
+            verifiedCacheIdentity = currentIdentity
+        }
+
+        // 2. Compute stale/expired topics to auto-unsubscribe (deduplicated per session!)
+        val previouslySubscribed = sessionManager.getSubscribedCourseTopics().toMutableSet()
+        val activeCourseTopics = initialTopics
+            .filter { it.status != TopicConnectionStatus.SKIPPED && it.key.startsWith("course_") }
+            .map { it.topicName }
+            .toSet()
+
+        val staleTopics = linkedSetOf<String>()
+        for (oldTopic in previouslySubscribed) {
+            if (oldTopic !in activeCourseTopics) {
+                staleTopics.add(oldTopic)
+            }
+        }
+        for (expired in expiredCourses) {
+            if (userId.isNotBlank()) {
+                val expUserTopic = "LIVE_ShikhoNotification_UserID_${userId}_Program_${expired.programId}"
+                if (expUserTopic !in unsubscribedSessionTopics || forceRefreshFisToken) {
+                    staleTopics.add(expUserTopic)
+                }
+            }
+            if (!expired.phaseId.isNullOrBlank()) {
+                val expPhaseTopic = "LIVE_ShikhoNotification_Program_${expired.programId}_Phase_${expired.phaseId}"
+                if (expPhaseTopic !in unsubscribedSessionTopics || forceRefreshFisToken) {
+                    staleTopics.add(expPhaseTopic)
+                }
+            }
+        }
+        // If a topic is back in active targets, remove it from unsubscribedSessionTopics
+        unsubscribedSessionTopics.removeAll(activeCourseTopics)
+
+        // Pre-fill already verified topics so UI never flickers on incremental updates
+        val updatedTopics = initialTopics.map { item ->
+            if (!forceRefreshFisToken && item.status != TopicConnectionStatus.SKIPPED) {
+                val cached = verifiedTopicCache[item.topicName]
+                if (cached != null && cached.status == TopicConnectionStatus.CONNECTED) {
+                    item.copy(
+                        status = TopicConnectionStatus.CONNECTED,
+                        httpCode = cached.httpCode,
+                        createTime = cached.createTime,
+                        latencyMs = cached.latencyMs,
+                        sdkVerified = cached.sdkVerified,
+                        errorMessage = null
+                    )
+                } else item
+            } else item
+        }.toMutableList()
+
+        val needsSubscribeCount = updatedTopics.count {
+            it.status != TopicConnectionStatus.SKIPPED && it.status != TopicConnectionStatus.CONNECTED
+        }
+
+        // Fast-path: if NOTHING needs subscribing and NOTHING needs unsubscribing, update state cleanly without spamming logs/API!
+        if (!forceRefreshFisToken && needsSubscribeCount == 0 && staleTopics.isEmpty()) {
+            val savedOneSignalId = OneSignalPushManager.getSavedPlayerId(appContext)
+            _connectionState.update { prev ->
+                prev.copy(
+                    isSyncing = false,
+                    playServicesAvailable = gmsAvailable,
+                    activeUserId = userId,
+                    activeProgramId = selectedProgramId,
+                    activePhaseId = selectedPhaseId,
+                    activeCourseCount = activeCourses.size,
+                    expiredCourseCount = expiredCourses.size,
+                    expiredCourseNames = if (expiredNamesList.isNotEmpty()) expiredNamesList else prev.expiredCourseNames,
+                    oneSignalConnected = prev.oneSignalConnected || savedOneSignalId.isNotBlank(),
+                    oneSignalPlayerId = prev.oneSignalPlayerId.ifBlank { savedOneSignalId },
+                    topics = updatedTopics.toList(),
+                    lastSyncedAt = prev.lastSyncedAt.ifBlank { nowTimeString() },
+                    lastError = null
+                )
+            }
+            return
+        }
+
+        val savedOneSignalId = OneSignalPushManager.getSavedPlayerId(appContext)
         _connectionState.update { prev ->
             prev.copy(
                 isSyncing = true,
@@ -571,65 +734,21 @@ object ShikhoNotificationManager {
                 activePhaseId = selectedPhaseId,
                 activeCourseCount = activeCourses.size,
                 expiredCourseCount = expiredCourses.size,
-                topics = initialTopics,
+                expiredCourseNames = if (expiredNamesList.isNotEmpty()) expiredNamesList else prev.expiredCourseNames,
+                oneSignalConnected = prev.oneSignalConnected || savedOneSignalId.isNotBlank(),
+                oneSignalPlayerId = prev.oneSignalPlayerId.ifBlank { savedOneSignalId },
+                topics = updatedTopics.toList(),
                 lastError = null
             )
         }
 
+        val syncModeTag = if (forceRefreshFisToken) "Live Full Verify" else "Smart Diff Sync"
         logTerminal(
             "INFO",
-            "🚀 Smart Shikho FCM Sync | activeCourses=${activeCourses.size}, expired=${expiredCourses.size}"
+            "🚀 $syncModeTag | activeCourses=${activeCourses.size}, expired=${expiredCourses.size}, toSub=$needsSubscribeCount, toUnsub=${staleTopics.size}"
         )
-        if (expiredCourses.isNotEmpty()) {
-            val expiredNames = expiredCourses.joinToString(", ") {
-                it.titleBn.ifBlank { it.programId.takeLast(8) }
-            }
-            logTerminal("WARN", "⏳ মেয়াদ শেষ / নিষ্ক্রিয় কোর্স শনাক্ত (${expiredCourses.size}): $expiredNames")
-        }
-
-        // 1. Resolve real FirebaseApp + FID + FIS Auth JWT + FCM Token
-        val creds = resolveFirebaseCredentials(
-            appContext = appContext,
-            sessionManager = sessionManager,
-            gmsAvailable = gmsAvailable,
-            forceRefreshFisToken = forceRefreshFisToken
-        )
-
-        if (creds.firebaseApp == null) {
-            markAllActiveTopicsFailed("FirebaseApp not initialized")
-            _connectionState.update {
-                it.copy(
-                    isSyncing = false,
-                    firebaseInitialized = false,
-                    lastSyncedAt = nowTimeString(),
-                    lastError = "FirebaseApp not initialized (check google-services.json)"
-                )
-            }
-            return
-        }
-
-        // 2. Auto-unsubscribe expired, removed, or outdated-phase course topics
-        val previouslySubscribed = sessionManager.getSubscribedCourseTopics().toMutableSet()
-        val activeCourseTopics = initialTopics
-            .filter { it.status != TopicConnectionStatus.SKIPPED && it.key.startsWith("course_") }
-            .map { it.topicName }
-            .toSet()
-
-        val staleTopics = linkedSetOf<String>()
-        // 2a. Any previously subscribed course/phase topic that is no longer in our active target set
-        for (oldTopic in previouslySubscribed) {
-            if (oldTopic !in activeCourseTopics) {
-                staleTopics.add(oldTopic)
-            }
-        }
-        // 2b. Explicitly build topics for newly detected expired courses so they are guaranteed cleaned up
-        for (expired in expiredCourses) {
-            if (userId.isNotBlank()) {
-                staleTopics.add("LIVE_ShikhoNotification_UserID_${userId}_Program_${expired.programId}")
-            }
-            if (!expired.phaseId.isNullOrBlank()) {
-                staleTopics.add("LIVE_ShikhoNotification_Program_${expired.programId}_Phase_${expired.phaseId}")
-            }
+        if (expiredNamesList.isNotEmpty() && staleTopics.isNotEmpty()) {
+            logTerminal("WARN", "⏳ মেয়াদ শেষ / নিষ্ক্রিয় কোর্স শনাক্ত (${expiredNamesList.size}): ${expiredNamesList.joinToString(", ")}")
         }
 
         var unsubscribedNow = 0
@@ -645,17 +764,25 @@ object ShikhoNotificationManager {
                 topic = oldTopic
             )
             previouslySubscribed.remove(oldTopic)
+            verifiedTopicCache.remove(oldTopic)
+            unsubscribedSessionTopics.add(oldTopic)
             unsubscribedNow++
         }
 
-        // 3. Auto-subscribe & verify EVERY active Shikho topic (SHIKHO_ALL + userId + ALL active courses & phases)
+        // 3. Subscribe & verify EVERY new/unverified active Shikho topic
         var anyError: String? = null
-        val updatedTopics = initialTopics.toMutableList()
 
         for (i in updatedTopics.indices) {
             val item = updatedTopics[i]
             if (item.status == TopicConnectionStatus.SKIPPED) {
                 logTerminal("WARN", "⏭️ Skipped [${item.label}]: ${item.errorMessage}")
+                continue
+            }
+            if (!forceRefreshFisToken && item.status == TopicConnectionStatus.CONNECTED) {
+                // Already verified CONNECTED in this session — skip redundant network call
+                if (item.key.startsWith("course_")) {
+                    previouslySubscribed.add(item.topicName)
+                }
                 continue
             }
 
@@ -756,8 +883,11 @@ object ShikhoNotificationManager {
             }
 
             updatedTopics[i] = finalState
-            if (finalState.status == TopicConnectionStatus.CONNECTED && item.key.startsWith("course_")) {
-                previouslySubscribed.add(item.topicName)
+            if (finalState.status == TopicConnectionStatus.CONNECTED) {
+                verifiedTopicCache[item.topicName] = finalState
+                if (item.key.startsWith("course_")) {
+                    previouslySubscribed.add(item.topicName)
+                }
             }
             _connectionState.update { it.copy(topics = updatedTopics.toList()) }
         }
@@ -780,7 +910,8 @@ object ShikhoNotificationManager {
                 isSyncing = false,
                 activeCourseCount = activeCourses.size,
                 expiredCourseCount = expiredCourses.size,
-                autoUnsubscribedCount = prev.autoUnsubscribedCount + unsubscribedNow,
+                expiredCourseNames = if (expiredNamesList.isNotEmpty()) expiredNamesList else prev.expiredCourseNames,
+                autoUnsubscribedCount = unsubscribedSessionTopics.size,
                 topics = updatedTopics.toList(),
                 lastSyncedAt = finishedAt,
                 lastError = anyError
@@ -1231,6 +1362,10 @@ object ShikhoNotificationManager {
                         topic = topic
                     )
                 }
+                verifiedTopicCache.clear()
+                unsubscribedSessionTopics.clear()
+                lastSyncedCredentials = null
+                lastCredentialsResolvedAtMs = 0L
                 _connectionState.update { prev ->
                     prev.copy(
                         isSyncing = false,
@@ -1239,6 +1374,7 @@ object ShikhoNotificationManager {
                         activePhaseId = "",
                         activeCourseCount = 0,
                         expiredCourseCount = 0,
+                        expiredCourseNames = emptyList(),
                         autoUnsubscribedCount = prev.autoUnsubscribedCount + topicsToRemove.size,
                         topics = emptyList(),
                         lastSyncedAt = nowTimeString()

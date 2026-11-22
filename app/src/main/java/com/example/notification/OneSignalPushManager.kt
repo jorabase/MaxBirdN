@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -41,6 +43,11 @@ object OneSignalPushManager {
     private const val KEY_LAST_SYNCED_FCM = "last_synced_fcm_token"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val syncMutex = Mutex()
+    @Volatile
+    private var lastSyncedSignature: String = ""
+    @Volatile
+    private var lastSyncedAtMs: Long = 0L
 
     private val httpClient = OkHttpClient.Builder()
         .applyAntiCaptureSecurity()
@@ -297,27 +304,34 @@ object OneSignalPushManager {
         fcmToken: String? = null,
         studentNameOverride: String? = null
     ) = withContext(Dispatchers.IO) {
-        try {
-            fetchRemoteOneSignalConfigIfNeeded(context)
+        syncMutex.withLock {
+            try {
+                fetchRemoteOneSignalConfigIfNeeded(context)
 
-            val session = SessionManager(context)
-            val resolvedFcm = (fcmToken ?: session.getFcmToken() ?: "").trim()
-            val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
-            val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
-            val normPhone = session.getNormalizedUserPhone()
-            val userId = (session.getUserId() ?: "").trim()
-            val studentName = (studentNameOverride?.trim()?.takeIf { it.isNotBlank() }
-                ?: session.getUserFullName()?.trim()?.takeIf { it.isNotBlank() }
-                ?: DeviceActivationRepository.getSavedStudentName(context).trim())
-                .ifBlank { "শিক্ষার্থী" }
+                val session = SessionManager(context)
+                val resolvedFcm = (fcmToken ?: session.getFcmToken() ?: "").trim()
+                val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
+                val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
+                val normPhone = session.getNormalizedUserPhone()
+                val userId = (session.getUserId() ?: "").trim()
+                val studentName = (studentNameOverride?.trim()?.takeIf { it.isNotBlank() }
+                    ?: session.getUserFullName()?.trim()?.takeIf { it.isNotBlank() }
+                    ?: DeviceActivationRepository.getSavedStudentName(context).trim())
+                    .ifBlank { "শিক্ষার্থী" }
 
-            // Primary external_user_id is the student's 11-digit phone if logged in, otherwise deviceHardwareHash
-            val externalUserId = normPhone.ifBlank { deviceHardwareHash }
-            val appId = getOneSignalAppId(context)
+                // Primary external_user_id is the student's 11-digit phone if logged in, otherwise deviceHardwareHash
+                val externalUserId = normPhone.ifBlank { deviceHardwareHash }
+                val appId = getOneSignalAppId(context)
 
-            var playerId = getSavedPlayerId(context)
+                var playerId = getSavedPlayerId(context)
+                val currentSignature = "$appId|$resolvedFcm|$externalUserId|$studentName"
+                val nowMs = System.currentTimeMillis()
+                if (playerId.isNotBlank() && currentSignature == lastSyncedSignature && (nowMs - lastSyncedAtMs) < 15_000L) {
+                    ShikhoNotificationManager.updateOneSignalStatus(playerId, externalUserId)
+                    return@withLock
+                }
 
-            // 1. Register / Update with OneSignal Players API if App ID & FCM token are available
+                // 1. Register / Update with OneSignal Players API if App ID & FCM token are available
             if (appId.isNotBlank() && resolvedFcm.isNotBlank()) {
                 val tagsJson = JSONObject().apply {
                     put("role", "student")
@@ -361,32 +375,36 @@ object OneSignalPushManager {
                             val json = JSONObject(bodyStr)
                             val newPlayerId = json.optString("id", "").trim()
                             if (newPlayerId.isNotBlank()) {
-                                playerId = newPlayerId
-                                getPrefs(context).edit()
-                                    .putString(KEY_PLAYER_ID, newPlayerId)
-                                    .putString(KEY_LAST_SYNCED_FCM, resolvedFcm)
-                                    .apply()
-                                ShikhoNotificationManager.logTerminal(
-                                    "SUCCESS",
-                                    "🔔 OneSignal Device Registered (Player ID: ${newPlayerId.take(12)}..., Key: $externalUserId)"
-                                )
+                                    playerId = newPlayerId
+                                    getPrefs(context).edit()
+                                        .putString(KEY_PLAYER_ID, newPlayerId)
+                                        .putString(KEY_LAST_SYNCED_FCM, resolvedFcm)
+                                        .apply()
+                                    lastSyncedSignature = currentSignature
+                                    lastSyncedAtMs = System.currentTimeMillis()
+                                    ShikhoNotificationManager.updateOneSignalStatus(newPlayerId, externalUserId)
+                                    ShikhoNotificationManager.logTerminal(
+                                        "SUCCESS",
+                                        "🔔 OneSignal Device Registered (Player ID: ${newPlayerId.take(12)}..., Key: $externalUserId)"
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // Also ensure tags & external_user_id are updated on existing player_id
-                    if (playerId.isNotBlank()) {
-                        val putReq = Request.Builder()
-                            .url("https://onesignal.com/api/v1/players/$playerId")
-                            .addHeader("Content-Type", "application/json")
-                            .put(playerPayload.toString().toRequestBody("application/json".toMediaType()))
-                            .build()
-                        runCatching { httpClient.newCall(putReq).execute().close() }
+                        // Also ensure tags & external_user_id are updated on existing player_id
+                        if (playerId.isNotBlank()) {
+                            ShikhoNotificationManager.updateOneSignalStatus(playerId, externalUserId)
+                            val putReq = Request.Builder()
+                                .url("https://onesignal.com/api/v1/players/$playerId")
+                                .addHeader("Content-Type", "application/json")
+                                .put(playerPayload.toString().toRequestBody("application/json".toMediaType()))
+                                .build()
+                            runCatching { httpClient.newCall(putReq).execute().close() }
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "OneSignal player registration warning: ${e.message}")
                     }
-                } catch (e: Throwable) {
-                    Log.w(TAG, "OneSignal player registration warning: ${e.message}")
                 }
-            }
 
             // 2. Sync `onesignal_player_id` and `fcm_token` to Supabase via RPC (with scoped fallback)
             syncPushIdentityToSupabase(
@@ -398,8 +416,9 @@ object OneSignalPushManager {
                 fcmToken = resolvedFcm,
                 studentKey = externalUserId
             )
-        } catch (e: Throwable) {
-            Log.w(TAG, "syncStudentDeviceWithOneSignal error: ${e.message}")
+            } catch (e: Throwable) {
+                Log.w(TAG, "syncStudentDeviceWithOneSignal error: ${e.message}")
+            }
         }
     }
 

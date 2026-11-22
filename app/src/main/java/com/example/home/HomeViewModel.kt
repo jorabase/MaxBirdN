@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -674,65 +675,66 @@ class HomeViewModel(
             )
         }
 
-        // Step 1: Immediately subscribe global + user + all active course UserID_Program topics (and clean up expired)
-        com.example.notification.ShikhoNotificationManager.syncEnrolledCourses(
-            context = getApplication(),
-            enrolledCourses = initialTargets
-        )
-
         val activeTargets = initialTargets.filter { it.isActive }
-        if (activeTargets.isEmpty()) return
+        if (activeTargets.isEmpty()) {
+            com.example.notification.ShikhoNotificationManager.syncEnrolledCourses(
+                context = getApplication(),
+                enrolledCourses = initialTargets
+            )
+            return
+        }
 
-        // Step 2: Resolve current active Phase ID for EVERY active enrolled course in parallel (no app restart needed)
+        // Resolve current active Phase ID for EVERY active enrolled course in parallel FIRST
+        // (fast 4.5s timeout) so we trigger ONE single complete FCM sync with all active courses + phases!
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val resolvedPhasesMap = coroutineScope {
-                    activeTargets.map { target ->
-                        async {
-                            val phaseQuery = GraphQlQuery(
-                                operationName = "ProgramPhasesByStudent",
-                                query = """
-                                    query ProgramPhasesByStudent(${'$'}program_id: String!, ${'$'}course_progress_percentage: Boolean) {
-                                      programPhasesByStudent(program_id: ${'$'}program_id, course_progress_percentage: ${'$'}course_progress_percentage) {
-                                        data {
-                                          id
-                                          is_current
-                                          status
-                                          title
+            val resolvedPhasesMap = withTimeoutOrNull(4500L) {
+                runCatching {
+                    coroutineScope {
+                        activeTargets.map { target ->
+                            async {
+                                val phaseQuery = GraphQlQuery(
+                                    operationName = "ProgramPhasesByStudent",
+                                    query = """
+                                        query ProgramPhasesByStudent(${'$'}program_id: String!, ${'$'}course_progress_percentage: Boolean) {
+                                          programPhasesByStudent(program_id: ${'$'}program_id, course_progress_percentage: ${'$'}course_progress_percentage) {
+                                            data {
+                                              id
+                                              is_current
+                                              status
+                                              title
+                                            }
+                                          }
                                         }
-                                      }
-                                    }
-                                """.trimIndent(),
-                                variables = mapOf(
-                                    "program_id" to target.programId,
-                                    "course_progress_percentage" to false
+                                    """.trimIndent(),
+                                    variables = mapOf(
+                                        "program_id" to target.programId,
+                                        "course_progress_percentage" to false
+                                    )
                                 )
-                            )
-                            val phaseRes = runCatching { apiService.getProgramPhases(phaseQuery) }.getOrNull()
-                            val phases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
-                            val currentPhase = phases.firstOrNull { it.is_current == true }
-                                ?: phases.firstOrNull { it.status.equals("ACTIVE", ignoreCase = true) }
-                                ?: phases.firstOrNull()
-                            target.programId to currentPhase?.id?.trim()?.takeIf { it.isNotBlank() }
-                        }
-                    }.awaitAll().toMap()
-                }
-
-                val fullTargets = initialTargets.map { target ->
-                    val resolvedPhaseId = resolvedPhasesMap[target.programId] ?: target.phaseId
-                    if (target.programId == sessionManager.getActiveProgramId() && !resolvedPhaseId.isNullOrBlank()) {
-                        sessionManager.saveActiveProgramPhaseId(resolvedPhaseId)
+                                val phaseRes = runCatching { apiService.getProgramPhases(phaseQuery) }.getOrNull()
+                                val phases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
+                                val currentPhase = phases.firstOrNull { it.is_current == true }
+                                    ?: phases.firstOrNull { it.status.equals("ACTIVE", ignoreCase = true) }
+                                    ?: phases.firstOrNull()
+                                target.programId to currentPhase?.id?.trim()?.takeIf { it.isNotBlank() }
+                            }
+                        }.awaitAll().toMap()
                     }
-                    target.copy(phaseId = resolvedPhaseId)
-                }
+                }.getOrNull()
+            } ?: emptyMap()
 
-                com.example.notification.ShikhoNotificationManager.syncEnrolledCourses(
-                    context = getApplication(),
-                    enrolledCourses = fullTargets
-                )
-            } catch (_: Throwable) {
-                // Step 1 already subscribed all active program topics; ignore transient phase fetch errors
+            val fullTargets = initialTargets.map { target ->
+                val resolvedPhaseId = resolvedPhasesMap[target.programId] ?: target.phaseId
+                if (target.programId == sessionManager.getActiveProgramId() && !resolvedPhaseId.isNullOrBlank()) {
+                    sessionManager.saveActiveProgramPhaseId(resolvedPhaseId)
+                }
+                target.copy(phaseId = resolvedPhaseId)
             }
+
+            com.example.notification.ShikhoNotificationManager.syncEnrolledCourses(
+                context = getApplication(),
+                enrolledCourses = fullTargets
+            )
         }
     }
 
@@ -775,8 +777,7 @@ class HomeViewModel(
                     variables = mapOf("program_id" to programId, "course_progress_percentage" to true)
                 )
                 val phaseRes = runCatching { apiService.getProgramPhases(phaseQuery) }.getOrNull()
-                val phases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
-                val finalPhases = if (phases.isNotEmpty()) phases else com.example.ui.components.defaultCoursePhases
+                val finalPhases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
                 _uiState.value = _uiState.value.copy(programPhases = finalPhases)
 
                 // ২. কারেন্ট / একটিভ ফেজ সিলেক্ট করা
@@ -911,8 +912,7 @@ class HomeViewModel(
                         variables = mapOf("program_id" to programId, "course_progress_percentage" to true)
                     )
                     val phaseRes = runCatching { apiService.getProgramPhases(phaseQuery) }.getOrNull()
-                    val fetchedPhases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
-                    phases = if (fetchedPhases.isNotEmpty()) fetchedPhases else com.example.ui.components.defaultCoursePhases
+                    phases = phaseRes?.data?.programPhasesByStudent?.data ?: emptyList()
                     _uiState.value = _uiState.value.copy(programPhases = phases)
                 }
 
