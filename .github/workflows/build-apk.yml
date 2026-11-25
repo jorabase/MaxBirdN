@@ -248,6 +248,39 @@ jobs:
           echo "KEY_ALIAS=$KEY_AL" >> $GITHUB_ENV
 
       # -----------------------------------------------------------
+      # 1.5. AUTO-BUNDLE SHERPA-ONNX ANDROID AAR (OFFLINE NEURAL TTS)
+      # -----------------------------------------------------------
+      - name: Download Sherpa-ONNX Android AAR (Offline Neural TTS)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p app/libs
+          if ls app/libs/sherpa-onnx-*.aar 1> /dev/null 2>&1; then
+            echo "✅ Sherpa-ONNX AAR already present in app/libs/."
+            exit 0
+          fi
+
+          echo "🔎 Resolving latest official k2-fsa/sherpa-onnx Android AAR..."
+          AAR_URL=$(curl -sSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest" \
+            | jq -r '.assets[] | select(.name | test("^sherpa-onnx-[0-9]+\\.[0-9]+\\.[0-9]+\\.aar$")) | .browser_download_url' \
+            | head -n 1)
+
+          if [ -z "$AAR_URL" ] || [ "$AAR_URL" = "null" ]; then
+            echo "⚠️ Latest API query did not return standard AAR; falling back to v2.0.3..."
+            AAR_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-2.0.3.aar"
+          fi
+
+          AAR_FILE="app/libs/$(basename "$AAR_URL")"
+          echo "⬇️ Downloading $AAR_URL -> $AAR_FILE"
+          if curl -fSL --retry 3 --retry-delay 3 -o "$AAR_FILE" "$AAR_URL" && [ -s "$AAR_FILE" ]; then
+            echo "✅ Bundled Sherpa-ONNX Android AAR successfully ($(du -h "$AAR_FILE" | cut -f1))."
+          else
+            rm -f "$AAR_FILE"
+            echo "⚠️ Could not download Sherpa-ONNX AAR right now; APK will still build cleanly with Google Offline TTS fallback."
+          fi
+
+      # -----------------------------------------------------------
       # 2. RELEASE APK
       #    Automatic on push; manual 'release' or 'all'
       # -----------------------------------------------------------

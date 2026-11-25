@@ -303,14 +303,17 @@ class OfflineBookTtsManager(context: Context) {
             })
         }
 
+        val enginePref = TtsVoicePackManager.getEnginePreference(appContext)
         val hasSherpaBn = sherpaBackend.isAvailable() && TtsVoicePackManager.isModelInstalled(appContext, "bn")
         val hasSherpaEn = sherpaBackend.isAvailable() && TtsVoicePackManager.isModelInstalled(appContext, "en")
+        val useSherpa = enginePref != TtsEnginePreference.GOOGLE_SYSTEM && (hasSherpaBn || hasSherpaEn)
         val hasOfflineBn = hasSherpaBn || (bnVoice != null && !bnVoice.isNetworkConnectionRequired)
         val hasOfflineEn = hasSherpaEn || (enVoice != null && !enVoice.isNetworkConnectionRequired)
 
         val engineLabel = when {
-            hasSherpaBn || hasSherpaEn -> "Sherpa-ONNX নিউরাল অফলাইন ভয়েস"
-            hasOfflineBn -> "বাংলা + ইংরেজি অফলাইন নিউরাল ভয়েস"
+            enginePref == TtsEnginePreference.GOOGLE_SYSTEM -> "Google অফলাইন TTS (বাংলা + ইংরেজি)"
+            useSherpa -> "Sherpa-ONNX নিউরাল অফলাইন ভয়েস"
+            hasOfflineBn -> "Google অফলাইন TTS (বাংলা + ইংরেজি)"
             else -> "ডিভাইস অফলাইন TTS (বাংলা + ইংরেজি)"
         }
 
@@ -318,7 +321,7 @@ class OfflineBookTtsManager(context: Context) {
             it.copy(
                 isReady = true,
                 engineLabelBn = engineLabel,
-                isSherpaNeuralActive = hasSherpaBn || hasSherpaEn,
+                isSherpaNeuralActive = useSherpa,
                 hasOfflineBanglaVoice = hasOfflineBn,
                 hasOfflineEnglishVoice = hasOfflineEn,
                 selectedBanglaVoiceName = bnVoice?.name.orEmpty(),
@@ -396,7 +399,8 @@ class OfflineBookTtsManager(context: Context) {
 
                 _state.update { it.copy(detectedLanguage = segment.lang) }
 
-                val sherpaPaths = if (sherpaBackend.isAvailable()) {
+                val enginePref = TtsVoicePackManager.getEnginePreference(appContext)
+                val sherpaPaths = if (enginePref != TtsEnginePreference.GOOGLE_SYSTEM && sherpaBackend.isAvailable()) {
                     TtsVoicePackManager.getInstalledModelPaths(appContext, segment.lang)
                 } else null
 

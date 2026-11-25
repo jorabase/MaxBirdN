@@ -17,6 +17,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,11 +29,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -44,6 +49,7 @@ import com.example.utils.toBengaliDigits
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.File
+import kotlin.math.roundToInt
 
 private enum class ReaderThemeMode(val labelBn: String) {
     ORIGINAL("মূল"),
@@ -164,10 +170,11 @@ fun LibraryHtmlReaderScreen(
     var readerTheme by remember { mutableStateOf(ReaderThemeMode.ORIGINAL) }
     var textZoomPercent by remember { mutableIntStateOf(100) }
     var showTtsControlBar by remember { mutableStateOf(false) }
+    var showReaderOptionsSheet by remember { mutableStateOf(false) }
     var showVoiceSettingsDialog by remember { mutableStateOf(false) }
     var isHtmlDrivenSpeech by remember { mutableStateOf(false) }
 
-    // Native paragraph-by-paragraph reader state (used when user taps the native Play/Read Aloud bar)
+    // Native paragraph-by-paragraph reader state (used when user taps Read Aloud from the 3-dot menu)
     var extractedParagraphs by remember { mutableStateOf<List<String>>(emptyList()) }
     var currentParagraphIdx by remember { mutableIntStateOf(-1) }
     var isNativeAutoReading by remember { mutableStateOf(false) }
@@ -183,7 +190,6 @@ fun LibraryHtmlReaderScreen(
                 isHtmlDrivenSpeech = speaking
                 if (speaking) {
                     isNativeAutoReading = false
-                    showTtsControlBar = true
                 }
             }
         )
@@ -403,213 +409,354 @@ fun LibraryHtmlReaderScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            Surface(
-                color = if (isDarkSystem) Color(0xFF0B1426) else Color.White,
-                shadowElevation = 3.dp
+    val containerBg = when (readerTheme) {
+        ReaderThemeMode.DARK -> Color(0xFF0B1220)
+        ReaderThemeMode.SEPIA -> Color(0xFFFBF4E4)
+        ReaderThemeMode.LIGHT -> Color.White
+        ReaderThemeMode.ORIGINAL -> if (isDarkSystem) Color(0xFF0B1220) else Color(0xFF0F172A)
+    }
+
+    // 3-Dot Quick Reader Options Bottom Sheet (replaces the old bulky top bar)
+    if (showReaderOptionsSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showReaderOptionsSheet = false },
+            containerColor = if (isDarkSystem) Color(0xFF0F1A2E) else Color.White,
+            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(modifier = Modifier.statusBarsPadding()) {
-                    Row(
+                // Book Header + Back Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            showReaderOptionsSheet = false
+                            isNativeAutoReading = false
+                            ttsManager.stop()
+                            onBack()
+                        },
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .size(44.dp)
+                            .testTag("reader_back_button"),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color(0xFF10B981).copy(alpha = 0.14f)
+                        )
                     ) {
-                        IconButton(
-                            onClick = {
-                                isNativeAutoReading = false
-                                ttsManager.stop()
-                                onBack()
-                            },
-                            modifier = Modifier.testTag("reader_back_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "লাইব্রেরিতে ফিরে যান",
+                            tint = Color(0xFF10B981)
+                        )
+                    }
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = title.ifBlank { "HTML বই" },
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            val modeTag = if (loadedFromOffline) "অফলাইন কপি" else "অনলাইন মোড"
-                            Text(
-                                text = if (subtitle.isNotBlank()) "$subtitle • $modeTag" else modeTag,
-                                fontSize = 11.sp,
-                                color = if (loadedFromOffline) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title.ifBlank { "HTML বই" },
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val modeTag = if (loadedFromOffline) "অফলাইন কপি" else "অনলাইন মোড"
+                        Text(
+                            text = if (subtitle.isNotBlank()) "$subtitle • $modeTag" else modeTag,
+                            fontSize = 11.5.sp,
+                            color = if (loadedFromOffline) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
 
-                        // Listen Aloud (Toggle Native Offline TTS Bar)
-                        IconButton(
-                            onClick = {
-                                if (!showTtsControlBar) {
-                                    showTtsControlBar = true
-                                    if (!ttsState.isSpeaking && !isHtmlDrivenSpeech) {
-                                        startNativeReadAloud()
-                                    }
-                                } else {
-                                    if (ttsState.isSpeaking) {
-                                        isNativeAutoReading = false
-                                        ttsManager.stop()
-                                        highlightParagraphInWebView(-1)
-                                    }
-                                    showTtsControlBar = false
+                // Primary Quick Actions Row: Audio Reader, Offline Save, Voice Settings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Toggle Native Audio Reader Bar
+                    val audioActive = ttsState.isSpeaking || showTtsControlBar
+                    Surface(
+                        onClick = {
+                            showReaderOptionsSheet = false
+                            if (!showTtsControlBar) {
+                                showTtsControlBar = true
+                                if (!ttsState.isSpeaking && !isHtmlDrivenSpeech) {
+                                    startNativeReadAloud()
                                 }
-                            },
-                            modifier = Modifier.testTag("reader_tts_toggle_button")
+                            } else {
+                                if (ttsState.isSpeaking) {
+                                    isNativeAutoReading = false
+                                    ttsManager.stop()
+                                    highlightParagraphInWebView(-1)
+                                }
+                                showTtsControlBar = false
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (audioActive) Color(0xFF10B981) else Color(0xFF10B981).copy(alpha = 0.13f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("reader_tts_toggle_button")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
                                 imageVector = if (ttsState.isSpeaking) Icons.Default.VolumeUp else Icons.Default.Headphones,
-                                contentDescription = "অফলাইন অডিও রিডার",
-                                tint = if (ttsState.isSpeaking || showTtsControlBar) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurface
+                                contentDescription = "অডিও রিডার",
+                                tint = if (audioActive) Color.White else Color(0xFF10B981),
+                                modifier = Modifier.size(22.dp)
                             )
-                        }
-
-                        // Save for Offline button (when opened online and not yet saved)
-                        if (!isOfflineAvailable && remoteUrl.isNotBlank()) {
-                            IconButton(
-                                onClick = {
-                                    if (!isDownloadingNow) {
-                                        LibraryRepository.downloadHtmlFileByParams(
-                                            context = context,
-                                            downloadEntityId = fileId,
-                                            title = title,
-                                            subtitle = subtitle,
-                                            remoteUrl = remoteUrl
-                                        )
-                                        Toast.makeText(context, "অফলাইনের জন্য ডাউনলোড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.testTag("reader_download_offline_button")
-                            ) {
-                                if (isDownloadingNow) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.DownloadForOffline,
-                                        contentDescription = "অফলাইনের জন্য সেভ করুন",
-                                        tint = Color(0xFF0284C7)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Voice Settings
-                        IconButton(
-                            onClick = { showVoiceSettingsDialog = true },
-                            modifier = Modifier.testTag("reader_voice_settings_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.RecordVoiceOver,
-                                contentDescription = "ভয়েস সেটিংস"
+                            Text(
+                                text = if (audioActive) "অডিও বন্ধ" else "অডিও রিডার",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (audioActive) Color.White else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
                             )
                         }
                     }
 
-                    // Compact Reading Controls Row (Theme + Font Size)
-                    Row(
+                    // Offline Download / Saved Status
+                    Surface(
+                        onClick = {
+                            if (!isOfflineAvailable && remoteUrl.isNotBlank() && !isDownloadingNow) {
+                                LibraryRepository.downloadHtmlFileByParams(
+                                    context = context,
+                                    downloadEntityId = fileId,
+                                    title = title,
+                                    subtitle = subtitle,
+                                    remoteUrl = remoteUrl
+                                )
+                                Toast.makeText(context, "অফলাইনের জন্য ডাউনলোড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
+                                showReaderOptionsSheet = false
+                            } else if (isOfflineAvailable) {
+                                Toast.makeText(context, "এই বইটি অফলাইনে সেভ করা আছে", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isOfflineAvailable) {
+                            Color(0xFF10B981).copy(alpha = 0.12f)
+                        } else {
+                            Color(0xFF0284C7).copy(alpha = 0.13f)
+                        },
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .weight(1f)
+                            .testTag("reader_download_offline_button")
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ReaderThemeMode.entries.forEach { mode ->
-                                val selected = readerTheme == mode
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (selected) Color(0xFF10B981) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable { readerTheme = mode }
+                        Column(
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            if (isDownloadingNow) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.2.dp,
+                                    color = Color(0xFF0284C7)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = if (isOfflineAvailable) Icons.Default.DownloadDone else Icons.Default.DownloadForOffline,
+                                    contentDescription = "অফলাইন ডাউনলোড",
+                                    tint = if (isOfflineAvailable) Color(0xFF10B981) else Color(0xFF0284C7),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Text(
+                                text = when {
+                                    isDownloadingNow -> "ডাউনলোড..."
+                                    isOfflineAvailable -> "অফলাইন সেভড"
+                                    else -> "ডাউনলোড"
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    // Voice Settings
+                    Surface(
+                        onClick = {
+                            showReaderOptionsSheet = false
+                            showVoiceSettingsDialog = true
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFF8B5CF6).copy(alpha = 0.13f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("reader_voice_settings_button")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.RecordVoiceOver,
+                                contentDescription = "ভয়েস সেটিংস",
+                                tint = Color(0xFF8B5CF6),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "ভয়েস সেটিংস",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                // Reading Theme Selector
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "পড়ার থিম",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ReaderThemeMode.entries.forEach { mode ->
+                            val selected = readerTheme == mode
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (selected) Color(0xFF10B981) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { readerTheme = mode }
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = mode.labelBn,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                                        fontSize = 12.5.sp,
+                                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
                         }
+                    }
+                }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                // Font Size / Zoom Control
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "লেখার সাইজ",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { textZoomPercent = (textZoomPercent - 10).coerceAtLeast(75) }
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { textZoomPercent = (textZoomPercent - 10).coerceAtLeast(75) }
-                            ) {
-                                Text(
-                                    text = "A-",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
                             Text(
-                                text = "${textZoomPercent.toBengaliDigits()}%",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "A-",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                             )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { textZoomPercent = (textZoomPercent + 10).coerceAtMost(175) }
+                        }
+                        Text(
+                            text = "${textZoomPercent.toBengaliDigits()}%",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { textZoomPercent = (textZoomPercent + 10).coerceAtMost(175) }
+                        ) {
+                            Text(
+                                text = "A+",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+                        if (textZoomPercent != 100) {
+                            TextButton(
+                                onClick = { textZoomPercent = 100 },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text(
-                                    text = "A+",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
+                                Text("রিসেট", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
                             }
                         }
                     }
                 }
             }
         }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when {
-                isLoadingHtml -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            CircularProgressIndicator(color = Color(0xFF10B981))
-                            Text(
-                                text = "বইটি খোলা হচ্ছে...",
-                                fontSize = 13.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+    }
+
+    // True Full-Screen Reader Surface (no bulky top bar!)
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(containerBg)
+            .statusBarsPadding()
+    ) {
+        val density = LocalDensity.current
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        val maxHeightPx = with(density) { maxHeight.toPx() }
+        val fabSizePx = with(density) { 48.dp.toPx() }
+
+        // Draggable offset for the unobtrusive floating 3-dot button (anchored at BottomEnd by default so it never covers HTML header icons)
+        var fabOffsetX by remember { mutableFloatStateOf(0f) }
+        var fabOffsetY by remember { mutableFloatStateOf(0f) }
+
+        when {
+            isLoadingHtml -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF10B981))
+                        Text(
+                            text = "বইটি খোলা হচ্ছে...",
+                            fontSize = 13.5.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
                     }
                 }
+            }
 
                 loadError != null -> {
                     Box(
@@ -707,8 +854,59 @@ fun LibraryHtmlReaderScreen(
                         },
                         modifier = Modifier
                             .fillMaxSize()
+                            .navigationBarsPadding()
                             .padding(bottom = if (showTtsControlBar) 108.dp else 0.dp)
                     )
+                }
+            }
+
+            // Sleek, unobtrusive, draggable 3-Dot Menu Floating Button (Bottom-Right so HTML top bar is 100% clear)
+            if (!showTtsControlBar) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 14.dp, bottom = 20.dp)
+                        .offset { IntOffset(fabOffsetX.roundToInt(), fabOffsetY.roundToInt()) }
+                        .pointerInput(maxWidthPx, maxHeightPx) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                val minX = -(maxWidthPx - fabSizePx - 36f).coerceAtLeast(0f)
+                                val minY = -(maxHeightPx - fabSizePx - 80f).coerceAtLeast(0f)
+                                fabOffsetX = (fabOffsetX + dragAmount.x).coerceIn(minX, 0f)
+                                fabOffsetY = (fabOffsetY + dragAmount.y).coerceIn(minY, 0f)
+                            }
+                        }
+                ) {
+                    Surface(
+                        onClick = { showReaderOptionsSheet = true },
+                        shape = CircleShape,
+                        color = Color(0xFF0F172A).copy(alpha = 0.72f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .shadow(8.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.35f))
+                            .testTag("reader_more_options_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "রিডার অপশন মেনু",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            if (ttsState.isSpeaking) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = (-8).dp, y = 8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10B981))
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -871,7 +1069,6 @@ fun LibraryHtmlReaderScreen(
                                     tint = Color(0xFFEF4444)
                                 )
                             }
-                        }
                     }
                 }
             }

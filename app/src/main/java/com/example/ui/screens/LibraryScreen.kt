@@ -16,11 +16,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -150,17 +154,13 @@ fun LibraryScreen(
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        // Top Header Bar
+        // Top Header Bar (Clean — pull down anywhere to refresh, no manual refresh button)
         LibraryTopHeader(
             navLevel = navLevel,
-            isRefreshing = state.isRefreshing,
             isOfflineSnapshot = state.isOfflineSnapshot,
-            totalOfflineSavedCount = totalOfflineSavedCount,
             isDark = isDark,
             onBack = { viewModel.navigateBack() },
-            onRefresh = { viewModel.loadLibrary(forceRefresh = true) },
-            onOpenVoiceSettings = { showVoiceSettingsDialog = true },
-            onOpenDownloads = onNavigateToDownloads
+            onOpenVoiceSettings = { showVoiceSettingsDialog = true }
         )
 
         // Breadcrumb Trail when drilled into Subject / Chapter / Files
@@ -186,8 +186,26 @@ fun LibraryScreen(
             )
         }
 
-        // Main Content Body
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        // Main Content Body with Pull-to-Refresh gesture
+        val pullRefreshState = rememberPullToRefreshState()
+        PullToRefreshBox(
+            isRefreshing = state.isRefreshing,
+            onRefresh = { viewModel.loadLibrary(forceRefresh = true) },
+            state = pullRefreshState,
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = pullRefreshState,
+                    isRefreshing = state.isRefreshing,
+                    containerColor = if (isDark) Color(0xFF112035) else Color.White,
+                    color = LibraryEmerald,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .testTag("library_pull_to_refresh")
+        ) {
             val query = state.searchQuery.trim()
             if (state.isLoading && state.index == null) {
                 LibraryLoadingView()
@@ -203,13 +221,19 @@ fun LibraryScreen(
                     }
                 }
                 if (matchedFiles.isEmpty()) {
-                    LibraryEmptyStateView(
-                        icon = Icons.Default.SearchOff,
-                        title = "কোনো বই খুঁজে পাওয়া যায়নি",
-                        subtitle = "\"$query\" নামে কোনো শ্রেণী, সাবজেক্ট, অধ্যায় বা পাঠ নেই।",
-                        actionLabel = "সার্চ মুছুন",
-                        onAction = { viewModel.updateSearchQuery("") }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        LibraryEmptyStateView(
+                            icon = Icons.Default.SearchOff,
+                            title = "কোনো বই খুঁজে পাওয়া যায়নি",
+                            subtitle = "\"$query\" নামে কোনো শ্রেণী, সাবজেক্ট, অধ্যায় বা পাঠ নেই।",
+                            actionLabel = "সার্চ মুছুন",
+                            onAction = { viewModel.updateSearchQuery("") }
+                        )
+                    }
                 } else {
                     LazyColumn(
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 120.dp),
@@ -252,16 +276,22 @@ fun LibraryScreen(
                     }
                 }
             } else if (state.index == null || state.index?.classes.isNullOrEmpty()) {
-                LibraryEmptyStateView(
-                    icon = Icons.Default.MenuBook,
-                    title = "লাইব্রেরি এখনো খালি রয়েছে",
-                    subtitle = state.errorMessage
-                        ?: "অ্যাডমিন অ্যাপ থেকে শ্রেণী, সাবজেক্ট, অধ্যায় ও HTML বই আপলোড করলে এখানে স্বয়ংক্রিয়ভাবে দেখাবে।",
-                    actionLabel = "পুনরায় লোড করুন",
-                    onAction = { viewModel.loadLibrary(forceRefresh = true) },
-                    secondaryActionLabel = if (totalOfflineSavedCount > 0) "ডাউনলোড করা বই দেখুন (${totalOfflineSavedCount.toBengaliDigits()})" else null,
-                    onSecondaryAction = onNavigateToDownloads
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    LibraryEmptyStateView(
+                        icon = Icons.Default.MenuBook,
+                        title = "লাইব্রেরি এখনো খালি রয়েছে",
+                        subtitle = state.errorMessage
+                            ?: "অ্যাডমিন অ্যাপ থেকে শ্রেণী, সাবজেক্ট, অধ্যায় ও HTML বই আপলোড করলে এখানে স্বয়ংক্রিয়ভাবে দেখাবে। নিচে টেনে রিফ্রেশ করুন।",
+                        actionLabel = "আবার চেষ্টা করুন",
+                        onAction = { viewModel.loadLibrary(forceRefresh = true) },
+                        secondaryActionLabel = if (totalOfflineSavedCount > 0) "ডাউনলোড করা বই দেখুন (${totalOfflineSavedCount.toBengaliDigits()})" else null,
+                        onSecondaryAction = onNavigateToDownloads
+                    )
+                }
             } else {
                 AnimatedContent(
                     targetState = navLevel,
@@ -503,14 +533,10 @@ fun LibraryScreen(
 @Composable
 private fun LibraryTopHeader(
     navLevel: LibraryNavLevel,
-    isRefreshing: Boolean,
     isOfflineSnapshot: Boolean,
-    totalOfflineSavedCount: Int,
     isDark: Boolean,
     onBack: () -> Unit,
-    onRefresh: () -> Unit,
-    onOpenVoiceSettings: () -> Unit,
-    onOpenDownloads: () -> Unit
+    onOpenVoiceSettings: () -> Unit
 ) {
     val headerTitle = when (navLevel) {
         is LibraryNavLevel.Classes -> "ডিজিটাল লাইব্রেরি"
@@ -519,10 +545,10 @@ private fun LibraryTopHeader(
         is LibraryNavLevel.Files -> navLevel.chapter.title
     }
     val headerSub = when (navLevel) {
-        is LibraryNavLevel.Classes -> if (isOfflineSnapshot) "অফলাইন ক্যাশ • ইন্টারনেট ছাড়াই পড়ুন" else "অনলাইন ও অফলাইন HTML বই + ভয়েস রিডার"
+        is LibraryNavLevel.Classes -> if (isOfflineSnapshot) "অফলাইন ক্যাশ • নিচে টেনে রিফ্রেশ করুন" else "ইন্টারেক্টিভ বই ও অফলাইন রিডার"
         is LibraryNavLevel.Subjects -> "সাবজেক্ট নির্বাচন করুন"
         is LibraryNavLevel.Chapters -> "${navLevel.classGroup.title} • অধ্যায়সমূহ"
-        is LibraryNavLevel.Files -> "${navLevel.subject.title} • HTML পাঠ"
+        is LibraryNavLevel.Files -> "${navLevel.subject.title} • পাঠসমূহ"
     }
 
     Row(
@@ -530,7 +556,7 @@ private fun LibraryTopHeader(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (navLevel !is LibraryNavLevel.Classes) {
             FilledTonalIconButton(
@@ -570,7 +596,7 @@ private fun LibraryTopHeader(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = headerTitle,
-                fontSize = 18.sp,
+                fontSize = 19.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
@@ -585,47 +611,32 @@ private fun LibraryTopHeader(
             )
         }
 
-        // Offline TTS Voice Settings Button
-        FilledTonalIconButton(
+        // Sleek Offline Voice / TTS Pill Button
+        Surface(
             onClick = onOpenVoiceSettings,
+            shape = RoundedCornerShape(14.dp),
+            color = LibraryEmerald.copy(alpha = if (isDark) 0.2f else 0.12f),
+            border = BorderStroke(1.dp, LibraryEmerald.copy(alpha = if (isDark) 0.4f else 0.28f)),
             modifier = Modifier
-                .size(42.dp)
-                .testTag("library_voice_settings_button"),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = LibraryEmerald.copy(alpha = if (isDark) 0.2f else 0.14f)
-            )
+                .heightIn(min = 42.dp)
+                .testTag("library_voice_settings_button")
         ) {
-            Icon(
-                imageVector = Icons.Default.RecordVoiceOver,
-                contentDescription = "অফলাইন ভয়েস সেটিংস",
-                tint = LibraryEmerald,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        // Refresh Index Button
-        FilledTonalIconButton(
-            onClick = onRefresh,
-            enabled = !isRefreshing,
-            modifier = Modifier
-                .size(42.dp)
-                .testTag("library_refresh_button"),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0).copy(alpha = 0.65f)
-            )
-        ) {
-            if (isRefreshing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = LibraryEmerald
-                )
-            } else {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "রিফ্রেশ",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
+                    imageVector = Icons.Default.RecordVoiceOver,
+                    contentDescription = "অফলাইন ভয়েস সেটিংস",
+                    tint = LibraryEmerald,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "ভয়েস",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
                 )
             }
         }
