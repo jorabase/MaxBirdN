@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
+import com.example.ui.components.QuizRichContent
 import com.example.ui.theme.isAppInDarkTheme
 import java.util.Locale
 
@@ -335,13 +336,24 @@ fun LiveCqQuestionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${formatToBengaliNumber(questionNumber)}.  $stimulusText",
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "${formatToBengaliNumber(questionNumber)}.  ",
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    QuizRichContent(
+                        text = stimulusText,
+                        textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 15.5.sp, lineHeight = 22.sp),
+                        textColor = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        maxImageHeight = 200.dp
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 
@@ -373,11 +385,11 @@ fun LiveCqQuestionCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Top
                     ) {
-                        Text(
+                        QuizRichContent(
                             text = displayQ,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 20.sp,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                            textColor = MaterialTheme.colorScheme.onSurface,
+                            maxImageHeight = 160.dp,
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))

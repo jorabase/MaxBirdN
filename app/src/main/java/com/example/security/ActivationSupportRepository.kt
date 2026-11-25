@@ -89,12 +89,13 @@ object ActivationSupportRepository {
                 .get()
                 .build()
 
-            val response = httpClient.newCall(request).execute()
-            val body = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful) {
-                Log.w(TAG, "Supabase HTTP error ${response.code}: $body")
-                return@withContext getCachedLinks(context)
+            val body = httpClient.newCall(request).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Supabase HTTP error ${response.code}: $text")
+                    return@withContext getCachedLinks(context)
+                }
+                text
             }
 
             val list = parseJsonArray(body)
@@ -115,18 +116,23 @@ object ActivationSupportRepository {
         val jsonArray = JSONArray(rawJson)
         for (i in 0 until jsonArray.length()) {
             val obj = jsonArray.optJSONObject(i) ?: continue
-            val title = obj.optString("title", "").trim()
-            val url = obj.optString("url", "").trim()
+            fun cleanStr(key: String, fallback: String = ""): String {
+                if (!obj.has(key) || obj.isNull(key)) return fallback
+                val v = obj.optString(key, "").trim()
+                return if (v.isBlank() || v.equals("null", ignoreCase = true)) fallback else v
+            }
+            val title = cleanStr("title")
+            val url = cleanStr("url")
             if (title.isBlank() || url.isBlank()) continue
 
             list.add(
                 ActivationSupportLink(
-                    id = obj.optString("id", "link_$i"),
+                    id = cleanStr("id", "link_$i"),
                     title = title,
-                    subtitle = obj.optString("subtitle", "").takeIf { it.isNotBlank() },
-                    iconType = obj.optString("icon_type", "other").lowercase().trim(),
+                    subtitle = cleanStr("subtitle").takeIf { it.isNotBlank() },
+                    iconType = cleanStr("icon_type", "other").lowercase(),
                     url = url,
-                    colorHex = obj.optString("color_hex", "").takeIf { it.isNotBlank() },
+                    colorHex = cleanStr("color_hex").takeIf { it.isNotBlank() },
                     isActive = obj.optBoolean("is_active", true),
                     priority = obj.optInt("priority", 0)
                 )

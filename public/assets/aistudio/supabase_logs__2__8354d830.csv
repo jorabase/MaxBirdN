@@ -1,0 +1,234 @@
+id,date,method,pathname,status,timestamp,level,event_message,log_type,log_count,logs,auth_user
+ab8341f6-3189-47eb-9d9b-3bc974612ff7,"""2026-11-24T05:13:32.443Z""",,,00000,2026-11-24T05:13:32.443000,success,"checkpoint complete: wrote 6 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.515 s, sync=0.004 s, total=0.563 s; sync files=3, longest=0.003 s, average=0.002 s; distance=32768 kB, estimate=32819 kB; lsn=C/80, redo lsn=C/28",postgres,null,[],null
+b655861d-3eb1-44ff-a90d-a179d7055e4c,"""2026-11-24T05:13:31.882Z""",,,00000,2026-11-24T05:13:31.882000,success,checkpoint starting: time,postgres,null,[],null
+0e1feae1-69df-4e2e-865f-3ec77a8162dc,"""2026-11-24T05:08:32.566Z""",,,00000,2026-11-24T05:08:32.566000,success,"checkpoint complete: wrote 6 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.651 s, sync=0.005 s, total=0.683 s; sync files=3, longest=0.004 s, average=0.002 s; distance=32767 kB, estimate=32824 kB; lsn=B/FE000080, redo lsn=B/FE000028",postgres,null,[],null
+bb1bc060-a08b-4201-bcfe-7637f39c8df4,"""2026-11-24T05:08:31.885Z""",,,00000,2026-11-24T05:08:31.885000,success,checkpoint starting: time,postgres,null,[],null
+b29639b8-b758-4689-b265-d2c1f8c4d4f9,"""2026-11-24T05:05:37.555Z""",,,42501,2026-11-24T05:05:37.555000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+bc8c6dcf-bd09-4591-ac19-8a8d918263e8,"""2026-11-24T05:05:37.437Z""",,,42501,2026-11-24T05:05:37.437000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+3dde0317-7a0e-411d-a568-086b125158a3,"""2026-11-24T05:05:37.066Z""",,,42501,2026-11-24T05:05:37.066000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+6d5c1571-b914-48f1-ab47-a59558b8da6b,"""2026-11-24T05:05:36.746Z""",,,42501,2026-11-24T05:05:36.746000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+914fbe1b-eaac-43f7-b22e-fa5c50b5c382,"""2026-11-24T03:33:29.526Z""",,,00000,2026-11-24T03:33:29.526000,success,"checkpoint complete: wrote 1 buffers (0.0%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.105 s, sync=0.004 s, total=0.127 s; sync files=1, longest=0.004 s, average=0.004 s; distance=16354 kB, estimate=32831 kB; lsn=B/FC0000B8, redo lsn=B/FC000060",postgres,null,[],null
+590773a0-e58f-4b9a-ac1f-1aa3895fab77,"""2026-11-24T03:33:29.401Z""",,,00000,2026-11-24T03:33:29.401000,success,checkpoint starting: time,postgres,null,[],null
+97fa0891-b532-4ac5-9bae-dff4de792eda,"""2026-11-24T03:28:30.875Z""",,,00000,2026-11-24T03:28:30.875000,success,"checkpoint complete: wrote 18 buffers (0.1%); 0 WAL file(s) added, 0 removed, 1 recycled; write=1.831 s, sync=0.005 s, total=1.870 s; sync files=11, longest=0.004 s, average=0.001 s; distance=16413 kB, estimate=34662 kB; lsn=B/FB007850, redo lsn=B/FB0077F8",postgres,null,[],null
+8d55e4ca-f217-4446-9f0c-2c60b6571a90,"""2026-11-24T03:28:29.010Z""",,,00000,2026-11-24T03:28:29.010000,success,checkpoint starting: time,postgres,null,[],null
+23c0be57-3763-4a78-8f31-cf183d4e86bc,"""2026-11-24T03:27:13.945Z""",,,00000,2026-11-24T03:27:13.945000,success,"statement: SET statement_timeout='58s'; SET idle_session_timeout='58s';
+CREATE OR REPLACE FUNCTION pg_temp.count_estimate(
+    query text
+) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    plan jsonb;
+BEGIN
+    EXECUTE 'EXPLAIN (FORMAT JSON)' || query INTO plan;
+    RETURN plan->0->'Plan'->'Plan Rows';
+END;
+$$;
+
+
+with approximation as (select reltuples as estimate from pg_class where oid = 'auth.users'::regclass)
+select 
+  case 
+    when estimate = -1 then (select pg_temp.count_estimate('select * from auth.users'))::int
+    when estimate > 50000 then estimate::int
+    else (select count(*) from auth.users)
+  end as count,
+  estimate = -1 or estimate > 50000 as is_estimate
+from approximation
+
+-- source: dashboard
+-- user: session:645d13e2-944e-4823-95e1-813e522d4f74
+-- date: 2026-11-24T03:27:13.424Z",postgres,null,[],null
+6cb9212f-4acd-4576-b765-ebd2ba275252,"""2026-11-24T03:27:13.908Z""",,,00000,2026-11-24T03:27:13.908000,success,"statement: SET statement_timeout='58s'; SET idle_session_timeout='58s';
+CREATE OR REPLACE FUNCTION pg_temp.count_estimate(
+    query text
+) RETURNS integer LANGUAGE plpgsql AS $$
+DECLARE
+    plan jsonb;
+BEGIN
+    EXECUTE 'EXPLAIN (FORMAT JSON)' || query INTO plan;
+    RETURN plan->0->'Plan'->'Plan Rows';
+END;
+$$;
+
+
+with approximation as (select reltuples as estimate from pg_class where oid = 'auth.users'::regclass)
+select 
+  case 
+    when estimate = -1 then (select pg_temp.count_estimate('select * from auth.users'))::int
+    when estimate > 50000 then estimate::int
+    else (select count(*) from auth.users)
+  end as count,
+  estimate = -1 or estimate > 50000 as is_estimate
+from approximation
+
+-- source: dashboard
+-- user: session:645d13e2-944e-4823-95e1-813e522d4f74
+-- date: 2026-11-24T03:27:13.433Z",postgres,null,[],null
+20b69990-150b-4d87-b377-5f34b89d7668,"""2026-11-24T00:38:27.550Z""",,,00000,2026-11-24T00:38:27.550000,success,"checkpoint complete: wrote 14 buffers (0.0%); 0 WAL file(s) added, 0 removed, 1 recycled; write=1.311 s, sync=0.005 s, total=1.330 s; sync files=10, longest=0.004 s, average=0.001 s; distance=16371 kB, estimate=36689 kB; lsn=B/FA000080, redo lsn=B/FA000028",postgres,null,[],null
+8732e083-f00e-45b4-ad8a-385680adf191,"""2026-11-24T00:38:26.220Z""",,,00000,2026-11-24T00:38:26.220000,success,checkpoint starting: time,postgres,null,[],null
+5f1ca4ac-8ac2-46f6-a2bc-64647064e4d4,"""2026-11-24T00:33:27.970Z""",,,00000,2026-11-24T00:33:27.970000,success,"checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.946 s, sync=0.004 s, total=0.977 s; sync files=7, longest=0.003 s, average=0.001 s; distance=16396 kB, estimate=38947 kB; lsn=B/F9006290, redo lsn=B/F9003050",postgres,null,[],null
+1861459f-a8b7-4062-aedd-1348a5576a82,"""2026-11-24T00:33:26.997Z""",,,00000,2026-11-24T00:33:26.997000,success,checkpoint starting: time,postgres,null,[],null
+873e3284-4c92-41cd-bff7-16dd8b3f911b,"""2026-11-23T20:13:23.593Z""",,,00000,2026-11-23T20:13:23.593000,success,"checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 3 recycled; write=0.106 s, sync=0.004 s, total=0.129 s; sync files=2, longest=0.003 s, average=0.002 s; distance=32768 kB, estimate=41452 kB; lsn=B/F8000080, redo lsn=B/F8000028",postgres,null,[],null
+1503bb7d-ae49-48ef-be86-b5d69601f272,"""2026-11-23T20:13:23.466Z""",,,00000,2026-11-23T20:13:23.466000,success,checkpoint starting: time,postgres,null,[],null
+7939c321-b949-4dcc-8e33-b68a81f81994,"""2026-11-23T20:08:23.611Z""",,,08006,2026-11-23T20:08:23.611000,success,could not receive data from client: Connection reset by peer,postgres,null,[],null
+59003992-f45c-48fc-8f91-07c9b66efeae,"""2026-11-23T20:08:23.213Z""",,,00000,2026-11-23T20:08:23.213000,success,"checkpoint complete: wrote 2 buffers (0.0%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.155 s, sync=0.005 s, total=0.210 s; sync files=2, longest=0.003 s, average=0.003 s; distance=32768 kB, estimate=42417 kB; lsn=B/F6000080, redo lsn=B/F6000028",postgres,null,[],null
+941406db-0ad7-4662-80fd-0337390ad9f6,"""2026-11-23T20:08:23.007Z""",,,00000,2026-11-23T20:08:23.007000,success,checkpoint starting: immediate force wait,postgres,null,[],null
+775cc465-c7ab-4d79-808d-8929e50158a3,"""2026-11-23T16:13:35.932Z""",,,00000,2026-11-23T16:13:35.932000,success,"checkpoint complete: wrote 7 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.850 s, sync=0.004 s, total=0.893 s; sync files=2, longest=0.004 s, average=0.002 s; distance=32768 kB, estimate=43490 kB; lsn=B/F4000080, redo lsn=B/F4000028",postgres,null,[],null
+546d52fa-3d0c-47c4-8c27-9ee8bba54007,"""2026-11-23T16:13:35.043Z""",,,00000,2026-11-23T16:13:35.043000,success,checkpoint starting: time,postgres,null,[],null
+83bfd6bc-6656-4f3d-b7b1-03e6e7a4fb76,"""2026-11-23T15:33:35.960Z""",,,00000,2026-11-23T15:33:35.960000,success,"checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.847 s, sync=0.002 s, total=0.873 s; sync files=3, longest=0.002 s, average=0.001 s; distance=32768 kB, estimate=44681 kB; lsn=B/F2000080, redo lsn=B/F2000028",postgres,null,[],null
+a42218f4-b047-4d20-bac1-bb3c81a10ade,"""2026-11-23T15:33:35.092Z""",,,00000,2026-11-23T15:33:35.092000,success,checkpoint starting: time,postgres,null,[],null
+59adc053-fa8b-40be-8a61-d8290ebca634,"""2026-11-23T15:03:36.648Z""",,,00000,2026-11-23T15:03:36.648000,success,"checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.802 s, sync=0.004 s, total=0.829 s; sync files=3, longest=0.003 s, average=0.002 s; distance=32768 kB, estimate=46005 kB; lsn=B/F0000080, redo lsn=B/F0000028",postgres,null,[],null
+63e07e49-8f62-4d31-8e92-6c285d3d1a00,"""2026-11-23T15:03:35.822Z""",,,00000,2026-11-23T15:03:35.822000,success,checkpoint starting: time,postgres,null,[],null
+262da86a-ad65-4b03-b120-91242bd24f4e,"""2026-11-23T14:43:38.783Z""",,,00000,2026-11-23T14:43:38.783000,success,"checkpoint complete: wrote 32 buffers (0.1%); 0 WAL file(s) added, 0 removed, 2 recycled; write=3.118 s, sync=0.005 s, total=3.145 s; sync files=5, longest=0.003 s, average=0.001 s; distance=32768 kB, estimate=47475 kB; lsn=B/EE0000B8, redo lsn=B/EE000028",postgres,null,[],null
+3b4e7a4d-a693-4da5-aa0c-5d1ec2ee61b6,"""2026-11-23T14:43:35.639Z""",,,00000,2026-11-23T14:43:35.639000,success,checkpoint starting: time,postgres,null,[],null
+21c924e0-f23c-4911-87fd-2a5b90424f67,"""2026-11-23T14:42:12.997Z""",,,42501,2026-11-23T14:42:12.997000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+5d4edc98-0910-4f72-b21c-a771262ac837,"""2026-11-23T14:42:12.958Z""",,,42501,2026-11-23T14:42:12.958000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+f7643c19-de02-4cec-b257-9fb1d939e146,"""2026-11-23T14:42:12.904Z""",,,42501,2026-11-23T14:42:12.904000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+5b0c843c-d558-4805-a08c-cf425693a7e2,"""2026-11-23T14:42:12.852Z""",,,42501,2026-11-23T14:42:12.852000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+6d449f65-956c-42b6-9a13-86f596ccc7b8,"""2026-11-23T14:41:58.207Z""",,,42501,2026-11-23T14:41:58.207000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+be08e200-56c0-484e-bc06-778c5be20124,"""2026-11-23T14:41:58.111Z""",,,42501,2026-11-23T14:41:58.111000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+bf62ff51-2d60-4b27-bd61-6b822e9924df,"""2026-11-23T14:41:57.767Z""",,,42501,2026-11-23T14:41:57.767000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+024e61f8-7a76-4d87-bea3-a3fc4da83332,"""2026-11-23T14:41:57.652Z""",,,42501,2026-11-23T14:41:57.652000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+13a88457-e8c5-464c-afab-749642304764,"""2026-11-23T14:33:39.104Z""",,,00000,2026-11-23T14:33:39.104000,success,"checkpoint complete: wrote 34 buffers (0.1%); 0 WAL file(s) added, 0 removed, 3 recycled; write=3.396 s, sync=0.003 s, total=3.430 s; sync files=5, longest=0.003 s, average=0.001 s; distance=49110 kB, estimate=49110 kB; lsn=B/EC0000B8, redo lsn=B/EC000028",postgres,null,[],null
+4a0c8c24-dbce-4bbe-92ab-1add818ae283,"""2026-11-23T14:33:35.676Z""",,,00000,2026-11-23T14:33:35.676000,success,checkpoint starting: time,postgres,null,[],null
+8a7745ad-5654-4bec-bafa-fde1ed472528,"""2026-11-23T14:08:37.363Z""",,,00000,2026-11-23T14:08:37.363000,success,"checkpoint complete: wrote 24 buffers (0.1%); 0 WAL file(s) added, 0 removed, 2 recycled; write=2.311 s, sync=0.002 s, total=2.327 s; sync files=4, longest=0.001 s, average=0.001 s; distance=32809 kB, estimate=39229 kB; lsn=B/E900A818, redo lsn=B/E900A788",postgres,null,[],null
+07d1fef2-3053-4244-bfcf-df765a37f3d5,"""2026-11-23T14:08:35.036Z""",,,00000,2026-11-23T14:08:35.036000,success,checkpoint starting: time,postgres,null,[],null
+d0cdc671-1572-4c61-8a11-a09350604129,"""2026-11-23T14:06:20.731Z""",,,42501,2026-11-23T14:06:20.731000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+86c0ff3a-dea3-4faf-b2d5-65817cded76a,"""2026-11-23T14:06:20.606Z""",,,42501,2026-11-23T14:06:20.606000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+3cdb7ae2-8915-4025-b4f8-5fa994e52262,"""2026-11-23T14:06:15.690Z""",,,42501,2026-11-23T14:06:15.690000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+7d3e9fe7-7d71-4861-947f-e7df4283c1eb,"""2026-11-23T14:06:15.518Z""",,,42501,2026-11-23T14:06:15.518000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+153675f2-0f36-427b-8af4-a2dd1632fed9,"""2026-11-23T14:06:04.860Z""",,,42501,2026-11-23T14:06:04.860000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+db48bd38-362d-46d0-a524-f4f749ea82c4,"""2026-11-23T14:06:04.699Z""",,,42501,2026-11-23T14:06:04.699000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+3ff9c461-dab0-40f9-824f-86474bd976d7,"""2026-11-23T14:06:04.567Z""",,,42501,2026-11-23T14:06:04.567000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+ffed2460-9cf0-45d4-ad11-27a06a8572bb,"""2026-11-23T14:06:04.389Z""",,,42501,2026-11-23T14:06:04.389000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+a95fb61e-dacc-4eb3-b12b-e010445f8023,"""2026-11-23T14:05:49.332Z""",,,42501,2026-11-23T14:05:49.332000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+61287bed-2c65-4205-8ce0-8f5db522a40f,"""2026-11-23T14:05:49.106Z""",,,42501,2026-11-23T14:05:49.106000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+4c71a786-18f3-4b31-b71c-68a81d8ecb12,"""2026-11-23T14:05:30.855Z""",,,42501,2026-11-23T14:05:30.855000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+3d48b707-90e7-4a15-a408-80ebf393f59a,"""2026-11-23T14:05:30.713Z""",,,42501,2026-11-23T14:05:30.713000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+32a5eae3-2da6-473e-b6c5-c1671cabfe63,"""2026-11-23T14:05:30.658Z""",,,42501,2026-11-23T14:05:30.658000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+27f3faee-7281-404c-a149-f6b1693b8ffa,"""2026-11-23T14:05:30.508Z""",,,42501,2026-11-23T14:05:30.508000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+b90c0ea8-f5e8-479d-a0eb-09a996583cea,"""2026-11-23T14:05:27.892Z""",,,42501,2026-11-23T14:05:27.892000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+9d467d26-63a2-4425-9c55-b171c2dff905,"""2026-11-23T14:05:27.736Z""",,,42501,2026-11-23T14:05:27.736000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+886bc497-942f-4126-adb1-345fbfe85f72,"""2026-11-23T14:05:07.575Z""",,,42501,2026-11-23T14:05:07.575000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+ef389cc0-e326-4a9f-8e54-0f2318777841,"""2026-11-23T14:05:07.414Z""",,,42501,2026-11-23T14:05:07.414000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+c2eff16a-7ba6-4da8-a57c-82e27a511fe7,"""2026-11-23T14:05:07.290Z""",,,42501,2026-11-23T14:05:07.290000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+90a7ddd2-32a5-4663-b36b-bac422d241eb,"""2026-11-23T14:05:07.125Z""",,,42501,2026-11-23T14:05:07.125000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+cf6f7c9b-9b93-4224-adc6-1232cbbe62e3,"""2026-11-23T14:05:03.543Z""",,,42501,2026-11-23T14:05:03.543000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+43c76957-7da3-4c29-b738-873fec959766,"""2026-11-23T14:05:03.381Z""",,,42501,2026-11-23T14:05:03.381000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+353244ca-a62a-4123-b6a6-22ececbd395f,"""2026-11-23T14:04:47.588Z""",,,42501,2026-11-23T14:04:47.588000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+6cba28f9-066e-4989-9d5c-db39ac2480ec,"""2026-11-23T14:04:47.358Z""",,,42501,2026-11-23T14:04:47.358000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+9c2ce345-ab32-42f3-844b-2543d1b0b8e2,"""2026-11-23T14:04:47.028Z""",,,42501,2026-11-23T14:04:47.028000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+416cf220-dc4c-40e6-b493-e8ddd44a130e,"""2026-11-23T14:04:46.749Z""",,,42501,2026-11-23T14:04:46.749000,error,permission denied for table devices,postgres,null,[],null
+c2cb024c-5d16-48f1-b084-d052e0610e3f,"""2026-11-23T14:04:39.804Z""",,,42501,2026-11-23T14:04:39.804000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+47b5c5c9-cd83-49a8-a737-df074634232d,"""2026-11-23T14:04:39.732Z""",,,42501,2026-11-23T14:04:39.732000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+07a9ce8d-9124-415e-ad49-ea30dd80aa9b,"""2026-11-23T14:04:39.636Z""",,,42501,2026-11-23T14:04:39.636000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+cd97a281-540e-4090-9bff-316f82ad53ac,"""2026-11-23T14:04:39.556Z""",,,42501,2026-11-23T14:04:39.556000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+9ad1907f-7713-4a11-b462-6fcac50269ac,"""2026-11-23T14:04:29.477Z""",,,42501,2026-11-23T14:04:29.477000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+3fff72b1-90b2-4317-b0fe-726ec9544134,"""2026-11-23T14:04:29.255Z""",,,42501,2026-11-23T14:04:29.255000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+3d928725-c452-4c6d-8c83-053cb5091c2f,"""2026-11-23T14:03:35.694Z""",,,00000,2026-11-23T14:03:35.694000,success,"checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.951 s, sync=0.002 s, total=0.971 s; sync files=4, longest=0.002 s, average=0.001 s; distance=32768 kB, estimate=39943 kB; lsn=B/E7000080, redo lsn=B/E7000028",postgres,null,[],null
+6fea1072-946d-4d46-a67a-6a5ed413ab4d,"""2026-11-23T14:03:34.725Z""",,,00000,2026-11-23T14:03:34.725000,success,checkpoint starting: time,postgres,null,[],null
+c8805cae-e050-4538-a127-c830158f04be,"""2026-11-23T14:02:55.453Z""",,,42501,2026-11-23T14:02:55.453000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+cdf43cbb-9d00-4715-976d-9072c43a8de4,"""2026-11-23T14:02:55.333Z""",,,42501,2026-11-23T14:02:55.333000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+1c335e87-52b2-42d8-aac4-07d67ece6509,"""2026-11-23T14:02:55.323Z""",,,42501,2026-11-23T14:02:55.323000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+36375471-b2e0-492c-afdb-2319ac489c61,"""2026-11-23T14:02:55.191Z""",,,42501,2026-11-23T14:02:55.191000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+5d67c55e-7647-4713-bc6e-1815469cecac,"""2026-11-23T14:02:33.046Z""",,,42501,2026-11-23T14:02:33.046000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+0365292f-d6c7-46e7-890c-8c8e42b30720,"""2026-11-23T14:02:32.926Z""",,,42501,2026-11-23T14:02:32.926000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+77c824ab-a96f-4c75-a74b-69e4d652615b,"""2026-11-23T14:02:28.095Z""",,,42501,2026-11-23T14:02:28.095000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+317a189a-a9d7-43ca-9d85-df1eb880c833,"""2026-11-23T14:02:27.949Z""",,,42501,2026-11-23T14:02:27.949000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+d51e46e3-6665-4dc7-809f-a0b2ea823480,"""2026-11-23T13:28:35.092Z""",,,00000,2026-11-23T13:28:35.092000,success,"checkpoint complete: wrote 11 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=1.160 s, sync=0.002 s, total=1.180 s; sync files=6, longest=0.001 s, average=0.001 s; distance=32768 kB, estimate=40740 kB; lsn=B/E5000080, redo lsn=B/E5000028",postgres,null,[],null
+18df55d3-cd2a-4170-8bdf-f43177dc1952,"""2026-11-23T13:28:33.913Z""",,,00000,2026-11-23T13:28:33.913000,success,checkpoint starting: time,postgres,null,[],null
+a743bb50-d128-448c-a522-d06b32b497ab,"""2026-11-23T13:24:23.300Z""",,,42501,2026-11-23T13:24:23.300000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+5fc7462a-d97c-435a-bd0e-6015748deb94,"""2026-11-23T13:24:23.179Z""",,,42501,2026-11-23T13:24:23.179000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+34b70f73-bf71-4357-ba33-9c0a83151f9a,"""2026-11-23T13:24:18.675Z""",,,42501,2026-11-23T13:24:18.675000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+a3a80ebc-6b93-4d20-9701-a859642dc5ee,"""2026-11-23T13:24:18.458Z""",,,42501,2026-11-23T13:24:18.458000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+e06f6ba4-bb5f-43aa-be1d-04b1960cf08f,"""2026-11-23T12:45:49.420Z""",,,42501,2026-11-23T12:45:49.420000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+47a02b99-fcbd-4f15-91b1-db1b68003d63,"""2026-11-23T12:45:49.278Z""",,,42501,2026-11-23T12:45:49.278000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+66564e65-f194-4cef-80c2-2bbe57119f4d,"""2026-11-23T12:45:23.989Z""",,,42501,2026-11-23T12:45:23.989000,error,permission denied for table devices,postgres,null,[],null
+44aa3335-e235-45ac-b64f-61ae760e7328,"""2026-11-23T12:45:04.988Z""",,,42501,2026-11-23T12:45:04.988000,error,permission denied for table devices,postgres,null,[],null
+8ae830b4-16ff-4c3f-a8d3-5e6aa3ddb9c5,"""2026-11-23T12:44:51.535Z""",,,42501,2026-11-23T12:44:51.535000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+6a48f5f6-0c9e-4fef-b995-4bc6f6d48e70,"""2026-11-23T12:44:51.389Z""",,,42501,2026-11-23T12:44:51.389000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+2a549113-b642-4f40-90ea-c6f68c035054,"""2026-11-23T12:44:16.455Z""",,,42501,2026-11-23T12:44:16.455000,error,permission denied for table devices,postgres,null,[],null
+b39f8b9c-d69c-469d-8b46-fcd2d5927df3,"""2026-11-23T12:43:59.293Z""",,,42501,2026-11-23T12:43:59.293000,error,permission denied for table devices,postgres,null,[],null
+23a74052-dfde-40cd-af39-34e366e735b5,"""2026-11-23T12:43:43.263Z""",,,42501,2026-11-23T12:43:43.263000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+805eaa22-9467-42c0-9cb9-eaeb0c1e8d59,"""2026-11-23T12:43:43.043Z""",,,42501,2026-11-23T12:43:43.043000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+294a5368-ddca-4c9e-a4d8-7a3394962d9a,"""2026-11-23T12:43:42.959Z""",,,42501,2026-11-23T12:43:42.959000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+61ea9a22-8793-4a48-904b-b1547a1d1cd9,"""2026-11-23T12:43:42.786Z""",,,42501,2026-11-23T12:43:42.786000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+80765098-0303-46f2-a0b8-9d665c28f936,"""2026-11-23T12:43:32.839Z""",,,00000,2026-11-23T12:43:32.839000,success,"checkpoint complete: wrote 6 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.699 s, sync=0.002 s, total=0.726 s; sync files=1, longest=0.002 s, average=0.002 s; distance=32768 kB, estimate=41626 kB; lsn=B/E3000080, redo lsn=B/E3000028",postgres,null,[],null
+1f8cdf79-b186-440d-81de-fde1f80ad168,"""2026-11-23T12:43:32.117Z""",,,00000,2026-11-23T12:43:32.117000,success,checkpoint starting: time,postgres,null,[],null
+192e9c4d-d1d3-4a32-b1b0-104975c8743b,"""2026-11-23T12:43:04.526Z""",,,42501,2026-11-23T12:43:04.526000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+749a093d-4322-4122-b330-4719e2e32010,"""2026-11-23T12:43:04.346Z""",,,42501,2026-11-23T12:43:04.346000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+d87cddbf-efad-471a-ad04-8a068365dbe7,"""2026-11-23T12:42:40.195Z""",,,42501,2026-11-23T12:42:40.195000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+77606278-f47f-445c-a346-bdd80472271b,"""2026-11-23T12:42:40.022Z""",,,42501,2026-11-23T12:42:40.022000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+ef3104bd-f2fc-4cae-b112-8f6a8d8b6769,"""2026-11-23T12:38:46.206Z""",,,42501,2026-11-23T12:38:46.206000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+278280f9-b34c-4dfb-9714-080276787d08,"""2026-11-23T12:38:46.158Z""",,,42501,2026-11-23T12:38:46.158000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+9a89b838-9f62-4efd-b684-b78c7b385382,"""2026-11-23T12:38:46.069Z""",,,42501,2026-11-23T12:38:46.069000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+2b316a46-834b-47b9-9690-07db5eac0ee7,"""2026-11-23T12:38:46.024Z""",,,42501,2026-11-23T12:38:46.024000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+58d972cb-314c-4feb-bdbd-8827d1adf366,"""2026-11-23T12:33:33.501Z""",,,00000,2026-11-23T12:33:33.501000,success,"checkpoint complete: wrote 11 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=1.014 s, sync=0.002 s, total=1.031 s; sync files=3, longest=0.002 s, average=0.001 s; distance=32768 kB, estimate=42610 kB; lsn=B/E1000080, redo lsn=B/E1000028",postgres,null,[],null
+b3011b46-95a0-4069-bc28-b5fdc690e41f,"""2026-11-23T12:33:32.470Z""",,,00000,2026-11-23T12:33:32.470000,success,checkpoint starting: time,postgres,null,[],null
+7d9a3245-b68d-41d9-a3dc-e93b04d4d6f3,"""2026-11-23T12:31:26.076Z""",,,42501,2026-11-23T12:31:26.076000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+5ac26a0e-659c-40c4-97c9-b4bd7f3bd078,"""2026-11-23T12:31:25.851Z""",,,42501,2026-11-23T12:31:25.851000,error,permission denied for table devices,postgres,null,[],null
+13bdf929-3d55-4e3e-add0-00e3b2c50e31,"""2026-11-23T12:31:22.937Z""",,,42501,2026-11-23T12:31:22.937000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+e5576d47-7cef-4cd2-9346-67cd32e52d7b,"""2026-11-23T12:31:22.671Z""",,,42501,2026-11-23T12:31:22.671000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+ee24c02d-b268-414b-9140-24a81ed9582b,"""2026-11-23T12:25:23.973Z""",,,42501,2026-11-23T12:25:23.973000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+267205b1-a373-4f17-b0c3-bc7775a8c1e2,"""2026-11-23T12:25:23.781Z""",,,42501,2026-11-23T12:25:23.781000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+79d4b22e-a849-4881-91df-87b606a11a08,"""2026-11-23T12:24:52.765Z""",,,42501,2026-11-23T12:24:52.765000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+36bf6df7-287a-431f-99da-b7505863a803,"""2026-11-23T12:24:52.610Z""",,,42501,2026-11-23T12:24:52.610000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+da26259e-22c2-4bda-bb99-67596d1d558a,"""2026-11-23T12:24:44.162Z""",,,42501,2026-11-23T12:24:44.162000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+387b1e7e-96cc-4382-b890-8773cd77ef1b,"""2026-11-23T12:24:44.024Z""",,,42501,2026-11-23T12:24:44.024000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+914117a7-ed0d-4028-b9ef-c7a2d092462e,"""2026-11-23T12:24:32.254Z""",,,42501,2026-11-23T12:24:32.254000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+1144502e-b990-41df-8c79-dd9252e8ca18,"""2026-11-23T12:24:32.124Z""",,,42501,2026-11-23T12:24:32.124000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+2c2b1be1-da58-4605-acb0-98be67d29c45,"""2026-11-23T12:24:32.059Z""",,,42501,2026-11-23T12:24:32.059000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+c62bb159-3ffb-45ac-9dc3-9dc28207adb6,"""2026-11-23T12:24:31.919Z""",,,42501,2026-11-23T12:24:31.919000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+742084aa-061d-45c8-8b9b-aac976f9b6d0,"""2026-11-23T12:24:15.770Z""",,,42501,2026-11-23T12:24:15.770000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+c4b79256-2179-49dc-9027-c2e344a72d99,"""2026-11-23T12:24:15.626Z""",,,42501,2026-11-23T12:24:15.626000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+fa616f15-2dd1-4fc0-9b3c-fec7eaa0b60f,"""2026-11-23T12:23:28.763Z""",,,42501,2026-11-23T12:23:28.763000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+6039eb94-0f26-48b3-87d2-836941c42409,"""2026-11-23T12:23:28.597Z""",,,42501,2026-11-23T12:23:28.597000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+c62492e8-3176-4470-baa9-6c07ce2e6ee7,"""2026-11-23T12:23:28.493Z""",,,42501,2026-11-23T12:23:28.493000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+5868f798-dedd-4c3d-a8e4-1cd67d89043b,"""2026-11-23T12:23:28.311Z""",,,42501,2026-11-23T12:23:28.311000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+29d8c9c4-59d6-4a6a-b374-79cce785f688,"""2026-11-23T12:22:33.084Z""",,,42501,2026-11-23T12:22:33.084000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+5af4d0a5-f1a0-42d7-a3d8-d0424924c619,"""2026-11-23T12:22:32.917Z""",,,42501,2026-11-23T12:22:32.917000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+6e6c5f7c-e08b-4f96-92da-c8e34413a88e,"""2026-11-23T12:21:04.509Z""",,,42501,2026-11-23T12:21:04.509000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+95ce8b1b-1964-45ab-ad06-a10bd1c27e61,"""2026-11-23T12:21:04.379Z""",,,42501,2026-11-23T12:21:04.379000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+6b19f4d9-396f-45a1-ac21-4191060f6785,"""2026-11-23T12:20:56.975Z""",,,42501,2026-11-23T12:20:56.975000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+1dff7b58-df37-458d-9b15-14fc800d906f,"""2026-11-23T12:20:56.921Z""",,,42501,2026-11-23T12:20:56.921000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+fbf22665-321f-4407-8762-063a3caec9d1,"""2026-11-23T12:20:56.849Z""",,,42501,2026-11-23T12:20:56.849000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+56f98d16-5f63-4eb9-b43f-c58b26fd22c0,"""2026-11-23T12:20:56.786Z""",,,42501,2026-11-23T12:20:56.786000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+57cd59bc-7407-4c0b-8d03-09ce805d281a,"""2026-11-23T12:13:36.033Z""",,,00000,2026-11-23T12:13:36.033000,success,"checkpoint complete: wrote 34 buffers (0.1%); 0 WAL file(s) added, 0 removed, 2 recycled; write=3.334 s, sync=0.004 s, total=3.377 s; sync files=4, longest=0.003 s, average=0.001 s; distance=32768 kB, estimate=44919 kB; lsn=B/DD0000B8, redo lsn=B/DD000028",postgres,null,[],null
+6a8d5933-5db2-4b80-9831-e2c598d202c7,"""2026-11-23T12:13:32.660Z""",,,00000,2026-11-23T12:13:32.660000,success,checkpoint starting: time,postgres,null,[],null
+b7840291-09bc-428c-8686-aaa26604baba,"""2026-11-23T12:08:33.343Z""",,,00000,2026-11-23T12:08:33.343000,success,"checkpoint complete: wrote 12 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=1.191 s, sync=0.005 s, total=1.216 s; sync files=3, longest=0.003 s, average=0.002 s; distance=32752 kB, estimate=46269 kB; lsn=B/DB000080, redo lsn=B/DB000028",postgres,null,[],null
+9a407179-ad42-496b-bf28-80876f46e016,"""2026-11-23T12:08:32.129Z""",,,00000,2026-11-23T12:08:32.129000,success,checkpoint starting: time,postgres,null,[],null
+514c5228-1a52-485f-88a3-b2699733bcf3,"""2026-11-23T12:05:45.307Z""",,,42501,2026-11-23T12:05:45.307000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+37ff8aa3-4bf9-4a0a-9925-30b96e0e4840,"""2026-11-23T12:05:45.171Z""",,,42501,2026-11-23T12:05:45.171000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+98dda756-e3af-4abf-894c-999a9c5b0960,"""2026-11-23T12:05:44.737Z""",,,42501,2026-11-23T12:05:44.737000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+868bd86d-a0a9-4eac-8909-22971ab417e4,"""2026-11-23T12:05:44.538Z""",,,42501,2026-11-23T12:05:44.538000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+62de63fe-bf8c-48a6-9d0d-af151c339eed,"""2026-11-23T11:43:32.978Z""",,,00000,2026-11-23T11:43:32.978000,success,"checkpoint complete: wrote 8 buffers (0.0%); 0 WAL file(s) added, 0 removed, 1 recycled; write=0.820 s, sync=0.005 s, total=0.856 s; sync files=3, longest=0.004 s, average=0.002 s; distance=16399 kB, estimate=47771 kB; lsn=B/D9003FB0, redo lsn=B/D9003F58",postgres,null,[],null
+96d69f7d-c5be-411c-8b6d-2a79938f8161,"""2026-11-23T11:43:32.126Z""",,,00000,2026-11-23T11:43:32.126000,success,checkpoint starting: time,postgres,null,[],null
+1dd606e9-e7e8-4c1c-bd58-23c21949797d,"""2026-11-23T10:33:32.938Z""",,,00000,2026-11-23T10:33:32.938000,success,"checkpoint complete: wrote 9 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=0.956 s, sync=0.003 s, total=0.978 s; sync files=3, longest=0.002 s, average=0.001 s; distance=32768 kB, estimate=51256 kB; lsn=B/D80000B8, redo lsn=B/D8000028",postgres,null,[],null
+1d9a48c4-fa13-4de2-a5dd-af333adafd16,"""2026-11-23T10:33:31.962Z""",,,00000,2026-11-23T10:33:31.962000,success,checkpoint starting: time,postgres,null,[],null
+c0c672e4-53ac-4a9b-963c-0c745e0d17c4,"""2026-11-23T08:08:32.466Z""",,,00000,2026-11-23T08:08:32.466000,success,"checkpoint complete: wrote 10 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=1.096 s, sync=0.005 s, total=1.130 s; sync files=6, longest=0.004 s, average=0.001 s; distance=32768 kB, estimate=53311 kB; lsn=B/D6000080, redo lsn=B/D6000028",postgres,null,[],null
+0a62da3c-3f21-43d7-81ad-245a5640807d,"""2026-11-23T08:08:31.339Z""",,,00000,2026-11-23T08:08:31.339000,success,checkpoint starting: time,postgres,null,[],null
+b4f46f06-b582-4231-bc6e-76b877ce8cd6,"""2026-11-23T08:05:33.463Z""",,,42501,2026-11-23T08:05:33.463000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+a29e8c1e-47ea-42c9-82d8-734d7c540ce8,"""2026-11-23T08:05:33.281Z""",,,42501,2026-11-23T08:05:33.281000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+0018d34b-08a5-4bb0-830d-7bb409441193,"""2026-11-23T08:03:52.740Z""",,,42501,2026-11-23T08:03:52.740000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+3244e6b2-11af-4bf0-b00e-0ac819c2c454,"""2026-11-23T08:03:52.616Z""",,,42501,2026-11-23T08:03:52.616000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+f3e2d2c3-c4a3-4bfb-973f-ef0a2bc7862d,"""2026-11-23T08:03:52.553Z""",,,42501,2026-11-23T08:03:52.553000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+f079a00f-5dc5-4c72-8979-025f8ee0f9d8,"""2026-11-23T08:03:52.425Z""",,,42501,2026-11-23T08:03:52.425000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+56216a05-7df5-49cc-a18f-bb9e7de3a2d0,"""2026-11-23T08:03:45.356Z""",,,42501,2026-11-23T08:03:45.356000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+cdfbb8b0-b3b3-4911-9d81-fa8dcbd6c7a6,"""2026-11-23T08:03:45.216Z""",,,42501,2026-11-23T08:03:45.216000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+3c371e51-cc00-4e53-9ce7-7fa9932d807e,"""2026-11-23T08:03:44.909Z""",,,42501,2026-11-23T08:03:44.909000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+481b90ff-579f-441d-ad2e-9d3d0aaae80e,"""2026-11-23T08:03:44.728Z""",,,42501,2026-11-23T08:03:44.728000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+cc17ead7-c136-4210-92f7-49c9bf373886,"""2026-11-23T06:58:34.002Z""",,,00000,2026-11-23T06:58:34.002000,success,"checkpoint complete: wrote 29 buffers (0.1%); 0 WAL file(s) added, 0 removed, 2 recycled; write=2.823 s, sync=0.004 s, total=2.846 s; sync files=5, longest=0.003 s, average=0.001 s; distance=32768 kB, estimate=55593 kB; lsn=B/D4000080, redo lsn=B/D4000028",postgres,null,[],null
+b9680d86-fb55-4661-9627-b592a2d89728,"""2026-11-23T06:58:31.156Z""",,,00000,2026-11-23T06:58:31.156000,success,checkpoint starting: time,postgres,null,[],null
+6d15f852-e934-4e46-ad8a-ecec8a30e3ca,"""2026-11-23T06:54:12.346Z""",,,42501,2026-11-23T06:54:12.346000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+2cbd5afb-0753-413d-bd9b-ab9f92fa8e85,"""2026-11-23T06:54:11.976Z""",,,42501,2026-11-23T06:54:11.976000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+934d936c-9d65-4cee-a285-2b7c6a2e4446,"""2026-11-23T06:54:04.605Z""",,,42501,2026-11-23T06:54:04.605000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+af8f3cff-dce9-4530-9d22-98748bb9c597,"""2026-11-23T06:54:04.511Z""",,,42501,2026-11-23T06:54:04.511000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+10f6f076-6b17-4caa-b003-201c59a5a9aa,"""2026-11-23T06:54:04.314Z""",,,42501,2026-11-23T06:54:04.314000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+0549d266-89a6-4e45-921a-0f975386313a,"""2026-11-23T06:54:04.183Z""",,,42501,2026-11-23T06:54:04.183000,error,permission denied for table devices,postgres,null,[],null
+71db031a-9f62-4ddd-b801-e51cf8a01692,"""2026-11-23T06:33:32.863Z""",,,00000,2026-11-23T06:33:32.863000,success,"checkpoint complete: wrote 13 buffers (0.0%); 0 WAL file(s) added, 0 removed, 2 recycled; write=1.352 s, sync=0.004 s, total=1.383 s; sync files=4, longest=0.003 s, average=0.001 s; distance=32698 kB, estimate=58129 kB; lsn=B/D2000080, redo lsn=B/D2000028",postgres,null,[],null
+8fca2fe8-5fa5-4f51-af29-7358dff64dc0,"""2026-11-23T06:33:31.483Z""",,,00000,2026-11-23T06:33:31.483000,success,checkpoint starting: time,postgres,null,[],null
+74e8ff86-7fb7-4865-ba6e-c8cdc4d836e5,"""2026-11-23T05:58:35.712Z""",,,00000,2026-11-23T05:58:35.712000,success,"checkpoint complete: wrote 36 buffers (0.1%); 0 WAL file(s) added, 0 removed, 3 recycled; write=3.716 s, sync=0.002 s, total=3.739 s; sync files=5, longest=0.002 s, average=0.001 s; distance=49221 kB, estimate=60955 kB; lsn=B/D0011810, redo lsn=B/D00117B8",postgres,null,[],null
+79e31a48-ecc2-43e1-b3e6-828828f5c812,"""2026-11-23T05:58:31.974Z""",,,00000,2026-11-23T05:58:31.974000,success,checkpoint starting: time,postgres,null,[],null
+7179e2dd-b645-48e0-9a56-bced9dec362d,"""2026-11-23T05:54:43.216Z""",,,42501,2026-11-23T05:54:43.216000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+5eacb6d1-1ced-439b-9983-94ba6aed152c,"""2026-11-23T05:54:43.108Z""",,,42501,2026-11-23T05:54:43.108000,error,permission denied for table course_access_enrollments,postgres,null,[],null
+526d6267-1a94-4c3d-8cc6-650a28848669,"""2026-11-23T05:54:42.065Z""",,,42501,2026-11-23T05:54:42.065000,error,permission denied for table course_payment_transactions,postgres,null,[],null
+b8ac4f84-494b-429e-9fa9-88b8559d2580,"""2026-11-23T05:54:41.947Z""",,,42501,2026-11-23T05:54:41.947000,error,permission denied for table course_access_enrollments,postgres,null,[],null

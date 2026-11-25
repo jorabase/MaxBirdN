@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
 import coil.compose.AsyncImage
+import com.example.ui.components.QuizRichContent
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.ui.theme.isAppInDarkTheme
@@ -218,11 +219,11 @@ fun CQExamScreen(
 
                                 if (!cq.stimulus.isNullOrBlank()) {
                                     Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
+                                    QuizRichContent(
                                         text = cq.stimulus,
-                                        fontSize = 14.5.sp,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        lineHeight = 22.sp
+                                        textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 14.5.sp, lineHeight = 22.sp),
+                                        textColor = MaterialTheme.colorScheme.onSurface,
+                                        maxImageHeight = 220.dp
                                     )
                                 }
 

@@ -435,7 +435,7 @@ object OneSignalPushManager {
             val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) return
 
-            // 1. Primary: Call Supabase RPC `sync_student_push_identity`
+            // 1. Primary: Call Supabase RPC `sync_student_push_identity` (exact 7-arg signature)
             val currentAppVersion = try { BuildConfig.VERSION_NAME.trim() } catch (_: Throwable) { "" }
             var rpcSucceeded = false
             try {
@@ -446,9 +446,7 @@ object OneSignalPushManager {
                     put("p_student_key", studentKey)
                     put("p_onesignal_player_id", oneSignalPlayerId)
                     put("p_fcm_token", fcmToken)
-                    if (currentAppVersion.isNotBlank()) {
-                        put("p_app_version", currentAppVersion)
-                    }
+                    put("p_app_version", currentAppVersion)
                 }
                 val rpcReq = Request.Builder()
                     .url("${supabaseUrl.trimEnd('/')}/rest/v1/rpc/sync_student_push_identity")
@@ -479,14 +477,15 @@ object OneSignalPushManager {
                         put("student_phone", studentPhone)
                     }
                 }
+                val encodedHash = android.net.Uri.encode(deviceHardwareHash)
                 val devReq = Request.Builder()
-                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices?device_hash=eq.$deviceHardwareHash")
+                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices?device_hash=eq.$encodedHash")
                     .addHeader("apikey", anonKey)
                     .addHeader("Authorization", "Bearer $anonKey")
                     .addHeader("Content-Type", "application/json")
                     .patch(devPatch.toString().toRequestBody("application/json".toMediaType()))
                     .build()
-                httpClient.newCall(devReq).execute().close()
+                httpClient.newCall(devReq).execute().use { /* closed safely */ }
             } catch (_: Throwable) {}
         } catch (_: Throwable) {}
     }
@@ -608,8 +607,11 @@ object OneSignalPushManager {
     }
 
     /**
-     * Dispatches admin notifications strictly via the server-side Supabase RPC `notify_admin_via_onesignal`
-     * so that the master OneSignal REST API key is never compiled into or exposed by the student APK.
+     * Admin push notifications are dispatched automatically server-side by Supabase AFTER INSERT/UPDATE
+     * triggers (`trg_devices_onesignal_notify`, `trg_course_enrollments_onesignal_notify`,
+     * `trg_course_payments_onesignal_notify`). Direct `anon` execution of `notify_admin_via_onesignal`
+     * is intentionally revoked in Supabase (`anon_can_execute = false`), so the student client does not
+     * invoke that RPC directly (preventing 401/403 permission errors).
      */
     private fun sendPushToAdminAsync(
         context: Context,
@@ -617,31 +619,7 @@ object OneSignalPushManager {
         message: String,
         data: JSONObject
     ) {
-        val appContext = context.applicationContext
-        scope.launch {
-            try {
-                fetchRemoteOneSignalConfigIfNeeded(appContext)
-                val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
-                if (supabaseUrl.isNotBlank() && anonKey.isNotBlank()) {
-                    val eventType = data.optString("event_type", "ADMIN_ALERT").ifBlank { "ADMIN_ALERT" }
-                    val rpcPayload = JSONObject().apply {
-                        put("p_title", title)
-                        put("p_message", message)
-                        put("p_event_type", eventType)
-                        put("p_extra_data", data)
-                    }
-                    val rpcReq = Request.Builder()
-                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/rpc/notify_admin_via_onesignal")
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer $anonKey")
-                        .addHeader("Content-Type", "application/json")
-                        .post(rpcPayload.toString().toRequestBody("application/json".toMediaType()))
-                        .build()
-                    httpClient.newCall(rpcReq).execute().close()
-                }
-            } catch (e: Throwable) {
-                Log.w(TAG, "sendPushToAdminAsync error: ${e.message}")
-            }
-        }
+        val eventType = data.optString("event_type", "ADMIN_ALERT").ifBlank { "ADMIN_ALERT" }
+        Log.d(TAG, "Admin notification for $eventType is handled server-side by Supabase DB triggers.")
     }
 }

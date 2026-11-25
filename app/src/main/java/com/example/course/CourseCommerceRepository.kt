@@ -395,6 +395,12 @@ object CourseCommerceRepository {
         }
     }
 
+    private fun JSONObject.optCleanString(key: String, fallback: String = ""): String {
+        if (!has(key) || isNull(key)) return fallback
+        val v = optString(key, "").trim()
+        return if (v.isBlank() || v.equals("null", ignoreCase = true)) fallback else v
+    }
+
     private fun parseIsoTimestampMillis(iso: String?): Long? {
         if (iso.isNullOrBlank() || iso.equals("null", ignoreCase = true)) return null
         val formats = listOf(
@@ -532,17 +538,17 @@ object CourseCommerceRepository {
     }
 
     private fun parseEnrollmentItem(obj: JSONObject): CourseCommerceItemState? {
-        val progId = obj.optString("program_id", "").ifBlank { obj.optString("course_id", "") }.trim()
+        val progId = obj.optCleanString("program_id").ifBlank { obj.optCleanString("course_id") }
         if (progId.isBlank()) return null
 
-        val rawStatus = obj.optString("status", "")
-            .ifBlank { obj.optString("access_status", "REQUESTED") }
-            .trim()
+        val rawStatus = obj.optCleanString("status")
+            .ifBlank { obj.optCleanString("access_status", "REQUESTED") }
             .uppercase()
         val totalPrice = obj.optDouble("total_price", obj.optDouble("total_fee", 0.0)).let { if (it.isNaN()) 0.0 else it }
         val paidAmount = obj.optDouble("paid_amount", 0.0).let { if (it.isNaN()) 0.0 else it }
         val dueAmount = obj.optDouble("due_amount", (totalPrice - paidAmount).coerceAtLeast(0.0)).let { if (it.isNaN()) 0.0 else it }
-        val rawPlansAny = obj.opt("installment_plans_json") ?: obj.opt("installment_plans")
+        val rawPlansAny = obj.opt("installment_plans_json")?.takeIf { it != JSONObject.NULL }
+            ?: obj.opt("installment_plans")?.takeIf { it != JSONObject.NULL }
         val hasMultiPlanInJson = runCatching {
             val arr = when (rawPlansAny) {
                 is JSONArray -> rawPlansAny
@@ -568,33 +574,29 @@ object CourseCommerceRepository {
             obj.has("installment_enabled") && !obj.optBoolean("installment_enabled", false) && !obj.optBoolean("allow_installments", false) -> false
             else -> obj.optBoolean("allow_installments", false)
         }
-        val nextDueIso = (
-            obj.optString("next_due_date", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-                ?: obj.optString("next_installment_due_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-        )
+        val nextDueIso = obj.optCleanString("next_due_date").ifBlank {
+            obj.optCleanString("next_installment_due_at")
+        }.takeIf { it.isNotBlank() }
         val nextDueMillis = parseIsoTimestampMillis(nextDueIso)
 
-        // Parse Free Trial fields configured by Admin App
+        // Parse Free Trial fields strictly matching live `course_access_enrollments` columns
         val rawTrialDays = obj.optInt(
             "trial_days",
-            obj.optInt("trial_days_granted", obj.optInt("free_trial_days", 0))
+            obj.optInt("trial_days_granted", 0)
         ).coerceAtLeast(0)
-        val rawTrialHours = obj.optInt("trial_hours", obj.optInt("free_trial_hours", 0)).coerceAtLeast(0)
-        val trialStartedIso = obj.optString("trial_started_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-        val trialEndsIso = (
-            obj.optString("trial_ends_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-                ?: obj.optString("trial_expires_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-                ?: obj.optString("trial_end_date", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-        )
+        val rawTrialHours = obj.optInt("trial_hours", 0).coerceAtLeast(0)
+        val trialStartedIso = obj.optCleanString("trial_started_at").takeIf { it.isNotBlank() }
+        val trialEndsIso = obj.optCleanString("trial_ends_at").ifBlank {
+            obj.optCleanString("trial_expires_at")
+        }.takeIf { it.isNotBlank() }
         val trialEndsMillis = parseIsoTimestampMillis(trialEndsIso)
         val nowTrustedMs = currentTrustedTimeMillis()
         val trialEnabled = when {
-            obj.has("trial_enabled") && obj.optBoolean("trial_enabled", false) -> true
-            obj.has("allow_free_trial") && obj.optBoolean("allow_free_trial", false) -> true
+            obj.has("trial_enabled") && !obj.isNull("trial_enabled") && obj.optBoolean("trial_enabled", false) -> true
             rawStatus == "TRIAL_ACTIVE" -> true
             trialEndsMillis != null && nowTrustedMs < trialEndsMillis -> true
             rawTrialDays > 0 || rawTrialHours > 0 -> true
-            else -> obj.optBoolean("trial_enabled", obj.optBoolean("allow_free_trial", false))
+            else -> obj.optBoolean("trial_enabled", false)
         }
         val effectiveTrialDays = if (trialEnabled && rawTrialDays == 0 && rawTrialHours == 0) 1 else rawTrialDays
         val isTrialUsed = obj.optBoolean("is_trial_used", false) ||
@@ -603,9 +605,9 @@ object CourseCommerceRepository {
             rawStatus == "TRIAL_EXPIRED" ||
             (trialEndsMillis != null && nowTrustedMs >= trialEndsMillis)
 
-        val requestedIso = obj.optString("requested_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-        val approvedIso = obj.optString("approved_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
-        val unlockedIso = obj.optString("unlocked_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) }
+        val requestedIso = obj.optCleanString("requested_at").takeIf { it.isNotBlank() }
+        val approvedIso = obj.optCleanString("approved_at").takeIf { it.isNotBlank() }
+        val unlockedIso = obj.optCleanString("unlocked_at").takeIf { it.isNotBlank() }
         val requestedMillis = parseIsoTimestampMillis(requestedIso)
         val approvedMillis = parseIsoTimestampMillis(approvedIso)
         val unlockedMillis = parseIsoTimestampMillis(unlockedIso)
@@ -644,7 +646,7 @@ object CourseCommerceRepository {
             }
             "PAYMENT_PENDING", "PENDING_VERIFICATION" -> CourseAccessState.PAYMENT_PENDING
             "PAYMENT_REJECTED", "REJECTED" -> CourseAccessState.PAYMENT_REJECTED
-            "ACTIVE" -> {
+            "ACTIVE", "INSTALLMENT_ACTIVE", "PARTIAL_PAID" -> {
                 if (paidAmount <= 0.0 && trialEndsMillis != null && nowTrustedMs >= trialEndsMillis) {
                     CourseAccessState.APPROVED_TO_BUY
                 } else if (paidAmount > 0.0 && dueAmount > 0.0 && nextDueMillis != null && nowTrustedMs > nextDueMillis) {
@@ -660,7 +662,7 @@ object CourseCommerceRepository {
 
         val plans = parseInstallmentPlans(rawPlansAny, totalPrice, allowInst)
         val totalInst = obj.optInt("total_installments", 1).coerceAtLeast(1)
-        val completedInst = obj.optInt("completed_installments", obj.optInt("paid_installments", 0)).coerceAtLeast(0)
+        val completedInst = obj.optInt("completed_installments", 0).coerceAtLeast(0)
         val intervalDays = obj.optInt("installment_interval_days", 7).coerceAtLeast(1)
         val remainingInst = (totalInst - completedInst).coerceAtLeast(1)
         val nextInstAmt = obj.optDouble("next_installment_amount", 0.0).let {
@@ -670,31 +672,31 @@ object CourseCommerceRepository {
         }
 
         return CourseCommerceItemState(
-            enrollmentId = obj.optString("id", ""),
+            enrollmentId = obj.optCleanString("id"),
             programId = progId,
-            programTitle = obj.optString("program_title", "").ifBlank { obj.optString("course_title", "") },
+            programTitle = obj.optCleanString("program_title").ifBlank { obj.optCleanString("course_title") },
             accessState = mappedState,
             totalPrice = totalPrice,
             paidAmount = paidAmount,
             dueAmount = dueAmount,
             allowInstallments = allowInst,
             installmentPlans = plans,
-            activePlanId = obj.optString("active_plan_id", "").ifBlank { obj.optString("selected_plan_id", "") },
-            activePlanTitle = obj.optString("active_plan_title", "").ifBlank { obj.optString("selected_plan_title", "") },
+            activePlanId = obj.optCleanString("active_plan_id").ifBlank { obj.optCleanString("selected_plan_id") },
+            activePlanTitle = obj.optCleanString("active_plan_title").ifBlank { obj.optCleanString("selected_plan_title") },
             totalInstallments = totalInst,
             completedInstallments = completedInst,
             installmentIntervalDays = intervalDays,
             nextInstallmentAmount = nextInstAmt,
             nextDueDateIso = nextDueIso,
             nextDueDateMillis = nextDueMillis,
-            lastTransactionId = obj.optString("last_transaction_id", ""),
+            lastTransactionId = obj.optCleanString("last_transaction_id"),
             lastPaymentAmount = obj.optDouble("last_payment_amount", 0.0).let { if (it.isNaN()) 0.0 else it },
-            lastSenderMobile = obj.optString("last_sender_mobile", ""),
-            lastPaymentMethod = obj.optString("last_payment_method", "bKash"),
-            pendingInstallmentTxId = obj.optString("pending_installment_tx_id", "").takeIf { !it.equals("null", true) } ?: "",
+            lastSenderMobile = obj.optCleanString("last_sender_mobile"),
+            lastPaymentMethod = obj.optCleanString("last_payment_method", "bKash"),
+            pendingInstallmentTxId = obj.optCleanString("pending_installment_tx_id"),
             pendingInstallmentAmount = obj.optDouble("pending_installment_amount", 0.0).let { if (it.isNaN()) 0.0 else it },
-            rejectionReason = obj.optString("rejection_reason", "").takeIf { !it.equals("null", true) } ?: "",
-            adminNote = obj.optString("admin_note", "").takeIf { !it.equals("null", true) } ?: "",
+            rejectionReason = obj.optCleanString("rejection_reason"),
+            adminNote = obj.optCleanString("admin_note"),
             trialEnabled = trialEnabled,
             trialDays = effectiveTrialDays,
             trialHours = rawTrialHours,
@@ -825,23 +827,19 @@ object CourseCommerceRepository {
         val enabledMethods = parseDynamicPaymentMethods(settingsObj, separateMethodsArr)
 
         val settings = if (settingsObj != null) {
-            val rawBkash = settingsObj.optString("bkash_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
-            val rawNagad = settingsObj.optString("nagad_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
-            val rawRocket = settingsObj.optString("rocket_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
-            val rawUpay = settingsObj.optString("upay_number", "").trim().takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawBkash = settingsObj.optCleanString("bkash_number").takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawNagad = settingsObj.optCleanString("nagad_number").takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawRocket = settingsObj.optCleanString("rocket_number").takeIf { isRealPaymentNumber(it) } ?: ""
+            val rawUpay = settingsObj.optCleanString("upay_number").takeIf { isRealPaymentNumber(it) } ?: ""
+            val resolvedInstruction = settingsObj.optCleanString("payment_instruction_bn")
+                .ifBlank { settingsObj.optCleanString("payment_instructions_bn") }
+                .ifBlank { "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।" }
             AdminPaymentSettings(
                 bkashNumber = rawBkash,
                 nagadNumber = rawNagad,
                 rocketNumber = rawRocket,
                 upayNumber = rawUpay,
-                instructionBn = settingsObj.optString(
-                    "payment_instruction_bn",
-                    settingsObj.optString(
-                        "payment_instructions_bn",
-                        "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।"
-                    )
-                ).takeIf { !it.equals("null", true) && it.isNotBlank() }
-                    ?: "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।",
+                instructionBn = resolvedInstruction,
                 enabledMethods = enabledMethods
             )
         } else {
@@ -1091,11 +1089,12 @@ object CourseCommerceRepository {
                         .addHeader("Authorization", "Bearer $anonKey")
                         .get()
                         .build()
-                    val settingsResp = httpClient.newCall(settingsReq).execute()
-                    if (settingsResp.isSuccessful) {
-                        val arr = JSONArray(settingsResp.body?.string() ?: "[]")
-                        if (arr.length() > 0) {
-                            targetJson.put("payment_settings", arr.getJSONObject(0))
+                    httpClient.newCall(settingsReq).execute().use { settingsResp ->
+                        if (settingsResp.isSuccessful) {
+                            val arr = JSONArray(settingsResp.body?.string() ?: "[]")
+                            if (arr.length() > 0) {
+                                targetJson.put("payment_settings", arr.getJSONObject(0))
+                            }
                         }
                     }
                 } catch (_: Throwable) {}
@@ -1111,9 +1110,10 @@ object CourseCommerceRepository {
             val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
             val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
             var restFetchSucceeded = false
+            var rpcCallSucceeded = false
+            var rpcNotFound = false
 
-            // 1. Call exact Supabase RPC `get_student_course_commerce_status(p_device_id, p_shikho_account_key)` first
-            //    This RPC also auto-evaluates expired trials and overdue installments on the server!
+            // 1. Call exact Supabase SECURITY DEFINER RPC `get_student_course_commerce_status` (4-arg live signature)
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_student_course_commerce_status"
             val candidateRpcBodies = listOf(
                 JSONObject().apply {
@@ -1121,14 +1121,6 @@ object CourseCommerceRepository {
                     put("p_shikho_account_key", account.accountKey)
                     put("p_shikho_user_id", account.userId.ifBlank { account.accountKey })
                     put("p_user_phone", account.normPhone)
-                },
-                JSONObject().apply {
-                    put("p_device_id", deviceHardwareHash)
-                    put("p_shikho_account_key", account.accountKey)
-                },
-                JSONObject().apply {
-                    put("p_device_id", account.accountKey)
-                    put("p_shikho_account_key", account.accountKey)
                 }
             )
 
@@ -1139,7 +1131,6 @@ object CourseCommerceRepository {
 
                 val rStat = item.optString("status", "").ifBlank { item.optString("access_status", "") }.trim().uppercase()
                 val rPaid = item.optDouble("paid_amount", 0.0).let { if (it.isNaN()) 0.0 else it }
-                val rPrice = item.optDouble("total_price", 1000.0).let { if (it.isNaN()) 1000.0 else it }
                 val rReqMs = parseIsoTimestampMillis(item.optString("requested_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) })
                 val rAppMs = parseIsoTimestampMillis(item.optString("approved_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) })
                 val rUnlMs = parseIsoTimestampMillis(item.optString("unlocked_at", "").takeIf { it.isNotBlank() && !it.equals("null", true) })
@@ -1164,43 +1155,6 @@ object CourseCommerceRepository {
                 }
 
                 matchedEnrollments.put(item)
-
-                val rowPhone = item.optString("student_phone", "").trim()
-                val rowAcctKey = item.optString("shikho_account_key", "").trim()
-                val rowDevHash = item.optString("device_hash", "").trim()
-                if (rowId.isNotBlank() && account.normPhone.isNotBlank() &&
-                    (needsStatusResetToRequested || rowPhone != account.normPhone || rowAcctKey != account.accountKey || rowDevHash != deviceHardwareHash)
-                ) {
-                    runCatching {
-                        val healJson = JSONObject().apply {
-                            put("student_phone", account.normPhone)
-                            put("user_phone", account.normPhone)
-                            put("shikho_account_key", account.accountKey)
-                            put("student_key", account.accountKey)
-                            put("shikho_user_id", account.userId.ifBlank { account.accountKey })
-                            put("device_hash", deviceHardwareHash)
-                            put("display_device_id", displayDeviceId)
-                            if (needsStatusResetToRequested) {
-                                put("status", "REQUESTED")
-                                put("access_status", "REQUESTED")
-                                put("approved_at", JSONObject.NULL)
-                                put("unlocked_at", JSONObject.NULL)
-                                put("trial_enabled", false)
-                                put("trial_started_at", JSONObject.NULL)
-                                put("trial_ends_at", JSONObject.NULL)
-                                put("trial_expires_at", JSONObject.NULL)
-                            }
-                        }
-                        val healReq = Request.Builder()
-                            .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$rowId")
-                            .addHeader("apikey", anonKey)
-                            .addHeader("Authorization", "Bearer $anonKey")
-                            .addHeader("Content-Type", "application/json")
-                            .patch(healJson.toString().toRequestBody("application/json".toMediaType()))
-                            .build()
-                        httpClient.newCall(healReq).execute().close()
-                    }
-                }
             }
 
             for (rpcBody in candidateRpcBodies) {
@@ -1213,26 +1167,141 @@ object CourseCommerceRepository {
                         .post(rpcBody.toString().toRequestBody("application/json".toMediaType()))
                         .build()
 
-                    val resp = httpClient.newCall(req).execute()
-                    if (resp.isSuccessful) {
-                        val bodyStr = resp.body?.string() ?: ""
-                        if (bodyStr.trim().startsWith("{")) {
-                            val json = JSONObject(bodyStr)
-                            if (!rootJson.has("payment_settings") && json.optJSONObject("payment_settings") != null) {
-                                rootJson.put("payment_settings", json.optJSONObject("payment_settings"))
-                            }
-                            val enrArr = json.optJSONArray("enrollments")
-                            if (enrArr != null) {
+                    httpClient.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val bodyStr = resp.body?.string() ?: ""
+                            if (bodyStr.trim().startsWith("{")) {
+                                val json = JSONObject(bodyStr)
+                                rpcCallSucceeded = true
                                 restFetchSucceeded = true
-                                for (i in 0 until enrArr.length()) {
-                                    val item = enrArr.optJSONObject(i) ?: continue
+                                if (!rootJson.has("payment_settings") && json.optJSONObject("payment_settings") != null) {
+                                    rootJson.put("payment_settings", json.optJSONObject("payment_settings"))
+                                }
+                                val enrArr = json.optJSONArray("enrollments")
+                                if (enrArr != null) {
+                                    for (i in 0 until enrArr.length()) {
+                                        val item = enrArr.optJSONObject(i) ?: continue
+                                        sanitizeAndAddEnrollmentRow(item)
+                                    }
+                                }
+                                val txArr = json.optJSONArray("transactions")
+                                if (txArr != null) {
+                                    for (i in 0 until txArr.length()) {
+                                        val txItem = txArr.optJSONObject(i) ?: continue
+                                        val enrId = txItem.optString("enrollment_id", "").trim()
+                                        if (doesRowBelongToStudent(txItem, account) || (enrId.isNotBlank() && enrId in seenEnrollmentIds)) {
+                                            val txRowId = txItem.optString("id", "").trim()
+                                            if (txRowId.isBlank() || seenTxIds.add(txRowId)) {
+                                                matchedTransactions.put(txItem)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (resp.code == 404) {
+                            rpcNotFound = true
+                        }
+                    }
+                    if (rpcCallSucceeded) break
+                } catch (_: Throwable) {}
+            }
+
+            // 2. Legacy Fallback ONLY when RPC function does not exist on server (HTTP 404).
+            //    Never hit locked tables directly under Zero-Trust RLS (prevents 401 / 42501 permission denied logs).
+            if (!rpcCallSucceeded && rpcNotFound) {
+                val orClauses = mutableListOf<String>()
+                if (deviceHardwareHash.isNotBlank()) {
+                    val encHash = android.net.Uri.encode(deviceHardwareHash)
+                    orClauses.add("device_id.eq.$encHash")
+                    orClauses.add("device_hash.eq.$encHash")
+                }
+                if (displayDeviceId.isNotBlank()) {
+                    val encDisplay = android.net.Uri.encode(displayDeviceId)
+                    orClauses.add("display_device_id.eq.$encDisplay")
+                }
+                if (account.normPhone.isNotBlank()) {
+                    val encPhone = android.net.Uri.encode(account.normPhone)
+                    orClauses.add("student_phone.eq.$encPhone")
+                    orClauses.add("user_phone.eq.$encPhone")
+                    orClauses.add("student_key.eq.$encPhone")
+                    orClauses.add("shikho_account_key.eq.$encPhone")
+                    orClauses.add("device_id.eq.$encPhone")
+                }
+                if (account.accountKey.isNotBlank()) {
+                    val encKey = android.net.Uri.encode(account.accountKey)
+                    orClauses.add("shikho_account_key.eq.$encKey")
+                    orClauses.add("student_key.eq.$encKey")
+                    orClauses.add("device_id.eq.$encKey")
+                }
+                if (account.userId.isNotBlank()) {
+                    val encUid = android.net.Uri.encode(account.userId)
+                    orClauses.add("shikho_user_id.eq.$encUid")
+                    orClauses.add("shikho_account_key.eq.$encUid")
+                }
+                val studentOrFilter = if (orClauses.isNotEmpty()) {
+                    "&or=(${orClauses.distinct().joinToString(",")})"
+                } else ""
+
+                if (studentOrFilter.isNotEmpty()) {
+                    try {
+                        val enrUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?select=*${studentOrFilter}&order=updated_at.desc&limit=50"
+                        val enrReq = Request.Builder()
+                            .url(enrUrl)
+                            .addHeader("apikey", anonKey)
+                            .addHeader("Authorization", "Bearer $anonKey")
+                            .get()
+                            .build()
+                        httpClient.newCall(enrReq).execute().use { enrResp ->
+                            if (enrResp.isSuccessful) {
+                                restFetchSucceeded = true
+                                val rawArr = JSONArray(enrResp.body?.string() ?: "[]")
+                                for (i in 0 until rawArr.length()) {
+                                    val item = rawArr.optJSONObject(i) ?: continue
                                     sanitizeAndAddEnrollmentRow(item)
                                 }
                             }
-                            val txArr = json.optJSONArray("transactions")
-                            if (txArr != null) {
-                                for (i in 0 until txArr.length()) {
-                                    val txItem = txArr.optJSONObject(i) ?: continue
+                        }
+                    } catch (_: Throwable) {}
+
+                    val txOrClauses = mutableListOf<String>()
+                    if (deviceHardwareHash.isNotBlank()) {
+                        val encHash = android.net.Uri.encode(deviceHardwareHash)
+                        txOrClauses.add("device_id.eq.$encHash")
+                        txOrClauses.add("device_hash.eq.$encHash")
+                    }
+                    if (account.normPhone.isNotBlank()) {
+                        val encPhone = android.net.Uri.encode(account.normPhone)
+                        txOrClauses.add("user_phone.eq.$encPhone")
+                        txOrClauses.add("student_phone.eq.$encPhone")
+                        txOrClauses.add("shikho_account_key.eq.$encPhone")
+                        txOrClauses.add("device_id.eq.$encPhone")
+                    }
+                    if (account.accountKey.isNotBlank()) {
+                        val encKey = android.net.Uri.encode(account.accountKey)
+                        txOrClauses.add("shikho_account_key.eq.$encKey")
+                        txOrClauses.add("device_id.eq.$encKey")
+                    }
+                    if (account.userId.isNotBlank()) {
+                        val encUid = android.net.Uri.encode(account.userId)
+                        txOrClauses.add("shikho_user_id.eq.$encUid")
+                    }
+                    val txOrFilter = if (txOrClauses.isNotEmpty()) {
+                        "&or=(${txOrClauses.distinct().joinToString(",")})"
+                    } else ""
+
+                    try {
+                        val txUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_transactions?select=*${txOrFilter}&order=id.desc&limit=50"
+                        val txReq = Request.Builder()
+                            .url(txUrl)
+                            .addHeader("apikey", anonKey)
+                            .addHeader("Authorization", "Bearer $anonKey")
+                            .get()
+                            .build()
+                        httpClient.newCall(txReq).execute().use { txResp ->
+                            if (txResp.isSuccessful) {
+                                val rawTxArr = JSONArray(txResp.body?.string() ?: "[]")
+                                for (i in 0 until rawTxArr.length()) {
+                                    val txItem = rawTxArr.optJSONObject(i) ?: continue
                                     val enrId = txItem.optString("enrollment_id", "").trim()
                                     if (doesRowBelongToStudent(txItem, account) || (enrId.isNotBlank() && enrId in seenEnrollmentIds)) {
                                         val txRowId = txItem.optString("id", "").trim()
@@ -1242,105 +1311,9 @@ object CourseCommerceRepository {
                                     }
                                 }
                             }
-                            if (matchedEnrollments.length() > 0) break
                         }
-                    }
-                } catch (_: Throwable) {}
-            }
-
-            // Build a strict student-scoped PostgREST `or=(...)` filter so we NEVER fetch all students' rows
-            val orClauses = mutableListOf<String>()
-            if (deviceHardwareHash.isNotBlank()) {
-                orClauses.add("device_id.eq.$deviceHardwareHash")
-                orClauses.add("device_hash.eq.$deviceHardwareHash")
-            }
-            if (displayDeviceId.isNotBlank()) {
-                orClauses.add("display_device_id.eq.$displayDeviceId")
-            }
-            if (account.normPhone.isNotBlank()) {
-                orClauses.add("student_phone.eq.${account.normPhone}")
-                orClauses.add("user_phone.eq.${account.normPhone}")
-                orClauses.add("shikho_account_key.eq.${account.normPhone}")
-                orClauses.add("device_id.eq.${account.normPhone}")
-            }
-            if (account.accountKey.isNotBlank()) {
-                orClauses.add("shikho_account_key.eq.${account.accountKey}")
-                orClauses.add("device_id.eq.${account.accountKey}")
-            }
-            if (account.userId.isNotBlank()) {
-                orClauses.add("shikho_user_id.eq.${account.userId}")
-                orClauses.add("shikho_account_key.eq.${account.userId}")
-            }
-            val studentOrFilter = if (orClauses.isNotEmpty()) {
-                "&or=(${orClauses.distinct().joinToString(",")})"
-            } else ""
-
-            // 2. Scoped REST Query on `course_access_enrollments` & `course_payment_transactions`
-            // Matches strictly by this student's phone number (`01XXXXXXXXX`), `shikho_user_id`, and `device_hash`
-            if (studentOrFilter.isNotEmpty()) {
-                try {
-                    val enrUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?select=*${studentOrFilter}&order=updated_at.desc&limit=50"
-                    val enrReq = Request.Builder()
-                        .url(enrUrl)
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer $anonKey")
-                        .get()
-                        .build()
-                    val enrResp = httpClient.newCall(enrReq).execute()
-                    if (enrResp.isSuccessful) {
-                        restFetchSucceeded = true
-                        val rawArr = JSONArray(enrResp.body?.string() ?: "[]")
-                        for (i in 0 until rawArr.length()) {
-                            val item = rawArr.optJSONObject(i) ?: continue
-                            sanitizeAndAddEnrollmentRow(item)
-                        }
-                    }
-                } catch (_: Throwable) {}
-
-                val txOrClauses = mutableListOf<String>()
-                if (deviceHardwareHash.isNotBlank()) {
-                    txOrClauses.add("device_id.eq.$deviceHardwareHash")
-                    txOrClauses.add("device_hash.eq.$deviceHardwareHash")
+                    } catch (_: Throwable) {}
                 }
-                if (account.normPhone.isNotBlank()) {
-                    txOrClauses.add("user_phone.eq.${account.normPhone}")
-                    txOrClauses.add("shikho_account_key.eq.${account.normPhone}")
-                    txOrClauses.add("device_id.eq.${account.normPhone}")
-                }
-                if (account.accountKey.isNotBlank()) {
-                    txOrClauses.add("shikho_account_key.eq.${account.accountKey}")
-                    txOrClauses.add("device_id.eq.${account.accountKey}")
-                }
-                if (account.userId.isNotBlank()) {
-                    txOrClauses.add("shikho_user_id.eq.${account.userId}")
-                }
-                val txOrFilter = if (txOrClauses.isNotEmpty()) {
-                    "&or=(${txOrClauses.distinct().joinToString(",")})"
-                } else ""
-
-                try {
-                    val txUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_transactions?select=*${txOrFilter}&order=id.desc&limit=50"
-                    val txReq = Request.Builder()
-                        .url(txUrl)
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer $anonKey")
-                        .get()
-                        .build()
-                    val txResp = httpClient.newCall(txReq).execute()
-                    if (txResp.isSuccessful) {
-                        val rawTxArr = JSONArray(txResp.body?.string() ?: "[]")
-                        for (i in 0 until rawTxArr.length()) {
-                            val txItem = rawTxArr.optJSONObject(i) ?: continue
-                            val enrId = txItem.optString("enrollment_id", "").trim()
-                            if (doesRowBelongToStudent(txItem, account) || (enrId.isNotBlank() && enrId in seenEnrollmentIds)) {
-                                val txRowId = txItem.optString("id", "").trim()
-                                if (txRowId.isBlank() || seenTxIds.add(txRowId)) {
-                                    matchedTransactions.put(txItem)
-                                }
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {}
             }
 
             if (restFetchSucceeded) {
@@ -1370,21 +1343,25 @@ object CourseCommerceRepository {
         return try {
             val orClauses = mutableListOf<String>()
             if (account.normPhone.isNotBlank()) {
-                orClauses.add("student_phone.eq.${account.normPhone}")
-                orClauses.add("user_phone.eq.${account.normPhone}")
-                orClauses.add("shikho_account_key.eq.${account.normPhone}")
-                orClauses.add("device_id.eq.${account.normPhone}")
+                val encPhone = android.net.Uri.encode(account.normPhone)
+                orClauses.add("student_phone.eq.$encPhone")
+                orClauses.add("user_phone.eq.$encPhone")
+                orClauses.add("shikho_account_key.eq.$encPhone")
+                orClauses.add("device_id.eq.$encPhone")
             }
             if (account.accountKey.isNotBlank()) {
-                orClauses.add("shikho_account_key.eq.${account.accountKey}")
-                orClauses.add("device_id.eq.${account.accountKey}")
+                val encKey = android.net.Uri.encode(account.accountKey)
+                orClauses.add("shikho_account_key.eq.$encKey")
+                orClauses.add("device_id.eq.$encKey")
             }
             if (account.userId.isNotBlank()) {
-                orClauses.add("shikho_user_id.eq.${account.userId}")
-                orClauses.add("shikho_account_key.eq.${account.userId}")
+                val encUid = android.net.Uri.encode(account.userId)
+                orClauses.add("shikho_user_id.eq.$encUid")
+                orClauses.add("shikho_account_key.eq.$encUid")
             }
             val filterPart = if (orClauses.isNotEmpty()) "&or=(${orClauses.distinct().joinToString(",")})" else ""
-            val url = "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?program_id=eq.$programId${filterPart}&select=*&order=updated_at.desc&limit=10"
+            val encProgramId = android.net.Uri.encode(programId)
+            val url = "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?program_id=eq.$encProgramId${filterPart}&select=*&order=updated_at.desc&limit=10"
             val req = Request.Builder()
                 .url(url)
                 .addHeader("apikey", anonKey)
@@ -1442,88 +1419,7 @@ object CourseCommerceRepository {
                 timeZone = TimeZone.getTimeZone("UTC")
             }.format(Date())
 
-            // Helper to strictly force the enrollment row in Supabase to `REQUESTED` (pending Admin approval)
-            // so an old `ACTIVE` row on the same device_hash can NEVER auto-unlock the course!
-            fun enforceStrictRequestedRowOnServer(targetRowId: String? = null): Boolean {
-                val strictResetObj = JSONObject().apply {
-                    put("device_id", deviceHardwareHash)
-                    put("device_hash", deviceHardwareHash)
-                    put("display_device_id", displayDeviceId)
-                    put("shikho_account_key", accountKey)
-                    put("student_key", accountKey)
-                    put("shikho_user_id", userId)
-                    put("student_name", studentName)
-                    put("student_phone", normPhone)
-                    put("user_phone", normPhone)
-                    if (oneSignalPlayerId.isNotBlank()) put("onesignal_player_id", oneSignalPlayerId)
-                    put("student_class", classCode ?: "")
-                    put("student_group", groupCode ?: "")
-                    put("program_title", programTitle)
-                    put("class_code", classCode ?: "")
-                    put("group_code", groupCode ?: "")
-                    put("batch_id", batchId ?: "")
-                    put("banner_url", bannerUrl ?: "")
-                    put("status", "REQUESTED")
-                    put("access_status", "REQUESTED")
-                    put("paid_amount", 0)
-                    put("completed_installments", 0)
-                    put("trial_enabled", false)
-                    put("trial_days", 0)
-                    put("trial_hours", 0)
-                    put("trial_started_at", JSONObject.NULL)
-                    put("trial_ends_at", JSONObject.NULL)
-                    put("trial_expires_at", JSONObject.NULL)
-                    put("is_trial_used", false)
-                    put("trial_used", false)
-                    put("approved_at", JSONObject.NULL)
-                    put("unlocked_at", JSONObject.NULL)
-                    put("rejection_reason", "")
-                    put("requested_at", nowIso)
-                    put("updated_at", nowIso)
-                }
-
-                val filterUrl = if (!targetRowId.isNullOrBlank()) {
-                    "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$targetRowId"
-                } else {
-                    val orParts = mutableListOf<String>()
-                    if (accountKey.isNotBlank()) orParts.add("shikho_account_key.eq.$accountKey")
-                    if (normPhone.isNotBlank()) orParts.add("student_phone.eq.$normPhone")
-                    if (deviceHardwareHash.isNotBlank()) orParts.add("device_hash.eq.$deviceHardwareHash")
-                    "${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?program_id=eq.$programId&or=(${orParts.distinct().joinToString(",")})"
-                }
-
-                val patchReq = Request.Builder()
-                    .url(filterUrl)
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .addHeader("Content-Type", "application/json")
-                    .patch(strictResetObj.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                val patchResp = runCatching { httpClient.newCall(patchReq).execute() }.getOrNull()
-                val ok = patchResp?.isSuccessful == true
-                patchResp?.close()
-                return ok
-            }
-
-            // 1. Check if an enrollment row for this student + programId already exists in Supabase
-            val existingRow = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
-            if (existingRow != null) {
-                val existingId = existingRow.optString("id", "").trim()
-                if (existingId.isNotBlank() && enforceStrictRequestedRowOnServer(existingId)) {
-                    markOptimisticCourseRequested(context, programId, programTitle)
-                    fetchCourseCommerceStatus(context)
-                    com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
-                        context = context,
-                        studentName = studentName,
-                        studentPhone = normPhone,
-                        programTitle = programTitle,
-                        programId = programId
-                    )
-                    return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
-                }
-            }
-
-            // 2. Call Supabase RPC `request_course_purchase_access` and then IMMEDIATELY force `status = REQUESTED`
+            // 1. Primary (Zero-Trust RLS compatible): Call Supabase SECURITY DEFINER RPC `request_course_purchase_access`
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/request_course_purchase_access"
             val rpcBody = JSONObject().apply {
                 put("p_device_id", deviceHardwareHash)
@@ -1536,6 +1432,8 @@ object CourseCommerceRepository {
                 put("p_program_title", programTitle)
             }
 
+            var rpcNotFound = false
+            var rpcHttpCode = 0
             try {
                 val req = Request.Builder()
                     .url(rpcUrl)
@@ -1545,34 +1443,100 @@ object CourseCommerceRepository {
                     .post(rpcBody.toString().toRequestBody("application/json".toMediaType()))
                     .build()
 
-                val resp = httpClient.newCall(req).execute()
-                if (resp.isSuccessful) {
-                    val bodyStr = resp.body?.string() ?: ""
-                    if (bodyStr.trim().startsWith("{")) {
-                        val json = JSONObject(bodyStr)
-                        if (json.optBoolean("success", false) || json.optString("status", "").isNotBlank()) {
-                            // CRITICAL: Force status = REQUESTED on the row in case the DB RPC matched an old ACTIVE row by device_hash
-                            enforceStrictRequestedRowOnServer(null)
-                            val msg = json.optString(
-                                "message",
-                                "অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।"
-                            )
-                            markOptimisticCourseRequested(context, programId, programTitle)
-                            fetchCourseCommerceStatus(context)
-                            com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
-                                context = context,
-                                studentName = studentName,
-                                studentPhone = normPhone,
-                                programTitle = programTitle,
-                                programId = programId
-                            )
-                            return@withContext Result.success(msg)
+                httpClient.newCall(req).execute().use { resp ->
+                    rpcHttpCode = resp.code
+                    if (resp.isSuccessful) {
+                        val bodyStr = resp.body?.string() ?: ""
+                        if (bodyStr.trim().startsWith("{")) {
+                            val json = JSONObject(bodyStr)
+                            val explicitFailure = json.has("success") && !json.optBoolean("success", true)
+                            if (!explicitFailure && (json.optBoolean("success", false) || json.optString("status", "").isNotBlank())) {
+                                val msg = json.optString(
+                                    "message",
+                                    "অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।"
+                                )
+                                markOptimisticCourseRequested(context, programId, programTitle)
+                                fetchCourseCommerceStatus(context)
+                                com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
+                                    context = context,
+                                    studentName = studentName,
+                                    studentPhone = normPhone,
+                                    programTitle = programTitle,
+                                    programId = programId
+                                )
+                                return@withContext Result.success(msg)
+                            } else {
+                                val errMsg = json.optString("message", "").ifBlank { "রিকোয়েস্ট পাঠানো যায়নি।" }
+                                return@withContext Result.failure(Exception(errMsg))
+                            }
                         }
+                    } else if (resp.code == 404) {
+                        rpcNotFound = true
                     }
                 }
             } catch (_: Throwable) {}
 
-            // 3. Direct REST Fallback into `course_access_enrollments` matching exact DB unique constraint `(device_id, shikho_account_key, program_id)`
+            if (!rpcNotFound) {
+                return@withContext Result.failure(
+                    Exception(
+                        if (rpcHttpCode > 0) "রিকোয়েস্ট পাঠানো যায়নি (HTTP $rpcHttpCode)।"
+                        else "নেটওয়ার্ক ত্রুটি: অনুগ্রহ করে আবার চেষ্টা করুন।"
+                    )
+                )
+            }
+
+            // 2. Legacy Fallback ONLY if RPC does not exist on server (HTTP 404)
+            val existingRow = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
+            if (existingRow != null) {
+                val existingId = existingRow.optString("id", "").trim()
+                if (existingId.isNotBlank()) {
+                    val strictResetObj = JSONObject().apply {
+                        put("device_id", deviceHardwareHash)
+                        put("device_hash", deviceHardwareHash)
+                        put("display_device_id", displayDeviceId)
+                        put("shikho_account_key", accountKey)
+                        put("student_key", accountKey)
+                        put("shikho_user_id", userId)
+                        put("student_name", studentName)
+                        put("student_phone", normPhone)
+                        put("user_phone", normPhone)
+                        if (oneSignalPlayerId.isNotBlank()) put("onesignal_player_id", oneSignalPlayerId)
+                        put("student_class", classCode ?: "")
+                        put("student_group", groupCode ?: "")
+                        put("program_title", programTitle)
+                        put("class_code", classCode ?: "")
+                        put("group_code", groupCode ?: "")
+                        put("batch_id", batchId ?: "")
+                        put("banner_url", bannerUrl ?: "")
+                        put("status", "REQUESTED")
+                        put("access_status", "REQUESTED")
+                        put("requested_at", nowIso)
+                        put("updated_at", nowIso)
+                    }
+                    val patchReq = Request.Builder()
+                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$existingId")
+                        .addHeader("apikey", anonKey)
+                        .addHeader("Authorization", "Bearer $anonKey")
+                        .addHeader("Content-Type", "application/json")
+                        .patch(strictResetObj.toString().toRequestBody("application/json".toMediaType()))
+                        .build()
+                    val patchOk = runCatching { httpClient.newCall(patchReq).execute().use { it.isSuccessful } }.getOrDefault(false)
+                    if (patchOk) {
+                        markOptimisticCourseRequested(context, programId, programTitle)
+                        fetchCourseCommerceStatus(context)
+                        com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
+                            context = context,
+                            studentName = studentName,
+                            studentPhone = normPhone,
+                            programTitle = programTitle,
+                            programId = programId
+                        )
+                        return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
+                    }
+                }
+            }
+
+            // 3. Direct REST Fallback into `course_access_enrollments` with all live NOT NULL columns populated
             val fullEnrollmentPayload = JSONObject().apply {
                 put("device_id", deviceHardwareHash)
                 put("device_hash", deviceHardwareHash)
@@ -1587,13 +1551,17 @@ object CourseCommerceRepository {
                 put("student_class", classCode ?: "")
                 put("student_group", groupCode ?: "")
                 put("program_id", programId)
+                put("course_id", programId)
                 put("program_title", programTitle)
+                put("course_title", programTitle)
                 put("class_code", classCode ?: "")
                 put("group_code", groupCode ?: "")
                 put("batch_id", batchId ?: "")
                 put("banner_url", bannerUrl ?: "")
                 put("status", "REQUESTED")
                 put("access_status", "REQUESTED")
+                put("rejection_reason", "")
+                put("admin_note", "")
                 put("requested_at", nowIso)
                 put("updated_at", nowIso)
             }
@@ -1616,9 +1584,57 @@ object CourseCommerceRepository {
                         .post(fullEnrollmentPayload.toString().toRequestBody("application/json".toMediaType()))
                         .build()
 
-                    val upsertResp = httpClient.newCall(upsertReq).execute()
-                    lastStatusCode = upsertResp.code
-                    if (upsertResp.isSuccessful) {
+                    httpClient.newCall(upsertReq).execute().use { upsertResp ->
+                        lastStatusCode = upsertResp.code
+                        if (upsertResp.isSuccessful) {
+                            markOptimisticCourseRequested(context, programId, programTitle)
+                            fetchCourseCommerceStatus(context)
+                            com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
+                                context = context,
+                                studentName = studentName,
+                                studentPhone = normPhone,
+                                programTitle = programTitle,
+                                programId = programId
+                            )
+                            return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
+                        } else {
+                            lastErrorBody = upsertResp.body?.string() ?: ""
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+
+            // 3. Plain POST fallback without on_conflict query param (all live NOT NULL columns populated)
+            val plainPayload = JSONObject().apply {
+                put("device_id", accountKey)
+                put("shikho_account_key", accountKey)
+                put("shikho_user_id", userId)
+                put("student_phone", normPhone)
+                put("user_phone", normPhone)
+                put("student_name", studentName)
+                put("student_class", classCode ?: "")
+                put("student_group", groupCode ?: "")
+                put("class_code", classCode ?: "")
+                put("group_code", groupCode ?: "")
+                put("batch_id", batchId ?: "")
+                put("program_id", programId)
+                put("program_title", programTitle)
+                put("status", "REQUESTED")
+                put("rejection_reason", "")
+                put("admin_note", "")
+                put("requested_at", nowIso)
+                put("updated_at", nowIso)
+            }
+            try {
+                val plainReq = Request.Builder()
+                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments")
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post(plainPayload.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+                httpClient.newCall(plainReq).execute().use { plainResp ->
+                    if (plainResp.isSuccessful || plainResp.code == 409) {
                         markOptimisticCourseRequested(context, programId, programTitle)
                         fetchCourseCommerceStatus(context)
                         com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
@@ -1629,44 +1645,7 @@ object CourseCommerceRepository {
                             programId = programId
                         )
                         return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
-                    } else {
-                        lastErrorBody = upsertResp.body?.string() ?: ""
                     }
-                } catch (_: Throwable) {}
-            }
-
-            // 3. Plain POST fallback without on_conflict query param
-            val plainPayload = JSONObject().apply {
-                put("device_id", accountKey)
-                put("shikho_account_key", accountKey)
-                put("shikho_user_id", userId)
-                put("student_phone", normPhone)
-                put("user_phone", normPhone)
-                put("student_name", studentName)
-                put("program_id", programId)
-                put("program_title", programTitle)
-                put("status", "REQUESTED")
-            }
-            try {
-                val plainReq = Request.Builder()
-                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments")
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .addHeader("Content-Type", "application/json")
-                    .post(plainPayload.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                val plainResp = httpClient.newCall(plainReq).execute()
-                if (plainResp.isSuccessful || plainResp.code == 409) {
-                    markOptimisticCourseRequested(context, programId, programTitle)
-                    fetchCourseCommerceStatus(context)
-                    com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
-                        context = context,
-                        studentName = studentName,
-                        studentPhone = normPhone,
-                        programTitle = programTitle,
-                        programId = programId
-                    )
-                    return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
                 }
             } catch (_: Throwable) {}
 
@@ -1724,39 +1703,8 @@ object CourseCommerceRepository {
             val oneSignalPlayerId = com.example.notification.OneSignalPushManager.getSavedPlayerId(context)
 
             val existingItem = getCachedSnapshot(context).enrollmentsByProgramId[programId]
-            var enrollmentId = existingItem?.enrollmentId?.takeIf { it.isNotBlank() }
-            if (enrollmentId == null) {
-                enrollmentId = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
-                    ?.optString("id", "")
-                    ?.takeIf { it.isNotBlank() }
-            }
 
-            // Ensure the enrollment row is unified with the student's phone number / accountKey and real hardware device_hash
-            if (enrollmentId != null) {
-                runCatching {
-                    val syncJson = JSONObject().apply {
-                        put("device_hash", deviceHardwareHash)
-                        put("display_device_id", displayDeviceId)
-                        put("shikho_account_key", accountKey)
-                        put("student_key", accountKey)
-                        put("shikho_user_id", userId)
-                        put("student_phone", normPhone)
-                        put("user_phone", normPhone)
-                        if (oneSignalPlayerId.isNotBlank()) put("onesignal_player_id", oneSignalPlayerId)
-                    }
-                    val syncReq = Request.Builder()
-                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$enrollmentId")
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer $anonKey")
-                        .addHeader("Content-Type", "application/json")
-                        .patch(syncJson.toString().toRequestBody("application/json".toMediaType()))
-                        .build()
-                    httpClient.newCall(syncReq).execute().close()
-                }
-            }
-
-            // 1. Call exact Supabase RPC `submit_course_payment_transaction`
-            // Signature: submit_course_payment_transaction(p_device_id, p_shikho_account_key, p_student_name, p_program_id, p_program_title, p_plan_id, p_plan_title, p_total_installments, p_installment_interval_days, p_payment_method, p_sender_mobile, p_amount, p_transaction_id)
+            // 1. Primary (Zero-Trust RLS compatible): Call exact Supabase SECURITY DEFINER RPC `submit_course_payment_transaction`
             val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/submit_course_payment_transaction"
             val rpcBody = JSONObject().apply {
                 put("p_device_id", deviceHardwareHash)
@@ -1774,6 +1722,8 @@ object CourseCommerceRepository {
                 put("p_transaction_id", cleanTrx)
             }
 
+            var rpcNotFound = false
+            var rpcHttpCode = 0
             try {
                 val req = Request.Builder()
                     .url(rpcUrl)
@@ -1783,34 +1733,56 @@ object CourseCommerceRepository {
                     .post(rpcBody.toString().toRequestBody("application/json".toMediaType()))
                     .build()
 
-                val resp = httpClient.newCall(req).execute()
-                if (resp.isSuccessful) {
-                    val bodyStr = resp.body?.string() ?: ""
-                    if (bodyStr.trim().startsWith("{")) {
-                        val json = JSONObject(bodyStr)
-                        if (json.optBoolean("success", false)) {
-                            val msg = json.optString(
-                                "message",
-                                "আপনার পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করে এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।"
-                            )
-                            fetchCourseCommerceStatus(context)
-                            com.example.notification.OneSignalPushManager.notifyAdminCoursePaymentSubmitted(
-                                context = context,
-                                studentName = studentName,
-                                studentPhone = normPhone,
-                                programTitle = programTitle,
-                                paymentMethod = paymentMethod,
-                                amount = amountInt,
-                                transactionId = cleanTrx,
-                                planTitle = selectedPlan.titleBn
-                            )
-                            return@withContext Result.success(msg)
+                httpClient.newCall(req).execute().use { resp ->
+                    rpcHttpCode = resp.code
+                    if (resp.isSuccessful) {
+                        val bodyStr = resp.body?.string() ?: ""
+                        if (bodyStr.trim().startsWith("{")) {
+                            val json = JSONObject(bodyStr)
+                            if (json.optBoolean("success", false)) {
+                                val msg = json.optString(
+                                    "message",
+                                    "আপনার পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করে এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।"
+                                )
+                                fetchCourseCommerceStatus(context)
+                                com.example.notification.OneSignalPushManager.notifyAdminCoursePaymentSubmitted(
+                                    context = context,
+                                    studentName = studentName,
+                                    studentPhone = normPhone,
+                                    programTitle = programTitle,
+                                    paymentMethod = paymentMethod,
+                                    amount = amountInt,
+                                    transactionId = cleanTrx,
+                                    planTitle = selectedPlan.titleBn
+                                )
+                                return@withContext Result.success(msg)
+                            } else {
+                                val errMsg = json.optString("message", "").ifBlank { "পেমেন্ট জমা দিতে সমস্যা হয়েছে।" }
+                                return@withContext Result.failure(Exception(errMsg))
+                            }
                         }
+                    } else if (resp.code == 404) {
+                        rpcNotFound = true
                     }
                 }
             } catch (_: Throwable) {}
 
-            // 2. Direct REST Fallback into `course_payment_transactions`
+            if (!rpcNotFound) {
+                return@withContext Result.failure(
+                    Exception(
+                        if (rpcHttpCode > 0) "পেমেন্ট জমা দিতে সমস্যা হয়েছে (HTTP $rpcHttpCode)।"
+                        else "নেটওয়ার্ক সমস্যা: অনুগ্রহ করে আবার চেষ্টা করুন।"
+                    )
+                )
+            }
+
+            // 2. Legacy Direct REST Fallback ONLY if RPC does not exist on server (HTTP 404)
+            var enrollmentId = existingItem?.enrollmentId?.takeIf { it.isNotBlank() }
+            if (enrollmentId == null) {
+                enrollmentId = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
+                    ?.optString("id", "")
+                    ?.takeIf { it.isNotBlank() }
+            }
             // Strictly uses ONLY columns that exist in `public.course_payment_transactions`!
             val nowIso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
@@ -1820,6 +1792,7 @@ object CourseCommerceRepository {
             val payType = if ((existingItem?.completedInstallments ?: 0) > 0) "INSTALLMENT" else "INITIAL"
             val longEnrId = enrollmentId?.toLongOrNull()
 
+            val totalInstallmentsSafe = selectedPlan.installmentsCount.coerceAtLeast(1)
             val txVariants = listOf(
                 JSONObject().apply {
                     if (longEnrId != null) put("enrollment_id", longEnrId)
@@ -1841,13 +1814,14 @@ object CourseCommerceRepository {
                     put("selected_plan_title", selectedPlan.titleBn)
                     put("payment_type", payType)
                     put("installment_number", nextInstallmentNum)
-                    put("total_installments", selectedPlan.installmentsCount.coerceAtLeast(1))
+                    put("total_installments", totalInstallmentsSafe)
                     put("interval_days", selectedPlan.intervalDays)
                     put("payment_method", paymentMethod)
                     put("sender_mobile", cleanMobile)
                     put("amount", amountInt)
                     put("transaction_id", cleanTrx)
                     put("status", "PENDING")
+                    put("rejection_reason", "")
                     put("submitted_at", nowIso)
                     put("created_at", nowIso)
                 },
@@ -1861,11 +1835,13 @@ object CourseCommerceRepository {
                     put("plan_id", selectedPlan.planId)
                     put("plan_title", selectedPlan.titleBn)
                     put("installment_number", nextInstallmentNum)
+                    put("total_installments", totalInstallmentsSafe)
                     put("payment_method", paymentMethod)
                     put("sender_mobile", cleanMobile)
                     put("amount", amountInt)
                     put("transaction_id", cleanTrx)
                     put("status", "PENDING")
+                    put("rejection_reason", "")
                     put("submitted_at", nowIso)
                 }
             )
@@ -1881,12 +1857,13 @@ object CourseCommerceRepository {
                         .addHeader("Content-Type", "application/json")
                         .post(txJson.toString().toRequestBody("application/json".toMediaType()))
                         .build()
-                    val txResp = httpClient.newCall(txReq).execute()
-                    lastTxCode = txResp.code
-                    if (txResp.isSuccessful) {
-                        txSucceeded = true
-                        break
+                    httpClient.newCall(txReq).execute().use { txResp ->
+                        lastTxCode = txResp.code
+                        if (txResp.isSuccessful) {
+                            txSucceeded = true
+                        }
                     }
+                    if (txSucceeded) break
                 } catch (_: Throwable) {}
             }
 
@@ -1964,50 +1941,18 @@ object CourseCommerceRepository {
                 return@withContext Result.failure(Exception("সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
             }
 
-            val existingRow = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
             val cachedItem = getCachedSnapshot(context).enrollmentsByProgramId[programId]
-
-            val trialEnabled = existingRow?.optBoolean("trial_enabled", cachedItem?.trialEnabled ?: false)
-                ?: (cachedItem?.trialEnabled ?: false)
-            val trialDays = existingRow?.optInt("trial_days", cachedItem?.trialDays ?: 1)?.coerceAtLeast(0)
-                ?: (cachedItem?.trialDays ?: 1)
-            val trialHours = existingRow?.optInt("trial_hours", cachedItem?.trialHours ?: 0)?.coerceAtLeast(0)
-                ?: (cachedItem?.trialHours ?: 0)
-            val alreadyUsed = existingRow?.optBoolean("is_trial_used", false) == true &&
-                !existingRow.optString("trial_ends_at", "").isNullOrBlank()
-
-            if (!trialEnabled && trialDays <= 0 && trialHours <= 0) {
-                return@withContext Result.failure(Exception("এই কোর্সের জন্য এখনো ফ্রি ট্রায়াল চালু করা হয়নি।"))
-            }
-            if (alreadyUsed) {
-                val existingEndMs = parseIsoTimestampMillis(existingRow?.optString("trial_ends_at", ""))
-                if (existingEndMs != null && currentTrustedTimeMillis() >= existingEndMs) {
-                    return@withContext Result.failure(Exception("আপনার ফ্রি ট্রায়ালের মেয়াদ ইতিমধ্যে শেষ হয়েছে। কোর্সটি চালিয়ে যেতে ভর্তি হোন।"))
-                }
-            }
-
-            val nowMs = currentTrustedTimeMillis()
-            val durationMs = when {
-                trialDays > 0 && trialHours > 0 -> (trialDays * 24L + trialHours) * 3600L * 1000L
-                trialDays > 0 -> trialDays * 24L * 3600L * 1000L
-                trialHours > 0 -> trialHours * 3600L * 1000L
-                else -> 24L * 3600L * 1000L
-            }
-            val endMs = nowMs + durationMs
-
-            val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-                timeZone = TimeZone.getTimeZone("UTC")
-            }
-            val nowIso = isoFormatter.format(Date(nowMs))
-            val endIso = isoFormatter.format(Date(endMs))
+            val trialDays = (cachedItem?.trialDays ?: 1).coerceAtLeast(0)
+            val trialHours = (cachedItem?.trialHours ?: 0).coerceAtLeast(0)
             val durationLabelBn = when {
                 trialDays > 0 -> "${CourseCommerceItemState.toBanglaDigits(trialDays.toString())} দিনের"
                 trialHours > 0 -> "${CourseCommerceItemState.toBanglaDigits(trialHours.toString())} ঘণ্টার"
                 else -> "১ দিনের"
             }
 
-            // 1. Call exact Supabase RPC `start_course_free_trial(p_student_key, p_program_id, p_program_title)`
+            // 1. Primary (Zero-Trust RLS compatible): Call exact Supabase SECURITY DEFINER RPC `start_course_free_trial`
             var rpcSucceeded = false
+            var rpcNotFound = false
             var rpcMessage = ""
             val studentKey = account.normPhone.ifBlank { account.accountKey }.ifBlank { DeviceSecurityManager.getDeviceHardwareHash(context) }
             try {
@@ -2033,58 +1978,76 @@ object CourseCommerceRepository {
                                 rpcMessage = json.optString("message", "")
                             } else {
                                 val errMsg = json.optString("message", "")
-                                if (errMsg.isNotBlank() && alreadyUsed) {
+                                if (errMsg.isNotBlank()) {
                                     return@withContext Result.failure(Exception(errMsg))
                                 }
                             }
                         }
+                    } else if (resp.code == 404) {
+                        rpcNotFound = true
                     }
                 }
             } catch (_: Throwable) {}
 
-            // 2. Also PATCH `course_access_enrollments` directly if RPC was not used
-            val rowId = existingRow?.optString("id", "")?.trim().orEmpty()
-                .ifBlank { cachedItem?.enrollmentId.orEmpty() }
-
+            // 2. Legacy Direct REST Fallback ONLY if RPC does not exist on server (HTTP 404)
             var patchSucceeded = rpcSucceeded
-            if (!rpcSucceeded && rowId.isNotBlank()) {
-                val patchPayloads = listOf(
-                    JSONObject().apply {
-                        put("status", "TRIAL_ACTIVE")
-                        put("access_status", "TRIAL_ACTIVE")
-                        put("trial_enabled", true)
-                        put("trial_started_at", nowIso)
-                        put("trial_ends_at", endIso)
-                        put("trial_expires_at", endIso)
-                        put("is_trial_used", true)
-                        put("trial_used", true)
-                        put("updated_at", nowIso)
-                    },
-                    JSONObject().apply {
-                        put("status", "TRIAL_ACTIVE")
-                        put("trial_enabled", true)
-                        put("trial_started_at", nowIso)
-                        put("trial_ends_at", endIso)
-                        put("is_trial_used", true)
-                        put("updated_at", nowIso)
+            if (!rpcSucceeded && rpcNotFound) {
+                val existingRow = findExistingEnrollmentForStudent(supabaseUrl, anonKey, account, programId)
+                val rowId = existingRow?.optString("id", "")?.trim().orEmpty()
+                    .ifBlank { cachedItem?.enrollmentId.orEmpty() }
+                if (rowId.isNotBlank()) {
+                    val nowMs = currentTrustedTimeMillis()
+                    val durationMs = when {
+                        trialDays > 0 && trialHours > 0 -> (trialDays * 24L + trialHours) * 3600L * 1000L
+                        trialDays > 0 -> trialDays * 24L * 3600L * 1000L
+                        trialHours > 0 -> trialHours * 3600L * 1000L
+                        else -> 24L * 3600L * 1000L
                     }
-                )
-                for (patchObj in patchPayloads) {
-                    try {
-                        val patchReq = Request.Builder()
-                            .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$rowId")
-                            .addHeader("apikey", anonKey)
-                            .addHeader("Authorization", "Bearer $anonKey")
-                            .addHeader("Content-Type", "application/json")
-                            .patch(patchObj.toString().toRequestBody("application/json".toMediaType()))
-                            .build()
-                        httpClient.newCall(patchReq).execute().use { resp ->
-                            if (resp.isSuccessful) {
-                                patchSucceeded = true
-                            }
+                    val endMs = nowMs + durationMs
+                    val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                        timeZone = TimeZone.getTimeZone("UTC")
+                    }
+                    val nowIso = isoFormatter.format(Date(nowMs))
+                    val endIso = isoFormatter.format(Date(endMs))
+
+                    val patchPayloads = listOf(
+                        JSONObject().apply {
+                            put("status", "TRIAL_ACTIVE")
+                            put("access_status", "TRIAL_ACTIVE")
+                            put("trial_enabled", true)
+                            put("trial_started_at", nowIso)
+                            put("trial_ends_at", endIso)
+                            put("trial_expires_at", endIso)
+                            put("is_trial_used", true)
+                            put("trial_used", true)
+                            put("updated_at", nowIso)
+                        },
+                        JSONObject().apply {
+                            put("status", "TRIAL_ACTIVE")
+                            put("trial_enabled", true)
+                            put("trial_started_at", nowIso)
+                            put("trial_ends_at", endIso)
+                            put("is_trial_used", true)
+                            put("updated_at", nowIso)
                         }
-                        if (patchSucceeded) break
-                    } catch (_: Throwable) {}
+                    )
+                    for (patchObj in patchPayloads) {
+                        try {
+                            val patchReq = Request.Builder()
+                                .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_access_enrollments?id=eq.$rowId")
+                                .addHeader("apikey", anonKey)
+                                .addHeader("Authorization", "Bearer $anonKey")
+                                .addHeader("Content-Type", "application/json")
+                                .patch(patchObj.toString().toRequestBody("application/json".toMediaType()))
+                                .build()
+                            httpClient.newCall(patchReq).execute().use { resp ->
+                                if (resp.isSuccessful) {
+                                    patchSucceeded = true
+                                }
+                            }
+                            if (patchSucceeded) break
+                        } catch (_: Throwable) {}
+                    }
                 }
             }
 

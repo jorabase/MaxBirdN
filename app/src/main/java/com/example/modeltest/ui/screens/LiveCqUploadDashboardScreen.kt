@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
+import com.example.ui.components.QuizRichContent
 import com.example.ui.theme.isAppInDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -442,12 +443,12 @@ fun LiveCqUploadDashboardScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Text(
+                    QuizRichContent(
                         text = q.title?.replace("$", "") ?: "",
-                        fontSize = 15.sp,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 22.sp),
+                        textColor = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 22.sp
+                        maxImageHeight = 200.dp
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -460,11 +461,11 @@ fun LiveCqUploadDashboardScreen(
                                 .padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
+                            QuizRichContent(
                                 text = sq.question?.replace("$", "") ?: "",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 20.sp,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                                maxImageHeight = 160.dp,
                                 modifier = Modifier.weight(1f)
                             )
                             Spacer(modifier = Modifier.width(8.dp))

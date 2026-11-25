@@ -54,12 +54,13 @@ object AppNoticeRepository {
                 .get()
                 .build()
 
-            val response = httpClient.newCall(request).execute()
-            val responseBody = response.body?.string().orEmpty()
-
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Failed to fetch notices: HTTP ${response.code} - $responseBody")
-                return@withContext cachedNotices
+            val responseBody = httpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Failed to fetch notices: HTTP ${response.code} - $body")
+                    return@withContext cachedNotices
+                }
+                body
             }
 
             val jsonArray = JSONArray(responseBody)
@@ -67,16 +68,21 @@ object AppNoticeRepository {
 
             for (i in 0 until jsonArray.length()) {
                 val obj = jsonArray.optJSONObject(i) ?: continue
-                val id = obj.optString("id", "")
-                val title = obj.optString("title", "").trim()
-                val description = obj.optString("description", "").trim().takeIf { it.isNotBlank() }
-                val imageUrl = obj.optString("image_url", "").trim()
-                val actionUrl = obj.optString("action_url", "").trim().takeIf { it.isNotBlank() }
-                val buttonText = obj.optString("action_button_text", "বিস্তারিত দেখুন").trim().ifBlank { "বিস্তারিত দেখুন" }
+                fun cleanStr(key: String, fallback: String = ""): String {
+                    if (!obj.has(key) || obj.isNull(key)) return fallback
+                    val v = obj.optString(key, "").trim()
+                    return if (v.isBlank() || v.equals("null", ignoreCase = true)) fallback else v
+                }
+                val id = cleanStr("id")
+                val title = cleanStr("title")
+                val description = cleanStr("description").takeIf { it.isNotBlank() }
+                val imageUrl = cleanStr("image_url")
+                val actionUrl = cleanStr("action_url").takeIf { it.isNotBlank() }
+                val buttonText = cleanStr("action_button_text", "বিস্তারিত দেখুন")
                 val priority = obj.optInt("priority", 0)
                 val isActive = obj.optBoolean("is_active", true)
                 val showAsPopup = obj.optBoolean("show_as_popup", true)
-                val createdAt = obj.optString("created_at", "").trim().takeIf { it.isNotBlank() }
+                val createdAt = cleanStr("created_at").takeIf { it.isNotBlank() }
 
                 // Basic validation: must have ID and Image URL
                 if (id.isNotBlank() && imageUrl.isNotBlank()) {

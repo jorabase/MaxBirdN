@@ -1,0 +1,1079 @@
+{
+    "triggers": [
+        {
+            "table": "course_access_enrollments",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "AFTER",
+            "trigger": "trg_course_enrollments_onesignal_notify"
+        },
+        {
+            "table": "course_access_enrollments",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_guard_enrollments_direct_tamper"
+        },
+        {
+            "table": "course_access_enrollments",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_sync_course_enrollment_columns"
+        },
+        {
+            "table": "course_payment_transactions",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "AFTER",
+            "trigger": "trg_course_payments_onesignal_notify"
+        },
+        {
+            "table": "course_payment_transactions",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_guard_payment_tx_direct_tamper"
+        },
+        {
+            "table": "course_payment_transactions",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_sync_course_payment_tx_columns"
+        },
+        {
+            "table": "device_shikho_accounts",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_protect_shikho_accounts_anon"
+        },
+        {
+            "table": "devices",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "AFTER",
+            "trigger": "trg_devices_onesignal_notify"
+        },
+        {
+            "table": "devices",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_guard_devices_direct_tamper"
+        },
+        {
+            "table": "devices",
+            "events": [
+                "INSERT",
+                "UPDATE"
+            ],
+            "timing": "BEFORE",
+            "trigger": "trg_sync_devices_columns"
+        },
+        {
+            "table": "student_notifications",
+            "events": [
+                "INSERT"
+            ],
+            "timing": "AFTER",
+            "trigger": "trg_student_notifications_onesignal"
+        }
+    ],
+    "rls_policies": [
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "activation_support_links",
+            "using": "is_admin_user()",
+            "policy": "Admin full support_links",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "activation_support_links",
+            "using": "(is_active = true)",
+            "policy": "Anon read active support_links",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "activation_support_links",
+            "using": "true",
+            "policy": "Service role full support_links",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "admin_push_devices",
+            "using": "is_admin_user()",
+            "policy": "Admin full admin_push_devices",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "admin_push_devices",
+            "using": "true",
+            "policy": "Service role full admin_push_devices",
+            "with_check": "true"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "admin_users",
+            "using": "(user_id = auth.uid())",
+            "policy": "Admin read own admin_users",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "admin_users",
+            "using": "true",
+            "policy": "Service role full admin_users",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "ai_agent_configs",
+            "using": "is_admin_user()",
+            "policy": "Admin full ai_agent_configs",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "ai_agent_configs",
+            "using": "true",
+            "policy": "Service role full ai_agent_configs",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "ai_agent_schedules",
+            "using": "is_admin_user()",
+            "policy": "Admin full ai_agent_schedules",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "ai_agent_schedules",
+            "using": "true",
+            "policy": "Service role full ai_agent_schedules",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "ai_agent_tasks",
+            "using": "is_admin_user()",
+            "policy": "Admin full ai_agent_tasks",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "ai_agent_tasks",
+            "using": "true",
+            "policy": "Service role full ai_agent_tasks",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "app_notices",
+            "using": "is_admin_user()",
+            "policy": "Admin full app_notices",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "app_notices",
+            "using": "(is_active = true)",
+            "policy": "Anon read active app_notices",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "app_notices",
+            "using": "true",
+            "policy": "Service role full app_notices",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "app_security_config",
+            "using": "is_admin_user()",
+            "policy": "Admin full app_security_config",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "app_security_config",
+            "using": "true",
+            "policy": "Service role full app_security_config",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "app_updates",
+            "using": "is_admin_user()",
+            "policy": "Admin full app_updates",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "app_updates",
+            "using": "(is_active = true)",
+            "policy": "Anon read active app_updates",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "app_updates",
+            "using": "true",
+            "policy": "Service role full app_updates",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "course_access_enrollments",
+            "using": "is_admin_user()",
+            "policy": "Admin full course_access_enrollments",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "INSERT",
+            "roles": [
+                "anon"
+            ],
+            "table": "course_access_enrollments",
+            "using": null,
+            "policy": "Anon insert enrollments",
+            "with_check": "true"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "course_access_enrollments",
+            "using": "true",
+            "policy": "Anon read enrollments",
+            "with_check": null
+        },
+        {
+            "cmd": "UPDATE",
+            "roles": [
+                "anon"
+            ],
+            "table": "course_access_enrollments",
+            "using": "true",
+            "policy": "Anon update enrollments",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "course_access_enrollments",
+            "using": "true",
+            "policy": "Service role full course_access_enrollments",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "course_payment_settings",
+            "using": "is_admin_user()",
+            "policy": "Admin full payment_settings",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "course_payment_settings",
+            "using": "true",
+            "policy": "Anon read payment_settings",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "course_payment_settings",
+            "using": "true",
+            "policy": "Service role full payment_settings",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "course_payment_transactions",
+            "using": "is_admin_user()",
+            "policy": "Admin full course_payment_transactions",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "INSERT",
+            "roles": [
+                "anon"
+            ],
+            "table": "course_payment_transactions",
+            "using": null,
+            "policy": "Anon insert transactions",
+            "with_check": "true"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "course_payment_transactions",
+            "using": "true",
+            "policy": "Anon read transactions",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "course_payment_transactions",
+            "using": "true",
+            "policy": "Service role full course_payment_transactions",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "device_shikho_accounts",
+            "using": "is_admin_user()",
+            "policy": "Admin full device_shikho_accounts",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "INSERT",
+            "roles": [
+                "anon"
+            ],
+            "table": "device_shikho_accounts",
+            "using": null,
+            "policy": "Anon insert device_shikho_accounts",
+            "with_check": "true"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "device_shikho_accounts",
+            "using": "true",
+            "policy": "Anon read device_shikho_accounts",
+            "with_check": null
+        },
+        {
+            "cmd": "UPDATE",
+            "roles": [
+                "anon"
+            ],
+            "table": "device_shikho_accounts",
+            "using": "true",
+            "policy": "Anon update device_shikho_accounts",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "device_shikho_accounts",
+            "using": "true",
+            "policy": "Service role full device_shikho_accounts",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "devices",
+            "using": "is_admin_user()",
+            "policy": "Admin full devices",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "INSERT",
+            "roles": [
+                "anon"
+            ],
+            "table": "devices",
+            "using": null,
+            "policy": "Anon insert devices",
+            "with_check": "true"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "devices",
+            "using": "true",
+            "policy": "Anon read devices",
+            "with_check": null
+        },
+        {
+            "cmd": "UPDATE",
+            "roles": [
+                "anon"
+            ],
+            "table": "devices",
+            "using": "true",
+            "policy": "Anon update devices",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "devices",
+            "using": "true",
+            "policy": "Service role full devices",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "onesignal_config",
+            "using": "is_admin_user()",
+            "policy": "Admin full onesignal_config",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "onesignal_config",
+            "using": "true",
+            "policy": "Service role full onesignal_config",
+            "with_check": "true"
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "authenticated"
+            ],
+            "table": "student_notifications",
+            "using": "is_admin_user()",
+            "policy": "Admin full student_notifications",
+            "with_check": "is_admin_user()"
+        },
+        {
+            "cmd": "SELECT",
+            "roles": [
+                "anon"
+            ],
+            "table": "student_notifications",
+            "using": "(is_active = true)",
+            "policy": "Anon read active student_notifications",
+            "with_check": null
+        },
+        {
+            "cmd": "ALL",
+            "roles": [
+                "service_role"
+            ],
+            "table": "student_notifications",
+            "using": "true",
+            "policy": "Service role full student_notifications",
+            "with_check": "true"
+        }
+    ],
+    "table_grants": [
+        {
+            "role": "anon",
+            "table": "activation_support_links",
+            "privileges": [
+                "SELECT"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "activation_support_links",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "admin_push_devices",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "admin_users",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "ai_agent_configs",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "ai_agent_schedules",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "ai_agent_tasks",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "app_notices",
+            "privileges": [
+                "SELECT"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "app_notices",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "app_security_config",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "app_updates",
+            "privileges": [
+                "SELECT"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "app_updates",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "course_access_enrollments",
+            "privileges": [
+                "INSERT",
+                "SELECT",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "course_access_enrollments",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "course_payment_settings",
+            "privileges": [
+                "SELECT"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "course_payment_settings",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "course_payment_transactions",
+            "privileges": [
+                "INSERT",
+                "SELECT"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "course_payment_transactions",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "device_shikho_accounts",
+            "privileges": [
+                "INSERT",
+                "SELECT",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "device_shikho_accounts",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "devices",
+            "privileges": [
+                "INSERT",
+                "SELECT",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "devices",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "onesignal_config",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        },
+        {
+            "role": "anon",
+            "table": "student_notifications",
+            "privileges": [
+                "SELECT"
+            ]
+        },
+        {
+            "role": "authenticated",
+            "table": "student_notifications",
+            "privileges": [
+                "DELETE",
+                "INSERT",
+                "REFERENCES",
+                "SELECT",
+                "TRIGGER",
+                "TRUNCATE",
+                "UPDATE"
+            ]
+        }
+    ],
+    "realtime_tables": [
+        "activation_support_links",
+        "app_notices",
+        "app_updates",
+        "course_access_enrollments",
+        "course_payment_settings",
+        "course_payment_transactions",
+        "device_shikho_accounts",
+        "devices",
+        "student_notifications"
+    ],
+    "rpc_permissions": [
+        {
+            "args": "p_enrollment_id bigint, p_total_price integer, p_installment_enabled boolean, p_installment_plans_json jsonb, p_admin_note text, p_instant_free_unlock boolean",
+            "function": "admin_approve_course_access_request",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_student_key text, p_program_id text, p_total_price numeric, p_allow_installments boolean, p_installment_plans jsonb, p_trial_enabled boolean, p_trial_days integer, p_trial_hours integer, p_start_trial_immediately boolean, p_admin_note text",
+            "function": "admin_approve_course_access_with_trial",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_student_note text",
+            "function": "admin_approve_device_verification",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_student_key text, p_program_id text, p_action text, p_days integer, p_hours integer",
+            "function": "admin_manage_course_trial",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_version_name text, p_version_code integer, p_download_url text, p_changelog text, p_title text, p_button_text text, p_checksum_sha256 text",
+            "function": "admin_publish_app_update",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_transaction_id bigint, p_approve boolean, p_rejection_reason text, p_custom_next_due_days integer",
+            "function": "admin_review_course_payment",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_shikho_user_id text, p_user_phone text, p_is_access_granted boolean, p_is_restricted boolean, p_allowed_classes text[], p_allowed_groups text[], p_allowed_batches text[], p_allowed_programs text[], p_revoke_other_accounts boolean",
+            "function": "admin_set_account_course_permissions",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_is_banned boolean, p_reason text",
+            "function": "admin_set_device_block_status",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_is_restricted boolean, p_allowed_classes text[], p_allowed_groups text[], p_allowed_batches text[], p_allowed_programs text[]",
+            "function": "admin_set_device_course_permissions",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_enabled boolean, p_title text, p_message text, p_estimated_time text",
+            "function": "admin_set_kill_switch",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_is_banned boolean, p_reason text",
+            "function": "admin_toggle_device_ban",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text",
+            "function": "check_device_status",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_device_model text, p_device_brand text, p_android_version text, p_app_version text",
+            "function": "check_device_status",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "check_is_admin",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_device_model text, p_device_brand text, p_android_version text, p_app_version text",
+            "function": "check_student_verification_status",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "enforce_overdue_course_installments",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "get_onesignal_public_app_id",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "get_required_app_version_name",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_id text, p_shikho_account_key text, p_shikho_user_id text, p_user_phone text",
+            "function": "get_student_course_commerce_status",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "is_admin",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "is_admin_user",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "",
+            "function": "is_global_kill_switch_active",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_raw text",
+            "function": "normalize_bd_phone",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_title text, p_message text, p_event_type text, p_extra_data jsonb",
+            "function": "notify_admin_via_onesignal",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_onesignal_player_id text, p_device_hash text, p_student_phone text, p_title text, p_message text, p_event_type text, p_extra_data jsonb",
+            "function": "notify_student_via_onesignal",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_id text, p_shikho_account_key text, p_student_name text, p_student_phone text, p_student_class text, p_student_group text, p_program_id text, p_program_title text",
+            "function": "request_course_purchase_access",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_device_model text, p_device_brand text, p_android_version text, p_app_version text, p_student_note text, p_app_signature text",
+            "function": "request_student_verification",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_student_key text, p_program_id text, p_program_title text",
+            "function": "start_course_free_trial",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_id text, p_shikho_account_key text, p_student_name text, p_program_id text, p_program_title text, p_plan_id text, p_plan_title text, p_total_installments integer, p_installment_interval_days integer, p_payment_method text, p_sender_mobile text, p_amount integer, p_transaction_id text",
+            "function": "submit_course_payment_transaction",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_display_device_id text, p_student_phone text, p_student_key text, p_onesignal_player_id text, p_fcm_token text, p_app_version text",
+            "function": "sync_student_push_identity",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_app_id text, p_rest_api_key text",
+            "function": "update_onesignal_config_secure",
+            "anon_can_execute": false,
+            "authenticated_can_execute": true
+        },
+        {
+            "args": "p_device_hash text, p_token text, p_app_version text",
+            "function": "verify_device_heartbeat",
+            "anon_can_execute": true,
+            "authenticated_can_execute": true
+        }
+    ],
+    "security_health_check": {
+        "realtime_tables_count": 9,
+        "admin_rpcs_exposed_to_anon": [
+        ],
+        "admin_tables_exposed_to_anon": [
+        ],
+        "duplicate_protect_triggers_left": [
+        ],
+        "device_shikho_unique_index_exists": true
+    }
+}

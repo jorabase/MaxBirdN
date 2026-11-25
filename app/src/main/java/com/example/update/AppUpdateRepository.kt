@@ -8,8 +8,10 @@ import com.example.BuildConfig
 import com.example.security.DeviceActivationRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
@@ -26,7 +28,8 @@ data class AppUpdateInfo(
     val isKillSwitchActive: Boolean = false,
     val killSwitchTitleBn: String = "অ্যাপ আপডেটের কাজ চলছে",
     val killSwitchMessageBn: String = "অ্যাপটিকে আরও উন্নত, দ্রুত ও নিরাপদ করতে বর্তমানে সার্ভার ও সিস্টেম আপডেটের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত। কাজ শেষ হওয়া মাত্রই অ্যাপটি পুনরায় চালু হবে।",
-    val estimatedBackTimeBn: String? = null
+    val estimatedBackTimeBn: String? = null,
+    val fileSizeMb: Double? = null
 )
 
 object AppUpdateRepository {
@@ -110,30 +113,59 @@ object AppUpdateRepository {
                 }
                 val bodyStr = response.body?.string() ?: return@withContext null
                 val jsonArray = JSONArray(bodyStr)
-                if (jsonArray.length() == 0) return@withContext null
+                if (jsonArray.length() == 0) {
+                    // Fallback: check live SECURITY DEFINER RPC `is_global_kill_switch_active`
+                    // in case an admin enabled kill switch while `app_updates.is_active` is false under anon RLS.
+                    if (isGlobalKillSwitchActiveRpc(supabaseUrl, anonKey)) {
+                        return@withContext AppUpdateInfo(
+                            versionCode = BuildConfig.VERSION_CODE,
+                            versionName = BuildConfig.VERSION_NAME,
+                            minSupportedVersionCode = BuildConfig.VERSION_CODE,
+                            isForce = true,
+                            titleBn = "অ্যাপ আপডেটের কাজ চলছে",
+                            changelogBn = "",
+                            downloadUrl = "",
+                            buttonText = "এখনই ডাউনলোড ও আপডেট করুন",
+                            signatureHash = null,
+                            isKillSwitchActive = true
+                        )
+                    }
+                    return@withContext null
+                }
 
                 val obj = jsonArray.getJSONObject(0)
-                val versionCode = obj.optInt("latest_version_code", obj.optInt("version_code", 0))
-                val versionName = obj.optString("latest_version_name", obj.optString("version_name", "1.0.0"))
-                val minSupportedCode = obj.optInt("min_supported_version_code", versionCode)
+                fun cleanStr(key: String, fallback: String = ""): String {
+                    if (!obj.has(key) || obj.isNull(key)) return fallback
+                    val v = obj.optString(key, "").trim()
+                    return if (v.isBlank() || v.equals("null", ignoreCase = true)) fallback else v
+                }
+
+                val versionCode = obj.optInt("latest_version_code", 0)
+                val versionName = cleanStr("latest_version_name", "1.0.0")
+                val minSupportedCode = if (!obj.isNull("min_supported_version_code")) {
+                    obj.optInt("min_supported_version_code", versionCode)
+                } else {
+                    versionCode
+                }
                 val isForce = true
-                val titleBn = obj.optString("title", "নির্ধারিত সংস্করণ ইনস্টল করুন")
-                val changelogBn = obj.optString("changelog", obj.optString("release_notes", "অ্যাপে নতুন ফিচার এবং সিকিউরিটি আপডেট যুক্ত করা হয়েছে।"))
-                val downloadUrl = obj.optString("download_url", obj.optString("apk_url", "")).trim()
-                val buttonText = obj.optString("button_text", "এখনই ডাউনলোড ও আপডেট করুন")
-                val signatureHash = obj.optString("apk_checksum_sha256", obj.optString("sha256_checksum", "")).takeIf { it.isNotBlank() }
+                val titleBn = cleanStr("title", "নির্ধারিত সংস্করণ ইনস্টল করুন")
+                val changelogBn = cleanStr("changelog", "অ্যাপে নতুন ফিচার এবং সিকিউরিটি আপডেট যুক্ত করা হয়েছে।")
+                val downloadUrl = cleanStr("download_url")
+                val buttonText = cleanStr("button_text", "এখনই ডাউনলোড ও আপডেট করুন")
+                val signatureHash = cleanStr("apk_checksum_sha256").takeIf { it.isNotBlank() }
 
                 val isKillSwitchActive = obj.optBoolean("is_kill_switch", false) ||
-                    obj.optBoolean("is_maintenance", false) ||
-                    obj.optBoolean("kill_switch", false)
+                    obj.optBoolean("is_maintenance", false)
 
-                val killSwitchTitleBn = obj.optString("kill_switch_title", "").trim().ifBlank {
-                    "অ্যাপ আপডেটের কাজ চলছে"
-                }
-                val killSwitchMessageBn = obj.optString("kill_switch_message", "").trim().ifBlank {
+                val killSwitchTitleBn = cleanStr("kill_switch_title", "অ্যাপ আপডেটের কাজ চলছে")
+                val killSwitchMessageBn = cleanStr(
+                    "kill_switch_message",
                     "অ্যাপটিকে আরও উন্নত, দ্রুত ও নিরাপদ করতে বর্তমানে সার্ভার ও সিস্টেম আপডেটের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত। কাজ শেষ হওয়া মাত্রই অ্যাপটি পুনরায় চালু হবে।"
-                }
-                val estimatedBackTimeBn = obj.optString("estimated_back_time", "").trim().takeIf { it.isNotBlank() }
+                )
+                val estimatedBackTimeBn = cleanStr("estimated_back_time").takeIf { it.isNotBlank() }
+                val fileSizeMb = if (obj.has("file_size_mb") && !obj.isNull("file_size_mb")) {
+                    obj.optDouble("file_size_mb", Double.NaN).takeIf { !it.isNaN() && it > 0.0 }
+                } else null
 
                 return@withContext AppUpdateInfo(
                     versionCode = versionCode,
@@ -148,12 +180,31 @@ object AppUpdateRepository {
                     isKillSwitchActive = isKillSwitchActive,
                     killSwitchTitleBn = killSwitchTitleBn,
                     killSwitchMessageBn = killSwitchMessageBn,
-                    estimatedBackTimeBn = estimatedBackTimeBn
+                    estimatedBackTimeBn = estimatedBackTimeBn,
+                    fileSizeMb = fileSizeMb
                 )
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Exception fetching update: ${e.message}", e)
             null
+        }
+    }
+
+    private fun isGlobalKillSwitchActiveRpc(supabaseUrl: String, anonKey: String): Boolean {
+        return try {
+            val rpcReq = Request.Builder()
+                .url("${supabaseUrl.trimEnd('/')}/rest/v1/rpc/is_global_kill_switch_active")
+                .addHeader("apikey", anonKey)
+                .addHeader("Authorization", "Bearer $anonKey")
+                .addHeader("Content-Type", "application/json")
+                .post("{}".toRequestBody("application/json".toMediaType()))
+                .build()
+            httpClient.newCall(rpcReq).execute().use { resp ->
+                if (!resp.isSuccessful) return false
+                resp.body?.string()?.trim()?.equals("true", ignoreCase = true) == true
+            }
+        } catch (_: Throwable) {
+            false
         }
     }
 
