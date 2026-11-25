@@ -40,14 +40,32 @@ object OneSignalPushManager {
     private const val PREFS_NAME = "maxbird_onesignal_prefs"
     private const val KEY_PLAYER_ID = "onesignal_player_id"
     private const val KEY_CACHED_APP_ID = "cached_onesignal_app_id"
+    private const val KEY_APP_ID_FETCHED_AT = "cached_onesignal_app_id_fetched_at"
     private const val KEY_LAST_SYNCED_FCM = "last_synced_fcm_token"
+    private const val KEY_LAST_ONESIGNAL_SYNC_SIG = "last_onesignal_sync_sig"
+    private const val KEY_LAST_ONESIGNAL_SYNC_AT = "last_onesignal_sync_at"
+    private const val KEY_LAST_SUPABASE_SYNC_SIG = "last_supabase_push_sync_sig"
+    private const val KEY_LAST_SUPABASE_SYNC_AT = "last_supabase_push_sync_at"
+
+    private const val APP_ID_CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
+    private const val ONESIGNAL_PLAYER_SYNC_TTL_MS = 10 * 60_000L // 10 minutes when signature unchanged
+    private const val SUPABASE_PUSH_SYNC_TTL_MS = 6 * 60 * 60 * 1000L // 6 hours when push identity unchanged
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val configMutex = Mutex()
     private val syncMutex = Mutex()
+    @Volatile
+    private var hasFetchedAppIdThisSession: Boolean = false
     @Volatile
     private var lastSyncedSignature: String = ""
     @Volatile
     private var lastSyncedAtMs: Long = 0L
+    @Volatile
+    private var lastSupabaseSyncedSignature: String = ""
+    @Volatile
+    private var lastSupabaseSyncedAtMs: Long = 0L
+    @Volatile
+    private var lastTriggeredIdentityKey: String = ""
 
     private val httpClient = OkHttpClient.Builder()
         .applyAntiCaptureSecurity()
@@ -89,11 +107,24 @@ object OneSignalPushManager {
         }
     }
 
+    private fun buildQuickIdentityKey(context: Context): String {
+        return try {
+            val session = SessionManager(context)
+            val phone = session.getNormalizedUserPhone()
+            val fcmTail = session.getFcmToken().orEmpty().trim().takeLast(12)
+            "$phone|$fcmTail"
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
     /**
      * Initializes OneSignal & FCM token acquisition on app launch.
      */
     fun init(context: Context) {
         val appContext = context.applicationContext
+        lastSyncTriggerMs = System.currentTimeMillis()
+        lastTriggeredIdentityKey = buildQuickIdentityKey(appContext)
         scope.launch {
             fetchRemoteOneSignalConfigIfNeeded(appContext)
             acquireFcmAndSync(appContext)
@@ -102,63 +133,96 @@ object OneSignalPushManager {
 
     @Volatile
     private var lastSyncTriggerMs: Long = 0L
-    private const val SYNC_THROTTLE_MS = 30_000L
+    private const val SYNC_THROTTLE_MS = 5 * 60_000L // 5 minutes debounce for identical identity
 
     /**
      * Triggers an asynchronous sync of the student's current device, phone number, and FCM token
-     * with OneSignal and Supabase. Throttled to avoid duplicate burst calls on app startup/resume.
+     * with OneSignal and Supabase. Debounced to avoid duplicate burst calls on app startup/resume,
+     * while still syncing immediately whenever phone/FCM identity changes or force = true.
      */
     fun triggerSyncAsync(
         context: Context,
         studentNameOverride: String? = null,
         force: Boolean = false
     ) {
+        val appContext = context.applicationContext
         val now = System.currentTimeMillis()
-        if (!force && studentNameOverride.isNullOrBlank() && (now - lastSyncTriggerMs) < SYNC_THROTTLE_MS) {
+        val quickKey = buildQuickIdentityKey(appContext)
+        val identityChanged = quickKey.isNotBlank() && quickKey != lastTriggeredIdentityKey
+        if (!force && !identityChanged && studentNameOverride.isNullOrBlank() && (now - lastSyncTriggerMs) < SYNC_THROTTLE_MS) {
             return
         }
         lastSyncTriggerMs = now
-        val appContext = context.applicationContext
+        if (quickKey.isNotBlank()) {
+            lastTriggeredIdentityKey = quickKey
+        }
         scope.launch {
             acquireFcmAndSync(appContext, studentNameOverride = studentNameOverride)
         }
     }
 
-    private suspend fun fetchRemoteOneSignalConfigIfNeeded(context: Context) = withContext(Dispatchers.IO) {
-        try {
-            val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
-            if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withContext
+    private fun shouldSkipRemoteAppIdFetch(context: Context, force: Boolean): Boolean {
+        val fromBuildConfig = try {
+            BuildConfig.ONESIGNAL_APP_ID.trim().removeSurrounding("\"").removeSurrounding("'")
+        } catch (_: Throwable) {
+            ""
+        }
+        if (fromBuildConfig.isNotBlank() && !fromBuildConfig.contains("your-onesignal", ignoreCase = true)) {
+            hasFetchedAppIdThisSession = true
+            return true
+        }
+        if (force) return false
+        if (hasFetchedAppIdThisSession) return true
+        val prefs = getPrefs(context)
+        val cached = prefs.getString(KEY_CACHED_APP_ID, "")?.trim().orEmpty()
+        val fetchedAt = prefs.getLong(KEY_APP_ID_FETCHED_AT, 0L)
+        if (cached.isNotBlank() && fetchedAt > 0L && (System.currentTimeMillis() - fetchedAt) < APP_ID_CACHE_TTL_MS) {
+            hasFetchedAppIdThisSession = true
+            return true
+        }
+        return false
+    }
 
-            // Fetch public OneSignal App ID via secure RPC (never exposes REST API Key)
-            val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_onesignal_public_app_id"
-            val rpcReq = Request.Builder()
-                .url(rpcUrl)
-                .addHeader("apikey", anonKey)
-                .addHeader("Authorization", "Bearer $anonKey")
-                .addHeader("Content-Type", "application/json")
-                .post("{}".toRequestBody("application/json".toMediaType()))
-                .build()
+    private suspend fun fetchRemoteOneSignalConfigIfNeeded(
+        context: Context,
+        force: Boolean = false
+    ) = withContext(Dispatchers.IO) {
+        if (shouldSkipRemoteAppIdFetch(context, force)) return@withContext
+        configMutex.withLock {
+            if (shouldSkipRemoteAppIdFetch(context, force)) return@withLock
+            try {
+                val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
+                if (supabaseUrl.isBlank() || anonKey.isBlank()) return@withLock
 
-            httpClient.newCall(rpcReq).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val bodyStr = resp.body?.string()?.trim().orEmpty()
-                    if (bodyStr.startsWith("{")) {
-                        val obj = JSONObject(bodyStr)
-                        val remoteAppId = obj.optString("onesignal_app_id", "").trim()
-                        if (remoteAppId.isNotBlank()) {
-                            getPrefs(context).edit().putString(KEY_CACHED_APP_ID, remoteAppId).apply()
-                            return@withContext
+                // Fetch public OneSignal App ID via secure RPC (never exposes REST API Key)
+                val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/get_onesignal_public_app_id"
+                val rpcReq = Request.Builder()
+                    .url(rpcUrl)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post("{}".toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                httpClient.newCall(rpcReq).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val bodyStr = resp.body?.string()?.trim().orEmpty()
+                        val remoteAppId = when {
+                            bodyStr.startsWith("{") -> JSONObject(bodyStr).optString("onesignal_app_id", "").trim()
+                            bodyStr.startsWith("\"") && bodyStr.endsWith("\"") -> bodyStr.removeSurrounding("\"").trim()
+                            else -> ""
                         }
-                    } else if (bodyStr.startsWith("\"") && bodyStr.endsWith("\"")) {
-                        val remoteAppId = bodyStr.removeSurrounding("\"").trim()
+                        val editor = getPrefs(context).edit()
+                            .putLong(KEY_APP_ID_FETCHED_AT, System.currentTimeMillis())
                         if (remoteAppId.isNotBlank()) {
-                            getPrefs(context).edit().putString(KEY_CACHED_APP_ID, remoteAppId).apply()
-                            return@withContext
+                            editor.putString(KEY_CACHED_APP_ID, remoteAppId)
                         }
+                        editor.apply()
+                        hasFetchedAppIdThisSession = true
                     }
                 }
-            }
-        } catch (_: Throwable) {}
+            } catch (_: Throwable) {}
+        }
     }
 
     private const val MAXBIRD_FIREBASE_APP_NAME = "maxbird-notification"
@@ -326,62 +390,76 @@ object OneSignalPushManager {
                 var playerId = getSavedPlayerId(context)
                 val currentSignature = "$appId|$resolvedFcm|$externalUserId|$studentName"
                 val nowMs = System.currentTimeMillis()
-                if (playerId.isNotBlank() && currentSignature == lastSyncedSignature && (nowMs - lastSyncedAtMs) < 15_000L) {
+                val prefs = getPrefs(context)
+                val effectiveOneSignalSig = lastSyncedSignature.ifBlank {
+                    prefs.getString(KEY_LAST_ONESIGNAL_SYNC_SIG, "") ?: ""
+                }
+                val effectiveOneSignalAt = if (lastSyncedAtMs > 0L) {
+                    lastSyncedAtMs
+                } else {
+                    prefs.getLong(KEY_LAST_ONESIGNAL_SYNC_AT, 0L)
+                }
+
+                val oneSignalAlreadyFresh = playerId.isNotBlank() &&
+                    currentSignature == effectiveOneSignalSig &&
+                    (nowMs - effectiveOneSignalAt) < ONESIGNAL_PLAYER_SYNC_TTL_MS
+
+                if (oneSignalAlreadyFresh) {
                     ShikhoNotificationManager.updateOneSignalStatus(playerId, externalUserId)
-                    return@withLock
-                }
-
-                // 1. Register / Update with OneSignal Players API if App ID & FCM token are available
-            if (appId.isNotBlank() && resolvedFcm.isNotBlank()) {
-                val tagsJson = JSONObject().apply {
-                    put("role", "student")
-                    put("is_admin", "false")
-                    put("device_hash", deviceHardwareHash)
-                    put("display_device_id", displayDeviceId)
-                    put("student_name", studentName)
-                    if (normPhone.isNotBlank()) {
-                        put("student_phone", normPhone)
-                        put("student_key", normPhone)
-                    } else {
-                        put("student_key", deviceHardwareHash)
+                } else if (appId.isNotBlank() && resolvedFcm.isNotBlank()) {
+                    // 1. Register / Update with OneSignal Players API if App ID & FCM token are available
+                    val tagsJson = JSONObject().apply {
+                        put("role", "student")
+                        put("is_admin", "false")
+                        put("device_hash", deviceHardwareHash)
+                        put("display_device_id", displayDeviceId)
+                        put("student_name", studentName)
+                        if (normPhone.isNotBlank()) {
+                            put("student_phone", normPhone)
+                            put("student_key", normPhone)
+                        } else {
+                            put("student_key", deviceHardwareHash)
+                        }
+                        if (userId.isNotBlank()) {
+                            put("shikho_user_id", userId)
+                        }
                     }
-                    if (userId.isNotBlank()) {
-                        put("shikho_user_id", userId)
+
+                    val playerPayload = JSONObject().apply {
+                        put("app_id", appId)
+                        put("device_type", 1) // 1 = Android
+                        put("identifier", resolvedFcm)
+                        put("notification_types", 1) // 1 = Subscribed
+                        put("external_user_id", externalUserId)
+                        put("device_model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+                        put("device_os", Build.VERSION.RELEASE ?: "Android")
+                        put("game_version", try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "1.0" })
+                        put("tags", tagsJson)
                     }
-                }
 
-                val playerPayload = JSONObject().apply {
-                    put("app_id", appId)
-                    put("device_type", 1) // 1 = Android
-                    put("identifier", resolvedFcm)
-                    put("notification_types", 1) // 1 = Subscribed
-                    put("external_user_id", externalUserId)
-                    put("device_model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
-                    put("device_os", Build.VERSION.RELEASE ?: "Android")
-                    put("game_version", try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "1.0" })
-                    put("tags", tagsJson)
-                }
+                    try {
+                        val req = Request.Builder()
+                            .url("https://onesignal.com/api/v1/players")
+                            .addHeader("Content-Type", "application/json")
+                            .post(playerPayload.toString().toRequestBody("application/json".toMediaType()))
+                            .build()
 
-                try {
-                    val req = Request.Builder()
-                        .url("https://onesignal.com/api/v1/players")
-                        .addHeader("Content-Type", "application/json")
-                        .post(playerPayload.toString().toRequestBody("application/json".toMediaType()))
-                        .build()
-
-                    httpClient.newCall(req).execute().use { resp ->
-                        val bodyStr = resp.body?.string() ?: ""
-                        if (resp.isSuccessful && bodyStr.trim().startsWith("{")) {
-                            val json = JSONObject(bodyStr)
-                            val newPlayerId = json.optString("id", "").trim()
-                            if (newPlayerId.isNotBlank()) {
+                        httpClient.newCall(req).execute().use { resp ->
+                            val bodyStr = resp.body?.string() ?: ""
+                            if (resp.isSuccessful && bodyStr.trim().startsWith("{")) {
+                                val json = JSONObject(bodyStr)
+                                val newPlayerId = json.optString("id", "").trim()
+                                if (newPlayerId.isNotBlank()) {
                                     playerId = newPlayerId
-                                    getPrefs(context).edit()
+                                    val syncedNow = System.currentTimeMillis()
+                                    prefs.edit()
                                         .putString(KEY_PLAYER_ID, newPlayerId)
                                         .putString(KEY_LAST_SYNCED_FCM, resolvedFcm)
+                                        .putString(KEY_LAST_ONESIGNAL_SYNC_SIG, currentSignature)
+                                        .putLong(KEY_LAST_ONESIGNAL_SYNC_AT, syncedNow)
                                         .apply()
                                     lastSyncedSignature = currentSignature
-                                    lastSyncedAtMs = System.currentTimeMillis()
+                                    lastSyncedAtMs = syncedNow
                                     ShikhoNotificationManager.updateOneSignalStatus(newPlayerId, externalUserId)
                                     ShikhoNotificationManager.logTerminal(
                                         "SUCCESS",
@@ -406,16 +484,17 @@ object OneSignalPushManager {
                     }
                 }
 
-            // 2. Sync `onesignal_player_id` and `fcm_token` to Supabase via RPC (with scoped fallback)
-            syncPushIdentityToSupabase(
-                deviceHardwareHash = deviceHardwareHash,
-                displayDeviceId = displayDeviceId,
-                studentPhone = normPhone,
-                studentName = studentName,
-                oneSignalPlayerId = playerId,
-                fcmToken = resolvedFcm,
-                studentKey = externalUserId
-            )
+                // 2. Sync `onesignal_player_id` and `fcm_token` to Supabase via RPC (deduplicated by signature + 6h TTL)
+                syncPushIdentityToSupabase(
+                    context = context,
+                    deviceHardwareHash = deviceHardwareHash,
+                    displayDeviceId = displayDeviceId,
+                    studentPhone = normPhone,
+                    studentName = studentName,
+                    oneSignalPlayerId = playerId,
+                    fcmToken = resolvedFcm,
+                    studentKey = externalUserId
+                )
             } catch (e: Throwable) {
                 Log.w(TAG, "syncStudentDeviceWithOneSignal error: ${e.message}")
             }
@@ -423,6 +502,7 @@ object OneSignalPushManager {
     }
 
     private fun syncPushIdentityToSupabase(
+        context: Context,
         deviceHardwareHash: String,
         displayDeviceId: String,
         studentPhone: String,
@@ -435,8 +515,25 @@ object OneSignalPushManager {
             val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) return
 
-            // 1. Primary: Call Supabase RPC `sync_student_push_identity` (exact 7-arg signature)
             val currentAppVersion = try { BuildConfig.VERSION_NAME.trim() } catch (_: Throwable) { "" }
+            val rpcSignature = "$deviceHardwareHash|$displayDeviceId|$studentPhone|$studentKey|$oneSignalPlayerId|$fcmToken|$currentAppVersion"
+            val nowMs = System.currentTimeMillis()
+            val prefs = getPrefs(context)
+            val cachedSig = lastSupabaseSyncedSignature.ifBlank {
+                prefs.getString(KEY_LAST_SUPABASE_SYNC_SIG, "") ?: ""
+            }
+            val cachedAt = if (lastSupabaseSyncedAtMs > 0L) {
+                lastSupabaseSyncedAtMs
+            } else {
+                prefs.getLong(KEY_LAST_SUPABASE_SYNC_AT, 0L)
+            }
+            if (rpcSignature == cachedSig && cachedAt > 0L && (nowMs - cachedAt) < SUPABASE_PUSH_SYNC_TTL_MS) {
+                lastSupabaseSyncedSignature = cachedSig
+                lastSupabaseSyncedAtMs = cachedAt
+                return
+            }
+
+            // 1. Primary: Call Supabase RPC `sync_student_push_identity` (exact 7-arg signature)
             var rpcSucceeded = false
             try {
                 val rpcPayload = JSONObject().apply {
@@ -460,7 +557,16 @@ object OneSignalPushManager {
                 }
             } catch (_: Throwable) {}
 
-            if (rpcSucceeded) return
+            if (rpcSucceeded) {
+                val syncedAt = System.currentTimeMillis()
+                lastSupabaseSyncedSignature = rpcSignature
+                lastSupabaseSyncedAtMs = syncedAt
+                prefs.edit()
+                    .putString(KEY_LAST_SUPABASE_SYNC_SIG, rpcSignature)
+                    .putLong(KEY_LAST_SUPABASE_SYNC_AT, syncedAt)
+                    .apply()
+                return
+            }
 
             // 2. Fallback: Scoped PATCH on `devices` table only if RPC is unavailable
             try {
@@ -485,7 +591,17 @@ object OneSignalPushManager {
                     .addHeader("Content-Type", "application/json")
                     .patch(devPatch.toString().toRequestBody("application/json".toMediaType()))
                     .build()
-                httpClient.newCall(devReq).execute().use { /* closed safely */ }
+                httpClient.newCall(devReq).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val syncedAt = System.currentTimeMillis()
+                        lastSupabaseSyncedSignature = rpcSignature
+                        lastSupabaseSyncedAtMs = syncedAt
+                        prefs.edit()
+                            .putString(KEY_LAST_SUPABASE_SYNC_SIG, rpcSignature)
+                            .putLong(KEY_LAST_SUPABASE_SYNC_AT, syncedAt)
+                            .apply()
+                    }
+                }
             } catch (_: Throwable) {}
         } catch (_: Throwable) {}
     }

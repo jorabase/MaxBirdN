@@ -4,10 +4,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -34,12 +36,20 @@ sealed class NavigationItem(
         description = "সকল এনরোল্ড ও অফার করা পাঠক্রম"
     )
 
+    object Library : NavigationItem(
+        route = "tab_library",
+        title = "লাইব্রেরি",
+        selectedIcon = Icons.Filled.MenuBook,
+        unselectedIcon = Icons.Outlined.MenuBook,
+        description = "ডিজিটাল বই, অধ্যায় ও অফলাইন অডিও রিডার"
+    )
+
     object Downloads : NavigationItem(
         route = "tab_downloads",
         title = "ডাউনলোড",
         selectedIcon = Icons.Filled.Download,
         unselectedIcon = Icons.Outlined.Download,
-        description = "অফলাইন ভিডিও ও স্টাডি মেটেরিয়াল"
+        description = "অফলাইন ভিডিও, বই ও স্টাডি মেটেরিয়াল"
     )
 
     object Settings : NavigationItem(
@@ -51,6 +61,6 @@ sealed class NavigationItem(
     )
 
     companion object {
-        val items = listOf(Home, Courses, Downloads, Settings)
+        val items = listOf(Home, Courses, Library, Downloads, Settings)
     }
 }

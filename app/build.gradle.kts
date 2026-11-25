@@ -88,10 +88,15 @@ android {
       ?: (findProperty("ONESIGNAL_APP_ID") as? String)
       ?: envProps.getProperty("ONESIGNAL_APP_ID")
       ?: "").trim().removeSurrounding("\"").replace("\r", "").replace("\n", "").replace("\"", "")
+    val libraryR2BaseUrl = (System.getenv("LIBRARY_R2_BASE_URL")
+      ?: (findProperty("LIBRARY_R2_BASE_URL") as? String)
+      ?: envProps.getProperty("LIBRARY_R2_BASE_URL")
+      ?: "").trim().removeSurrounding("\"").replace("\r", "").replace("\n", "").replace("\"", "")
 
     buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     buildConfigField("String", "ONESIGNAL_APP_ID", "\"$oneSignalAppId\"")
+    buildConfigField("String", "LIBRARY_R2_BASE_URL", "\"$libraryR2BaseUrl\"")
 
     fun resolveBoolFlag(propKey: String, envKey: String, defaultVal: Boolean): Boolean {
       val rawProp = (findProperty(propKey) as? String)?.trim()?.lowercase()
@@ -187,6 +192,7 @@ secrets {
   ignoreList.add("SUPABASE_ANON_KEY")
   ignoreList.add("ONESIGNAL_APP_ID")
   ignoreList.add("ONESIGNAL_REST_API_KEY")
+  ignoreList.add("LIBRARY_R2_BASE_URL")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.ERROR }
@@ -194,6 +200,7 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.E
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
+  implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)

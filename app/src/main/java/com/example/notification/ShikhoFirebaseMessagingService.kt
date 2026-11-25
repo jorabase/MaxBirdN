@@ -232,7 +232,10 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
                     com.example.security.DeviceActivationRepository.checkStudentVerificationStatus(applicationContext)
                 }
                 runCatching {
-                    com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(applicationContext)
+                    com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(
+                        context = applicationContext,
+                        forceRefresh = true
+                    )
                 }
             }
 

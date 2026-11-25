@@ -10,6 +10,8 @@ import com.example.auth.SessionManager
 import com.example.security.DeviceActivationRepository
 import com.example.security.DeviceSecurityManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -284,10 +286,29 @@ object CourseCommerceRepository {
     private const val KEY_MIGRATED_TO_ENC = "key_migrated_to_enc_v1"
     private const val KEY_CACHED_SNAPSHOT_JSON = "key_cached_snapshot_json"
     private const val KEY_CACHED_FOR_UID = "key_cached_for_uid"
+    private const val KEY_CACHED_PAYMENT_SETTINGS_JSON = "key_cached_payment_settings_json"
+    private const val KEY_PAYMENT_SETTINGS_FETCHED_AT = "key_payment_settings_fetched_at"
+
+    private const val PAYMENT_SETTINGS_CACHE_TTL_MS = 12 * 60 * 60 * 1000L // 12 hours
+    private const val COMMERCE_DEBOUNCE_MS = 45_000L // 45s session debounce & concurrent-call coalescing
 
     private val prefsLock = Any()
     @Volatile
     private var cachedPrefs: SharedPreferences? = null
+
+    private val paymentSettingsMutex = Mutex()
+    @Volatile
+    private var inMemoryPaymentSettingsJson: String? = null
+    @Volatile
+    private var inMemoryPaymentSettingsFetchedAtMs: Long = 0L
+
+    private val commerceFetchMutex = Mutex()
+    @Volatile
+    private var lastCommerceCacheKey: String = ""
+    @Volatile
+    private var lastCommerceFetchedElapsedMs: Long = 0L
+    @Volatile
+    private var lastCommerceSnapshot: CourseCommerceSnapshot? = null
 
     // Monotonic server-synced clock to prevent local device clock rollback bypass on Free Trials & Installments
     @Volatile
@@ -984,12 +1005,90 @@ object CourseCommerceRepository {
     }
 
     fun clearCache(context: Context) {
+        lastCommerceSnapshot = null
+        lastCommerceCacheKey = ""
+        lastCommerceFetchedElapsedMs = 0L
         try {
             getPrefs(context).edit()
                 .remove(KEY_CACHED_SNAPSHOT_JSON)
                 .remove(KEY_CACHED_FOR_UID)
                 .apply()
         } catch (_: Throwable) {}
+    }
+
+    private fun getCachedPaymentSettingsObject(
+        context: Context,
+        allowExpired: Boolean = false
+    ): JSONObject? {
+        return try {
+            val nowMs = System.currentTimeMillis()
+            val memJson = inMemoryPaymentSettingsJson
+            val memAt = inMemoryPaymentSettingsFetchedAtMs
+            if (!memJson.isNullOrBlank() && (allowExpired || (memAt > 0L && (nowMs - memAt) < PAYMENT_SETTINGS_CACHE_TTL_MS))) {
+                return JSONObject(memJson)
+            }
+            val prefs = getPrefs(context)
+            val savedJson = prefs.getString(KEY_CACHED_PAYMENT_SETTINGS_JSON, null)?.trim()
+            val savedAt = prefs.getLong(KEY_PAYMENT_SETTINGS_FETCHED_AT, 0L)
+            if (!savedJson.isNullOrBlank() && savedJson.startsWith("{") &&
+                (allowExpired || (savedAt > 0L && (nowMs - savedAt) < PAYMENT_SETTINGS_CACHE_TTL_MS))
+            ) {
+                inMemoryPaymentSettingsJson = savedJson
+                inMemoryPaymentSettingsFetchedAtMs = savedAt
+                return JSONObject(savedJson)
+            }
+            null
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun saveCachedPaymentSettingsObject(context: Context, settingsObj: JSONObject) {
+        try {
+            val serialized = settingsObj.toString()
+            val nowMs = System.currentTimeMillis()
+            inMemoryPaymentSettingsJson = serialized
+            inMemoryPaymentSettingsFetchedAtMs = nowMs
+            getPrefs(context).edit()
+                .putString(KEY_CACHED_PAYMENT_SETTINGS_JSON, serialized)
+                .putLong(KEY_PAYMENT_SETTINGS_FETCHED_AT, nowMs)
+                .apply()
+        } catch (_: Throwable) {}
+    }
+
+    private suspend fun getOrFetchPaymentSettings(
+        context: Context,
+        supabaseUrl: String,
+        anonKey: String,
+        forceRefresh: Boolean = false
+    ): JSONObject? {
+        if (!forceRefresh) {
+            getCachedPaymentSettingsObject(context, allowExpired = false)?.let { return it }
+        }
+        return paymentSettingsMutex.withLock {
+            if (!forceRefresh) {
+                getCachedPaymentSettingsObject(context, allowExpired = false)?.let { return@withLock it }
+            }
+            try {
+                val settingsReq = Request.Builder()
+                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_settings?select=*&limit=1")
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Authorization", "Bearer $anonKey")
+                    .get()
+                    .build()
+                httpClient.newCall(settingsReq).execute().use { settingsResp ->
+                    if (settingsResp.isSuccessful) {
+                        val arr = JSONArray(settingsResp.body?.string() ?: "[]")
+                        if (arr.length() > 0) {
+                            val obj = arr.getJSONObject(0)
+                            saveCachedPaymentSettingsObject(context, obj)
+                            return@withLock obj
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
+            getCachedPaymentSettingsObject(context, allowExpired = true)
+        }
     }
 
     fun getCachedSnapshot(context: Context): CourseCommerceSnapshot {
@@ -1067,45 +1166,43 @@ object CourseCommerceRepository {
      * Strictly scoped by the student's Phone Number (`01XXXXXXXXX`) and Shikho Account ID (`userId`)
      * so it works across ANY device where the student logs in with their phone number!
      */
-    suspend fun fetchCourseCommerceStatus(context: Context): CourseCommerceSnapshot = withContext(Dispatchers.IO) {
-        try {
-            val account = resolveStudentAccount(context)
-            if (!account.isLoggedIn) {
-                return@withContext CourseCommerceSnapshot()
-            }
+    suspend fun fetchCourseCommerceStatus(
+        context: Context,
+        forceRefresh: Boolean = false
+    ): CourseCommerceSnapshot = withContext(Dispatchers.IO) {
+        commerceFetchMutex.withLock {
+            try {
+                val account = resolveStudentAccount(context)
+                if (!account.isLoggedIn) {
+                    return@withLock CourseCommerceSnapshot()
+                }
 
-            val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
-            if (supabaseUrl.isBlank() || anonKey.isBlank()) {
-                return@withContext getCachedSnapshot(context)
-            }
+                val nowElapsed = SystemClock.elapsedRealtime()
+                val recentSnapshot = lastCommerceSnapshot
+                if (!forceRefresh &&
+                    recentSnapshot != null &&
+                    lastCommerceCacheKey == account.cacheKey &&
+                    (nowElapsed - lastCommerceFetchedElapsedMs) < COMMERCE_DEBOUNCE_MS
+                ) {
+                    return@withLock recentSnapshot
+                }
 
-            val rootJson = JSONObject()
+                val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
+                if (supabaseUrl.isBlank() || anonKey.isBlank()) {
+                    return@withLock getCachedSnapshot(context)
+                }
 
-            fun enrichWithLivePaymentSettings(targetJson: JSONObject) {
-                try {
-                    val settingsReq = Request.Builder()
-                        .url("${supabaseUrl.trimEnd('/')}/rest/v1/course_payment_settings?select=*&limit=1")
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer $anonKey")
-                        .get()
-                        .build()
-                    httpClient.newCall(settingsReq).execute().use { settingsResp ->
-                        if (settingsResp.isSuccessful) {
-                            val arr = JSONArray(settingsResp.body?.string() ?: "[]")
-                            if (arr.length() > 0) {
-                                targetJson.put("payment_settings", arr.getJSONObject(0))
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {}
-            }
+                val rootJson = JSONObject()
 
-            enrichWithLivePaymentSettings(rootJson)
+                // Pre-populate payment_settings from 12h memory/SharedPreferences cache (0 network calls)
+                getCachedPaymentSettingsObject(context, allowExpired = false)?.let { cachedSettings ->
+                    rootJson.put("payment_settings", cachedSettings)
+                }
 
-            val matchedEnrollments = JSONArray()
-            val matchedTransactions = JSONArray()
-            val seenEnrollmentIds = mutableSetOf<String>()
-            val seenTxIds = mutableSetOf<String>()
+                val matchedEnrollments = JSONArray()
+                val matchedTransactions = JSONArray()
+                val seenEnrollmentIds = mutableSetOf<String>()
+                val seenTxIds = mutableSetOf<String>()
 
             val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
             val displayDeviceId = DeviceSecurityManager.getDisplayDeviceId(context)
@@ -1174,8 +1271,10 @@ object CourseCommerceRepository {
                                 val json = JSONObject(bodyStr)
                                 rpcCallSucceeded = true
                                 restFetchSucceeded = true
-                                if (!rootJson.has("payment_settings") && json.optJSONObject("payment_settings") != null) {
-                                    rootJson.put("payment_settings", json.optJSONObject("payment_settings"))
+                                val rpcSettings = json.optJSONObject("payment_settings")
+                                if (rpcSettings != null) {
+                                    rootJson.put("payment_settings", rpcSettings)
+                                    saveCachedPaymentSettingsObject(context, rpcSettings)
                                 }
                                 val enrArr = json.optJSONArray("enrollments")
                                 if (enrArr != null) {
@@ -1316,17 +1415,34 @@ object CourseCommerceRepository {
                 }
             }
 
-            if (restFetchSucceeded) {
-                rootJson.put("enrollments", matchedEnrollments)
-                rootJson.put("transactions", matchedTransactions)
-                saveCachedSnapshot(context, rootJson.toString(), account.cacheKey)
-                return@withContext parseSnapshotJson(rootJson)
-            }
+                // Only query /rest/v1/course_payment_settings if neither 12h cache nor RPC provided it
+                if (!rootJson.has("payment_settings")) {
+                    getOrFetchPaymentSettings(
+                        context = context,
+                        supabaseUrl = supabaseUrl,
+                        anonKey = anonKey,
+                        forceRefresh = false
+                    )?.let { liveSettings ->
+                        rootJson.put("payment_settings", liveSettings)
+                    }
+                }
 
-            getCachedSnapshot(context)
-        } catch (e: Throwable) {
-            Log.e(TAG, "fetchCourseCommerceStatus error: ${e.message}")
-            getCachedSnapshot(context)
+                if (restFetchSucceeded) {
+                    rootJson.put("enrollments", matchedEnrollments)
+                    rootJson.put("transactions", matchedTransactions)
+                    saveCachedSnapshot(context, rootJson.toString(), account.cacheKey)
+                    val parsed = parseSnapshotJson(rootJson)
+                    lastCommerceSnapshot = parsed
+                    lastCommerceCacheKey = account.cacheKey
+                    lastCommerceFetchedElapsedMs = SystemClock.elapsedRealtime()
+                    return@withLock parsed
+                }
+
+                getCachedSnapshot(context)
+            } catch (e: Throwable) {
+                Log.e(TAG, "fetchCourseCommerceStatus error: ${e.message}")
+                getCachedSnapshot(context)
+            }
         }
     }
 
@@ -1456,7 +1572,7 @@ object CourseCommerceRepository {
                                     "অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।"
                                 )
                                 markOptimisticCourseRequested(context, programId, programTitle)
-                                fetchCourseCommerceStatus(context)
+                                fetchCourseCommerceStatus(context, forceRefresh = true)
                                 com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
                                     context = context,
                                     studentName = studentName,
@@ -1523,7 +1639,7 @@ object CourseCommerceRepository {
                     val patchOk = runCatching { httpClient.newCall(patchReq).execute().use { it.isSuccessful } }.getOrDefault(false)
                     if (patchOk) {
                         markOptimisticCourseRequested(context, programId, programTitle)
-                        fetchCourseCommerceStatus(context)
+                        fetchCourseCommerceStatus(context, forceRefresh = true)
                         com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
                             context = context,
                             studentName = studentName,
@@ -1588,7 +1704,7 @@ object CourseCommerceRepository {
                         lastStatusCode = upsertResp.code
                         if (upsertResp.isSuccessful) {
                             markOptimisticCourseRequested(context, programId, programTitle)
-                            fetchCourseCommerceStatus(context)
+                            fetchCourseCommerceStatus(context, forceRefresh = true)
                             com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
                                 context = context,
                                 studentName = studentName,
@@ -1636,7 +1752,7 @@ object CourseCommerceRepository {
                 httpClient.newCall(plainReq).execute().use { plainResp ->
                     if (plainResp.isSuccessful || plainResp.code == 409) {
                         markOptimisticCourseRequested(context, programId, programTitle)
-                        fetchCourseCommerceStatus(context)
+                        fetchCourseCommerceStatus(context, forceRefresh = true)
                         com.example.notification.OneSignalPushManager.notifyAdminCourseAccessRequest(
                             context = context,
                             studentName = studentName,
@@ -1744,7 +1860,7 @@ object CourseCommerceRepository {
                                     "message",
                                     "আপনার পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করে এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।"
                                 )
-                                fetchCourseCommerceStatus(context)
+                                fetchCourseCommerceStatus(context, forceRefresh = true)
                                 com.example.notification.OneSignalPushManager.notifyAdminCoursePaymentSubmitted(
                                     context = context,
                                     studentName = studentName,
@@ -1900,7 +2016,7 @@ object CourseCommerceRepository {
             }
 
             if (txSucceeded) {
-                fetchCourseCommerceStatus(context)
+                fetchCourseCommerceStatus(context, forceRefresh = true)
                 com.example.notification.OneSignalPushManager.notifyAdminCoursePaymentSubmitted(
                     context = context,
                     studentName = studentName,
@@ -2052,7 +2168,7 @@ object CourseCommerceRepository {
             }
 
             if (patchSucceeded) {
-                fetchCourseCommerceStatus(context)
+                fetchCourseCommerceStatus(context, forceRefresh = true)
                 com.example.notification.OneSignalPushManager.notifyAdminFreeTrialStarted(
                     context = context,
                     studentName = account.studentName,

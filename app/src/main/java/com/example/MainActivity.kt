@@ -111,12 +111,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Lifecycle-aware version enforcement & Kill Switch monitor (pauses in background, polls every 60s)
+        // Lifecycle-aware version enforcement & Kill Switch monitor (Cold Start + every 12 minutes)
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     val info = withContext(Dispatchers.IO) {
-                        AppUpdateRepository.fetchLatestUpdate()
+                        AppUpdateRepository.fetchLatestUpdate(forceRefresh = false)
                     }
                     if (info != null && AppUpdateRepository.shouldBlockApp(info, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME)) {
                         requiredUpdateState.value = info
@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    delay(60_000L)
+                    delay(AppUpdateRepository.UPDATE_CHECK_INTERVAL_MS)
                 }
             }
         }
@@ -179,7 +179,7 @@ class MainActivity : ComponentActivity() {
                                                 isRecheckingKillSwitch = true
                                                 mainScope.launch {
                                                     val latest = withContext(Dispatchers.IO) {
-                                                        AppUpdateRepository.fetchLatestUpdate()
+                                                        AppUpdateRepository.fetchLatestUpdate(forceRefresh = true)
                                                     }
                                                     isRecheckingKillSwitch = false
                                                     if (latest != null && AppUpdateRepository.shouldBlockApp(

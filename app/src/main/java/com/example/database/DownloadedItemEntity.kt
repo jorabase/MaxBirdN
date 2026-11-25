@@ -9,7 +9,7 @@ data class DownloadedItemEntity(
     val id: String,
     val title: String,
     val subtitle: String? = null,
-    val fileType: String, // "VIDEO" or "PDF"
+    val fileType: String, // "VIDEO", "PDF", or "HTML_BOOK"
     val remoteUrl: String,
     val localFilePath: String,
     val totalBytes: Long = 0L,
@@ -20,6 +20,7 @@ data class DownloadedItemEntity(
     companion object {
         const val FILE_TYPE_VIDEO = "VIDEO"
         const val FILE_TYPE_PDF = "PDF"
+        const val FILE_TYPE_HTML_BOOK = "HTML_BOOK"
 
         const val STATUS_DOWNLOADING = "DOWNLOADING"
         const val STATUS_PAUSED = "PAUSED"
@@ -32,6 +33,9 @@ data class DownloadedItemEntity(
 
     val isPdf: Boolean
         get() = fileType.equals(FILE_TYPE_PDF, ignoreCase = true)
+
+    val isHtmlBook: Boolean
+        get() = fileType.equals(FILE_TYPE_HTML_BOOK, ignoreCase = true)
 
     val isCompleted: Boolean
         get() = status.equals(STATUS_COMPLETED, ignoreCase = true)

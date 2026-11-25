@@ -496,7 +496,8 @@ class AppFileDownloadManager private constructor(
         title: String,
         subtitle: String? = null,
         fileType: String,
-        remoteUrl: String
+        remoteUrl: String,
+        forceRedownload: Boolean = false
     ): Job {
         pausedIds.remove(id)
         cancelledIds.remove(id)
@@ -519,13 +520,23 @@ class AppFileDownloadManager private constructor(
                 val streamDir = File(downloadVaultDir, "hls_$sanitizedId")
                 File(streamDir, "playlist.m3u8")
             } else {
-                val extension = if (fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true)) "pdf" else "mp4"
+                val extension = when {
+                    fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true) -> "pdf"
+                    fileType.equals(DownloadedItemEntity.FILE_TYPE_HTML_BOOK, ignoreCase = true) -> "html"
+                    else -> "mp4"
+                }
                 File(downloadVaultDir, "${fileType.lowercase()}_${sanitizedId}.$extension")
             }
 
             // Check if already completed and local file is valid
             val existingItem = downloadedItemDao.getDownloadedItemByIdOnce(id)
-            if (existingItem != null &&
+            if (forceRedownload) {
+                if (targetFile.exists()) targetFile.delete()
+                File(targetFile.parentFile, "${targetFile.name}.tmp").delete()
+                for (i in 0 until 8) {
+                    File(targetFile.parentFile, "${targetFile.name}.part$i").delete()
+                }
+            } else if (existingItem != null &&
                 existingItem.status == DownloadedItemEntity.STATUS_COMPLETED &&
                 targetFile.exists() &&
                 targetFile.length() > 0
@@ -538,12 +549,12 @@ class AppFileDownloadManager private constructor(
             }
 
             // Preserve previous progress when resuming from PAUSED or FAILED state
-            val initialDownloaded = if (existingItem != null && existingItem.remoteUrl == remoteUrl) {
+            val initialDownloaded = if (!forceRedownload && existingItem != null && existingItem.remoteUrl == remoteUrl) {
                 existingItem.downloadedBytes.coerceAtLeast(0L)
             } else {
                 0L
             }
-            val initialTotal = if (existingItem != null && existingItem.remoteUrl == remoteUrl) {
+            val initialTotal = if (!forceRedownload && existingItem != null && existingItem.remoteUrl == remoteUrl) {
                 existingItem.totalBytes.coerceAtLeast(0L)
             } else {
                 0L
@@ -1155,9 +1166,16 @@ class AppFileDownloadManager private constructor(
         var contentLength = 0L
         var acceptRanges = false
 
+        val isHtmlBook = initialEntity.isHtmlBook
         val probeRequest = Request.Builder()
             .url(remoteUrl)
-            .addStandardHeaders()
+            .apply {
+                if (isHtmlBook) {
+                    header("User-Agent", "MaxBird-Android/1.0")
+                } else {
+                    addStandardHeaders()
+                }
+            }
             .header("Accept-Encoding", "identity")
             .header("Range", "bytes=0-0")
             .build()
@@ -1237,7 +1255,13 @@ class AppFileDownloadManager private constructor(
                         val resumeStartByte = startByte + alreadyDone
                         val rangeRequest = Request.Builder()
                             .url(remoteUrl)
-                            .addStandardHeaders()
+                            .apply {
+                                if (isHtmlBook) {
+                                    header("User-Agent", "MaxBird-Android/1.0")
+                                } else {
+                                    addStandardHeaders()
+                                }
+                            }
                             .header("Accept-Encoding", "identity")
                             .header("Range", "bytes=$resumeStartByte-$endByte")
                             .build()
@@ -1340,7 +1364,13 @@ class AppFileDownloadManager private constructor(
 
             val requestBuilder = Request.Builder()
                 .url(remoteUrl)
-                .addStandardHeaders()
+                .apply {
+                    if (isHtmlBook) {
+                        header("User-Agent", "MaxBird-Android/1.0")
+                    } else {
+                        addStandardHeaders()
+                    }
+                }
                 .header("Accept-Encoding", "identity")
 
             if (existingLen > 0L && acceptRanges && (totalBytes == 0L || existingLen < totalBytes)) {

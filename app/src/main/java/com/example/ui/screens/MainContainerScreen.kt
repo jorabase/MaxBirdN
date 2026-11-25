@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +37,7 @@ import com.example.course.CourseViewModel
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.home.HomeViewModel
+import com.example.library.LibraryViewModel
 import com.example.ui.navigation.NavigationItem
 
 @Composable
@@ -58,12 +60,14 @@ fun MainContainerScreen(
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
     onPlayVideo: (videoUrl: String, title: String, subjectName: String, subjectColor: String, isLive: Boolean) -> Unit = { _, _, _, _, _ -> },
     onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
+    onOpenHtmlBook: (fileId: String, title: String, subtitle: String, remoteUrl: String, localFilePath: String) -> Unit = { _, _, _, _, _ -> },
     onNavigateToNotificationHistory: () -> Unit = {},
     onNavigateToNotification: () -> Unit = {},
     onNavigateToHeaderWallpaper: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
+    val libraryViewModel: LibraryViewModel = viewModel()
     val haptic = LocalHapticFeedback.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
     val context = LocalContext.current
@@ -80,6 +84,8 @@ fun MainContainerScreen(
     BackHandler {
         if (selectedIndex == 1 && courseViewModel.uiState.value.selectedCourseProgram != null) {
             courseViewModel.closeCourseDetails()
+        } else if (selectedIndex == 2 && libraryViewModel.navigateBack()) {
+            // Handled by Library folder stack back navigation
         } else if (selectedIndex != 0) {
             selectedIndex = 0
         } else {
@@ -158,7 +164,7 @@ fun MainContainerScreen(
                 0 -> {
                     HomeScreen(
                         viewModel = homeViewModel,
-                        onNavigateToProfile = { selectedIndex = 3 },
+                        onNavigateToProfile = { selectedIndex = 4 },
                         onNavigateToEditProfile = onNavigateToEditProfile,
                         onNavigateToChangeSyllabus = onNavigateToChangeSyllabus,
                         onNavigateToCourseTab = { selectedIndex = 1 },
@@ -197,14 +203,22 @@ fun MainContainerScreen(
                     )
                 }
                 2 -> {
+                    LibraryScreen(
+                        viewModel = libraryViewModel,
+                        onOpenHtmlBook = onOpenHtmlBook,
+                        onNavigateToDownloads = { selectedIndex = 3 }
+                    )
+                }
+                3 -> {
                     DownloadsScreen(
                         onBack = { selectedIndex = 0 },
                         onPlayVideo = onPlayVideo,
                         onOpenPdf = onOpenPdf,
+                        onOpenHtmlBook = onOpenHtmlBook,
                         showBackButton = false
                     )
                 }
-                3 -> {
+                4 -> {
                     SettingsScreen(
                         sessionManager = sessionManager,
                         onNavigateToEditProfile = onNavigateToEditProfile,
@@ -212,7 +226,7 @@ fun MainContainerScreen(
                         onNavigateToProfile = onNavigateToProfile,
                         onNavigateToCourseEnrollment = onNavigateToCourseEnrollment,
                         onNavigateToSavedItems = onNavigateToSavedItems,
-                        onNavigateToDownloads = { selectedIndex = 2 },
+                        onNavigateToDownloads = { selectedIndex = 3 },
                         onNavigateToReportCard = { onNavigateToReportCard(null, null, null) },
                         onNavigateToNotification = onNavigateToNotification,
                         onNavigateToHeaderWallpaper = onNavigateToHeaderWallpaper,
@@ -257,6 +271,9 @@ fun MainContainerScreen(
                     } else if (index == 1 && courseViewModel.uiState.value.selectedCourseProgram != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         courseViewModel.closeCourseDetails()
+                    } else if (index == 2) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        libraryViewModel.jumpToRoot()
                     }
                 },
                 activeDownloadsCount = activeDownloadsCount
@@ -287,6 +304,7 @@ fun ElementalFloatingBottomBar(
         listOf(
             TabTheme(Color(0xFF281A07), Color(0xFFFEF3C7), Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFFB45309)), // Amber (Home)
             TabTheme(Color(0xFF072541), Color(0xFFE0F2FE), Color(0xFF0284C7), Color(0xFF38BDF8), Color(0xFF0369A1)), // Azure (Courses)
+            TabTheme(Color(0xFF06291E), Color(0xFFD1FAE5), Color(0xFF10B981), Color(0xFF34D399), Color(0xFF047857)), // Emerald (Library)
             TabTheme(Color(0xFF0B243E), Color(0xFFE0F2FE), Color(0xFF0EA5E9), Color(0xFF7DD3FC), Color(0xFF0284C7)), // Sky (Downloads)
             TabTheme(Color(0xFF21123A), Color(0xFFF3E8FF), Color(0xFFA855F7), Color(0xFFC084FC), Color(0xFF7E22CE))  // Violet (Settings)
         )
@@ -352,14 +370,14 @@ fun ElementalFloatingBottomBar(
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     NavigationItem.items.forEachIndexed { index, item ->
                         val isSelected = selectedIndex == index
                         val theme = themes.getOrElse(index) { themes.last() }
-                        val showDownloadBadge = index == 2 && activeDownloadsCount > 0
+                        val showDownloadBadge = index == 3 && activeDownloadsCount > 0
                         val activeIconColor = if (isDark) theme.darkIcon else theme.lightIcon
                         val activePillBg = if (isDark) theme.darkPillBg else theme.lightPillBg
 
@@ -386,7 +404,7 @@ fun ElementalFloatingBottomBar(
                             label = "itemScale$index"
                         )
 
-                        val slotWeight = if (isSelected) 1.32f else 1f
+                        val slotWeight = if (isSelected) 1.38f else 0.92f
 
                         Box(
                             modifier = Modifier
@@ -420,7 +438,7 @@ fun ElementalFloatingBottomBar(
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.Center,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                                     ) {
                                         Box {
                                             Icon(
@@ -428,7 +446,7 @@ fun ElementalFloatingBottomBar(
                                                 contentDescription = item.title,
                                                 tint = activeIconColor,
                                                 modifier = Modifier
-                                                    .size(19.dp)
+                                                    .size(18.dp)
                                                     .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                                             )
                                             if (showDownloadBadge) {
@@ -442,10 +460,10 @@ fun ElementalFloatingBottomBar(
                                                 )
                                             }
                                         }
-                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(
                                             text = item.title,
-                                            fontSize = 12.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = selectedTextColor,
                                             maxLines = 1,
@@ -469,7 +487,7 @@ fun ElementalFloatingBottomBar(
                                         ) {
                                             onTabSelected(index)
                                         }
-                                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                                        .padding(horizontal = 2.dp, vertical = 4.dp)
                                 ) {
                                     Box {
                                         Icon(
@@ -477,7 +495,7 @@ fun ElementalFloatingBottomBar(
                                             contentDescription = item.title,
                                             tint = iconTint,
                                             modifier = Modifier
-                                                .size(20.dp)
+                                                .size(19.dp)
                                                 .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                                         )
                                         if (showDownloadBadge) {
@@ -494,7 +512,7 @@ fun ElementalFloatingBottomBar(
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = item.title,
-                                        fontSize = 10.sp,
+                                        fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = iconTint,
                                         maxLines = 1,

@@ -622,7 +622,7 @@ fun SettingsScreen(
                         if (!isCheckingUpdate) {
                             isCheckingUpdate = true
                             scope.launch {
-                                val info = AppUpdateRepository.fetchLatestUpdate()
+                                val info = AppUpdateRepository.fetchLatestUpdate(forceRefresh = true)
                                 isCheckingUpdate = false
                                 if (info != null && AppUpdateRepository.shouldBlockApp(
                                         info = info,

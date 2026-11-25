@@ -66,6 +66,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       ONESIGNAL_APP_ID: ${{ secrets.ONESIGNAL_APP_ID }}
+      LIBRARY_R2_BASE_URL: ${{ secrets.LIBRARY_R2_BASE_URL }}
       FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
       VERSION_CODE: ${{ inputs.version_code != '' && inputs.version_code || github.run_number }}
       VERSION_NAME: ${{ inputs.version_name != '' && inputs.version_name || format('1.0.{0}', github.run_number) }}

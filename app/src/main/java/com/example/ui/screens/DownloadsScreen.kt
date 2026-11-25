@@ -92,6 +92,7 @@ fun DownloadsScreen(
     onBack: () -> Unit,
     onPlayVideo: (videoUrl: String, title: String, subjectName: String, subjectColor: String, isLive: Boolean) -> Unit,
     onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
+    onOpenHtmlBook: ((fileId: String, title: String, subtitle: String, remoteUrl: String, localFilePath: String) -> Unit)? = null,
     isOfflineOnly: Boolean = false,
     onNavigateOnline: (() -> Unit)? = null,
     showBackButton: Boolean = true,
@@ -106,7 +107,7 @@ fun DownloadsScreen(
     val allDownloads by downloadManager.getAllDownloads().collectAsStateWithLifecycle(initialValue = emptyList())
     val activeSpeeds by downloadManager.activeSpeedsFlow.collectAsStateWithLifecycle()
 
-    var selectedCategoryIndex by rememberSaveable { mutableIntStateOf(0) } // 0: All, 1: Videos, 2: PDFs
+    var selectedCategoryIndex by rememberSaveable { mutableIntStateOf(0) } // 0: All, 1: Videos, 2: PDFs, 3: HTML Books
     var selectedSortOrder by rememberSaveable { mutableIntStateOf(0) } // 0: Newest, 1: Largest, 2: Title
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var itemToDelete by remember { mutableStateOf<DownloadedItemEntity?>(null) }
@@ -165,12 +166,17 @@ fun DownloadsScreen(
         completedAndFailedDownloads.count { it.fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true) }
     }
 
+    val htmlBookCount = remember(completedAndFailedDownloads) {
+        completedAndFailedDownloads.count { it.fileType.equals(DownloadedItemEntity.FILE_TYPE_HTML_BOOK, ignoreCase = true) }
+    }
+
     // Filter only Completed & Failed items in main library so active items are not duplicated below!
     val filteredList = remember(completedAndFailedDownloads, selectedCategoryIndex, selectedSortOrder, searchQuery) {
         val base = completedAndFailedDownloads.filter { item ->
             val matchesCategory = when (selectedCategoryIndex) {
                 1 -> item.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true)
                 2 -> item.fileType.equals(DownloadedItemEntity.FILE_TYPE_PDF, ignoreCase = true)
+                3 -> item.fileType.equals(DownloadedItemEntity.FILE_TYPE_HTML_BOOK, ignoreCase = true)
                 else -> true
             }
             val matchesQuery = searchQuery.isBlank() ||
@@ -553,39 +559,40 @@ fun DownloadsScreen(
                     }
                 }
 
-                // Category Filter Chips Row (Balanced 3-Column Layout without Search Bar)
+                // Category Filter Chips Row (Scrollable 4-chip layout: All, Video, PDF, Library Books)
                 item {
                     val categories = listOf(
                         "সবগুলো (${completedAndFailedDownloads.size.toBengaliDigits()})" to Icons.Default.Folder,
                         "ভিডিও (${videoCount.toBengaliDigits()})" to Icons.Default.PlayCircleFilled,
-                        "নোট/পিডিএফ (${pdfCount.toBengaliDigits()})" to Icons.Default.PictureAsPdf
+                        "নোট/পিডিএফ (${pdfCount.toBengaliDigits()})" to Icons.Default.PictureAsPdf,
+                        "বই (${htmlBookCount.toBengaliDigits()})" to Icons.Default.MenuBook
                     )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         categories.forEachIndexed { index, (label, icon) ->
                             val isSelected = selectedCategoryIndex == index
+                            val chipAccent = if (index == 3) Color(0xFF10B981) else Color(0xFF0284C7)
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
-                                color = if (isSelected) Color(0xFF0284C7) else MaterialTheme.colorScheme.surface,
+                                color = if (isSelected) chipAccent else MaterialTheme.colorScheme.surface,
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isSelected) Color(0xFF0284C7)
+                                    if (isSelected) chipAccent
                                     else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                                 ),
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .testTag("downloads_category_chip_$index")
                                     .clip(RoundedCornerShape(16.dp))
                                     .clickable { selectedCategoryIndex = index }
                             ) {
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -602,7 +609,7 @@ fun DownloadsScreen(
                                         fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
                                         color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -615,7 +622,7 @@ fun DownloadsScreen(
                     if (activeDownloads.isEmpty()) {
                         item {
                             EmptyDownloadsView(
-                                isVideosTab = selectedCategoryIndex != 2,
+                                selectedCategoryIndex = selectedCategoryIndex,
                                 isSearching = searchQuery.isNotBlank(),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -650,19 +657,39 @@ fun DownloadsScreen(
                                     return@DownloadedItemCard
                                 }
 
-                                if (item.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true)) {
-                                    onPlayVideo(
-                                        item.localFilePath,
-                                        item.title,
-                                        item.subtitle ?: "অফলাইন লেকচার",
-                                        "#0284C7",
-                                        false
-                                    )
-                                } else {
-                                    if (onOpenPdf != null) {
-                                        onOpenPdf(item.localFilePath, item.title)
-                                    } else {
-                                        activePdfViewerItem = item
+                                when {
+                                    item.isVideo -> {
+                                        onPlayVideo(
+                                            item.localFilePath,
+                                            item.title,
+                                            item.subtitle ?: "অফলাইন লেকচার",
+                                            "#0284C7",
+                                            false
+                                        )
+                                    }
+                                    item.isHtmlBook -> {
+                                        if (onOpenHtmlBook != null) {
+                                            onOpenHtmlBook(
+                                                item.id,
+                                                item.title,
+                                                item.subtitle ?: "লাইব্রেরি বই",
+                                                item.remoteUrl,
+                                                item.localFilePath
+                                            )
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "বই রিডার চালু করা যাচ্ছে না",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                    else -> {
+                                        if (onOpenPdf != null) {
+                                            onOpenPdf(item.localFilePath, item.title)
+                                        } else {
+                                            activePdfViewerItem = item
+                                        }
                                     }
                                 }
                             },
@@ -1026,12 +1053,17 @@ fun DownloadedItemCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = com.example.ui.theme.isAppInDarkTheme()
-    val isVideo = item.fileType.equals(DownloadedItemEntity.FILE_TYPE_VIDEO, ignoreCase = true)
+    val isVideo = item.isVideo
+    val isHtmlBook = item.isHtmlBook
     val isFailed = item.status == DownloadedItemEntity.STATUS_FAILED
     val isPaused = item.status == DownloadedItemEntity.STATUS_PAUSED
 
     val subjectLabel = item.subtitle?.takeIf { it.isNotBlank() }
-        ?: if (isVideo) "ভিডিও লেকচার" else "লেকচার শিট"
+        ?: when {
+            isVideo -> "ভিডিও লেকচার"
+            isHtmlBook -> "লাইব্রেরি বই"
+            else -> "লেকচার শিট"
+        }
 
     val sizeText = remember(item.totalBytes, item.downloadedBytes) {
         val bytesToShow = if (item.totalBytes > 0L) item.totalBytes else item.downloadedBytes
@@ -1045,6 +1077,7 @@ fun DownloadedItemCard(
     val accentColor = when {
         isFailed -> Color(0xFFEF4444)
         isVideo -> Color(0xFF0284C7)
+        isHtmlBook -> Color(0xFF10B981)
         else -> Color(0xFF7C3AED)
     }
 
@@ -1084,6 +1117,7 @@ fun DownloadedItemCard(
                     imageVector = when {
                         isFailed -> Icons.Default.ErrorOutline
                         isVideo -> Icons.Default.PlayCircleFilled
+                        isHtmlBook -> Icons.Default.MenuBook
                         else -> Icons.Default.PictureAsPdf
                     },
                     contentDescription = null,
@@ -1195,10 +1229,11 @@ fun DownloadedItemCard(
 
 @Composable
 fun EmptyDownloadsView(
-    isVideosTab: Boolean,
+    selectedCategoryIndex: Int,
     modifier: Modifier = Modifier,
     isSearching: Boolean = false
 ) {
+    val accent = if (selectedCategoryIndex == 3) Color(0xFF10B981) else Color(0xFF0284C7)
     Column(
         modifier = modifier.padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1211,7 +1246,7 @@ fun EmptyDownloadsView(
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            Color(0xFF0284C7).copy(alpha = 0.16f),
+                            accent.copy(alpha = 0.16f),
                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                         )
                     )
@@ -1221,11 +1256,12 @@ fun EmptyDownloadsView(
             Icon(
                 imageVector = when {
                     isSearching -> Icons.Default.SearchOff
-                    isVideosTab -> Icons.Default.CloudDownload
-                    else -> Icons.Default.PictureAsPdf
+                    selectedCategoryIndex == 2 -> Icons.Default.PictureAsPdf
+                    selectedCategoryIndex == 3 -> Icons.Default.MenuBook
+                    else -> Icons.Default.CloudDownload
                 },
                 contentDescription = null,
-                tint = Color(0xFF0284C7).copy(alpha = 0.8f),
+                tint = accent.copy(alpha = 0.85f),
                 modifier = Modifier.size(36.dp)
             )
         }
@@ -1235,8 +1271,10 @@ fun EmptyDownloadsView(
         Text(
             text = when {
                 isSearching -> "কোনো ফাইল খুঁজে পাওয়া যায়নি"
-                isVideosTab -> "কোনো ডাউনলোডকৃত ভিডিও নেই"
-                else -> "কোনো ডাউনলোডকৃত নোট বা পিডিএফ নেই"
+                selectedCategoryIndex == 1 -> "কোনো ডাউনলোডকৃত ভিডিও নেই"
+                selectedCategoryIndex == 2 -> "কোনো ডাউনলোডকৃত নোট বা পিডিএফ নেই"
+                selectedCategoryIndex == 3 -> "কোনো ডাউনলোডকৃত বই নেই"
+                else -> "কোনো ডাউনলোডকৃত ফাইল নেই"
             },
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
@@ -1249,8 +1287,10 @@ fun EmptyDownloadsView(
         Text(
             text = if (isSearching) {
                 "অনুগ্রহ করে অন্য কোনো নাম বা কি-ওয়ার্ড দিয়ে খুঁজে দেখুন"
+            } else if (selectedCategoryIndex == 3) {
+                "লাইব্রেরি ট্যাব থেকে যেকোনো বই বা অধ্যায় ডাউনলোড করলে এখানে অফলাইনে পড়তে ও শুনতে পারবেন"
             } else {
-                "ডাউনলোড করা ক্লাস ও নোট এখানে ইন্টারনেট ছাড়াই অফলাইনে দেখার জন্য জমা থাকবে"
+                "ডাউনলোড করা ক্লাস, বই ও নোট এখানে ইন্টারনেট ছাড়াই অফলাইনে দেখার জন্য জমা থাকবে"
             },
             fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

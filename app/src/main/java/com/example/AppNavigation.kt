@@ -205,6 +205,22 @@ object Routes {
         val encSub = safeUrlEncode(subject)
         return "pdf_viewer?url=$encUrl&title=$encTitle&initialRemoteUrl=$encRemote&subject=$encSub"
     }
+
+    const val LIBRARY_HTML_READER = "library_html_reader?fileId={fileId}&title={title}&subtitle={subtitle}&remoteUrl={remoteUrl}&localFilePath={localFilePath}"
+    fun libraryHtmlReaderRoute(
+        fileId: String,
+        title: String,
+        subtitle: String = "",
+        remoteUrl: String = "",
+        localFilePath: String = ""
+    ): String {
+        val encId = safeUrlEncode(fileId)
+        val encTitle = safeUrlEncode(title)
+        val encSub = safeUrlEncode(subtitle)
+        val encRemote = safeUrlEncode(remoteUrl)
+        val encLocal = safeUrlEncode(localFilePath)
+        return "library_html_reader?fileId=$encId&title=$encTitle&subtitle=$encSub&remoteUrl=$encRemote&localFilePath=$encLocal"
+    }
 }
 
 // ============================================================
@@ -769,6 +785,17 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onOpenPdf = { filePath, title ->
                     navController.navigate(Routes.pdfViewerRoute(url = filePath, title = title))
+                },
+                onOpenHtmlBook = { fileId, title, subtitle, remoteUrl, localFilePath ->
+                    navController.navigate(
+                        Routes.libraryHtmlReaderRoute(
+                            fileId = fileId,
+                            title = title,
+                            subtitle = subtitle,
+                            remoteUrl = remoteUrl,
+                            localFilePath = localFilePath
+                        )
+                    )
                 },
                 onNavigateToNotificationHistory = {
                     navController.navigate(Routes.NOTIFICATION_SETTINGS)
@@ -1776,6 +1803,17 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onOpenPdf = { filePath, title ->
                     navController.navigate(Routes.pdfViewerRoute(url = filePath, title = title))
+                },
+                onOpenHtmlBook = { fileId, title, subtitle, remoteUrl, localFilePath ->
+                    navController.navigate(
+                        Routes.libraryHtmlReaderRoute(
+                            fileId = fileId,
+                            title = title,
+                            subtitle = subtitle,
+                            remoteUrl = remoteUrl,
+                            localFilePath = localFilePath
+                        )
+                    )
                 }
             )
         }
@@ -1949,6 +1987,35 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 subjectName = subjectName.ifBlank { fallbackSubject.ifBlank { "বিষয়" } },
                 initialCandidateUrls = candidateUrls,
                 sessionManager = sessionManager,
+                onBack = {
+                    navController.safePopBackStack()
+                }
+            )
+        }
+
+        animatedComposable(
+            route = Routes.LIBRARY_HTML_READER,
+            anim = NavAnim.forward,
+            arguments = listOf(
+                navArgument("fileId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                navArgument("subtitle") { type = NavType.StringType; defaultValue = "" },
+                navArgument("remoteUrl") { type = NavType.StringType; defaultValue = "" },
+                navArgument("localFilePath") { type = NavType.StringType; defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val fileId = safeUrlDecode(backStackEntry.arguments?.getString("fileId"))
+            val title = safeUrlDecode(backStackEntry.arguments?.getString("title"))
+            val subtitle = safeUrlDecode(backStackEntry.arguments?.getString("subtitle"))
+            val remoteUrl = safeUrlDecode(backStackEntry.arguments?.getString("remoteUrl"))
+            val localFilePath = safeUrlDecode(backStackEntry.arguments?.getString("localFilePath"))
+
+            LibraryHtmlReaderScreen(
+                fileId = fileId,
+                title = title,
+                subtitle = subtitle,
+                remoteUrl = remoteUrl,
+                initialLocalFilePath = localFilePath,
                 onBack = {
                     navController.safePopBackStack()
                 }
