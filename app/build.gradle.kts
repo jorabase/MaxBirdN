@@ -153,14 +153,6 @@ android {
     }
   }
 
-  val targetAbisProp = (findProperty("targetAbis") as? String)
-      ?: System.getenv("TARGET_ABIS")
-      ?: "arm64-v8a,armeabi-v7a"
-  val releaseAbiList = targetAbisProp
-      .split(",")
-      .map { it.trim() }
-      .filter { it.isNotBlank() }
-
   buildTypes {
     release {
       isCrunchPngs = false
@@ -168,21 +160,8 @@ android {
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
-      if (releaseAbiList.isNotEmpty()) {
-        ndk {
-          abiFilters += releaseAbiList
-        }
-      }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
-  }
-  val isAabBuild = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
-  packaging {
-    jniLibs {
-      // Compress native .so libraries inside direct-download APKs (~65% smaller APK);
-      // keep uncompressed for AAB so Play Store generates per-ABI compressed splits with 16KB alignment.
-      useLegacyPackaging = !isAabBuild
-    }
   }
   lint {
     checkReleaseBuilds = false
@@ -221,7 +200,6 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.E
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
-  implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
@@ -272,7 +250,6 @@ dependencies {
   // implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.zxing.core)
-  implementation(libs.commons.compress)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)

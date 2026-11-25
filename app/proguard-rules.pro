@@ -101,11 +101,9 @@
 -keep class coil.** { *; }
 -dontwarn coil.**
 
-# 11. WebView @JavascriptInterface (window.AndroidApp TTS Bridge) & Sherpa-ONNX Offline Neural TTS
+# 11. WebView @JavascriptInterface (window.AndroidApp TTS Bridge)
 -keepattributes JavascriptInterface
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
--keep class com.k2fsa.sherpa.onnx.** { *; }
--dontwarn com.k2fsa.sherpa.onnx.**
 

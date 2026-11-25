@@ -47,19 +47,6 @@ on:
         required: false
         default: false
         type: boolean
-      include_neural_tts_engine:
-        description: "🗣️ Include Sherpa-ONNX Neural TTS Engine (Voice packs still download on-demand inside app)"
-        required: false
-        default: true
-        type: boolean
-      target_abis:
-        description: "📱 Target Mobile CPU ABIs (arm64-v8a = smallest ~24 MB APK, arm64+arm32 = all phones ~32 MB)"
-        required: false
-        default: "arm64-v8a,armeabi-v7a"
-        type: choice
-        options:
-          - "arm64-v8a,armeabi-v7a"
-          - "arm64-v8a"
 
 jobs:
   build:
@@ -87,8 +74,6 @@ jobs:
       ENABLE_ANTI_NETWORK_CAPTURE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_network_capture) || 'true' }}
       ENABLE_ANTI_TAMPER: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_tamper) || 'true' }}
       BLOCK_VPN_CONNECTION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.block_vpn_connection) || 'false' }}
-      INCLUDE_NEURAL_TTS_ENGINE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.include_neural_tts_engine) || 'true' }}
-      TARGET_ABIS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_abis || 'arm64-v8a,armeabi-v7a' }}
 
     steps:
       - name: Checkout Code
@@ -263,46 +248,12 @@ jobs:
           echo "KEY_ALIAS=$KEY_AL" >> $GITHUB_ENV
 
       # -----------------------------------------------------------
-      # 1.5. AUTO-BUNDLE SHERPA-ONNX ANDROID AAR (OFFLINE NEURAL TTS)
-      # -----------------------------------------------------------
-      - name: Download Sherpa-ONNX Android AAR (Offline Neural TTS)
-        if: ${{ env.INCLUDE_NEURAL_TTS_ENGINE == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p app/libs
-          if ls app/libs/sherpa-onnx-*.aar 1> /dev/null 2>&1; then
-            echo "✅ Sherpa-ONNX AAR already present in app/libs/."
-            exit 0
-          fi
-
-          echo "🔎 Resolving latest official k2-fsa/sherpa-onnx Android AAR..."
-          AAR_URL=$(curl -sSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest" \
-            | jq -r '.assets[] | select(.name | test("^sherpa-onnx-[0-9]+\\.[0-9]+\\.[0-9]+\\.aar$")) | .browser_download_url' \
-            | head -n 1)
-
-          if [ -z "$AAR_URL" ] || [ "$AAR_URL" = "null" ]; then
-            echo "⚠️ Latest API query did not return standard AAR; falling back to v2.0.3..."
-            AAR_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-2.0.3.aar"
-          fi
-
-          AAR_FILE="app/libs/$(basename "$AAR_URL")"
-          echo "⬇️ Downloading $AAR_URL -> $AAR_FILE"
-          if curl -fSL --retry 3 --retry-delay 3 -o "$AAR_FILE" "$AAR_URL" && [ -s "$AAR_FILE" ]; then
-            echo "✅ Bundled Sherpa-ONNX Android AAR successfully ($(du -h "$AAR_FILE" | cut -f1))."
-          else
-            rm -f "$AAR_FILE"
-            echo "⚠️ Could not download Sherpa-ONNX AAR right now; APK will still build cleanly with Google Offline TTS fallback."
-          fi
-
-      # -----------------------------------------------------------
       # 2. RELEASE APK
       #    Automatic on push; manual 'release' or 'all'
       # -----------------------------------------------------------
       - name: Build Release APK
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'all')) }}
-        run: ./gradlew assembleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PtargetAbis="$TARGET_ABIS" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 3. DEBUG APK
@@ -310,7 +261,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Debug APK
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PtargetAbis="$TARGET_ABIS" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 4. RELEASE AAB
@@ -318,7 +269,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release AAB
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'aab' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew bundleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PtargetAbis="$TARGET_ABIS" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
+        run: ./gradlew bundleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 5. ORGANIZE & UPLOAD ARTIFACTS
@@ -396,7 +347,6 @@ jobs:
           echo "**Package Name:** \`com.maxbird.ff.app\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version Name:** \`$VERSION_NAME\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version Code:** \`$VERSION_CODE\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Neural TTS Engine Bundled:** \`$INCLUDE_NEURAL_TTS_ENGINE\` (ABIs: \`$TARGET_ABIS\`)" >> $GITHUB_STEP_SUMMARY
           echo "**Screenshot & Screen Record Protection:** \`$ENABLE_SCREENSHOT_PROTECTION\`" >> $GITHUB_STEP_SUMMARY
           echo "**Anti-Reqable / Network Capture Protection:** \`$ENABLE_ANTI_NETWORK_CAPTURE\`" >> $GITHUB_STEP_SUMMARY
           echo "**Anti-Tamper & Hook Protection:** \`$ENABLE_ANTI_TAMPER\`" >> $GITHUB_STEP_SUMMARY

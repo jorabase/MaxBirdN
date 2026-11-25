@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
 
@@ -30,8 +31,7 @@ data class TtsPlaybackState(
     val isPaused: Boolean = false,
     val speechRate: Float = 1.0f,
     val detectedLanguage: String = "bn", // "bn" or "en"
-    val engineLabelBn: String = "অফলাইন ভয়েস প্রস্তুত হচ্ছে...",
-    val isSherpaNeuralActive: Boolean = false,
+    val engineLabelBn: String = "Google অফলাইন TTS প্রস্তুত হচ্ছে...",
     val hasOfflineBanglaVoice: Boolean = false,
     val hasOfflineEnglishVoice: Boolean = false,
     val selectedBanglaVoiceName: String = "",
@@ -44,15 +44,13 @@ data class BilingualTextSegment(
 )
 
 /**
- * Offline Human-Like Bangla + English TTS Controller for HTML Books.
+ * Offline Bangla + English TTS Controller for HTML Books using Google Speech Services / Android TTS.
  *
  * Features:
- * 1. Dual-Engine Hybrid Architecture:
- *    - Primary (when Sherpa-ONNX AAR + R2 voice pack installed): On-device Piper/VITS Neural ONNX TTS.
- *    - Built-in Automatic Fallback (0 extra APK size): Enhanced Android Offline Neural TTS prioritizing
- *      Google Speech Services (`com.google.android.tts`) highest-quality local offline `bn-BD` / `en-US` voices.
+ * 1. Prioritizes Google Speech Services (`com.google.android.tts`) highest-quality local offline
+ *    `bn-BD` and `en-US` voices with zero extra APK size and instant playback.
  * 2. Smart Bilingual Script Splitting: Automatically detects Bangla (`\u0980-\u09FF`) and English runs
- *    within the same sentence/paragraph and switches voices naturally without robotic mispronunciation.
+ *    within the same sentence/paragraph and switches voices cleanly.
  * 3. Generation-safe completion callbacks: Guarantees `window.onAndroidTtsDone()` fires cleanly when
  *    finished and NEVER fires stale callbacks after `stop()` or rapid skipping.
  */
@@ -100,7 +98,7 @@ class OfflineBookTtsManager(context: Context) {
                 val wordLang = when {
                     hasBn -> "bn"
                     hasEn -> "en"
-                    else -> currentLang // digits / punctuation inherit current script context
+                    else -> currentLang
                 }
 
                 if (currentBuf.isNotEmpty() && wordLang != currentLang) {
@@ -175,7 +173,6 @@ class OfflineBookTtsManager(context: Context) {
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val sherpaBackend = SherpaOnnxNeuralBackend()
 
     private val _state = MutableStateFlow(TtsPlaybackState())
     val state: StateFlow<TtsPlaybackState> = _state.asStateFlow()
@@ -192,7 +189,7 @@ class OfflineBookTtsManager(context: Context) {
     @Volatile
     private var activeSpeakJob: Job? = null
 
-    // Pause / Resume snapshot for Android TTS (resumes from the exact paused segment)
+    // Pause / Resume snapshot (resumes from the exact paused segment)
     @Volatile
     private var pausedRemainingSegments: List<BilingualTextSegment> = emptyList()
     @Volatile
@@ -201,7 +198,22 @@ class OfflineBookTtsManager(context: Context) {
     private var pausedOnDone: (() -> Unit)? = null
 
     init {
+        cleanupLegacyOfflineVoicePacks()
         initializeAndroidTts()
+    }
+
+    /**
+     * Silently removes any old downloaded neural TTS model files so devices reclaim storage automatically.
+     */
+    private fun cleanupLegacyOfflineVoicePacks() {
+        scope.launch {
+            runCatching {
+                val legacyDir = File(appContext.filesDir, "offline_neural_tts_models")
+                if (legacyDir.exists()) {
+                    legacyDir.deleteRecursively()
+                }
+            }
+        }
     }
 
     private fun initializeAndroidTts() {
@@ -227,7 +239,7 @@ class OfflineBookTtsManager(context: Context) {
             }
         }
 
-        // Prefer Google Speech Services (highest quality offline Bangla & English neural voices on Android)
+        // Prefer Google Speech Services (highest quality offline Bangla & English voices on Android)
         androidTts = try {
             val hasGoogleTts = runCatching {
                 appContext.packageManager.getPackageInfo(GOOGLE_TTS_ENGINE, 0)
@@ -259,14 +271,14 @@ class OfflineBookTtsManager(context: Context) {
                 val locale = v.locale ?: return -1000
                 if (!locale.language.equals(targetLang, ignoreCase = true)) return -1000
                 var score = 0
-                // Strongly prefer offline local voices so reading works with zero internet!
+                // Strongly prefer offline local voices so reading works with zero internet
                 if (!v.isNetworkConnectionRequired) score += 500 else score -= 200
                 // Prefer exact country (BD for Bangla, US/GB for English)
                 if (locale.country.equals(preferredCountry, ignoreCase = true)) score += 120
                 else if (targetLang == "bn" && locale.country.equals("IN", ignoreCase = true)) score += 60
                 // Quality score (VERY_HIGH = 500, HIGH = 400, NORMAL = 300)
                 score += v.quality
-                // Prefer Google local neural voice variants (e.g. bn-bd-x-ban-local / baf-local)
+                // Prefer Google local voice variants (e.g. bn-bd-x-ban-local / baf-local)
                 val lowerName = v.name.lowercase()
                 if (lowerName.contains("-local")) score += 80
                 if (lowerName.contains("ban") || lowerName.contains("baf")) score += 45
@@ -303,25 +315,18 @@ class OfflineBookTtsManager(context: Context) {
             })
         }
 
-        val enginePref = TtsVoicePackManager.getEnginePreference(appContext)
-        val hasSherpaBn = sherpaBackend.isAvailable() && TtsVoicePackManager.isModelInstalled(appContext, "bn")
-        val hasSherpaEn = sherpaBackend.isAvailable() && TtsVoicePackManager.isModelInstalled(appContext, "en")
-        val useSherpa = enginePref != TtsEnginePreference.GOOGLE_SYSTEM && (hasSherpaBn || hasSherpaEn)
-        val hasOfflineBn = hasSherpaBn || (bnVoice != null && !bnVoice.isNetworkConnectionRequired)
-        val hasOfflineEn = hasSherpaEn || (enVoice != null && !enVoice.isNetworkConnectionRequired)
-
-        val engineLabel = when {
-            enginePref == TtsEnginePreference.GOOGLE_SYSTEM -> "Google অফলাইন TTS (বাংলা + ইংরেজি)"
-            useSherpa -> "Sherpa-ONNX নিউরাল অফলাইন ভয়েস"
-            hasOfflineBn -> "Google অফলাইন TTS (বাংলা + ইংরেজি)"
-            else -> "ডিভাইস অফলাইন TTS (বাংলা + ইংরেজি)"
+        val hasOfflineBn = bnVoice != null && !bnVoice.isNetworkConnectionRequired
+        val hasOfflineEn = enVoice != null && !enVoice.isNetworkConnectionRequired
+        val engineLabel = if (hasOfflineBn) {
+            "Google অফলাইন TTS (বাংলা + ইংরেজি)"
+        } else {
+            "ডিভাইস অফলাইন TTS (বাংলা + ইংরেজি)"
         }
 
         _state.update {
             it.copy(
                 isReady = true,
                 engineLabelBn = engineLabel,
-                isSherpaNeuralActive = useSherpa,
                 hasOfflineBanglaVoice = hasOfflineBn,
                 hasOfflineEnglishVoice = hasOfflineEn,
                 selectedBanglaVoiceName = bnVoice?.name.orEmpty(),
@@ -375,7 +380,6 @@ class OfflineBookTtsManager(context: Context) {
             prevJob?.cancelAndJoin()
             if (speakGeneration.get() != gen) return@launch
 
-            // Wait briefly for Android TTS initialization if needed
             withTimeoutOrNull(2500L) { androidTtsReady.await() }
             if (speakGeneration.get() != gen) return@launch
 
@@ -392,30 +396,14 @@ class OfflineBookTtsManager(context: Context) {
                 if (!isActive || speakGeneration.get() != gen) return@launch
                 val segment = segments[idx]
 
-                // Save remaining segments in case user taps Pause mid-speech
                 pausedRemainingSegments = segments.subList(idx, segments.size)
                 pausedRate = rate
                 pausedOnDone = onDone
 
                 _state.update { it.copy(detectedLanguage = segment.lang) }
 
-                val enginePref = TtsVoicePackManager.getEnginePreference(appContext)
-                val sherpaPaths = if (enginePref != TtsEnginePreference.GOOGLE_SYSTEM && sherpaBackend.isAvailable()) {
-                    TtsVoicePackManager.getInstalledModelPaths(appContext, segment.lang)
-                } else null
+                speakSegmentViaAndroidTts(segment, rate, gen)
 
-                val spokenBySherpa = if (sherpaPaths != null) {
-                    sherpaBackend.speakBlocking(segment.text, sherpaPaths, rate)
-                } else {
-                    false
-                }
-
-                if (!spokenBySherpa) {
-                    if (!isActive || speakGeneration.get() != gen) return@launch
-                    speakSegmentViaAndroidTts(segment, rate, gen)
-                }
-
-                // Natural brief micro-pause between language switches or sentences
                 if (idx < segments.lastIndex && isActive && speakGeneration.get() == gen) {
                     delay(55L)
                 }
@@ -451,7 +439,6 @@ class OfflineBookTtsManager(context: Context) {
                 }
             }
             tts.setSpeechRate(rate)
-            // Slightly warmer, calmer pitch (0.98f) sounds more human & less shrill
             tts.setPitch(0.98f)
 
             val doneSignal = CompletableDeferred<Boolean>()
@@ -463,7 +450,6 @@ class OfflineBookTtsManager(context: Context) {
             }
             val code = tts.speak(segment.text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
             if (code == TextToSpeech.SUCCESS) {
-                // Safety timeout proportional to segment length so we never deadlock on buggy OEM TTS
                 val timeoutMs = (segment.text.length * 180L).coerceIn(8_000L, 45_000L)
                 withTimeoutOrNull(timeoutMs) { doneSignal.await() }
             }
@@ -477,7 +463,6 @@ class OfflineBookTtsManager(context: Context) {
     fun pause() {
         if (!_state.value.isSpeaking || _state.value.isPaused) return
         speakGeneration.incrementAndGet()
-        sherpaBackend.pause()
         stopInternalPlaybackOnly()
         activeSpeakJob?.cancel()
         _state.update { it.copy(isSpeaking = false, isPaused = true) }
@@ -506,7 +491,6 @@ class OfflineBookTtsManager(context: Context) {
     private fun stopInternalPlaybackOnly() {
         currentUtteranceDeferred?.complete(false)
         currentUtteranceDeferred = null
-        sherpaBackend.stop()
         runCatching { androidTts?.stop() }
     }
 
@@ -514,7 +498,6 @@ class OfflineBookTtsManager(context: Context) {
 
     fun release() {
         stop()
-        sherpaBackend.release()
         runCatching { androidTts?.shutdown() }
         androidTts = null
     }
