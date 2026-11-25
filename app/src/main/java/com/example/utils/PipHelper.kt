@@ -41,8 +41,8 @@ object PipHelper {
             actions.add(
                 RemoteAction(
                     rewindIcon,
-                    "১০ সেকেন্ড পেছনে",
-                    "১০ সেকেন্ড পেছনে যান",
+                    AppLang.tr("Rewind 10s", "১০ সেকেন্ড পেছনে"),
+                    AppLang.tr("Rewind 10 seconds", "১০ সেকেন্ড পেছনে যান"),
                     rewindIntent
                 )
             )
@@ -59,7 +59,7 @@ object PipHelper {
             } else {
                 Icon.createWithResource(context, R.drawable.ic_pip_play)
             }
-            val playPauseTitle = if (isPlaying) "পজ" else "প্লে"
+            val playPauseTitle = if (isPlaying) AppLang.tr("Pause", "পজ") else AppLang.tr("Play", "প্লে")
             actions.add(
                 RemoteAction(
                     playPauseIcon,
@@ -69,7 +69,7 @@ object PipHelper {
                 )
             )
 
-            // 3. 10s Fast Forward button (১০ সেকেন্ড সামনে)
+            // 3. 10s Fast Forward button
             val forwardIntent = PendingIntent.getBroadcast(
                 context,
                 103,
@@ -80,8 +80,8 @@ object PipHelper {
             actions.add(
                 RemoteAction(
                     forwardIcon,
-                    "১০ সেকেন্ড সামনে",
-                    "১০ সেকেন্ড সামনে যান",
+                    AppLang.tr("Forward 10s", "১০ সেকেন্ড সামনে"),
+                    AppLang.tr("Forward 10 seconds", "১০ সেকেন্ড সামনে যান"),
                     forwardIntent
                 )
             )

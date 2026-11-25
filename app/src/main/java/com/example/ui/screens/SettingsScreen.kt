@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -30,11 +29,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import com.example.BuildConfig
 import com.example.auth.SessionManager
-import com.example.course.CourseViewModel
-import com.example.home.HomeViewModel
 import com.example.player.EqualizerManager
 import com.example.ui.components.EqualizerBottomSheet
 import com.example.ui.dialogs.UpdateDialog
@@ -44,8 +42,13 @@ import com.example.ui.theme.isAppInDarkTheme
 import com.example.update.AppUpdateInfo
 import com.example.update.AppUpdateRepository
 import com.example.utils.AppCacheManager
+import com.example.utils.AppLang
+import com.example.utils.AppLanguage
 import com.example.utils.AvatarUtils
 import com.example.utils.CacheBreakdown
+import com.example.utils.isBangla
+import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -68,11 +71,14 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val isDark = isAppInDarkTheme()
+    val isBn = isBangla()
 
     val currentThemeMode by sessionManager.themeModeFlow.collectAsStateWithLifecycle()
+    val currentLanguage by sessionManager.appLanguageFlow.collectAsStateWithLifecycle()
     val currentLeadTime by sessionManager.classNotificationLeadTimeFlow.collectAsStateWithLifecycle()
     val currentWallpaper by sessionManager.headerWallpaperFlow.collectAsStateWithLifecycle()
 
+    var showLanguageDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showEqualizerSheet by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
@@ -91,27 +97,24 @@ fun SettingsScreen(
     }
     var isClearingCache by remember { mutableStateOf(false) }
 
-    // App Update Checker State
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var fetchedUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
     var showUpToDateDialog by remember { mutableStateOf(false) }
     var verifiedDatabaseVersionText by remember { mutableStateOf<String?>(null) }
 
-    // Refresh cache breakdown on entry
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             cacheBreakdown = AppCacheManager.getCacheBreakdown(context)
         }
     }
 
-    // Reactive profile fields
     val profileUpdateTick by sessionManager.userProfileUpdateFlow.collectAsStateWithLifecycle()
     val avatarFromFlow by sessionManager.userAvatarFlow.collectAsStateWithLifecycle()
 
-    val fullName = remember(profileUpdateTick) {
+    val fullName = remember(profileUpdateTick, isBn) {
         sessionManager.getUserFullName()
             ?: sessionManager.getUserFirstName()?.takeIf { it.isNotBlank() }
-            ?: "শিক্ষার্থী"
+            ?: AppLang.tr("Student", "শিক্ষার্থী")
     }
     val phone = remember(profileUpdateTick) {
         sessionManager.getUserPhone() ?: ""
@@ -124,32 +127,34 @@ fun SettingsScreen(
             ?: sessionManager.getUserClassName()
             ?: "HSC"
     }
-    val groupDisplay = remember(profileUpdateTick) {
+    val groupDisplay = remember(profileUpdateTick, isBn) {
         val raw = sessionManager.getUserGroup() ?: ""
         when (raw.lowercase()) {
-            "science" -> "বিজ্ঞান বিভাগ"
-            "humanities", "arts" -> "মানবিক বিভাগ"
-            "business", "commerce", "business studies" -> "ব্যবসায় শিক্ষা"
-            else -> raw.ifBlank { "বিজ্ঞান বিভাগ" }
+            "science" -> AppLang.tr("Science", "বিজ্ঞান")
+            "humanities", "arts", "hum" -> AppLang.tr("Humanities", "মানবিক")
+            "business", "commerce", "business studies" -> AppLang.tr("Business", "ব্যবসায়")
+            else -> raw.ifBlank { AppLang.tr("Science", "বিজ্ঞান") }
         }
     }
-    val activeCourseTitle = remember(profileUpdateTick) {
-        sessionManager.getActiveProgramTitleBn() ?: "অ্যাকাডেমিক প্রোগ্রাম"
+    val activeCourseTitle = remember(profileUpdateTick, isBn) {
+        sessionManager.getActiveProgramTitleBn() ?: AppLang.tr("Academic Program", "একাডেমিক প্রোগ্রাম")
     }
     val avatarUrl = remember(avatarFromFlow, fullName) {
         val candidate = avatarFromFlow ?: sessionManager.getUserAvatar()
         AvatarUtils.formatAvatarUrl(candidate, fullName)
     }
 
-    val activeWallpaperBadge = remember(currentWallpaper) {
+    val activeWallpaperBadge = remember(currentWallpaper, isBn) {
         when (currentWallpaper.type) {
-            HeaderWallpaperConfig.CUSTOM_CODE -> currentWallpaper.customTitle ?: "কাস্টম কোড"
-            HeaderWallpaperConfig.CUSTOM_IMAGE -> "গ্যালারি ছবি"
-            else -> HeaderWallpaperPresets.findById(currentWallpaper.type).nameBn.split(" ").firstOrNull() ?: "থিম"
+            HeaderWallpaperConfig.PRESET_AUTO_DAILY -> AppLang.tr("Auto 7D", "৭ দিন অটো")
+            HeaderWallpaperConfig.CUSTOM_CODE -> currentWallpaper.customTitle ?: AppLang.tr("Custom", "কাস্টম")
+            HeaderWallpaperConfig.CUSTOM_IMAGE -> AppLang.tr("Photo", "ছবি")
+            else -> HeaderWallpaperPresets.findById(currentWallpaper.type).displayName.split(" ").firstOrNull()
+                ?: AppLang.tr("Theme", "থিম")
         }
     }
 
-    val activeEqualizerBadge = remember(showEqualizerSheet) {
+    val activeEqualizerBadge = remember(showEqualizerSheet, isBn) {
         EqualizerManager.getActiveStatusLabel(context)
     }
 
@@ -170,7 +175,7 @@ fun SettingsScreen(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(11.dp))
                                 .background(Color(0xFF0284C7).copy(alpha = 0.14f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -178,20 +183,22 @@ fun SettingsScreen(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = null,
                                 tint = Color(0xFF0284C7),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
                         Column {
                             Text(
-                                text = "সেটিংস ও প্রেফারেন্স",
+                                text = tr("Settings", "সেটিংস"),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = primaryText
+                                color = primaryText,
+                                maxLines = 1
                             )
                             Text(
-                                text = "অ্যাকাউন্ট ও অ্যাপ কাস্টমাইজেশন",
+                                text = tr("Account & preferences", "অ্যাকাউন্ট ও পছন্দ"),
                                 fontSize = 11.5.sp,
-                                color = secondaryText
+                                color = secondaryText,
+                                maxLines = 1
                             )
                         }
                     }
@@ -209,9 +216,9 @@ fun SettingsScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Premium Student Profile Hero Card
+            // 1. Student Profile Hero Card
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -227,30 +234,30 @@ fun SettingsScreen(
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF0F172A),
-                                    Color(0xFF1E3A8A),
+                                    Color(0xFF0B1528),
+                                    Color(0xFF1A367A),
                                     Color(0xFF0284C7)
                                 )
                             )
                         )
-                        .padding(20.dp)
+                        .padding(18.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(68.dp)
+                                    .size(64.dp)
                                     .clip(CircleShape)
-                                    .border(2.5.dp, Color(0xFF38BDF8), CircleShape)
+                                    .border(2.dp, Color(0xFF38BDF8), CircleShape)
                                     .background(Color.White.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 SubcomposeAsyncImage(
                                     model = avatarUrl,
-                                    contentDescription = "Profile Avatar",
+                                    contentDescription = tr("Profile Photo", "প্রোফাইল ছবি"),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -260,13 +267,13 @@ fun SettingsScreen(
                                             imageVector = Icons.Default.Person,
                                             contentDescription = null,
                                             tint = Color.White,
-                                            modifier = Modifier.size(34.dp)
+                                            modifier = Modifier.size(32.dp)
                                         )
                                     }
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(16.dp))
+                            Spacer(modifier = Modifier.width(14.dp))
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(
@@ -275,7 +282,7 @@ fun SettingsScreen(
                                 ) {
                                     Text(
                                         text = fullName,
-                                        fontSize = 18.sp,
+                                        fontSize = 17.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
                                         maxLines = 1,
@@ -284,9 +291,9 @@ fun SettingsScreen(
                                     )
                                     Icon(
                                         imageVector = Icons.Default.Verified,
-                                        contentDescription = "Verified",
+                                        contentDescription = tr("Verified", "যাচাইকৃত"),
                                         tint = Color(0xFF38BDF8),
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
 
@@ -294,9 +301,9 @@ fun SettingsScreen(
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = phone,
-                                        fontSize = 13.sp,
+                                        fontSize = 12.5.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = Color.White.copy(alpha = 0.85f),
+                                        color = Color.White.copy(alpha = 0.84f),
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -318,7 +325,6 @@ fun SettingsScreen(
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFBAE6FD),
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                         )
                                     }
@@ -332,7 +338,6 @@ fun SettingsScreen(
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFFDE68A),
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                         )
                                     }
@@ -347,27 +352,26 @@ fun SettingsScreen(
                                     containerColor = Color.White.copy(alpha = 0.18f),
                                     contentColor = Color.White
                                 ),
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
-                                    contentDescription = "Edit Profile",
-                                    modifier = Modifier.size(20.dp)
+                                    contentDescription = tr("Edit Profile", "প্রোফাইল এডিট"),
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
 
-                        // Active Program Pill inside Hero Card
                         Surface(
                             shape = RoundedCornerShape(14.dp),
-                            color = Color.Black.copy(alpha = 0.25f),
+                            color = Color.Black.copy(alpha = 0.24f),
                             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -379,7 +383,7 @@ fun SettingsScreen(
                                         imageVector = Icons.Default.School,
                                         contentDescription = null,
                                         tint = Color(0xFF38BDF8),
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(17.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
@@ -392,12 +396,12 @@ fun SettingsScreen(
                                     )
                                 }
                                 Text(
-                                    text = if (schoolName.isNotBlank()) schoolName else "সক্রিয় ব্যাচ",
+                                    text = if (schoolName.isNotBlank()) schoolName else tr("Active", "সক্রিয়"),
                                     fontSize = 11.sp,
                                     color = Color(0xFF7DD3FC),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.widthIn(max = 120.dp)
+                                    modifier = Modifier.widthIn(max = 116.dp)
                                 )
                             }
                         }
@@ -405,161 +409,150 @@ fun SettingsScreen(
                 }
             }
 
-            // 2. Academic & Learning Section
+            // 2. Academic Section (Clean, Crisp 1-Line Titles)
             SettingsSectionGroup(
-                title = "অ্যাকাডেমিক ও লার্নিং পোর্টাল",
+                title = tr("Academic", "একাডেমিক"),
                 icon = Icons.Default.AutoStories,
                 isDark = isDark
             ) {
                 SettingsActionRow(
                     icon = Icons.Default.PersonOutline,
                     iconTint = Color(0xFF0284C7),
-                    title = "আমার প্রোফাইল ও একাডেমিক তথ্য",
-                    subtitle = "নাম, প্রতিষ্ঠান, শ্রেণি ও প্রোফাইল তথ্য দেখুন",
-                    badgeText = "প্রোফাইল",
+                    title = tr("Profile", "প্রোফাইল"),
+                    subtitle = tr("Personal & academic info", "ব্যক্তিগত ও একাডেমিক তথ্য"),
                     isDark = isDark,
                     onClick = onNavigateToProfile,
                     testTag = "settings_row_profile"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
                 SettingsActionRow(
                     icon = Icons.Default.WorkspacePremium,
                     iconTint = Color(0xFF7C3AED),
-                    title = "ব্যাচ ও সিলেবাস পরিবর্তন",
-                    subtitle = "সক্রিয় প্রোগ্রাম পরিবর্তন ও বিষয়ভিত্তিক সিলেবাস",
-                    badgeText = "ব্যাচ",
+                    title = tr("Batch & Syllabus", "ব্যাচ ও সিলেবাস"),
+                    subtitle = tr("Switch active program", "সক্রিয় প্রোগ্রাম পরিবর্তন"),
                     isDark = isDark,
                     onClick = onNavigateToChangeSyllabus,
                     testTag = "settings_row_my_courses"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
                 SettingsActionRow(
                     icon = Icons.Default.Explore,
                     iconTint = Color(0xFF059669),
-                    title = "সকল কোর্স ও ক্যাটালগ দেখুন",
-                    subtitle = "নতুন কোর্স, ফ্রি ট্রায়াল ও বিষয়ভিত্তিক লেকচার",
-                    badgeText = "ক্যাটালগ",
+                    title = tr("Course Catalog", "কোর্স ক্যাটালগ"),
+                    subtitle = tr("Explore courses & trials", "নতুন কোর্স ও ফ্রি ট্রায়াল"),
                     isDark = isDark,
                     onClick = onNavigateToCourseEnrollment,
                     testTag = "settings_row_course_catalog"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
                 SettingsActionRow(
                     icon = Icons.Default.BookmarkBorder,
                     iconTint = Color(0xFFD97706),
-                    title = "সংরক্ষিত আইটেম (বুকমার্কস)",
-                    subtitle = "আপনার সেভ করা গুরুত্বপূর্ণ লেকচার ও পিডিএফ নোটস",
-                    badgeText = "সেভড",
+                    title = tr("Saved Items", "সংরক্ষিত আইটেম"),
+                    subtitle = tr("Bookmarked classes & notes", "সেভ করা লেকচার ও নোট"),
                     isDark = isDark,
                     onClick = onNavigateToSavedItems,
                     testTag = "settings_row_saved_items"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
                 SettingsActionRow(
                     icon = Icons.Default.Analytics,
                     iconTint = Color(0xFFEA580C),
-                    title = "রিপোর্ট কার্ড ও লিডারবোর্ড",
-                    subtitle = "উপস্থিতি, পরীক্ষার ফলাফল ও বিষয়ভিত্তিক অগ্রগতি",
-                    badgeText = "প্রগ্রেস",
+                    title = tr("Report Card", "রিপোর্ট কার্ড"),
+                    subtitle = tr("Results & progress", "ফলাফল ও অগ্রগতি"),
                     isDark = isDark,
                     onClick = onNavigateToReportCard,
                     testTag = "settings_row_report_card"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
                 SettingsActionRow(
                     icon = Icons.Default.DownloadForOffline,
                     iconTint = Color(0xFF2563EB),
-                    title = "অফলাইন ডাউনলোড ম্যানেজার",
-                    subtitle = "ডাউনলোড করা ভিডিও ক্লাস ও পিডিএফ নোটস",
-                    badgeText = "অফলাইন",
+                    title = tr("Downloads", "ডাউনলোড"),
+                    subtitle = tr("Offline videos & notes", "অফলাইন ভিডিও ও নোট"),
                     isDark = isDark,
                     onClick = onNavigateToDownloads,
                     testTag = "settings_row_downloads"
                 )
             }
 
-            // 3. App Preferences & Customization Section (Options #1, #2, #3, #4)
+            // 3. Preferences Section (Includes App Language + 7 Interactive Banner Themes)
             SettingsSectionGroup(
-                title = "অ্যাপ প্রেফারেন্স ও কাস্টমাইজেশন",
-                icon = Icons.Default.Palette,
+                title = tr("Preferences", "পছন্দ ও থিম"),
+                icon = Icons.Default.Tune,
                 isDark = isDark
             ) {
-                // Option #1: Header & Live Wallpaper
+                // App Language (English Default + Bangla)
+                SettingsActionRow(
+                    icon = Icons.Default.Translate,
+                    iconTint = Color(0xFF0EA5E9),
+                    title = tr("App Language", "অ্যাপ ভাষা"),
+                    subtitle = if (currentLanguage == AppLanguage.BANGLA) "বাংলা" else "English",
+                    badgeText = if (currentLanguage == AppLanguage.BANGLA) "বাংলা" else "EN",
+                    isDark = isDark,
+                    onClick = { showLanguageDialog = true },
+                    testTag = "settings_row_language"
+                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
+
+                // Banner Themes (7 Interactive + Auto Daily)
                 SettingsActionRow(
                     icon = Icons.Default.Wallpaper,
                     iconTint = Color(0xFFEC4899),
-                    title = "হেডার ও লাইভ ওয়ালপেপার",
-                    subtitle = "${com.example.utils.toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি প্রিমিয়াম সিমলেস অ্যানিমেটেড থিম, গ্যালারি ছবি ও থিম কোড ইমপোর্ট",
+                    title = tr("Banner Themes", "ব্যানার থিম"),
+                    subtitle = tr("7 interactive & daily auto", "৭টি ইন্টারঅ্যাক্টিভ ও অটো থিম"),
                     badgeText = activeWallpaperBadge,
                     isDark = isDark,
                     onClick = onNavigateToHeaderWallpaper,
                     testTag = "settings_row_wallpaper"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
-                // Option #2: Notification & Class Alarm
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
+
+                // Notifications
                 SettingsActionRow(
                     icon = Icons.Default.NotificationsActive,
                     iconTint = Color(0xFFD97706),
-                    title = "নোটিফিকেশন ও ক্লাস অ্যালার্ম",
-                    subtitle = "রুটিন অনুযায়ী ক্লাস অ্যালার্ম ও $currentLeadTime মি. আগের রিমাইন্ডার",
-                    badgeText = "${currentLeadTime}m",
+                    title = tr("Notifications", "নোটিফিকেশন"),
+                    subtitle = tr(
+                        "Class alert (${currentLeadTime}m before)",
+                        "ক্লাস অ্যালার্ম (${toBengaliDigits(currentLeadTime)} মি. আগে)"
+                    ),
+                    badgeText = "${toBengaliDigits(currentLeadTime)}m",
                     isDark = isDark,
                     onClick = onNavigateToNotification,
                     testTag = "settings_row_notifications"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
-                // Option #3: App Theme (Dark & Light Mode)
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
+
+                // Appearance
                 val themeLabel = when (currentThemeMode) {
-                    "light" -> "লাইট মোড সক্রিয়"
-                    "dark" -> "ডার্ক মোড সক্রিয়"
-                    else -> "সিস্টেম ডিফল্ট (ডিভাইস অনুযায়ী)"
+                    "light" -> tr("Light mode", "লাইট মোড")
+                    "dark" -> tr("Dark mode", "ডার্ক মোড")
+                    else -> tr("System default", "সিস্টেম ডিফল্ট")
                 }
                 val themeBadge = when (currentThemeMode) {
-                    "light" -> "Light"
-                    "dark" -> "Dark"
-                    else -> "System"
+                    "light" -> tr("Light", "লাইট")
+                    "dark" -> tr("Dark", "ডার্ক")
+                    else -> tr("Auto", "অটো")
                 }
                 SettingsActionRow(
                     icon = Icons.Default.Brightness6,
                     iconTint = Color(0xFF4F46E5),
-                    title = "অ্যাপ থিম (Dark & Light Mode)",
+                    title = tr("Appearance", "অ্যাপ থিম"),
                     subtitle = themeLabel,
                     badgeText = themeBadge,
                     isDark = isDark,
                     onClick = { showThemeDialog = true },
                     testTag = "settings_row_theme"
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = cardBorder
-                )
-                // Option #4: Audio Equalizer & Sound Control
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
+
+                // Audio Equalizer
                 SettingsActionRow(
-                    icon = Icons.Default.Tune,
+                    icon = Icons.Default.Equalizer,
                     iconTint = Color(0xFF059669),
-                    title = "অডিও ইকুলাইজার ও সাউন্ড কন্ট্রোল",
-                    subtitle = "মোবাইলের ইকুলাইজার স্থায়ী কানেক্ট ও স্টুডিও সাউন্ড বুস্টার",
+                    title = tr("Audio Equalizer", "ইকুলাইজার"),
+                    subtitle = tr("Sound boost & presets", "সাউন্ড ও প্রিসেট কন্ট্রোল"),
                     badgeText = activeEqualizerBadge,
                     isDark = isDark,
                     onClick = { showEqualizerSheet = true },
@@ -567,9 +560,9 @@ fun SettingsScreen(
                 )
             }
 
-            // 4. Option #5: Storage & Cache Memory Management Section
+            // 4. Storage & Updates Section
             SettingsSectionGroup(
-                title = "স্টোরেজ ও ক্যাশ মেমোরি",
+                title = tr("System", "সিস্টেম"),
                 icon = Icons.Default.Storage,
                 isDark = isDark
             ) {
@@ -579,11 +572,11 @@ fun SettingsScreen(
                 SettingsActionRow(
                     icon = Icons.Default.CleaningServices,
                     iconTint = Color(0xFF0284C7),
-                    title = "ক্যাশ মেমোরি পরিষ্কার করুন",
+                    title = tr("Clear Cache", "ক্যাশ পরিষ্কার"),
                     subtitle = if (isClearingCache) {
-                        "ক্যাশ মেমোরি পরিষ্কার করা হচ্ছে..."
+                        tr("Clearing cache...", "পরিষ্কার হচ্ছে...")
                     } else {
-                        "$formattedTotal অস্থায়ী ক্যাশ জমা আছে • বিস্তারিত দেখতে ও খালি করতে ট্যাপ করুন"
+                        tr("Temporary app files", "অস্থায়ী ক্যাশ ফাইল")
                     },
                     badgeText = formattedTotal,
                     isDark = isDark,
@@ -599,22 +592,15 @@ fun SettingsScreen(
                     },
                     testTag = "settings_row_clear_cache"
                 )
-            }
-
-            // 5. Option #6: App Update & Version Enforcement Section
-            SettingsSectionGroup(
-                title = "অ্যাপ আপডেট ও সংস্করণ যাচাই",
-                icon = Icons.Default.SystemUpdate,
-                isDark = isDark
-            ) {
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = cardBorder)
                 SettingsActionRow(
-                    icon = Icons.Default.SystemSecurityUpdateGood,
+                    icon = Icons.Default.SystemUpdate,
                     iconTint = Color(0xFF10B981),
-                    title = "অ্যাপ আপডেট ও নির্ধারিত সংস্করণ চেক করুন",
+                    title = tr("App Update", "অ্যাপ আপডেট"),
                     subtitle = if (isCheckingUpdate) {
-                        "সার্ভার ডাটাবেজ থেকে নির্ধারিত সংস্করণ যাচাই করা হচ্ছে..."
+                        tr("Checking version...", "যাচাই হচ্ছে...")
                     } else {
-                        "ডাটাবেজে নির্ধারিত সংস্করণে আছেন কিনা যাচাই করুন (বর্তমান: v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE})"
+                        tr("Current v${BuildConfig.VERSION_NAME}", "বর্তমান v${BuildConfig.VERSION_NAME}")
                     },
                     badgeText = if (isCheckingUpdate) "..." else "v${BuildConfig.VERSION_NAME}",
                     isDark = isDark,
@@ -646,22 +632,21 @@ fun SettingsScreen(
                 )
             }
 
-            // 6. Option #7: Account & Security (Full Account + Cache Wipe Logout)
+            // 5. Account Section
             SettingsSectionGroup(
-                title = "অ্যাকাউন্ট ও নিরাপত্তা",
+                title = tr("Account", "অ্যাকাউন্ট"),
                 icon = Icons.Default.Security,
                 isDark = isDark
             ) {
                 SettingsActionRow(
                     icon = Icons.AutoMirrored.Filled.ExitToApp,
                     iconTint = Color(0xFFDC2626),
-                    title = "লগআউট ও অ্যাকাউন্ট ডাটা ক্লিয়ার",
+                    title = tr("Log Out", "লগআউট"),
                     subtitle = if (isLoggingOut) {
-                        "অ্যাকাউন্ট ডাটা ও ক্যাশ মুছে লগআউট করা হচ্ছে..."
+                        tr("Signing out...", "লগআউট হচ্ছে...")
                     } else {
-                        "সকল অ্যাকাউন্ট তথ্য ও ক্যাশ মুছে নিরাপদে প্রস্থান করুন"
+                        tr("Sign out & clear local data", "অ্যাকাউন্ট থেকে প্রস্থান")
                     },
-                    badgeText = "প্রস্থান",
                     isDestructive = true,
                     isDark = isDark,
                     onClick = {
@@ -673,12 +658,12 @@ fun SettingsScreen(
                 )
             }
 
-            // App Version Footer — generous bottom clearance above floating dock + nav bars
+            // Version Footer
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(top = 6.dp, bottom = 116.dp),
+                    .padding(top = 4.dp, bottom = 116.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Surface(
@@ -687,7 +672,7 @@ fun SettingsScreen(
                     border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -695,11 +680,14 @@ fun SettingsScreen(
                             imageVector = Icons.Default.Verified,
                             contentDescription = null,
                             tint = Color(0xFF0284C7),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
-                            text = "ভার্সন v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
-                            fontSize = 12.5.sp,
+                            text = tr(
+                                "Version v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                                "ভার্সন v${BuildConfig.VERSION_NAME} (${toBengaliDigits(BuildConfig.VERSION_CODE)})"
+                            ),
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = primaryText
                         )
@@ -713,7 +701,134 @@ fun SettingsScreen(
     // DIALOGS & SHEETS
     // =========================================================================
 
-    // #3: App Theme Selection Dialog (Instant Reactive Update)
+    // Language Selection Dialog (English Default + Bangla)
+    if (showLanguageDialog) {
+        val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
+        val itemUnselectedBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC)
+        val itemBorder = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            containerColor = dialogBg,
+            shape = RoundedCornerShape(26.dp),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0EA5E9).copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = null,
+                            tint = Color(0xFF0EA5E9)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = tr("App Language", "অ্যাপ ভাষা"),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = primaryText
+                        )
+                        Text(
+                            text = tr("Applies instantly across the app", "সম্পূর্ণ অ্যাপে সাথে সাথেই পরিবর্তিত হবে"),
+                            fontSize = 11.5.sp,
+                            color = secondaryText
+                        )
+                    }
+                }
+            },
+            text = {
+                val langOptions = listOf(
+                    Triple(AppLanguage.ENGLISH, "English", "Default interface language"),
+                    Triple(AppLanguage.BANGLA, "বাংলা", "সম্পূর্ণ বাংলা ইন্টারফেস")
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    langOptions.forEach { (lang, title, desc) ->
+                        val isSelected = currentLanguage == lang
+                        val accentCol = if (lang == AppLanguage.ENGLISH) Color(0xFF0284C7) else Color(0xFF10B981)
+
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) accentCol.copy(alpha = if (isDark) 0.18f else 0.10f) else itemUnselectedBg,
+                            border = BorderStroke(
+                                if (isSelected) 2.dp else 1.dp,
+                                if (isSelected) accentCol else itemBorder
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable {
+                                    sessionManager.setAppLanguage(lang)
+                                    showLanguageDialog = false
+                                }
+                                .testTag("language_option_${lang.code}")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(accentCol.copy(alpha = 0.16f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (lang == AppLanguage.ENGLISH) "EN" else "বাং",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = accentCol
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = title,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = primaryText
+                                    )
+                                    Text(
+                                        text = desc,
+                                        fontSize = 11.5.sp,
+                                        color = secondaryText
+                                    )
+                                }
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        sessionManager.setAppLanguage(lang)
+                                        showLanguageDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = accentCol,
+                                        unselectedColor = secondaryText
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text(tr("Close", "বন্ধ করুন"), fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // App Theme Selection Dialog
     if (showThemeDialog) {
         val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
         val itemUnselectedBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC)
@@ -732,24 +847,24 @@ fun SettingsScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0284C7).copy(alpha = 0.15f)),
+                            .background(Color(0xFF4F46E5).copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Palette,
                             contentDescription = null,
-                            tint = Color(0xFF0284C7)
+                            tint = Color(0xFF4F46E5)
                         )
                     }
                     Column {
                         Text(
-                            text = "অ্যাপ থিম নির্বাচন করুন",
-                            fontSize = 17.5.sp,
+                            text = tr("Appearance", "অ্যাপ থিম"),
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = primaryText
                         )
                         Text(
-                            text = "সিলেক্ট করার সাথে সাথেই সম্পূর্ণ অ্যাপের থিম পরিবর্তিত হবে",
+                            text = tr("Choose light or dark theme", "পছন্দের থিম নির্বাচন করুন"),
                             fontSize = 11.5.sp,
                             color = secondaryText
                         )
@@ -758,21 +873,9 @@ fun SettingsScreen(
             },
             text = {
                 val options = listOf(
-                    Triple(
-                        "system",
-                        "সিস্টেম ডিফল্ট (মোবাইল অনুযায়ী)",
-                        "মোবাইলের সিস্টেম সেটিংস অনুযায়ী স্বয়ংক্রিয়ভাবে পরিবর্তিত হবে"
-                    ) to Icons.Default.BrightnessAuto,
-                    Triple(
-                        "light",
-                        "লাইট মোড (Light Mode)",
-                        "দিনের বেলা পড়ার জন্য উজ্জ্বল ও পরিষ্কার সাদা থিম"
-                    ) to Icons.Default.LightMode,
-                    Triple(
-                        "dark",
-                        "ডার্ক মোড (Dark Mode)",
-                        "রাতের বেলা ও চোখের আরামের জন্য প্রিমিয়াম ডার্ক থিম"
-                    ) to Icons.Default.DarkMode
+                    Triple("system", tr("System Default", "সিস্টেম ডিফল্ট"), tr("Follows device theme", "ডিভাইস অনুযায়ী")) to Icons.Default.BrightnessAuto,
+                    Triple("light", tr("Light Mode", "লাইট মোড"), tr("Bright & crisp display", "উজ্জ্বল ও পরিষ্কার")) to Icons.Default.LightMode,
+                    Triple("dark", tr("Dark Mode", "ডার্ক মোড"), tr("Easy on the eyes at night", "রাতের জন্য আরামদায়ক")) to Icons.Default.DarkMode
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     options.forEach { (item, modeIcon) ->
@@ -808,8 +911,8 @@ fun SettingsScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(11.dp))
                                         .background(accentCol.copy(alpha = 0.16f)),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -817,7 +920,7 @@ fun SettingsScreen(
                                         imageVector = modeIcon,
                                         contentDescription = null,
                                         tint = accentCol,
-                                        modifier = Modifier.size(22.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -852,20 +955,16 @@ fun SettingsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showThemeDialog = false }) {
-                    Text("বন্ধ করুন", fontWeight = FontWeight.Bold)
+                    Text(tr("Close", "বন্ধ করুন"), fontWeight = FontWeight.Bold)
                 }
             }
         )
     }
 
-    // #4: Audio Equalizer Bottom Sheet
     if (showEqualizerSheet) {
-        EqualizerBottomSheet(
-            onDismiss = { showEqualizerSheet = false }
-        )
+        EqualizerBottomSheet(onDismiss = { showEqualizerSheet = false })
     }
 
-    // #5: Upgraded Cache Memory Breakdown & Clean Dialog
     if (showClearCacheDialog) {
         val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
         val subCardBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC)
@@ -877,7 +976,7 @@ fun SettingsScreen(
             icon = {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(54.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF0284C7).copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
@@ -886,13 +985,13 @@ fun SettingsScreen(
                         imageVector = Icons.Default.CleaningServices,
                         contentDescription = null,
                         tint = Color(0xFF0284C7),
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             },
             title = {
                 Text(
-                    text = "ক্যাশ মেমোরি ও স্টোরেজ ক্লিনার",
+                    text = tr("Clear Cache", "ক্যাশ পরিষ্কার"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = primaryText,
@@ -911,19 +1010,19 @@ fun SettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             CacheCategoryRow(
-                                label = "ভিডিও স্ট্রিম ও মিডিয়া ক্যাশ",
+                                label = tr("Media & stream cache", "ভিডিও ও মিডিয়া ক্যাশ"),
                                 sizeText = AppCacheManager.formatBytes(cacheBreakdown.mediaStreamBytes),
                                 color = Color(0xFF0284C7),
                                 primaryText = primaryText
                             )
                             CacheCategoryRow(
-                                label = "পিডিএফ ও স্লাইড প্রিভিউ ক্যাশ",
+                                label = tr("PDF & slide cache", "পিডিএফ ও স্লাইড ক্যাশ"),
                                 sizeText = AppCacheManager.formatBytes(cacheBreakdown.pdfPreviewBytes),
                                 color = Color(0xFF8B5CF6),
                                 primaryText = primaryText
                             )
                             CacheCategoryRow(
-                                label = "ইমেজ ও নেটওয়ার্ক টেম্পোরারি ফাইল",
+                                label = tr("Image & network cache", "ইমেজ ও নেটওয়ার্ক ক্যাশ"),
                                 sizeText = AppCacheManager.formatBytes(cacheBreakdown.imageAndNetworkBytes),
                                 color = Color(0xFF10B981),
                                 primaryText = primaryText
@@ -935,7 +1034,7 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "সর্বমোট অস্থায়ী ক্যাশ",
+                                    text = tr("Total cache", "মোট অস্থায়ী ক্যাশ"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = primaryText
@@ -966,7 +1065,10 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "আপনার ডাউনলোড করা অফলাইন ভিডিও ও নোটস ১০০% অক্ষত থাকবে।",
+                                text = tr(
+                                    "Your offline downloads remain completely safe.",
+                                    "আপনার ডাউনলোড করা অফলাইন ফাইল সম্পূর্ণ সুরক্ষিত থাকবে।"
+                                ),
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (isDark) Color(0xFF6EE7B7) else Color(0xFF065F46)
@@ -988,7 +1090,7 @@ fun SettingsScreen(
                             isClearingCache = false
                             Toast.makeText(
                                 context,
-                                "সকল অস্থায়ী ক্যাশ মেমোরি সফলভাবে পরিষ্কার করা হয়েছে!",
+                                AppLang.tr("Cache cleared successfully", "ক্যাশ সফলভাবে পরিষ্কার হয়েছে"),
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -998,18 +1100,17 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("ক্যাশ পরিষ্কার করুন", fontWeight = FontWeight.Bold)
+                    Text(tr("Clear", "পরিষ্কার করুন"), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showClearCacheDialog = false }) {
-                    Text("বাতিল", color = secondaryText)
+                    Text(tr("Cancel", "বাতিল"), color = secondaryText)
                 }
             }
         )
     }
 
-    // #6: App Update Dialog when version differs from Database (`!=`)
     fetchedUpdateInfo?.let { updateInfo ->
         UpdateDialog(
             updateInfo = updateInfo,
@@ -1017,7 +1118,6 @@ fun SettingsScreen(
         )
     }
 
-    // #6: Up-to-date Verification Dialog when Installed Version == Database Version
     if (showUpToDateDialog) {
         val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
         AlertDialog(
@@ -1027,7 +1127,7 @@ fun SettingsScreen(
             icon = {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(54.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF10B981).copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
@@ -1036,13 +1136,13 @@ fun SettingsScreen(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
                         tint = Color(0xFF10B981),
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(30.dp)
                     )
                 }
             },
             title = {
                 Text(
-                    text = "সঠিক ও অনুমোদিত সংস্করণ!",
+                    text = tr("Up to Date", "অ্যাপ আপডেট আছে"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = primaryText,
@@ -1056,7 +1156,10 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "আপনি ডাটাবেজে নির্ধারিত অফিশিয়াল সংস্করণটিই ব্যবহার করছেন।",
+                        text = tr(
+                            "You are running the latest official version.",
+                            "আপনি সর্বশেষ অফিশিয়াল ভার্সন ব্যবহার করছেন।"
+                        ),
                         fontSize = 13.sp,
                         color = secondaryText,
                         textAlign = TextAlign.Center
@@ -1066,7 +1169,7 @@ fun SettingsScreen(
                         color = Color(0xFF10B981).copy(alpha = 0.12f)
                     ) {
                         Text(
-                            text = "নির্ধারিত ভার্সন: ${verifiedDatabaseVersionText ?: "v${BuildConfig.VERSION_NAME}"}",
+                            text = verifiedDatabaseVersionText ?: "v${BuildConfig.VERSION_NAME}",
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFF10B981),
@@ -1081,13 +1184,12 @@ fun SettingsScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("ঠিক আছে", fontWeight = FontWeight.Bold)
+                    Text(tr("OK", "ঠিক আছে"), fontWeight = FontWeight.Bold)
                 }
             }
         )
     }
 
-    // #7: Upgraded Logout & Full Account/Cache Wipe Confirmation Dialog
     if (showLogoutConfirmDialog) {
         val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
         val subCardBg = if (isDark) Color(0xFF1E293B) else Color(0xFFFEF2F2)
@@ -1101,7 +1203,7 @@ fun SettingsScreen(
             icon = {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(54.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFFDC2626).copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
@@ -1110,13 +1212,13 @@ fun SettingsScreen(
                         imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                         contentDescription = null,
                         tint = Color(0xFFDC2626),
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             },
             title = {
                 Text(
-                    text = "লগআউট ও ডাটা ক্লিয়ার নিশ্চিত করুন",
+                    text = tr("Log Out?", "লগআউট করবেন?"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = primaryText,
@@ -1126,9 +1228,12 @@ fun SettingsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "আপনি কি বর্তমান অ্যাকাউন্ট থেকে লগআউট করতে চান?",
+                        text = tr(
+                            "Are you sure you want to sign out of this account?",
+                            "আপনি কি বর্তমান অ্যাকাউন্ট থেকে লগআউট করতে চান?"
+                        ),
                         fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         color = primaryText,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
@@ -1142,16 +1247,19 @@ fun SettingsScreen(
                     ) {
                         Column(
                             modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Text(
-                                text = "লগআউট করলে যা যা পরিষ্কার হবে:",
+                                text = tr("This will clear:", "যা পরিষ্কার হবে:"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFFEF4444)
                             )
                             Text(
-                                text = "• ফোন থেকে বর্তমান অ্যাকাউন্টের সকল লগইন ও প্রোফাইল ডাটা\n• লোকাল ডাটাবেজে থাকা রুটিন, কোর্স ও লেসন ক্যাশ\n• সকল অস্থায়ী ভিডিও ও পিডিএফ ক্যাশ মেমোরি",
+                                text = tr(
+                                    "• Active login session & profile data\n• Cached courses, routine & lessons\n• Temporary media & PDF cache",
+                                    "• বর্তমান লগইন ও প্রোফাইল ডাটা\n• লোকাল রুটিন, কোর্স ও লেসন ক্যাশ\n• অস্থায়ী মিডিয়া ও পিডিএফ ক্যাশ"
+                                ),
                                 fontSize = 11.5.sp,
                                 color = secondaryText,
                                 lineHeight = 17.sp
@@ -1173,7 +1281,7 @@ fun SettingsScreen(
                                 isLoggingOut = false
                                 Toast.makeText(
                                     context,
-                                    "সকল অ্যাকাউন্ট ডাটা ও ক্যাশ মুছে লগআউট সম্পন্ন হয়েছে",
+                                    AppLang.tr("Logged out successfully", "লগআউট সম্পন্ন হয়েছে"),
                                     Toast.LENGTH_SHORT
                                 ).show()
                                 onLogout()
@@ -1190,7 +1298,7 @@ fun SettingsScreen(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("হ্যাঁ, লগআউট করুন", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(tr("Log Out", "লগআউট"), fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             dismissButton = {
@@ -1198,7 +1306,7 @@ fun SettingsScreen(
                     onClick = { showLogoutConfirmDialog = false },
                     enabled = !isLoggingOut
                 ) {
-                    Text("না, ফিরে যান", color = secondaryText, fontWeight = FontWeight.Bold)
+                    Text(tr("Cancel", "বাতিল"), color = secondaryText, fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -1263,11 +1371,11 @@ private fun SettingsSectionGroup(
                 imageVector = icon,
                 contentDescription = null,
                 tint = Color(0xFF0284C7),
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(15.dp)
             )
             Text(
                 text = title,
-                fontSize = 13.5.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color(0xFF0284C7)
             )
@@ -1307,41 +1415,43 @@ private fun SettingsActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 14.dp, vertical = 13.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(iconTint.copy(alpha = 0.14f))
-                .border(1.dp, iconTint.copy(alpha = 0.25f), RoundedCornerShape(13.dp)),
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(iconTint.copy(alpha = 0.13f))
+                .border(1.dp, iconTint.copy(alpha = 0.22f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isDestructive) Color(0xFFEF4444) else primaryText
+                color = if (isDestructive) Color(0xFFEF4444) else primaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(1.5.dp))
             Text(
                 text = subtitle,
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 color = secondaryText,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -1351,37 +1461,29 @@ private fun SettingsActionRow(
             Surface(
                 shape = RoundedCornerShape(50),
                 color = iconTint.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, iconTint.copy(alpha = 0.28f))
+                border = BorderStroke(1.dp, iconTint.copy(alpha = 0.26f))
             ) {
                 Text(
                     text = badgeText,
-                    fontSize = 11.sp,
+                    fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = iconTint,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .widthIn(max = 92.dp)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .widthIn(max = 88.dp)
+                        .padding(horizontal = 9.dp, vertical = 3.5.dp)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = secondaryText,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = secondaryText.copy(alpha = 0.7f),
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

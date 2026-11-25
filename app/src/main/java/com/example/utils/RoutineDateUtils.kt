@@ -120,9 +120,12 @@ object RoutineDateUtils {
         val hours = diffMins / 60
         val mins = diffMins % 60
         return when {
-            hours > 0 && mins > 0 -> "${hours.toBengaliDigits()} ঘণ্টা ${mins.toBengaliDigits()} মিনিট"
-            hours > 0 -> "${hours.toBengaliDigits()} ঘণ্টা"
-            mins > 0 -> "${mins.toBengaliDigits()} মিনিট"
+            hours > 0 && mins > 0 -> AppLang.tr(
+                "${hours}h ${mins}m",
+                "${hours.toBengaliDigits()} ঘণ্টা ${mins.toBengaliDigits()} মিনিট"
+            )
+            hours > 0 -> AppLang.tr("${hours}h", "${hours.toBengaliDigits()} ঘণ্টা")
+            mins > 0 -> AppLang.tr("${mins}m", "${mins.toBengaliDigits()} মিনিট")
             else -> ""
         }
     }

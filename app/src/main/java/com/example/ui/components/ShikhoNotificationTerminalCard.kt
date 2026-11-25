@@ -77,6 +77,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.notification.ShikhoNotificationManager
 import com.example.notification.ShikhoNotificationManager.TopicConnectionStatus
 import com.example.notification.ShikhoNotificationManager.TopicSubscriptionState
+import com.example.utils.AppLang
+import com.example.utils.tr
 
 /**
  * Real-time Shikho FCM Connection & Diagnostic Terminal.
@@ -113,9 +115,9 @@ fun ShikhoNotificationTerminalCard(
     }
 
     val statusLabel = when {
-        connectionState.isSyncing -> "কানেক্ট হচ্ছে..."
-        connectionState.isConnected -> "শিখো নোটিফিকেশন কানেক্টেড"
-        else -> "কানেক্টেড নয়"
+        connectionState.isSyncing -> tr("Connecting...", "কানেক্ট হচ্ছে...")
+        connectionState.isConnected -> tr("Shikho Notifications Connected", "শিখো নোটিফিকেশন কানেক্টেড")
+        else -> tr("Not Connected", "কানেক্টেড নয়")
     }
 
     val statusCodeBadge = when {
@@ -192,7 +194,7 @@ fun ShikhoNotificationTerminalCard(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "SHIKHO FCM টার্মিনাল",
+                                    text = tr("SHIKHO FCM TERMINAL", "SHIKHO FCM টার্মিনাল"),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontFamily = FontFamily.Monospace,
@@ -339,7 +341,7 @@ fun ShikhoNotificationTerminalCard(
                             )
                             Toast.makeText(
                                 context,
-                                "শিখো FCM কানেকশন নতুন করে যাচাই করা হচ্ছে...",
+                                AppLang.tr("Re-verifying Shikho FCM connection...", "শিখো FCM কানেকশন নতুন করে যাচাই করা হচ্ছে..."),
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -371,7 +373,7 @@ fun ShikhoNotificationTerminalCard(
                         }
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (connectionState.isSyncing) "চেক হচ্ছে..." else "আবার চেক ও কানেক্ট",
+                            text = if (connectionState.isSyncing) tr("Checking...", "চেক হচ্ছে...") else tr("Re-check & Connect", "আবার চেক ও কানেক্ট"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
@@ -400,7 +402,7 @@ fun ShikhoNotificationTerminalCard(
                     IconButton(
                         onClick = {
                             ShikhoNotificationManager.clearLogs()
-                            Toast.makeText(context, "টার্মিনাল লগ ক্লিয়ার হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Terminal logs cleared", "টার্মিনাল লগ ক্লিয়ার হয়েছে"), Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier
                             .size(48.dp)
@@ -467,7 +469,10 @@ fun ShikhoNotificationTerminalCard(
                         ) {
                             if (connectionState.topics.isEmpty()) {
                                 Text(
-                                    text = "কোনো টপিক সিঙ্ক এখনো শুরু হয়নি — 'আবার চেক ও কানেক্ট' চাপুন।",
+                                    text = tr(
+                                        "No topic sync started yet — tap 'Re-check & Connect'.",
+                                        "কোনো টপিক সিঙ্ক এখনো শুরু হয়নি — 'আবার চেক ও কানেক্ট' চাপুন।"
+                                    ),
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.Monospace,
                                     color = Color(0xFF94A3B8),
@@ -731,6 +736,6 @@ private fun copyTerminalReport(
             }
         }
         clipboard.setPrimaryClip(clip)
-        Toast.makeText(context, "টার্মিনাল রিপোর্ট কপি করা হয়েছে", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, AppLang.tr("Terminal report copied", "টার্মিনাল রিপোর্ট কপি করা হয়েছে"), Toast.LENGTH_SHORT).show()
     } catch (_: Throwable) {}
 }

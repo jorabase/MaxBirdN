@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import com.example.api.HierarchyChapterItem
 import com.example.quiz.PracticeQuizUiState
 import com.example.quiz.PracticeQuizViewModel
+import com.example.utils.tr
 
 private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
@@ -111,7 +112,7 @@ fun PracticeQuizChapterSelectionScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "প্র্যাকটিস কুইজ",
+                                text = tr("Practice Quiz", "প্র্যাকটিস কুইজ"),
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -119,7 +120,7 @@ fun PracticeQuizChapterSelectionScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "ধাপ ১/৩ • অধ্যায় নির্বাচন",
+                                text = tr("Step 1/3 • Select Chapters", "ধাপ ১/৩ • অধ্যায় নির্বাচন"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -132,7 +133,10 @@ fun PracticeQuizChapterSelectionScreen(
                             border = BorderStroke(1.dp, subjectColor.copy(alpha = 0.3f))
                         ) {
                             Text(
-                                text = "${toBengaliDigits(uiState.selectedChaptersCount)}টি নির্বাচিত",
+                                text = tr(
+                                    "${toBengaliDigits(uiState.selectedChaptersCount)} Selected",
+                                    "${toBengaliDigits(uiState.selectedChaptersCount)}টি নির্বাচিত"
+                                ),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = subjectColor,
@@ -188,9 +192,12 @@ fun PracticeQuizChapterSelectionScreen(
                     ) {
                         Text(
                             text = if (isEnabled) {
-                                "এগিয়ে যাও (${toBengaliDigits(uiState.selectedChaptersCount)}টি অধ্যায়)"
+                                tr(
+                                    "Continue (${toBengaliDigits(uiState.selectedChaptersCount)} chapters)",
+                                    "এগিয়ে যাও (${toBengaliDigits(uiState.selectedChaptersCount)}টি অধ্যায়)"
+                                )
                             } else {
-                                "অধ্যায় সিলেক্ট করুন"
+                                tr("Select Chapters", "অধ্যায় সিলেক্ট করুন")
                             },
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
@@ -231,7 +238,7 @@ fun PracticeQuizChapterSelectionScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "কুইজের অধ্যায়সমূহ লোড হচ্ছে...",
+                            text = tr("Loading chapters...", "অধ্যায়সমূহ লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -263,7 +270,7 @@ fun PracticeQuizChapterSelectionScreen(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = uiState.chaptersError ?: "অধ্যায় লোড করা যায়নি",
+                            text = uiState.chaptersError ?: tr("Failed to load chapters", "অধ্যায় লোড করা যায়নি"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -283,7 +290,7 @@ fun PracticeQuizChapterSelectionScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Try Again", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -334,14 +341,17 @@ fun PracticeQuizChapterSelectionScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = subjectTitle.ifBlank { "বিষয় অধ্যায়সমূহ" },
+                                            text = subjectTitle.ifBlank { tr("Chapters", "অধ্যায়সমূহ") },
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Spacer(modifier = Modifier.height(3.dp))
                                         Text(
-                                            text = "মোট সক্রিয় প্রশ্ন: ${toBengaliDigits(uiState.totalActiveQuestionsInSubject)}টি",
+                                            text = tr(
+                                                "Active Questions: ${toBengaliDigits(uiState.totalActiveQuestionsInSubject)}",
+                                                "সক্রিয় প্রশ্ন: ${toBengaliDigits(uiState.totalActiveQuestionsInSubject)}টি"
+                                            ),
                                             fontSize = 12.sp,
                                             color = subjectColor,
                                             fontWeight = FontWeight.Medium
@@ -367,13 +377,13 @@ fun PracticeQuizChapterSelectionScreen(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "এই অধ্যায়ের প্র্যাকটিস কুইজ",
+                                                text = tr("Chapter Practice", "অধ্যায় প্র্যাকটিস"),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = subjectColor
                                             )
                                             Text(
-                                                text = "নির্দিষ্ট অধ্যায় থেকে প্রশ্নের সেট তৈরি হবে",
+                                                text = tr("Questions will be generated from this chapter", "নির্দিষ্ট অধ্যায় থেকে প্রশ্নের সেট তৈরি হবে"),
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -382,13 +392,13 @@ fun PracticeQuizChapterSelectionScreen(
                                             onClick = { viewModel.showAllChapters() },
                                             colors = ButtonDefaults.textButtonColors(contentColor = subjectColor)
                                         ) {
-                                            Text("সব অধ্যায়", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            Text(tr("All Chapters", "সব অধ্যায়"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
                             } else {
                                 Text(
-                                    text = "অধ্যায় ও টপিক সিলেক্ট করো",
+                                    text = tr("Select Chapters", "অধ্যায় নির্বাচন করুন"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -449,13 +459,13 @@ fun PracticeQuizChapterSelectionScreen(
 
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "সকল অধ্যায়",
+                                                text = tr("All Chapters", "সকল অধ্যায়"),
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (isAllSelected) subjectColor else MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "সবগুলো অধ্যায় একসাথে অনুশীলন করতে",
+                                                text = tr("Practice across all chapters together", "সবগুলো অধ্যায় একসাথে অনুশীলন করতে"),
                                                 fontSize = 12.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -540,7 +550,7 @@ private fun ChapterSelectionItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = chapter.name ?: "অধ্যায়",
+                    text = chapter.name ?: tr("Chapter", "অধ্যায়"),
                     fontSize = 14.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -559,7 +569,7 @@ private fun ChapterSelectionItem(
                         color = subjectColor.copy(alpha = 0.1f)
                     ) {
                         Text(
-                            text = "${toBengaliDigits(questionCount)}টি প্রশ্ন",
+                            text = tr("${toBengaliDigits(questionCount)} Questions", "${toBengaliDigits(questionCount)}টি প্রশ্ন"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = subjectColor,
@@ -569,7 +579,7 @@ private fun ChapterSelectionItem(
 
                     if (chapter.no != null && chapter.no.toString().isNotBlank()) {
                         Text(
-                            text = "অধ্যায় ${toBengaliDigits(chapter.no.toString())}",
+                            text = tr("Chapter ${toBengaliDigits(chapter.no.toString())}", "অধ্যায় ${toBengaliDigits(chapter.no.toString())}"),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

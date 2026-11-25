@@ -36,6 +36,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.auth.SessionManager
 import com.example.quiz.PracticeQuizViewModel
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 
 private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
@@ -55,10 +58,10 @@ private fun formatSecondsToBengaliTime(
         }
         else -> serverSeconds.toLong()
     }
-    if (effectiveSec <= 0L) return "০০:০০ মি."
+    if (effectiveSec <= 0L) return AppLang.tr("00:00 min", "০০:০০ মি.")
     val min = effectiveSec / 60
     val sec = effectiveSec % 60
-    return "${toBengaliDigits(String.format("%02d", min))}:${toBengaliDigits(String.format("%02d", sec))} মি."
+    return "${toBengaliDigits(String.format("%02d", min))}:${toBengaliDigits(String.format("%02d", sec))} ${AppLang.tr("min", "মি.")}"
 }
 
 @Composable
@@ -82,9 +85,10 @@ fun PracticeQuizResultScreen(
         onBackToChapters()
     }
 
+    val isBn = isBangla()
     val result = uiState.resultSummary
-    val userName = remember { sessionManager.getUserFullName() ?: "শিক্ষার্থী" }
-    val userClass = remember { sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: "একাদশ শ্রেণি" }
+    val userName = remember(isBn) { sessionManager.getUserFullName() ?: AppLang.tr("Student", "শিক্ষার্থী") }
+    val userClass = remember(isBn) { sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: AppLang.tr("Class 11", "একাদশ শ্রেণি") }
     val userAvatar = remember { sessionManager.getUserAvatar() }
 
     // Dark Navy theme colors
@@ -124,7 +128,7 @@ fun PracticeQuizResultScreen(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     Text(
-                        text = "কুইজের ফলাফল",
+                        text = tr("Quiz Result", "কুইজ ফলাফল"),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -156,7 +160,7 @@ fun PracticeQuizResultScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "ফলাফল প্রস্তুত হচ্ছে...",
+                            text = tr("Preparing result...", "ফলাফল প্রস্তুত হচ্ছে..."),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.8f)
@@ -173,7 +177,7 @@ fun PracticeQuizResultScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.resultError ?: "ফলাফল পাওয়া যায়নি",
+                            text = uiState.resultError ?: tr("Result not found", "ফলাফল পাওয়া যায়নি"),
                             fontSize = 15.sp,
                             color = Color.White.copy(alpha = 0.8f),
                             textAlign = TextAlign.Center
@@ -183,7 +187,7 @@ fun PracticeQuizResultScreen(
                             onClick = { viewModel.loadQuizResult(sessionId) },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8))
                         ) {
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Try Again", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -264,7 +268,7 @@ fun PracticeQuizResultScreen(
                                             modifier = Modifier.size(13.dp)
                                         )
                                         Text(
-                                            text = "প্র্যাকটিস কুইজ",
+                                            text = tr("Practice Quiz", "প্র্যাকটিস কুইজ"),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF38BDF8)
@@ -320,7 +324,7 @@ fun PracticeQuizResultScreen(
 
                                 // Badge Title (e.g. "ঘষামাজা যোদ্ধা")
                                 Text(
-                                    text = result.badge ?: "কুইজ সম্পন্ন!",
+                                    text = result.badge ?: tr("Quiz Completed!", "কুইজ সম্পন্ন!"),
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -329,7 +333,7 @@ fun PracticeQuizResultScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                // Large Score Display (e.g. "৩/১০")
+                                // Large Score Display
                                 val totalCorrect = result.correctCount
                                 val totalQuestions = if (result.questionsCount > 0) result.questionsCount else uiState.totalQuestionsCount
                                 Surface(
@@ -338,7 +342,10 @@ fun PracticeQuizResultScreen(
                                     border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f))
                                 ) {
                                     Text(
-                                        text = "স্কোর: ${toBengaliDigits(totalCorrect)}/${toBengaliDigits(totalQuestions)}",
+                                        text = tr(
+                                            "Score: ${toBengaliDigits(totalCorrect)}/${toBengaliDigits(totalQuestions)}",
+                                            "স্কোর: ${toBengaliDigits(totalCorrect)}/${toBengaliDigits(totalQuestions)}"
+                                        ),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFF38BDF8),
@@ -348,7 +355,7 @@ fun PracticeQuizResultScreen(
                             }
                         }
 
-                        // 3-Column Stats Grid (সঠিক / ভুল / সময় লেগেছে)
+                        // 3-Column Stats Grid
                         Surface(
                             shape = RoundedCornerShape(18.dp),
                             color = cardNavyBg,
@@ -366,8 +373,8 @@ fun PracticeQuizResultScreen(
                                 StatColumnItem(
                                     icon = Icons.Default.CheckCircle,
                                     iconTint = Color(0xFF10B981),
-                                    title = "সঠিক",
-                                    value = "${toBengaliDigits(result.correctCount)}টি"
+                                    title = tr("Correct", "সঠিক"),
+                                    value = tr("${toBengaliDigits(result.correctCount)}", "${toBengaliDigits(result.correctCount)}টি")
                                 )
 
                                 Box(
@@ -381,8 +388,8 @@ fun PracticeQuizResultScreen(
                                 StatColumnItem(
                                     icon = Icons.Default.Cancel,
                                     iconTint = Color(0xFFEF4444),
-                                    title = "ভুল",
-                                    value = "${toBengaliDigits(result.incorrectCount)}টি"
+                                    title = tr("Wrong", "ভুল"),
+                                    value = tr("${toBengaliDigits(result.incorrectCount)}", "${toBengaliDigits(result.incorrectCount)}টি")
                                 )
 
                                 Box(
@@ -397,7 +404,7 @@ fun PracticeQuizResultScreen(
                                 StatColumnItem(
                                     icon = Icons.Default.AccessTime,
                                     iconTint = Color(0xFF38BDF8),
-                                    title = "সময় লেগেছে",
+                                    title = tr("Time Spent", "সময় লেগেছে"),
                                     value = formatSecondsToBengaliTime(
                                         serverSeconds = result.spentTimeSeconds.toDouble(),
                                         localElapsedSeconds = uiState.elapsedTimeSeconds,
@@ -423,7 +430,7 @@ fun PracticeQuizResultScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = subjectDetail.title_bn ?: subjectDetail.title ?: uiState.subjectTitle,
+                                            text = if (isBn) (subjectDetail.title_bn ?: subjectDetail.title ?: uiState.subjectTitle) else (subjectDetail.title ?: subjectDetail.title_bn ?: uiState.subjectTitle),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
@@ -434,15 +441,15 @@ fun PracticeQuizResultScreen(
                                                 .padding(end = 8.dp)
                                         )
 
-                                        // Proficiency Level Pill (e.g. "কাঁচা")
-                                        val proficiency = subjectDetail.proficiency ?: "অগ্রসরমান"
+                                        // Proficiency Level Pill
+                                        val proficiency = subjectDetail.proficiency ?: tr("Improving", "অগ্রসরমান")
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
                                             color = Color(0xFFF59E0B).copy(alpha = 0.15f),
                                             border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f))
                                         ) {
                                             Text(
-                                                text = "দক্ষতা: $proficiency",
+                                                text = tr("Skill: $proficiency", "দক্ষতা: $proficiency"),
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFFF59E0B),
@@ -479,7 +486,7 @@ fun PracticeQuizResultScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
 
                                     Text(
-                                        text = "সঠিকতা: ${toBengaliDigits((pct * 100).toInt())}%",
+                                        text = tr("Accuracy: ${toBengaliDigits((pct * 100).toInt())}%", "সঠিকতা: ${toBengaliDigits((pct * 100).toInt())}%"),
                                         fontSize = 12.sp,
                                         color = Color.White.copy(alpha = 0.7f)
                                     )
@@ -514,7 +521,7 @@ fun PracticeQuizResultScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "সলিউশন দেখা",
+                                    text = tr("View Solutions", "সলিউশন দেখুন"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -542,7 +549,7 @@ fun PracticeQuizResultScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "আবার ট্রাই করো",
+                                    text = tr("Try Again", "আবার চেষ্টা করুন"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White

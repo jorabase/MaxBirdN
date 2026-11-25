@@ -46,6 +46,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "LivePlayer"
@@ -82,12 +85,12 @@ fun createRealResolutionOption(
     val id = "${cleanHeight}p"
 
     val (qualityTag, badgeLabel, descLabel) = when {
-        cleanHeight >= 1080 -> Triple("Full HD", "FHD", "সর্বোচ্চ রেজুলেশন ও নিখুঁত স্পষ্টতা")
-        cleanHeight >= 720 -> Triple("HD", "HD", "হাই ডেফিনিশন (স্পষ্ট লেখা ও বোর্ড)")
-        cleanHeight >= 480 -> Triple("SD", "SD", "ব্যালেন্সড কোয়ালিটি ও ডেটা")
-        cleanHeight >= 360 -> Triple("Medium", "360P", "মোটামুটি স্পষ্ট ও কম ডেটা খরচ")
-        cleanHeight >= 240 -> Triple("Low", "LOW", "সাশ্রয়ী ডেটা খরচ")
-        else -> Triple("Data Saver", "SAVER", "সর্বনিম্ন ডেটা ও দুর্বল নেটওয়ার্কের জন্য")
+        cleanHeight >= 1080 -> Triple("Full HD", "FHD", AppLang.tr("Highest resolution & crisp clarity", "সর্বোচ্চ রেজুলেশন ও নিখুঁত স্পষ্টতা"))
+        cleanHeight >= 720 -> Triple("HD", "HD", AppLang.tr("High definition (clear board & text)", "হাই ডেফিনিশন (স্পষ্ট লেখা ও বোর্ড)"))
+        cleanHeight >= 480 -> Triple("SD", "SD", AppLang.tr("Balanced quality & data usage", "ব্যালেন্সড কোয়ালিটি ও ডেটা"))
+        cleanHeight >= 360 -> Triple("Medium", "360P", AppLang.tr("Clear view with low data usage", "মোটামুটি স্পষ্ট ও কম ডেটা খরচ"))
+        cleanHeight >= 240 -> Triple("Low", "LOW", AppLang.tr("Data-saving playback", "সাশ্রয়ী ডেটা খরচ"))
+        else -> Triple("Data Saver", "SAVER", AppLang.tr("Lowest data for weak networks", "সর্বনিম্ন ডেটা ও দুর্বল নেটওয়ার্কের জন্য"))
     }
 
     val dimenStr = if (width > 0 && height > 0) "${width}×${height}" else ""
@@ -269,8 +272,10 @@ fun LivePlayer(
         }
     }
 
+    val isBn = isBangla()
+
     // Merge HLS manifest resolutions & ExoPlayer track resolutions into a single 100% real list
-    LaunchedEffect(hlsManifestResolutions, exoTrackResolutions, currentPlayingResLabel) {
+    LaunchedEffect(hlsManifestResolutions, exoTrackResolutions, currentPlayingResLabel, isBn) {
         val combinedTracks = (exoTrackResolutions + hlsManifestResolutions)
             .groupBy { it.id }
             .map { (_, items) ->
@@ -279,16 +284,22 @@ fun LivePlayer(
             .sortedByDescending { it.height }
 
         val autoSubtitle = if (currentPlayingResLabel.isNotBlank()) {
-            "নেটওয়ার্ক স্পিড অনুযায়ী এডাপ্টিভ (বর্তমানে $currentPlayingResLabel চলছে)"
+            AppLang.tr(
+                "Adaptive by network speed (Currently $currentPlayingResLabel)",
+                "নেটওয়ার্ক স্পিড অনুযায়ী এডাপ্টিভ (বর্তমানে $currentPlayingResLabel চলছে)"
+            )
         } else {
-            "নেটওয়ার্ক স্পিড অনুযায়ী স্বয়ংক্রিয় রেজুলেশন"
+            AppLang.tr(
+                "Automatic resolution by network speed",
+                "নেটওয়ার্ক স্পিড অনুযায়ী স্বয়ংক্রিয় রেজুলেশন"
+            )
         }
 
         val finalOptions = buildList {
             add(
                 LiveResolutionOption(
                     id = "auto",
-                    title = "Auto (স্বয়ংক্রিয়)",
+                    title = AppLang.tr("Auto (Adaptive)", "Auto (স্বয়ংক্রিয়)"),
                     subtitle = autoSubtitle,
                     width = 0,
                     height = Int.MAX_VALUE,
@@ -605,10 +616,10 @@ fun LivePlayer(
                 isPlayerError = true
                 val msg = when {
                     error.message?.contains("Source error", ignoreCase = true) == true ->
-                        "লাইভ সম্প্রচারের সংযোগে সাময়িক বিলম্ব হচ্ছে।"
+                        AppLang.tr("Temporary delay connecting to the live stream.", "লাইভ সম্প্রচারের সংযোগে সাময়িক বিলম্ব হচ্ছে।")
                     error.message?.contains("BehindLiveWindow", ignoreCase = true) == true ->
-                        "লাইভ সম্প্রচার সমাপ্ত বা রিফ্রেশ প্রয়োজন।"
-                    else -> "নেটওয়ার্ক বা স্ট্রিম সংযোগে সমস্যা হয়েছে।"
+                        AppLang.tr("Live broadcast ended or needs refresh.", "লাইভ সম্প্রচার সমাপ্ত বা রিফ্রেশ প্রয়োজন।")
+                    else -> AppLang.tr("Network or stream connection error.", "নেটওয়ার্ক বা স্ট্রিম সংযোগে সমস্যা হয়েছে।")
                 }
                 playerErrorMessage = msg
                 onError?.invoke(msg)
@@ -692,7 +703,7 @@ fun LivePlayer(
                 exoPlayer.play()
                 isPlaying = true
                 isPlayingCallbackState.value?.invoke(true)
-                Toast.makeText(context, "লাইভ স্ট্রিমে সিঙ্ক করা হয়েছে ✨", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, AppLang.tr("Synced to live stream ✨", "লাইভ স্ট্রিমে সিঙ্ক করা হয়েছে ✨"), Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Log.w(TAG, "Error seeking to live: ${e.message}")
             }
@@ -819,7 +830,7 @@ fun LivePlayer(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "লাইভ ক্লাস সম্প্রচার সমাপ্ত হয়েছে",
+                        text = tr("Live broadcast ended", "লাইভ ক্লাস সম্প্রচার সমাপ্ত হয়েছে"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -831,7 +842,7 @@ fun LivePlayer(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = "আপনি ক্লাসটি পুনরায় প্রথম থেকে দেখতে পারেন",
+                        text = tr("You can replay the class from the beginning", "আপনি ক্লাসটি পুনরায় প্রথম থেকে দেখতে পারেন"),
                         fontSize = 11.5.sp,
                         color = Color(0xFF94A3B8),
                         textAlign = TextAlign.Center,
@@ -860,7 +871,7 @@ fun LivePlayer(
                         ) {
                             Icon(Icons.Default.Replay, null, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("পুনরায় দেখুন", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("Replay", "পুনরায় দেখুন"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                         }
 
                         if (allUrls.size > 1 && currentUrlIndex + 1 < allUrls.size) {
@@ -876,7 +887,7 @@ fun LivePlayer(
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
-                                Text("রেকর্ডিং দেখুন", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(tr("Watch Recording", "রেকর্ডিং দেখুন"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
 
@@ -889,7 +900,7 @@ fun LivePlayer(
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
-                                Text("ফিরে যান", fontSize = 11.5.sp)
+                                Text(tr("Go Back", "ফিরে যান"), fontSize = 11.5.sp)
                             }
                         }
                     }
@@ -923,7 +934,7 @@ fun LivePlayer(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "ভিডিও স্ট্রিম লোড হতে বিঘ্ন ঘটেছে",
+                        text = tr("Video stream interrupted", "ভিডিও স্ট্রিম লোড হতে বিঘ্ন ঘটেছে"),
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -956,7 +967,7 @@ fun LivePlayer(
                         ) {
                             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("পুনরায় চেষ্টা করুন", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                         }
 
                         if (allUrls.size > 1) {
@@ -972,7 +983,7 @@ fun LivePlayer(
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
-                                Text("বিকল্প স্ট্রিম", fontSize = 11.5.sp, color = Color(0xFF38BDF8))
+                                Text(tr("Alternate Stream", "বিকল্প স্ট্রিম"), fontSize = 11.5.sp, color = Color(0xFF38BDF8))
                             }
                         }
                     }

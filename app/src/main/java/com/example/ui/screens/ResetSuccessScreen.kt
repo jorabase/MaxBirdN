@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.utils.tr
 
 @Composable
 fun ResetSuccessScreen(
@@ -103,7 +104,7 @@ fun ResetSuccessScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
-                    text = "অভিনন্দন!",
+                    text = tr("All Set!", "অভিনন্দন!"),
                     fontSize = 26.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -113,7 +114,10 @@ fun ResetSuccessScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "আপনার অ্যাকাউন্ট সফলভাবে সম্পন্ন হয়েছে। পিন দিয়ে লগ ইন করে আপনার প্রোফাইল সম্পূর্ণ করুন।",
+                    text = tr(
+                        "Your account is ready. Log in with your PIN to continue.",
+                        "আপনার অ্যাকাউন্ট প্রস্তুত। পিন দিয়ে লগইন করে এগিয়ে যান।"
+                    ),
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -133,7 +137,7 @@ fun ResetSuccessScreen(
                     )
                 ) {
                     Text(
-                        text = "লগ ইন করুন",
+                        text = tr("Log In", "লগইন করুন"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White

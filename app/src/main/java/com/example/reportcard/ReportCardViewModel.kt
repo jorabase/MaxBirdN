@@ -24,7 +24,7 @@ enum class ReportTab {
 
 data class ReportCardUiState(
     val selectedTab: ReportTab = ReportTab.RESULT_DETAILS,
-    val programTitle: String = "এইচএসসি ২০২৬ একাডেমিক প্রোগ্রাম",
+    val programTitle: String = com.example.utils.AppLang.tr("HSC 2026 Academic Program", "এইচএসসি ২০২৬ একাডেমিক প্রোগ্রাম"),
     val programId: String = "",
     val phases: List<PhaseItem> = emptyList(),
     val selectedPhase: PhaseItem? = null,
@@ -72,7 +72,7 @@ class ReportCardViewModel(
         programTitle: String? = null,
         initialPhaseId: String? = null
     ) {
-        val name = sessionManager.getUserFullName() ?: "শিক্ষার্থী"
+        val name = sessionManager.getUserFullName() ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")
         val avatar = sessionManager.getUserAvatar()
         val school = sessionManager.getUserSchoolName() ?: ""
         val phone = sessionManager.getUserPhone()
@@ -234,7 +234,7 @@ class ReportCardViewModel(
 
                 val allSubject = AcademicSubjectItem(
                     code = "ALL",
-                    display_bn = "সকল বিষয়",
+                    display_bn = com.example.utils.AppLang.tr("All Subjects", "সকল বিষয়"),
                     color_code = "#3B82F6",
                     icon = "https://cdn.shikho.com/app/subjects/all.png"
                 )
@@ -260,7 +260,7 @@ class ReportCardViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = e.message ?: "উপাত্ত লোড করতে ব্যর্থ হয়েছে"
+                    errorMessage = e.message ?: com.example.utils.AppLang.tr("Failed to load data", "উপাত্ত লোড করতে ব্যর্থ হয়েছে")
                 )
             }
         }
@@ -291,7 +291,7 @@ class ReportCardViewModel(
                     trendData = trend,
                     isLoading = false,
                     isRefreshing = false,
-                    errorMessage = if (report == null) "এই কোয়ার্টারের রিপোর্ট ডেটা এখনো পাওয়া যায়নি।" else null
+                    errorMessage = if (report == null) com.example.utils.AppLang.tr("Report data for this quarter is not available yet.", "এই কোয়ার্টারের রিপোর্ট ডেটা এখনো পাওয়া যায়নি।") else null
                 )
 
             } catch (e: Exception) {
@@ -300,7 +300,7 @@ class ReportCardViewModel(
                     trendData = null,
                     isLoading = false,
                     isRefreshing = false,
-                    errorMessage = e.message ?: "রিপোর্ট কার্ড লোড করা যায়নি।"
+                    errorMessage = e.message ?: com.example.utils.AppLang.tr("Could not load report card.", "রিপোর্ট কার্ড লোড করা যায়নি।")
                 )
             }
         }
@@ -989,7 +989,7 @@ class ReportCardViewModel(
                         _uiState.update {
                             it.copy(
                                 isFetchingStudentProfile = false,
-                                profileFetchError = if (it.selectedStudentFullProfile == null) "তথ্য পাওয়া যায়নি" else null
+                                profileFetchError = if (it.selectedStudentFullProfile == null) com.example.utils.AppLang.tr("Details not found", "তথ্য পাওয়া যায়নি") else null
                             )
                         }
                     } else {
@@ -1036,7 +1036,7 @@ class ReportCardViewModel(
     }
 
     private fun buildDetailedStudentProfile(studentItem: LeaderboardUserItem?, targetUserId: String): UserProfile {
-        val rawName = studentItem?.effectiveName ?: "শিক্ষার্থী"
+        val rawName = studentItem?.effectiveName ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")
         val nameParts = rawName.trim().split(Regex("\\s+"))
         val firstName = if (nameParts.size > 1) nameParts.dropLast(1).joinToString(" ") else nameParts.firstOrNull() ?: rawName
         val lastName = if (nameParts.size > 1) nameParts.last() else ""
@@ -1055,18 +1055,18 @@ class ReportCardViewModel(
 
         val inferredDistrict = userDistrict?.takeIf { it.isNotBlank() && it != "null" }
 
-        val boardName = inferredDivision?.let { "$it শিক্ষা বোর্ড" }
+        val boardName = inferredDivision?.let { com.example.utils.AppLang.tr("$it Education Board", "$it শিক্ষা বোর্ড") }
 
         val studyGroup = studentItem?.group
             ?: studentItem?.study_group
             ?: studentItem?.user?.effectiveGroup
             ?: sessionManager.getUserGroup()
-            ?: "বিজ্ঞান"
+            ?: com.example.utils.AppLang.tr("Science", "বিজ্ঞান")
 
         val batchDisplay = studentItem?.batch
             ?: studentItem?.user?.batch
             ?: sessionManager.getActiveProgramBatchId()
-            ?: "এইচএসসি ২০২৭"
+            ?: com.example.utils.AppLang.tr("HSC 2027", "এইচএসসি ২০২৭")
 
         val passingYear = studentItem?.passing_year
             ?: studentItem?.user?.passing_year

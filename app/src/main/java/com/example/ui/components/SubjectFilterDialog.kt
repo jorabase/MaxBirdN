@@ -40,6 +40,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.api.AcademicSubjectItem
 import com.example.utils.SubjectColorUtils
 import com.example.utils.SubjectIconBadge
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +100,7 @@ fun SubjectFilterDialog(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "সাবজেক্ট সাজাও",
+                                text = tr("Filter Subjects", "সাবজেক্ট সাজাও"),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -108,7 +109,7 @@ fun SubjectFilterDialog(
 
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = courseTitle.ifBlank { "সিলেক্টেড কোর্স" },
+                            text = courseTitle.ifBlank { tr("Selected Course", "সিলেক্টেড কোর্স") },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = primary,
@@ -126,7 +127,7 @@ fun SubjectFilterDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "বন্ধ করুন",
+                            contentDescription = tr("Close", "বন্ধ করুন"),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
@@ -135,7 +136,6 @@ fun SubjectFilterDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Banner — NEW: theme-aware (ডার্ক মোডেও সুন্দর দেখাবে)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = primary.copy(alpha = 0.08f),
@@ -154,7 +154,10 @@ fun SubjectFilterDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "যে সাবজেক্টগুলো সিলেক্ট করবেন শুধু সেগুলোর রুটিন প্রদর্শিত হবে।",
+                            text = tr(
+                                "Only classes from selected subjects will appear in your routine.",
+                                "যে সাবজেক্টগুলো সিলেক্ট করবেন শুধু সেগুলোর রুটিন দেখাবে।"
+                            ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 16.sp
@@ -164,14 +167,21 @@ fun SubjectFilterDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 2. Quick Action Bar — LOGIC সেম
+                // 2. Quick Action Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (selectedCount == 0) "সব বিষয় সিলেক্টেড (ডিফল্ট)" else "${selectedCount.toString().toBengaliDigits()}/${totalCount.toString().toBengaliDigits()} টি বিষয় নির্বাচিত",
+                        text = if (selectedCount == 0) {
+                            tr("All subjects (Default)", "সব বিষয় সিলেক্টেড (ডিফল্ট)")
+                        } else {
+                            tr(
+                                "${selectedCount.toString().toBengaliDigits()}/${totalCount.toString().toBengaliDigits()} selected",
+                                "${selectedCount.toString().toBengaliDigits()}/${totalCount.toString().toBengaliDigits()} টি বিষয় নির্বাচিত"
+                            )
+                        },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -185,7 +195,7 @@ fun SubjectFilterDialog(
                         ) {
                             Icon(Icons.Default.FilterList, null, tint = primary, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("সবগুলো", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = primary)
+                            Text(tr("All", "সবগুলো"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = primary)
                         }
 
                         TextButton(
@@ -193,7 +203,7 @@ fun SubjectFilterDialog(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("রিসেট", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
+                            Text(tr("Reset", "রিসেট"), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -203,7 +213,7 @@ fun SubjectFilterDialog(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                 )
 
-                // 3. Subject Grid Content — LOGIC states সেম
+                // 3. Subject Grid Content
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -215,7 +225,7 @@ fun SubjectFilterDialog(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     CircularProgressIndicator(strokeWidth = 3.dp, modifier = Modifier.size(36.dp), color = primary)
                                     Spacer(modifier = Modifier.height(10.dp))
-                                    Text("সাবজেক্ট লোড হচ্ছে...", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(tr("Loading subjects...", "সাবজেক্ট লোড হচ্ছে..."), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -223,7 +233,7 @@ fun SubjectFilterDialog(
                         subjects.isEmpty() -> {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "এই কোর্সের জন্য কোনো সাবজেক্ট পাওয়া যায়নি।",
+                                    text = tr("No subjects found for this course.", "এই কোর্সের জন্য কোনো সাবজেক্ট পাওয়া যায়নি।"),
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -241,7 +251,7 @@ fun SubjectFilterDialog(
                                 items(subjects, key = { it.code ?: it.display_bn ?: "" }) { subject ->
                                     val code = subject.code ?: subject.display_bn ?: ""
                                     val isSelected = selectedSubjectCodes.contains(code)
-                                    val subjectName = subject.display_bn ?: subject.code ?: "বিষয়"
+                                    val subjectName = subject.display_bn ?: subject.code ?: tr("Subject", "বিষয়")
                                     val colors = SubjectColorUtils.getColorScheme(subjectName)
 
                                     // NEW: spring checkmark animation
@@ -346,7 +356,7 @@ fun SubjectFilterDialog(
                             .weight(1f)
                             .height(46.dp)
                     ) {
-                        Text("বাতিল", fontSize = 14.sp)
+                        Text(tr("Cancel", "বাতিল"), fontSize = 14.sp)
                     }
 
                     // Gradient Save
@@ -379,11 +389,11 @@ fun SubjectFilterDialog(
                         if (isSaving) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("সেভ হচ্ছে...", fontSize = 14.sp, color = Color.White)
+                            Text(tr("Saving...", "সেভ হচ্ছে..."), fontSize = 14.sp, color = Color.White)
                         } else {
                             Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("সেভ করুন", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(tr("Save", "সেভ করুন"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }

@@ -72,9 +72,12 @@ import com.example.player.ShikhoPlayerManager
 import com.example.player.VideoProgressManager
 import com.example.ui.components.EqualizerBottomSheet
 import com.example.ui.components.VideoDownloadQualityDialog
+import com.example.utils.AppLang
 import com.example.utils.PipHelper
 import com.example.utils.SetupPipController
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -131,13 +134,15 @@ fun AnimatedLessonPlayerScreen(
     var activeTitle by remember(title) { mutableStateOf(title) }
     var watchedUrls by remember { mutableStateOf(StudentGamificationManager.getWatchedAnimatedUrls(context)) }
 
+    val isBn = isBangla()
+
     // Build normalized playlist entries
-    val playlistEntries = remember(playlist, activeVideoUrl, activeTitle) {
+    val playlistEntries = remember(playlist, activeVideoUrl, activeTitle, isBn) {
         val fromTopics = playlist.mapIndexedNotNull { index, topic ->
             val videoData = topic.videos?.data?.firstOrNull { !it.playback_url.isNullOrBlank() }
             val pbUrl = videoData?.playback_url?.takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
             val thumb = videoData.video_thumbnail_url?.firstOrNull()
-            val tName = topic.name ?: "অ্যানিমেটেড লেসন ${toBengaliDigits(index + 1)}"
+            val tName = topic.name ?: AppLang.tr("Animated Lesson ${toBengaliDigits(index + 1)}", "অ্যানিমেটেড লেসন ${toBengaliDigits(index + 1)}")
             val sNo = topic.no?.let { toBengaliDigits(it) } ?: toBengaliDigits(index + 1)
             AnimatedPlaylistEntry(
                 id = topic.id ?: "topic_$index",
@@ -154,8 +159,8 @@ fun AnimatedLessonPlayerScreen(
             listOf(
                 AnimatedPlaylistEntry(
                     id = "current_0",
-                    serialNo = "১",
-                    title = activeTitle.ifBlank { "অ্যানিমেটেড লেসন" },
+                    serialNo = toBengaliDigits(1),
+                    title = activeTitle.ifBlank { AppLang.tr("Animated Lesson", "অ্যানিমেটেড লেসন") },
                     description = null,
                     videoUrl = activeVideoUrl,
                     thumbnailUrl = null
@@ -384,7 +389,10 @@ fun AnimatedLessonPlayerScreen(
                                 if (saved != null && saved.positionMs > 3000L && saved.positionMs < totalDuration - 5000L) {
                                     exoPlayer.seekTo(saved.positionMs)
                                     currentPosition = saved.positionMs
-                                    resumeNotificationText = "পূর্বের অবস্থান (${formatTime(saved.positionMs)}) থেকে শুরু হয়েছে"
+                                    resumeNotificationText = AppLang.tr(
+                                        "Resumed from ${formatTime(saved.positionMs)}",
+                                        "পূর্বের অবস্থান (${formatTime(saved.positionMs)}) থেকে শুরু হয়েছে"
+                                    )
                                 }
                             }
                         }
@@ -416,7 +424,10 @@ fun AnimatedLessonPlayerScreen(
 
             override fun onPlayerError(error: PlaybackException) {
                 isBuffering = false
-                playbackError = "ভিডিও লোড হতে সমস্যা হয়েছে: ${error.localizedMessage ?: "নেটওয়ার্ক কানেকশন পরীক্ষা করুন"}"
+                playbackError = AppLang.tr(
+                    "Failed to load video: ${error.localizedMessage ?: "Check your internet connection"}",
+                    "ভিডিও লোড হতে সমস্যা হয়েছে: ${error.localizedMessage ?: "নেটওয়ার্ক কানেকশন পরীক্ষা করুন"}"
+                )
             }
         }
 
@@ -484,7 +495,11 @@ fun AnimatedLessonPlayerScreen(
                                 }
                                 exoPlayer.prepare()
                                 exoPlayer.playWhenReady = true
-                                Toast.makeText(context, "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    AppLang.tr("Connection restored, resuming lesson...", "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে..."),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         } catch (_: Exception) {}
                     }
@@ -814,7 +829,7 @@ fun AnimatedLessonPlayerScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "উজ্জ্বলতা ${toBengaliDigits(percent.toString())}%",
+                                text = tr("Brightness ${toBengaliDigits(percent.toString())}%", "উজ্জ্বলতা ${toBengaliDigits(percent.toString())}%"),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
@@ -851,7 +866,7 @@ fun AnimatedLessonPlayerScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "ভলিউম ${toBengaliDigits(percent.toString())}%",
+                                text = tr("Volume ${toBengaliDigits(percent.toString())}%", "ভলিউম ${toBengaliDigits(percent.toString())}%"),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
@@ -898,9 +913,9 @@ fun AnimatedLessonPlayerScreen(
                         ) {
                             if (doubleTapFeedbackSide == "LEFT") {
                                 Icon(Icons.Default.Replay10, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                                Text("১০ সে. পেছনে", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                                Text(tr("10s back", "১০ সে. পেছনে"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                             } else {
-                                Text("১০ সে. সামনে", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                                Text(tr("10s forward", "১০ সে. সামনে"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                                 Icon(Icons.Default.Forward10, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
                             }
                         }
@@ -929,7 +944,7 @@ fun AnimatedLessonPlayerScreen(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Icon(Icons.Default.Bolt, contentDescription = null, tint = Color(0xFFFDE047), modifier = Modifier.size(18.dp))
-                        Text("২X স্পিডে চলছে...", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                        Text(tr("2X Speed...", "২X স্পিডে চলছে..."), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                     }
                 }
             }
@@ -951,7 +966,7 @@ fun AnimatedLessonPlayerScreen(
                         modifier = Modifier.clickable {
                             isScreenLocked = false
                             areControlsVisible = true
-                            Toast.makeText(context, "স্ক্রিন আনলক হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Screen unlocked", "স্ক্রিন আনলক হয়েছে"), Toast.LENGTH_SHORT).show()
                         }
                     ) {
                         Row(
@@ -960,7 +975,7 @@ fun AnimatedLessonPlayerScreen(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(18.dp))
-                            Text("পর্দা লক করা আছে • আনলক করতে ট্যাপ করুন", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(tr("Screen locked • Tap to unlock", "পর্দা লক করা আছে • আনলক করতে ট্যাপ করুন"), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -1001,7 +1016,7 @@ fun AnimatedLessonPlayerScreen(
                             },
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                         ) {
-                            Text("শুরু থেকে", color = Color(0xFFA78BFA), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("From start", "শুরু থেকে"), color = Color(0xFFA78BFA), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1030,7 +1045,7 @@ fun AnimatedLessonPlayerScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = if (isPlayingOffline) "অফলাইন অ্যানিমেশন প্রস্তুত হচ্ছে..." else "লেসন লোড হচ্ছে...",
+                                text = if (isPlayingOffline) tr("Preparing offline video...", "অফলাইন অ্যানিমেশন প্রস্তুত হচ্ছে...") else tr("Loading lesson...", "লেসন লোড হচ্ছে..."),
                                 color = Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
@@ -1060,7 +1075,7 @@ fun AnimatedLessonPlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = playbackError ?: "ভিডিও প্লে করা যাচ্ছে না",
+                            text = playbackError ?: tr("Unable to play video", "ভিডিও প্লে করা যাচ্ছে না"),
                             color = Color.White,
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center
@@ -1084,7 +1099,7 @@ fun AnimatedLessonPlayerScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                            Text(tr("Try Again", "পুনরায় চেষ্টা করুন"), fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                         }
                     }
                 }
@@ -1150,7 +1165,7 @@ fun AnimatedLessonPlayerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = activeTitle.ifBlank { "অ্যানিমেটেড লেসন" },
+                                    text = activeTitle.ifBlank { tr("Animated Lesson", "অ্যানিমেটেড লেসন") },
                                     color = Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
@@ -1165,7 +1180,7 @@ fun AnimatedLessonPlayerScreen(
                                         border = BorderStroke(0.6.dp, Color(0xFF10B981))
                                     ) {
                                         Text(
-                                            text = "অফলাইন",
+                                            text = tr("Offline", "অফলাইন"),
                                             color = Color(0xFF34D399),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
@@ -1180,7 +1195,14 @@ fun AnimatedLessonPlayerScreen(
                             val subInfo = listOfNotNull(
                                 subjectName.takeIf { it.isNotBlank() },
                                 chapterName.takeIf { it.isNotBlank() },
-                                if (playlistEntries.size > 1) "লেসন ${toBengaliDigits(currentPlaylistIndex + 1)}/${toBengaliDigits(playlistEntries.size)}" else "অ্যানিমেটেড ক্লাস"
+                                if (playlistEntries.size > 1) {
+                                    tr(
+                                        "Lesson ${toBengaliDigits(currentPlaylistIndex + 1)}/${toBengaliDigits(playlistEntries.size)}",
+                                        "লেসন ${toBengaliDigits(currentPlaylistIndex + 1)}/${toBengaliDigits(playlistEntries.size)}"
+                                    )
+                                } else {
+                                    tr("Animated Class", "অ্যানিমেটেড ক্লাস")
+                                }
                             ).joinToString(" • ")
 
                             Text(
@@ -1210,13 +1232,13 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.PlaylistPlay,
-                                        contentDescription = "প্লেলিস্ট",
+                                        contentDescription = tr("Playlist", "প্লেলিস্ট"),
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
-                                        text = "ভিডিও (${toBengaliDigits(playlistEntries.size)})",
+                                        text = tr("Videos (${toBengaliDigits(playlistEntries.size)})", "ভিডিও (${toBengaliDigits(playlistEntries.size)})"),
                                         color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
@@ -1255,9 +1277,9 @@ fun AnimatedLessonPlayerScreen(
                                     }
                                     resizeMode = nextMode
                                     val label = when (nextMode) {
-                                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ফিট মোড (Fit)"
-                                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ক্রপ/জুম মোড (Zoom)"
-                                        else -> "ফুলস্ক্রিন স্ট্রেচ (Fill)"
+                                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AppLang.tr("Fit Mode", "ফিট মোড (Fit)")
+                                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AppLang.tr("Zoom Mode", "ক্রপ/জুম মোড (Zoom)")
+                                        else -> AppLang.tr("Fill Mode", "ফুলস্ক্রিন স্ট্রেচ (Fill)")
                                     }
                                     Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
                                 },
@@ -1279,7 +1301,7 @@ fun AnimatedLessonPlayerScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
-                                contentDescription = "ইকুলাইজার",
+                                contentDescription = tr("Equalizer", "ইকুলাইজার"),
                                 tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1295,7 +1317,11 @@ fun AnimatedLessonPlayerScreen(
                                     color = Color(0xFF0284C7).copy(alpha = 0.35f),
                                     border = BorderStroke(0.8.dp, Color(0xFF38BDF8).copy(alpha = 0.7f)),
                                     modifier = Modifier.clickable {
-                                        Toast.makeText(context, "ডাউনলোড চলছে: ${item.progressPercent}%", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            AppLang.tr("Downloading: ${item.progressPercent}%", "ডাউনলোড চলছে: ${toBengaliDigits(item.progressPercent)}%"),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 ) {
                                     Row(
@@ -1310,7 +1336,7 @@ fun AnimatedLessonPlayerScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "${item.progressPercent}%",
+                                            text = "${toBengaliDigits(item.progressPercent)}%",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF38BDF8)
@@ -1325,7 +1351,7 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.DownloadDone,
-                                        contentDescription = "সেভড",
+                                        contentDescription = tr("Saved", "সেভড"),
                                         tint = Color(0xFF34D399),
                                         modifier = Modifier.size(19.dp)
                                     )
@@ -1338,7 +1364,7 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Download,
-                                        contentDescription = "ডাউনলোড",
+                                        contentDescription = tr("Download", "ডাউনলোড"),
                                         tint = Color.White,
                                         modifier = Modifier.size(19.dp)
                                     )
@@ -1352,7 +1378,7 @@ fun AnimatedLessonPlayerScreen(
                         onClick = {
                             isScreenLocked = true
                             areControlsVisible = false
-                            Toast.makeText(context, "পর্দা লক করা হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Screen locked", "পর্দা লক করা হয়েছে"), Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
@@ -1363,7 +1389,7 @@ fun AnimatedLessonPlayerScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.LockOpen,
-                            contentDescription = "পর্দা লক করুন",
+                            contentDescription = tr("Lock Screen", "পর্দা লক করুন"),
                             tint = Color.White.copy(alpha = 0.9f),
                             modifier = Modifier.size(18.dp)
                         )
@@ -1387,7 +1413,7 @@ fun AnimatedLessonPlayerScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.SkipPrevious,
-                                    contentDescription = "পূর্ববর্তী ভিডিও",
+                                    contentDescription = tr("Previous Video", "পূর্ববর্তী ভিডিও"),
                                     tint = Color.White.copy(alpha = if (prevEntry != null) 1f else 0.35f),
                                     modifier = Modifier.size(if (useSplitPortraitLayout) 22.dp else 26.dp)
                                 )
@@ -1476,7 +1502,7 @@ fun AnimatedLessonPlayerScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.SkipNext,
-                                    contentDescription = "পরবর্তী ভিডিও",
+                                    contentDescription = tr("Next Video", "পরবর্তী ভিডিও"),
                                     tint = Color.White.copy(alpha = if (nextEntry != null) 1f else 0.35f),
                                     modifier = Modifier.size(if (useSplitPortraitLayout) 22.dp else 26.dp)
                                 )
@@ -1540,7 +1566,7 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(
                                         imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                        contentDescription = if (isMuted) "আনমিউট করুন" else "মিউট করুন",
+                                        contentDescription = if (isMuted) tr("Unmute", "আনমিউট করুন") else tr("Mute", "মিউট করুন"),
                                         tint = if (isMuted) Color(0xFFEF4444) else Color.White,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -1658,7 +1684,7 @@ fun AnimatedLessonPlayerScreen(
                             ) {
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(16.dp))
                                 Text(
-                                    text = "লেসন সম্পন্ন হয়েছে! 🎉",
+                                    text = tr("Lesson Completed! 🎉", "লেসন সম্পন্ন হয়েছে! 🎉"),
                                     color = Color(0xFFD1FAE5),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.ExtraBold
@@ -1671,9 +1697,12 @@ fun AnimatedLessonPlayerScreen(
                         if (nextEntry != null) {
                             Text(
                                 text = if (autoPlayCountdown > 0 && isAutoPlayEnabled) {
-                                    "পরবর্তী লেসন শুরু হচ্ছে ${toBengaliDigits(autoPlayCountdown)} সেকেন্ডে..."
+                                    tr(
+                                        "Next lesson in ${toBengaliDigits(autoPlayCountdown)}s...",
+                                        "পরবর্তী লেসন শুরু হচ্ছে ${toBengaliDigits(autoPlayCountdown)} সেকেন্ডে..."
+                                    )
                                 } else {
-                                    "পরবর্তী অ্যানিমেটেড লেসন:"
+                                    tr("Up Next:", "পরবর্তী লেসন:")
                                 },
                                 color = Color.White.copy(alpha = 0.85f),
                                 fontSize = 12.5.sp,
@@ -1710,7 +1739,7 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(Icons.Default.Replay, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(5.dp))
-                                    Text("পুনরায় দেখুন", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(tr("Replay", "পুনরায় দেখুন"), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 // Play Next Immediately Button
@@ -1722,7 +1751,7 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(5.dp))
-                                    Text("পরবর্তী ভিডিও চালান", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(tr("Play Next", "পরবর্তী ভিডিও"), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 // Cancel Auto-play or Open Playlist
@@ -1730,7 +1759,7 @@ fun AnimatedLessonPlayerScreen(
                                     TextButton(
                                         onClick = { autoPlayCountdown = -1; isAutoPlayEnabled = false }
                                     ) {
-                                        Text("থামান", color = Color(0xFFF87171), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text(tr("Cancel", "থামান"), color = Color(0xFFF87171), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                 } else if (playlistEntries.size > 1) {
                                     OutlinedButton(
@@ -1741,13 +1770,13 @@ fun AnimatedLessonPlayerScreen(
                                     ) {
                                         Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("সব ভিডিও", color = Color(0xFFA78BFA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text(tr("All Videos", "সব ভিডিও"), color = Color(0xFFA78BFA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
                         } else {
                             Text(
-                                text = activeTitle.ifBlank { "অ্যানিমেটেড লেসন" },
+                                text = activeTitle.ifBlank { tr("Animated Lesson", "অ্যানিমেটেড লেসন") },
                                 color = Color.White,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1768,7 +1797,7 @@ fun AnimatedLessonPlayerScreen(
                                 ) {
                                     Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("পুনরায় দেখুন", fontWeight = FontWeight.Bold)
+                                    Text(tr("Replay", "পুনরায় দেখুন"), fontWeight = FontWeight.Bold)
                                 }
 
                                 if (playlistEntries.size > 1) {
@@ -1779,7 +1808,7 @@ fun AnimatedLessonPlayerScreen(
                                     ) {
                                         Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("অন্য ভিডিও বাছুন", color = Color(0xFFA78BFA), fontWeight = FontWeight.Bold)
+                                        Text(tr("Pick Video", "অন্য ভিডিও"), color = Color(0xFFA78BFA), fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1836,7 +1865,7 @@ fun AnimatedLessonPlayerScreen(
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = if (isCurrent) "বর্তমান ভিডিও" else "ট্যাপ করে দেখুন",
+                                                    text = if (isCurrent) tr("Playing now", "বর্তমান ভিডিও") else tr("Tap to watch", "ট্যাপ করে দেখুন"),
                                                     color = Color(0xFFC4B5FD),
                                                     fontSize = 10.sp
                                                 )
@@ -1900,13 +1929,16 @@ fun AnimatedLessonPlayerScreen(
                                     )
                                     Column {
                                         Text(
-                                            text = "অ্যানিমেটেড লেসন প্লেলিস্ট",
+                                            text = tr("Playlist", "প্লেলিস্ট"),
                                             color = Color.White,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.ExtraBold
                                         )
                                         Text(
-                                            text = "মোট ${toBengaliDigits(playlistEntries.size)}টি ভিডিও • যেকোনোটিতে ট্যাপ করুন",
+                                            text = tr(
+                                                "${toBengaliDigits(playlistEntries.size)} videos • Tap to play",
+                                                "মোট ${toBengaliDigits(playlistEntries.size)}টি ভিডিও • ট্যাপ করে দেখুন"
+                                            ),
                                             color = Color(0xFF94A3B8),
                                             fontSize = 11.sp
                                         )
@@ -1917,7 +1949,7 @@ fun AnimatedLessonPlayerScreen(
                                     onClick = { showPlaylistSheet = false },
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "বন্ধ করুন", tint = Color.White)
+                                    Icon(Icons.Default.Close, contentDescription = tr("Close", "বন্ধ করুন"), tint = Color.White)
                                 }
                             }
 
@@ -1990,7 +2022,7 @@ fun AnimatedLessonPlayerScreen(
                                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                                 ) {
                                                     Text(
-                                                        text = "লেসন ${entry.serialNo}",
+                                                        text = tr("Lesson ${entry.serialNo}", "লেসন ${entry.serialNo}"),
                                                         color = Color(0xFFA78BFA),
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold
@@ -2001,7 +2033,7 @@ fun AnimatedLessonPlayerScreen(
                                                             color = Color(0xFF8B5CF6)
                                                         ) {
                                                             Text(
-                                                                text = "চলছে",
+                                                                text = tr("Playing", "চলছে"),
                                                                 color = Color.White,
                                                                 fontSize = 9.sp,
                                                                 fontWeight = FontWeight.Bold,
@@ -2010,7 +2042,7 @@ fun AnimatedLessonPlayerScreen(
                                                         }
                                                     } else if (isWatched) {
                                                         Text(
-                                                            text = "✓ দেখা হয়েছে",
+                                                            text = tr("✓ Watched", "✓ দেখা হয়েছে"),
                                                             color = Color(0xFF34D399),
                                                             fontSize = 9.5.sp,
                                                             fontWeight = FontWeight.Bold
@@ -2080,7 +2112,10 @@ fun AnimatedLessonPlayerScreen(
                                     border = BorderStroke(1.dp, Color(0xFFA78BFA).copy(alpha = 0.5f))
                                 ) {
                                     Text(
-                                        text = "লেসন ${toBengaliDigits(currentPlaylistIndex + 1)}/${toBengaliDigits(playlistEntries.size)}",
+                                        text = tr(
+                                            "Lesson ${toBengaliDigits(currentPlaylistIndex + 1)}/${toBengaliDigits(playlistEntries.size)}",
+                                            "লেসন ${toBengaliDigits(currentPlaylistIndex + 1)}/${toBengaliDigits(playlistEntries.size)}"
+                                        ),
                                         color = Color(0xFFC4B5FD),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -2115,7 +2150,7 @@ fun AnimatedLessonPlayerScreen(
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
-                                        text = if (isAutoPlayEnabled) "অটো-প্লে অন" else "অটো-প্লে অফ",
+                                        text = if (isAutoPlayEnabled) tr("Auto-play On", "অটো-প্লে অন") else tr("Auto-play Off", "অটো-প্লে অফ"),
                                         color = if (isAutoPlayEnabled) Color(0xFF34D399) else Color(0xFF94A3B8),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
@@ -2127,7 +2162,7 @@ fun AnimatedLessonPlayerScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = activeTitle.ifBlank { "অ্যানিমেটেড লেসন" },
+                            text = activeTitle.ifBlank { tr("Animated Lesson", "অ্যানিমেটেড লেসন") },
                             color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -2162,7 +2197,7 @@ fun AnimatedLessonPlayerScreen(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "পূর্ববর্তী",
+                                    text = tr("Previous", "পূর্ববর্তী"),
                                     color = if (prevEntry != null) Color(0xFFC4B5FD) else Color.White.copy(alpha = 0.3f),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
@@ -2181,7 +2216,7 @@ fun AnimatedLessonPlayerScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    text = "পরবর্তী ভিডিও",
+                                    text = tr("Next", "পরবর্তী"),
                                     color = if (nextEntry != null) Color.White else Color.White.copy(alpha = 0.35f),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
@@ -2203,13 +2238,13 @@ fun AnimatedLessonPlayerScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Fullscreen,
-                                    contentDescription = "ফুলস্ক্রিন",
+                                    contentDescription = tr("Fullscreen", "ফুলস্ক্রিন"),
                                     tint = Color(0xFF38BDF8),
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "ফুলস্ক্রিন",
+                                    text = tr("Fullscreen", "ফুলস্ক্রিন"),
                                     color = Color(0xFF38BDF8),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
@@ -2238,7 +2273,7 @@ fun AnimatedLessonPlayerScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "অন্যান্য অ্যানিমেটেড ভিডিও সমূহ",
+                            text = tr("Up Next Videos", "অন্যান্য ভিডিও"),
                             color = Color.White,
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.ExtraBold
@@ -2246,7 +2281,7 @@ fun AnimatedLessonPlayerScreen(
                     }
 
                     Text(
-                        text = "মোট ${toBengaliDigits(playlistEntries.size)}টি",
+                        text = tr("${toBengaliDigits(playlistEntries.size)} total", "মোট ${toBengaliDigits(playlistEntries.size)}টি"),
                         color = Color(0xFFA78BFA),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -2352,7 +2387,7 @@ fun AnimatedLessonPlayerScreen(
                                                 color = Color(0xFF8B5CF6)
                                             ) {
                                                 Text(
-                                                    text = "এখন চলছে",
+                                                    text = tr("Now Playing", "এখন চলছে"),
                                                     color = Color.White,
                                                     fontSize = 9.5.sp,
                                                     fontWeight = FontWeight.ExtraBold,
@@ -2365,7 +2400,7 @@ fun AnimatedLessonPlayerScreen(
                                                 color = Color(0xFF10B981).copy(alpha = 0.18f)
                                             ) {
                                                 Text(
-                                                    text = "দেখা হয়েছে ✓",
+                                                    text = tr("Watched ✓", "দেখা হয়েছে ✓"),
                                                     color = Color(0xFF34D399),
                                                     fontSize = 9.5.sp,
                                                     fontWeight = FontWeight.Bold,
@@ -2411,7 +2446,7 @@ fun AnimatedLessonPlayerScreen(
     if (showDownloadQualityDialog) {
         VideoDownloadQualityDialog(
             videoUrl = effectivePlaybackUrl,
-            title = activeTitle.ifBlank { "অ্যানিমেটেড লেসন" },
+            title = activeTitle.ifBlank { tr("Animated Lesson", "অ্যানিমেটেড লেসন") },
             downloadedItem = downloadedItem,
             onDismiss = { showDownloadQualityDialog = false },
             onConfirmDownload = { selectedQuality ->
@@ -2419,14 +2454,17 @@ fun AnimatedLessonPlayerScreen(
                 val subtitleText = listOfNotNull(subjectName.takeIf { it.isNotBlank() }, chapterName.takeIf { it.isNotBlank() }).joinToString(" • ")
                 downloadManager.downloadFile(
                     id = downloadId,
-                    title = activeTitle.ifBlank { "অ্যানিমেটেড লেসন" },
-                    subtitle = subtitleText.ifBlank { "অ্যানিমেটেড ক্লাস" },
+                    title = activeTitle.ifBlank { AppLang.tr("Animated Lesson", "অ্যানিমেটেড লেসন") },
+                    subtitle = subtitleText.ifBlank { AppLang.tr("Animated Class", "অ্যানিমেটেড ক্লাস") },
                     fileType = DownloadedItemEntity.FILE_TYPE_VIDEO,
                     remoteUrl = selectedQuality.targetM3u8Url
                 )
                 Toast.makeText(
                     context,
-                    "ভিডিও ডাউনলোড শুরু হয়েছে (${selectedQuality.labelBangla})। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।",
+                    AppLang.tr(
+                        "Download started (${selectedQuality.labelBangla}). View it in Downloads.",
+                        "ভিডিও ডাউনলোড শুরু হয়েছে (${selectedQuality.labelBangla})। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।"
+                    ),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -2448,13 +2486,16 @@ fun AnimatedLessonPlayerScreen(
                         tint = Color(0xFF10B981),
                         modifier = Modifier.size(24.dp)
                     )
-                    Text("অফলাইন ডাউনলোড তথ্য", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(tr("Offline Download", "অফলাইন ডাউনলোড"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             },
             text = {
                 Column {
                     Text(
-                        text = "এই অ্যানিমেটেড লেসনটি আপনার ডিভাইসে অফলাইনে সংরক্ষিত আছে। ইন্টারনেট ছাড়াও এটি দেখতে পারবেন।",
+                        text = tr(
+                            "This animated lesson is saved offline on your device. You can watch it anytime without internet.",
+                            "এই অ্যানিমেটেড লেসনটি আপনার ডিভাইসে অফলাইনে সংরক্ষিত আছে। ইন্টারনেট ছাড়াও এটি দেখতে পারবেন।"
+                        ),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -2470,7 +2511,7 @@ fun AnimatedLessonPlayerScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("ফাইল সাইজ:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(tr("File Size:", "ফাইল সাইজ:"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     text = downloadManager.formatFileSize(downloadedItem?.totalBytes ?: 0L),
                                     fontSize = 12.sp,
@@ -2484,7 +2525,7 @@ fun AnimatedLessonPlayerScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showDeleteDownloadDialog = false }) {
-                    Text("ঠিক আছে", fontWeight = FontWeight.Bold)
+                    Text(tr("OK", "ঠিক আছে"), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -2492,10 +2533,10 @@ fun AnimatedLessonPlayerScreen(
                     onClick = {
                         downloadManager.deleteDownloadedFile(downloadId)
                         showDeleteDownloadDialog = false
-                        Toast.makeText(context, "ডাউনলোড ফাইল ডিলিট করা হয়েছে", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, AppLang.tr("Download deleted", "ডাউনলোড ফাইল ডিলিট করা হয়েছে"), Toast.LENGTH_SHORT).show()
                     }
                 ) {
-                    Text("ডিলিট করুন", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    Text(tr("Delete", "ডিলিট করুন"), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             }
         )

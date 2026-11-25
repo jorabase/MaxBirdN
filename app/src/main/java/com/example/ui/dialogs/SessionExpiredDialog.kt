@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.utils.tr
 
 @Composable
 fun SessionExpiredDialog(
@@ -65,7 +66,7 @@ fun SessionExpiredDialog(
 
                 // Title
                 Text(
-                    text = "সেশনের মেয়াদ শেষ হয়েছে",
+                    text = tr("Session Expired", "সেশনের মেয়াদ শেষ"),
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -76,7 +77,10 @@ fun SessionExpiredDialog(
 
                 // Description
                 Text(
-                    text = "আপনার অ্যাকাউন্টটি অন্য কোনো ডিভাইসে লগইন করা হয়েছে অথবা বর্তমান সেশনের মেয়াদ শেষ হয়ে গেছে। নিরাপদে পড়াশোনা চালিয়ে যেতে অনুগ্রহ করে আবার লগইন করুন।",
+                    text = tr(
+                        "Your account was signed in on another device or your session expired. Please log in again to continue.",
+                        "আপনার অ্যাকাউন্ট অন্য ডিভাইসে লগইন হয়েছে বা বর্তমান সেশনের মেয়াদ শেষ হয়েছে। চালিয়ে যেতে পুনরায় লগইন করুন।"
+                    ),
                     fontSize = 13.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -104,7 +108,7 @@ fun SessionExpiredDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "পুনরায় লগইন করুন",
+                        text = tr("Log In Again", "পুনরায় লগইন"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )

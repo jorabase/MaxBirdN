@@ -35,7 +35,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import com.example.auth.SessionManager
 import com.example.security.AntiTamperSecurity
+import com.example.utils.AppLang
 import com.example.utils.QrSessionUtils
+import com.example.utils.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -108,7 +110,7 @@ fun SessionShareDialog(
                             )
                         }
                         Text(
-                            text = "সেশন শেয়ার ও ব্যাকআপ",
+                            text = tr("Session Backup", "সেশন ব্যাকআপ"),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -122,7 +124,10 @@ fun SessionShareDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "অন্য যেকোনো ডিভাইসে বা অ্যাপে আপনার এই অ্যাকাউন্টটি চালু করতে নিচের কিউআর কোডটি স্ক্যান করুন অথবা কোডটি কপি করে ইনপোর্ট করুন।",
+                    text = tr(
+                        "Scan this QR code or copy the code below to sign in on another device.",
+                        "অন্য ডিভাইসে লগইন করতে নিচের কিউআর কোড স্ক্যান করুন অথবা কোড কপি করুন।"
+                    ),
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -168,7 +173,11 @@ fun SessionShareDialog(
                                 }
                             }
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "সেশন কোড সুরক্ষিতভাবে কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                AppLang.tr("Session code copied securely!", "সেশন কোড সুরক্ষিতভাবে কপি হয়েছে!"),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     },
                     shape = RoundedCornerShape(14.dp),
@@ -187,7 +196,7 @@ fun SessionShareDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "সেশন টেক্সট কোড কপি করুন",
+                        text = tr("Copy Session Code", "সেশন কোড কপি করুন"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -214,7 +223,10 @@ fun SessionShareDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "সতর্কতা: আপনার সেশন কিউআর কোড কারও সাথে শেয়ার করবেন না। নিরাপত্তার জন্য এই কোডের মেয়াদ ২৪ ঘণ্টা।",
+                            text = tr(
+                                "Warning: Never share your session QR code with anyone. It expires in 24 hours.",
+                                "সতর্কতা: আপনার সেশন কিউআর কোড কারও সাথে শেয়ার করবেন না। এর মেয়াদ ২৪ ঘণ্টা।"
+                            ),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             lineHeight = 15.sp

@@ -30,7 +30,10 @@ import com.example.modeltest.ui.ModelTestTab
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestListSkeleton
 import com.example.modeltest.ui.components.RetryErrorView
+import com.example.utils.AppLang
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -44,7 +47,7 @@ fun formatModelTestDate(rawDate: String?): String {
         val cleanDate = rawDate.replace("Z", "").take(19)
         val date = parser.parse(cleanDate)
         if (date != null) {
-            val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale("bn", "BD"))
+            val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", AppLang.locale())
             formatter.format(date)
         } else {
             rawDate
@@ -123,7 +126,7 @@ fun ModelTestDashboardScreen(
                             }
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = subjectTitle.ifBlank { "মডেল টেস্ট" },
+                                text = subjectTitle.ifBlank { tr("Model Tests", "মডেল টেস্ট") },
                                 fontSize = 19.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -132,7 +135,8 @@ fun ModelTestDashboardScreen(
                             )
                         }
 
-                        // Decorative Bengali letters artwork on the right (অ খ ক)
+                        // Decorative letters artwork on the right
+                        val isBn = isBangla()
                         Box(
                             modifier = Modifier
                                 .padding(end = 12.dp)
@@ -140,21 +144,21 @@ fun ModelTestDashboardScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "অ",
+                                text = if (isBn) "অ" else "A",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFFFACC15),
                                 modifier = Modifier.align(Alignment.TopStart)
                             )
                             Text(
-                                text = "খ",
+                                text = if (isBn) "খ" else "B",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF93C5FD),
                                 modifier = Modifier.align(Alignment.TopEnd)
                             )
                             Text(
-                                text = "ক",
+                                text = if (isBn) "ক" else "C",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF38BDF8),
@@ -187,7 +191,7 @@ fun ModelTestDashboardScreen(
                     ) {
                         Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("হোম এ ফিরে যাও", fontWeight = FontWeight.SemiBold)
+                        Text(tr("Back to Home", "হোমে ফিরে যান"), fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -199,7 +203,7 @@ fun ModelTestDashboardScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Top 3 Feature Cards: অ্যানিমেটেড লেসনস | প্র্যাকটিস কুইজ | ই-বুক
+            // Top 3 Feature Cards
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp,
@@ -211,9 +215,9 @@ fun ModelTestDashboardScreen(
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // 1. অ্যানিমেটেড লেসনস
+                    // 1. Animated Lessons
                     ModelTestTopFeatureCard(
-                        title = "অ্যানিমেটেড লেসনস",
+                        title = tr("Animated", "অ্যানিমেটেড"),
                         testTagName = "model_test_animated_lessons_card",
                         onClick = onNavigateToAnimatedLessons,
                         modifier = Modifier.weight(1f)
@@ -231,16 +235,16 @@ fun ModelTestDashboardScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Slideshow,
-                                contentDescription = "অ্যানিমেটেড লেসনস",
+                                contentDescription = tr("Animated Lessons", "অ্যানিমেটেড লেসনস"),
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
-                    // 2. প্র্যাকটিস কুইজ
+                    // 2. Practice Quiz
                     ModelTestTopFeatureCard(
-                        title = "প্র্যাকটিস কুইজ",
+                        title = tr("Quiz", "কুইজ"),
                         testTagName = "model_test_practice_quiz_card",
                         onClick = onNavigateToPracticeQuiz,
                         modifier = Modifier.weight(1f)
@@ -258,16 +262,16 @@ fun ModelTestDashboardScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Quiz,
-                                contentDescription = "প্র্যাকটিস কুইজ",
+                                contentDescription = tr("Practice Quiz", "প্র্যাকটিস কুইজ"),
                                 tint = Color(0xFFF59E0B),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                     }
 
-                    // 3. ই-বুক
+                    // 3. Smart Notes / E-Book
                     ModelTestTopFeatureCard(
-                        title = "ই-বুক",
+                        title = tr("Smart Notes", "ই-বুক"),
                         testTagName = "model_test_ebook_card",
                         onClick = onNavigateToSmartNotes,
                         modifier = Modifier.weight(1f)
@@ -285,7 +289,7 @@ fun ModelTestDashboardScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MenuBook,
-                                contentDescription = "ই-বুক",
+                                contentDescription = tr("Smart Notes", "ই-বুক"),
                                 tint = Color(0xFF1D4ED8),
                                 modifier = Modifier.size(22.dp)
                             )
@@ -318,15 +322,15 @@ fun ModelTestDashboardScreen(
                             }
                             uiState.modelTestsError != null && uiState.modelTests.isEmpty() -> {
                                 RetryErrorView(
-                                    message = uiState.modelTestsError ?: "মডেল টেস্ট লোড করা যায়নি",
+                                    message = uiState.modelTestsError ?: tr("Failed to load model tests", "মডেল টেস্ট লোড করা যায়নি"),
                                     onRetry = { viewModel.loadModelTests(forceRefresh = true) }
                                 )
                             }
                             uiState.modelTests.isEmpty() -> {
                                 EmptyStateView(
                                     icon = Icons.Default.Quiz,
-                                    title = "কোনো মডেল টেস্ট পাওয়া যায়নি",
-                                    subtitle = "এই বিষয়ের জন্য শীঘ্রই নতুন মডেল টেস্ট প্রকাশ করা হবে।"
+                                    title = tr("No Model Tests", "কোনো মডেল টেস্ট নেই"),
+                                    subtitle = tr("New model tests for this subject will appear here soon.", "এই বিষয়ের জন্য শীঘ্রই নতুন মডেল টেস্ট প্রকাশ করা হবে।")
                                 )
                             }
                             else -> {
@@ -357,15 +361,15 @@ fun ModelTestDashboardScreen(
                             }
                             uiState.classesError != null && uiState.liveClasses.isEmpty() -> {
                                 RetryErrorView(
-                                    message = uiState.classesError ?: "ক্লাস লোড করা যায়নি",
+                                    message = uiState.classesError ?: tr("Failed to load classes", "ক্লাস লোড করা যায়নি"),
                                     onRetry = { viewModel.loadClasses(forceRefresh = true) }
                                 )
                             }
                             uiState.liveClasses.isEmpty() -> {
                                 EmptyStateView(
                                     icon = Icons.Default.VideoCameraFront,
-                                    title = "কোনো ক্লাস পাওয়া যায়নি",
-                                    subtitle = "এই বিষয়ের জন্য লাইভ বা রেকর্ডেড ক্লাস শীঘ্রই শুরু হবে।"
+                                    title = tr("No Classes Found", "কোনো ক্লাস পাওয়া যায়নি"),
+                                    subtitle = tr("Live and recorded classes for this subject will appear here soon.", "এই বিষয়ের জন্য লাইভ বা রেকর্ডেড ক্লাস শীঘ্রই শুরু হবে।")
                                 )
                             }
                             else -> {
@@ -440,7 +444,11 @@ private fun ModelTestTabsHeader(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (modelTestCount > 0) "মডেল টেস্ট (${toBengaliDigits(modelTestCount)})" else "মডেল টেস্ট",
+                        text = if (modelTestCount > 0) {
+                            tr("Model Tests (${toBengaliDigits(modelTestCount)})", "মডেল টেস্ট (${toBengaliDigits(modelTestCount)})")
+                        } else {
+                            tr("Model Tests", "মডেল টেস্ট")
+                        },
                         fontSize = 13.5.sp,
                         fontWeight = if (isTestSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isTestSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -470,7 +478,11 @@ private fun ModelTestTabsHeader(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (classCount > 0) "ক্লাস (${toBengaliDigits(classCount)})" else "ক্লাস",
+                        text = if (classCount > 0) {
+                            tr("Classes (${toBengaliDigits(classCount)})", "ক্লাস (${toBengaliDigits(classCount)})")
+                        } else {
+                            tr("Classes", "ক্লাস")
+                        },
                         fontSize = 13.5.sp,
                         fontWeight = if (isClassSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isClassSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -487,7 +499,7 @@ private fun ModelTestCard(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    val title = item.title ?: "মডেল টেস্ট"
+    val title = item.title ?: tr("Model Test", "মডেল টেস্ট")
     val dateStr = formatModelTestDate(item.start_time)
     val state = item.user_activity_state?.uppercase() ?: ""
     val now = System.currentTimeMillis()
@@ -506,10 +518,10 @@ private fun ModelTestCard(
 
     // Live, Completed, Ended, Upcoming detection
     val (statusLabel, statusBg, statusText) = when {
-        isLive -> Triple("🔴 লাইভ এক্সাম", Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
-        isCompleted -> Triple("রেকর্ড এক্সাম • সম্পন্ন", Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
-        isMissed -> Triple("রেকর্ড এক্সাম", Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
-        else -> Triple("আপকামিং এক্সাম", Color(0xFF7C3AED).copy(alpha = 0.12f), Color(0xFF7C3AED))
+        isLive -> Triple(tr("🔴 Live Exam", "🔴 লাইভ এক্সাম"), Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
+        isCompleted -> Triple(tr("Completed", "সম্পন্ন"), Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
+        isMissed -> Triple(tr("Recorded Exam", "রেকর্ড এক্সাম"), Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
+        else -> Triple(tr("Upcoming Exam", "আপকামিং এক্সাম"), Color(0xFF7C3AED).copy(alpha = 0.12f), Color(0xFF7C3AED))
     }
 
     Card(
@@ -569,7 +581,7 @@ private fun ModelTestCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "বিস্তারিত ও রুলস দেখো",
+                    text = tr("View Details & Rules", "বিস্তারিত দেখুন"),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = accentColor
@@ -591,14 +603,14 @@ private fun ClassCard(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    val title = item.title ?: "লেকচার ক্লাস"
+    val title = item.title ?: tr("Lecture Class", "লেকচার ক্লাস")
     val dateStr = formatModelTestDate(item.start_time ?: item.live_class?.start_time)
     val isLive = item.isLiveNow
     val isUpcoming = item.isUpcoming
     val (statusLabel, statusBg, statusColor) = when {
-        isLive -> Triple("🔴 লাইভ ক্লাস", Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
-        isUpcoming -> Triple("আপকামিং ক্লাস", Color(0xFF0284C7).copy(alpha = 0.12f), Color(0xFF0284C7))
-        else -> Triple("রেকর্ড ক্লাস", Color(0xFF3B82F6).copy(alpha = 0.12f), Color(0xFF1D4ED8))
+        isLive -> Triple(tr("🔴 Live Class", "🔴 লাইভ ক্লাস"), Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
+        isUpcoming -> Triple(tr("Upcoming", "আপকামিং"), Color(0xFF0284C7).copy(alpha = 0.12f), Color(0xFF0284C7))
+        else -> Triple(tr("Recorded", "রেকর্ড ক্লাস"), Color(0xFF3B82F6).copy(alpha = 0.12f), Color(0xFF1D4ED8))
     }
 
     Card(
@@ -658,7 +670,7 @@ private fun ClassCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "ক্লাস প্লেয়ারে যাও",
+                    text = tr("Open Class", "ক্লাস দেখুন"),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = accentColor

@@ -50,6 +50,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.example.utils.formatLocalizedDigits
+import com.example.utils.tr
 import kotlinx.coroutines.launch
 
 /**
@@ -149,7 +151,7 @@ fun NoticePopupDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "বিশেষ নোটিশ",
+                                text = tr("Notice", "বিশেষ নোটিশ"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFFE0F2FE)
@@ -168,7 +170,7 @@ fun NoticePopupDialog(
                                 border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.15f))
                             ) {
                                 Text(
-                                    text = "${(pagerState.currentPage + 1).toNoticeBnDigits()} / ${notices.size.toNoticeBnDigits()}",
+                                    text = "${formatLocalizedDigits(pagerState.currentPage + 1)} / ${formatLocalizedDigits(notices.size)}",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFBAE6FD),
@@ -187,7 +189,7 @@ fun NoticePopupDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "বন্ধ করুন",
+                                contentDescription = tr("Close", "বন্ধ করুন"),
                                 tint = Color.White.copy(alpha = 0.85f),
                                 modifier = Modifier.size(17.dp)
                             )
@@ -263,7 +265,7 @@ fun NoticePopupDialog(
                                             )
                                             Spacer(modifier = Modifier.height(6.dp))
                                             Text(
-                                                text = "ছবি লোড করা যায়নি",
+                                                text = tr("Image failed to load", "ছবি লোড করা যায়নি"),
                                                 color = Color(0xFF94A3B8),
                                                 fontSize = 12.sp
                                             )
@@ -350,7 +352,7 @@ fun NoticePopupDialog(
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
-                                            text = notice.actionButtonText.ifBlank { "বিস্তারিত দেখুন" },
+                                            text = notice.actionButtonText.ifBlank { tr("View Details", "বিস্তারিত দেখুন") },
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.5.sp,
                                             color = Color.White
@@ -396,7 +398,7 @@ fun NoticePopupDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowLeft,
-                                contentDescription = "পূর্ববর্তী",
+                                contentDescription = tr("Previous", "পূর্ববর্তী"),
                                 tint = if (canGoBack) Color.White else Color.White.copy(alpha = 0.2f),
                                 modifier = Modifier.size(20.dp)
                             )
@@ -449,7 +451,7 @@ fun NoticePopupDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowRight,
-                                contentDescription = "পরবর্তী",
+                                contentDescription = tr("Next", "পরবর্তী"),
                                 tint = if (canGoNext) Color.White else Color.White.copy(alpha = 0.2f),
                                 modifier = Modifier.size(20.dp)
                             )
@@ -502,7 +504,7 @@ fun NoticePopupDialog(
 
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "আজকে আর দেখাবেন না",
+                            text = tr("Don't show again today", "আজকে আর দেখাবেন না"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (dontShowAgainToday) Color(0xFFE2E8F0) else Color(0xFF94A3B8)
@@ -518,7 +520,7 @@ fun NoticePopupDialog(
                             .clickable { onDismiss(dontShowAgainToday) }
                     ) {
                         Text(
-                            text = "বন্ধ করুন",
+                            text = tr("Close", "বন্ধ করুন"),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFE2E8F0),
@@ -530,11 +532,3 @@ fun NoticePopupDialog(
         }
     }
 }
-
-private val noticeBnDigits = mapOf(
-    '0' to '০', '1' to '১', '2' to '২', '3' to '৩', '4' to '৪',
-    '5' to '৫', '6' to '৬', '7' to '৭', '8' to '৮', '9' to '৯'
-)
-
-private fun Int.toNoticeBnDigits(): String =
-    toString().map { noticeBnDigits[it] ?: it }.joinToString("")

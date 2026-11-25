@@ -9,6 +9,7 @@ import androidx.security.crypto.MasterKey
 import com.example.auth.SessionManager
 import com.example.security.DeviceActivationRepository
 import com.example.security.DeviceSecurityManager
+import com.example.utils.AppLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,7 +51,7 @@ data class PaymentMethodOption(
     val code: String,
     val nameBn: String,
     val accountNumber: String,
-    val accountType: String = "Send Money করুন",
+    val accountType: String = AppLang.tr("Send Money", "Send Money করুন"),
     val instructionBn: String = "",
     val colorHex: String = "",
     val isEnabled: Boolean = true
@@ -61,7 +62,10 @@ data class AdminPaymentSettings(
     val nagadNumber: String = "",
     val rocketNumber: String = "",
     val upayNumber: String = "",
-    val instructionBn: String = "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।",
+    val instructionBn: String = AppLang.tr(
+        "Send money to the number above, then enter your sender number, amount, and Transaction ID (TrxID) below.",
+        "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।"
+    ),
     val enabledMethods: List<PaymentMethodOption> = emptyList()
 )
 
@@ -167,41 +171,45 @@ data class CourseCommerceItemState(
         get() = pendingInstallmentTxId.isNotBlank() && pendingInstallmentAmount > 0.0
 
     fun getTrialDurationLabelBn(): String {
+        val isBn = AppLang.isBn()
         return when {
-            trialDays > 0 && trialHours > 0 -> "${toBanglaDigits(trialDays.toString())} দিন ${toBanglaDigits(trialHours.toString())} ঘণ্টা"
-            trialDays > 0 -> "${toBanglaDigits(trialDays.toString())} দিন"
-            trialHours > 0 -> "${toBanglaDigits(trialHours.toString())} ঘণ্টা"
-            else -> "১ দিন"
+            trialDays > 0 && trialHours > 0 -> if (isBn) "${toBanglaDigits(trialDays.toString())} দিন ${toBanglaDigits(trialHours.toString())} ঘণ্টা" else "${trialDays}d ${trialHours}h"
+            trialDays > 0 -> if (isBn) "${toBanglaDigits(trialDays.toString())} দিন" else if (trialDays == 1) "1 Day" else "$trialDays Days"
+            trialHours > 0 -> if (isBn) "${toBanglaDigits(trialHours.toString())} ঘণ্টা" else if (trialHours == 1) "1 Hour" else "$trialHours Hours"
+            else -> if (isBn) "১ দিন" else "1 Day"
         }
     }
 
     fun getRemainingTrialTimeTextBn(): String {
         val endMs = trialEndsAtMillis ?: return ""
         val diff = endMs - CourseCommerceRepository.currentTrustedTimeMillis()
-        if (diff <= 0L) return "ট্রায়ালের মেয়াদ শেষ!"
+        val isBn = AppLang.isBn()
+        if (diff <= 0L) return if (isBn) "ট্রায়ালের মেয়াদ শেষ!" else "Trial expired"
         val totalMinutes = (diff / (1000L * 60)).toInt().coerceAtLeast(1)
         val days = totalMinutes / (60 * 24)
         val hours = (totalMinutes % (60 * 24)) / 60
         val mins = totalMinutes % 60
         return when {
-            days > 0 && hours > 0 -> "${toBanglaDigits(days.toString())} দিন ${toBanglaDigits(hours.toString())} ঘণ্টা বাকি"
-            days > 0 -> "${toBanglaDigits(days.toString())} দিন বাকি"
-            hours > 0 && mins > 0 -> "${toBanglaDigits(hours.toString())} ঘণ্টা ${toBanglaDigits(mins.toString())} মিনিট বাকি"
-            hours > 0 -> "${toBanglaDigits(hours.toString())} ঘণ্টা বাকি"
-            else -> "${toBanglaDigits(mins.toString())} মিনিট বাকি"
+            days > 0 && hours > 0 -> if (isBn) "${toBanglaDigits(days.toString())} দিন ${toBanglaDigits(hours.toString())} ঘণ্টা বাকি" else "${days}d ${hours}h left"
+            days > 0 -> if (isBn) "${toBanglaDigits(days.toString())} দিন বাকি" else "${days}d left"
+            hours > 0 && mins > 0 -> if (isBn) "${toBanglaDigits(hours.toString())} ঘণ্টা ${toBanglaDigits(mins.toString())} মিনিট বাকি" else "${hours}h ${mins}m left"
+            hours > 0 -> if (isBn) "${toBanglaDigits(hours.toString())} ঘণ্টা বাকি" else "${hours}h left"
+            else -> if (isBn) "${toBanglaDigits(mins.toString())} মিনিট বাকি" else "${mins}m left"
         }
     }
 
     fun getRemainingDaysTextBn(): String {
         val dueMs = nextDueDateMillis ?: return ""
         val diff = dueMs - CourseCommerceRepository.currentTrustedTimeMillis()
-        if (diff <= 0L) return "মেয়াদ শেষ!"
+        val isBn = AppLang.isBn()
+        if (diff <= 0L) return if (isBn) "মেয়াদ শেষ!" else "Overdue"
         val days = (diff / (1000L * 60 * 60 * 24)).toInt()
         val hours = ((diff % (1000L * 60 * 60 * 24)) / (1000L * 60 * 60)).toInt()
         return if (days > 0) {
-            "${toBanglaDigits(days.toString())} দিন ${toBanglaDigits(hours.toString())} ঘণ্টা বাকি"
+            if (isBn) "${toBanglaDigits(days.toString())} দিন ${toBanglaDigits(hours.toString())} ঘণ্টা বাকি" else "${days}d ${hours}h left"
         } else {
-            "${toBanglaDigits(hours.coerceAtLeast(1).toString())} ঘণ্টা বাকি"
+            val h = hours.coerceAtLeast(1)
+            if (isBn) "${toBanglaDigits(h.toString())} ঘণ্টা বাকি" else "${h}h left"
         }
     }
 
@@ -211,7 +219,11 @@ data class CourseCommerceItemState(
             val clean = iso.substringBefore("T")
             val parts = clean.split("-")
             if (parts.size == 3) {
-                val months = listOf("জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টে", "অক্টো", "নভে", "ডিসে")
+                val months = if (AppLang.isBn()) {
+                    listOf("জানু", "ফেব্রু", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টে", "অক্টো", "নভে", "ডিসে")
+                } else {
+                    listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+                }
                 val m = (parts[1].toIntOrNull() ?: 1).coerceIn(1, 12)
                 "${toBanglaDigits(parts[2].trimStart('0').ifBlank { "0" })} ${months[m - 1]}, ${toBanglaDigits(parts[0])}"
             } else iso
@@ -456,7 +468,10 @@ object CourseCommerceRepository {
         val price = if (totalPrice > 0.0) totalPrice else 1000.0
         val fullOption = InstallmentPlanOption(
             planId = "full",
-            titleBn = "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(price)})",
+            titleBn = AppLang.tr(
+                "One-Time Full Payment (${CourseCommerceItemState.formatTakaBn(price)})",
+                "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(price)})"
+            ),
             installmentsCount = 1,
             intervalDays = 0,
             firstAmount = price,
@@ -472,7 +487,10 @@ object CourseCommerceRepository {
             fullOption,
             InstallmentPlanOption(
                 planId = "inst_2_weekly",
-                titleBn = "২ কিস্তিতে পরিশোধ (প্রথমে ${CourseCommerceItemState.formatTakaBn(part2)} + পরে ${CourseCommerceItemState.formatTakaBn(price - part2)})",
+                titleBn = AppLang.tr(
+                    "2 Installments (${CourseCommerceItemState.formatTakaBn(part2)} now + ${CourseCommerceItemState.formatTakaBn(price - part2)} later)",
+                    "২ কিস্তিতে পরিশোধ (প্রথমে ${CourseCommerceItemState.formatTakaBn(part2)} + পরে ${CourseCommerceItemState.formatTakaBn(price - part2)})"
+                ),
                 installmentsCount = 2,
                 intervalDays = 15,
                 firstAmount = part2,
@@ -480,7 +498,10 @@ object CourseCommerceRepository {
             ),
             InstallmentPlanOption(
                 planId = "inst_5_weekly",
-                titleBn = "৫ কিস্তিতে পরিশোধ (প্রতি সপ্তাহে ${CourseCommerceItemState.formatTakaBn(part5)} করে)",
+                titleBn = AppLang.tr(
+                    "5 Installments (${CourseCommerceItemState.formatTakaBn(part5)} / week)",
+                    "৫ কিস্তিতে পরিশোধ (প্রতি সপ্তাহে ${CourseCommerceItemState.formatTakaBn(part5)} করে)"
+                ),
                 installmentsCount = 5,
                 intervalDays = 7,
                 firstAmount = part5,
@@ -488,7 +509,10 @@ object CourseCommerceRepository {
             ),
             InstallmentPlanOption(
                 planId = "inst_3_ten_days",
-                titleBn = "৩ কিস্তিতে পরিশোধ (প্রতি ১০ দিন পরপর ${CourseCommerceItemState.formatTakaBn(part3)} করে)",
+                titleBn = AppLang.tr(
+                    "3 Installments (${CourseCommerceItemState.formatTakaBn(part3)} every 10 days)",
+                    "৩ কিস্তিতে পরিশোধ (প্রতি ১০ দিন পরপর ${CourseCommerceItemState.formatTakaBn(part3)} করে)"
+                ),
                 installmentsCount = 3,
                 intervalDays = 10,
                 firstAmount = part3,
@@ -538,8 +562,14 @@ object CourseCommerceRepository {
                         .ifBlank { obj.optString("title", "") }
                         .ifBlank { obj.optString("name", "") }
                         .ifBlank {
-                            if (count == 1) "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(totalPrice)})"
-                            else "${CourseCommerceItemState.toBanglaDigits(count.toString())} কিস্তিতে পরিশোধ (${CourseCommerceItemState.formatTakaBn(rawFirst)} করে)"
+                            if (count == 1) AppLang.tr(
+                                "One-Time Full Payment (${CourseCommerceItemState.formatTakaBn(totalPrice)})",
+                                "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(totalPrice)})"
+                            )
+                            else AppLang.tr(
+                                "$count Installments (${CourseCommerceItemState.formatTakaBn(rawFirst)} each)",
+                                "${CourseCommerceItemState.toBanglaDigits(count.toString())} কিস্তিতে পরিশোধ (${CourseCommerceItemState.formatTakaBn(rawFirst)} করে)"
+                            )
                         }
                     list.add(
                         InstallmentPlanOption(
@@ -766,8 +796,8 @@ object CourseCommerceRepository {
 
                 val displayCode = rawCode.ifBlank { rawName }
                 val displayName = rawName.ifBlank { displayCode }
-                val accountType = mObj.optString("account_type", mObj.optString("type", mObj.optString("mode", "Send Money করুন"))).trim()
-                    .ifBlank { "Send Money করুন" }
+                val accountType = mObj.optString("account_type", mObj.optString("type", mObj.optString("mode", AppLang.tr("Send Money", "Send Money করুন")))).trim()
+                    .ifBlank { AppLang.tr("Send Money", "Send Money করুন") }
                 val instruction = mObj.optString("instruction_bn", mObj.optString("instruction", mObj.optString("note", ""))).trim()
                     .takeIf { !it.equals("null", true) } ?: ""
                 val colorHex = mObj.optString("color_hex", mObj.optString("color", "")).trim()
@@ -810,11 +840,11 @@ object CourseCommerceRepository {
             val hasExplicitJsonList = jsonArr != null && jsonArr.length() > 0
             if (!hasExplicitJsonList) {
                 val standardColumns = listOf(
-                    Triple("bkash", "bKash", "বিকাশ") to Pair("bkash_number", "bkash_enabled"),
-                    Triple("nagad", "Nagad", "নগদ") to Pair("nagad_number", "nagad_enabled"),
-                    Triple("rocket", "Rocket", "রকেট") to Pair("rocket_number", "rocket_enabled"),
-                    Triple("upay", "Upay", "উপায়") to Pair("upay_number", "upay_enabled"),
-                    Triple("cellfin", "CellFin", "সেলফিন") to Pair("cellfin_number", "cellfin_enabled")
+                    Triple("bkash", "bKash", AppLang.tr("bKash", "বিকাশ")) to Pair("bkash_number", "bkash_enabled"),
+                    Triple("nagad", "Nagad", AppLang.tr("Nagad", "নগদ")) to Pair("nagad_number", "nagad_enabled"),
+                    Triple("rocket", "Rocket", AppLang.tr("Rocket", "রকেট")) to Pair("rocket_number", "rocket_enabled"),
+                    Triple("upay", "Upay", AppLang.tr("Upay", "উপায়")) to Pair("upay_number", "upay_enabled"),
+                    Triple("cellfin", "CellFin", AppLang.tr("CellFin", "সেলফিন")) to Pair("cellfin_number", "cellfin_enabled")
                 )
                 for ((meta, colPair) in standardColumns) {
                     val (idKey, codeVal, nameBnVal) = meta
@@ -830,7 +860,7 @@ object CourseCommerceRepository {
                                 code = codeVal,
                                 nameBn = nameBnVal,
                                 accountNumber = rawNum,
-                                accountType = "Send Money করুন",
+                                accountType = AppLang.tr("Send Money", "Send Money করুন"),
                                 isEnabled = true
                             )
                         )
@@ -854,7 +884,12 @@ object CourseCommerceRepository {
             val rawUpay = settingsObj.optCleanString("upay_number").takeIf { isRealPaymentNumber(it) } ?: ""
             val resolvedInstruction = settingsObj.optCleanString("payment_instruction_bn")
                 .ifBlank { settingsObj.optCleanString("payment_instructions_bn") }
-                .ifBlank { "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।" }
+                .ifBlank {
+                    AppLang.tr(
+                        "Send money to the number above, then enter your sender number, amount, and Transaction ID (TrxID) below.",
+                        "উপরের নম্বরে টাকা পাঠিয়ে নিচের ফর্মে আপনার মোবাইল নম্বর, পাঠানো টাকার পরিমাণ এবং Transaction ID (TrxID) সঠিকভাবে প্রদান করুন।"
+                    )
+                }
             AdminPaymentSettings(
                 bkashNumber = rawBkash,
                 nagadNumber = rawNagad,
@@ -940,7 +975,7 @@ object CourseCommerceRepository {
         val userId = (session.getUserId() ?: "").trim()
         // Primary key is strictly the student's 11-digit phone number (or Shikho userId if phone not loaded yet)
         val accountKey = normPhone.ifBlank { userId }
-        val studentName = session.getUserFullName() ?: "শিক্ষার্থী"
+        val studentName = session.getUserFullName() ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")
         val cacheKey = "${normPhone}_${userId}"
         return StudentAccountRef(
             normPhone = normPhone,
@@ -1516,12 +1551,12 @@ object CourseCommerceRepository {
         try {
             val account = resolveStudentAccount(context)
             if (!account.isLoggedIn) {
-                return@withContext Result.failure(Exception("অনুগ্রহ করে আগে আপনার শিখো একাউন্টে লগইন করুন।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Please sign in first.", "অনুগ্রহ করে আগে লগইন করুন।")))
             }
 
             val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) {
-                return@withContext Result.failure(Exception("সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Server configuration missing.", "সার্ভার কনফিগারেশন পাওয়া যায়নি।")))
             }
 
             val accountKey = account.accountKey
@@ -1569,7 +1604,10 @@ object CourseCommerceRepository {
                             if (!explicitFailure && (json.optBoolean("success", false) || json.optString("status", "").isNotBlank())) {
                                 val msg = json.optString(
                                     "message",
-                                    "অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।"
+                                    AppLang.tr(
+                                        "Access request sent to Admin. Once approved, pricing and trial options will appear here.",
+                                        "অ্যাডমিনের কাছে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অনুমোদন হলে এখানে দেখতে পাবেন।"
+                                    )
                                 )
                                 markOptimisticCourseRequested(context, programId, programTitle)
                                 fetchCourseCommerceStatus(context, forceRefresh = true)
@@ -1582,7 +1620,7 @@ object CourseCommerceRepository {
                                 )
                                 return@withContext Result.success(msg)
                             } else {
-                                val errMsg = json.optString("message", "").ifBlank { "রিকোয়েস্ট পাঠানো যায়নি।" }
+                                val errMsg = json.optString("message", "").ifBlank { AppLang.tr("Could not send request.", "রিকোয়েস্ট পাঠানো যায়নি।") }
                                 return@withContext Result.failure(Exception(errMsg))
                             }
                         }
@@ -1595,8 +1633,8 @@ object CourseCommerceRepository {
             if (!rpcNotFound) {
                 return@withContext Result.failure(
                     Exception(
-                        if (rpcHttpCode > 0) "রিকোয়েস্ট পাঠানো যায়নি (HTTP $rpcHttpCode)।"
-                        else "নেটওয়ার্ক ত্রুটি: অনুগ্রহ করে আবার চেষ্টা করুন।"
+                        if (rpcHttpCode > 0) AppLang.tr("Could not send request (HTTP $rpcHttpCode).", "রিকোয়েস্ট পাঠানো যায়নি (HTTP $rpcHttpCode)।")
+                        else AppLang.tr("Network error. Please try again.", "নেটওয়ার্ক ত্রুটি: অনুগ্রহ করে আবার চেষ্টা করুন।")
                     )
                 )
             }
@@ -1647,7 +1685,12 @@ object CourseCommerceRepository {
                             programTitle = programTitle,
                             programId = programId
                         )
-                        return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
+                        return@withContext Result.success(
+                            AppLang.tr(
+                                "Access request sent to Admin. Once approved, pricing and trial options will appear here.",
+                                "অ্যাডমিনের কাছে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অনুমোদন হলে এখানে দেখতে পাবেন।"
+                            )
+                        )
                     }
                 }
             }
@@ -1712,7 +1755,12 @@ object CourseCommerceRepository {
                                 programTitle = programTitle,
                                 programId = programId
                             )
-                            return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
+                            return@withContext Result.success(
+                                AppLang.tr(
+                                    "Access request sent to Admin. Once approved, pricing and trial options will appear here.",
+                                    "অ্যাডমিনের কাছে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অনুমোদন হলে এখানে দেখতে পাবেন।"
+                                )
+                            )
                         } else {
                             lastErrorBody = upsertResp.body?.string() ?: ""
                         }
@@ -1760,15 +1808,24 @@ object CourseCommerceRepository {
                             programTitle = programTitle,
                             programId = programId
                         )
-                        return@withContext Result.success("অ্যাডমিনের কাছে কোর্সে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন দাম সেট করে এক্সেস দিলে এখানে দেখতে পাবেন।")
+                        return@withContext Result.success(
+                            AppLang.tr(
+                                "Access request sent to Admin. Once approved, pricing and trial options will appear here.",
+                                "অ্যাডমিনের কাছে এক্সেস রিকোয়েস্ট পাঠানো হয়েছে! অনুমোদন হলে এখানে দেখতে পাবেন।"
+                            )
+                        )
                     }
                 }
             } catch (_: Throwable) {}
 
             Log.e(TAG, "requestCoursePurchaseAccess failed ($lastStatusCode): $lastErrorBody")
-            return@withContext Result.failure(Exception("রিকোয়েস্ট পাঠানো যায়নি (HTTP $lastStatusCode)।"))
+            return@withContext Result.failure(
+                Exception(AppLang.tr("Could not send request (HTTP $lastStatusCode).", "রিকোয়েস্ট পাঠানো যায়নি (HTTP $lastStatusCode)।"))
+            )
         } catch (e: Throwable) {
-            return@withContext Result.failure(Exception("নেটওয়ার্ক ত্রুটি: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            return@withContext Result.failure(
+                Exception(AppLang.tr("Network error: ${e.localizedMessage ?: "Please try again"}", "নেটওয়ার্ক ত্রুটি: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            )
         }
     }
 
@@ -1789,25 +1846,25 @@ object CourseCommerceRepository {
         try {
             val account = resolveStudentAccount(context)
             if (!account.isLoggedIn) {
-                return@withContext Result.failure(Exception("অনুগ্রহ করে আগে আপনার শিখো একাউন্টে লগইন করুন।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Please sign in first.", "অনুগ্রহ করে আগে লগইন করুন।")))
             }
 
             val cleanMobile = DeviceCoursePermissionsConvertDigits(senderMobile).trim()
             val cleanTrx = transactionId.trim().uppercase()
             val amountInt = amount.toInt().coerceAtLeast(1)
             if (cleanMobile.length < 10) {
-                return@withContext Result.failure(Exception("যে মোবাইল নম্বর থেকে টাকা পাঠিয়েছেন তা সঠিকভাবে লিখুন (১১ ডিজিট)।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Enter a valid 11-digit sender mobile number.", "সঠিক ১১ ডিজিটের মোবাইল নম্বর লিখুন।")))
             }
             if (amount <= 0.0) {
-                return@withContext Result.failure(Exception("পাঠানো টাকার সঠিক পরিমাণ লিখুন।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Enter a valid amount.", "পাঠানো টাকার সঠিক পরিমাণ লিখুন।")))
             }
             if (cleanTrx.length < 4) {
-                return@withContext Result.failure(Exception("সঠিক ট্রানজেকশন আইডি (TrxID) লিখুন।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Enter a valid Transaction ID (TrxID).", "সঠিক ট্রানজেকশন আইডি (TrxID) লিখুন।")))
             }
 
             val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) {
-                return@withContext Result.failure(Exception("সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Server configuration missing.", "সার্ভার কনফিগারেশন পাওয়া যায়নি।")))
             }
 
             val accountKey = account.accountKey
@@ -1858,7 +1915,10 @@ object CourseCommerceRepository {
                             if (json.optBoolean("success", false)) {
                                 val msg = json.optString(
                                     "message",
-                                    "আপনার পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করে এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।"
+                                    AppLang.tr(
+                                        "Payment submitted! Course will unlock once verified by Admin.",
+                                        "পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করলেই কোর্স আনলক হয়ে যাবে।"
+                                    )
                                 )
                                 fetchCourseCommerceStatus(context, forceRefresh = true)
                                 com.example.notification.OneSignalPushManager.notifyAdminCoursePaymentSubmitted(
@@ -1873,7 +1933,7 @@ object CourseCommerceRepository {
                                 )
                                 return@withContext Result.success(msg)
                             } else {
-                                val errMsg = json.optString("message", "").ifBlank { "পেমেন্ট জমা দিতে সমস্যা হয়েছে।" }
+                                val errMsg = json.optString("message", "").ifBlank { AppLang.tr("Failed to submit payment.", "পেমেন্ট জমা দিতে সমস্যা হয়েছে।") }
                                 return@withContext Result.failure(Exception(errMsg))
                             }
                         }
@@ -1886,8 +1946,8 @@ object CourseCommerceRepository {
             if (!rpcNotFound) {
                 return@withContext Result.failure(
                     Exception(
-                        if (rpcHttpCode > 0) "পেমেন্ট জমা দিতে সমস্যা হয়েছে (HTTP $rpcHttpCode)।"
-                        else "নেটওয়ার্ক সমস্যা: অনুগ্রহ করে আবার চেষ্টা করুন।"
+                        if (rpcHttpCode > 0) AppLang.tr("Failed to submit payment (HTTP $rpcHttpCode).", "পেমেন্ট জমা দিতে সমস্যা হয়েছে (HTTP $rpcHttpCode)।")
+                        else AppLang.tr("Network error. Please try again.", "নেটওয়ার্ক সমস্যা: অনুগ্রহ করে আবার চেষ্টা করুন।")
                     )
                 )
             }
@@ -2027,12 +2087,21 @@ object CourseCommerceRepository {
                     transactionId = cleanTrx,
                     planTitle = selectedPlan.titleBn
                 )
-                return@withContext Result.success("আপনার পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করে এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।")
+                return@withContext Result.success(
+                    AppLang.tr(
+                        "Payment submitted! Course will unlock once verified by Admin.",
+                        "পেমেন্ট তথ্য সফলভাবে জমা হয়েছে! অ্যাডমিন যাচাই করলেই কোর্স আনলক হয়ে যাবে।"
+                    )
+                )
             } else {
-                return@withContext Result.failure(Exception("পেমেন্ট জমা দিতে সমস্যা হয়েছে (HTTP $lastTxCode)।"))
+                return@withContext Result.failure(
+                    Exception(AppLang.tr("Failed to submit payment (HTTP $lastTxCode).", "পেমেন্ট জমা দিতে সমস্যা হয়েছে (HTTP $lastTxCode)।"))
+                )
             }
         } catch (e: Throwable) {
-            return@withContext Result.failure(Exception("নেটওয়ার্ক সমস্যা: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            return@withContext Result.failure(
+                Exception(AppLang.tr("Network error: ${e.localizedMessage ?: "Please try again"}", "নেটওয়ার্ক সমস্যা: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            )
         }
     }
 
@@ -2049,21 +2118,21 @@ object CourseCommerceRepository {
         try {
             val account = resolveStudentAccount(context)
             if (!account.isLoggedIn) {
-                return@withContext Result.failure(Exception("অনুগ্রহ করে আগে আপনার শিখো একাউন্টে লগইন করুন।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Please sign in first.", "অনুগ্রহ করে আগে লগইন করুন।")))
             }
 
             val (supabaseUrl, anonKey) = DeviceActivationRepository.getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) {
-                return@withContext Result.failure(Exception("সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
+                return@withContext Result.failure(Exception(AppLang.tr("Server configuration missing.", "সার্ভার কনফিগারেশন পাওয়া যায়নি।")))
             }
 
             val cachedItem = getCachedSnapshot(context).enrollmentsByProgramId[programId]
             val trialDays = (cachedItem?.trialDays ?: 1).coerceAtLeast(0)
             val trialHours = (cachedItem?.trialHours ?: 0).coerceAtLeast(0)
             val durationLabelBn = when {
-                trialDays > 0 -> "${CourseCommerceItemState.toBanglaDigits(trialDays.toString())} দিনের"
-                trialHours > 0 -> "${CourseCommerceItemState.toBanglaDigits(trialHours.toString())} ঘণ্টার"
-                else -> "১ দিনের"
+                trialDays > 0 -> AppLang.tr("$trialDays-day", "${CourseCommerceItemState.toBanglaDigits(trialDays.toString())} দিনের")
+                trialHours > 0 -> AppLang.tr("$trialHours-hour", "${CourseCommerceItemState.toBanglaDigits(trialHours.toString())} ঘণ্টার")
+                else -> AppLang.tr("1-day", "১ দিনের")
             }
 
             // 1. Primary (Zero-Trust RLS compatible): Call exact Supabase SECURITY DEFINER RPC `start_course_free_trial`
@@ -2177,14 +2246,21 @@ object CourseCommerceRepository {
                     durationLabelBn = durationLabelBn
                 )
                 val finalMsg = rpcMessage.ifBlank {
-                    "🎉 অভিনন্দন! আপনার $durationLabelBn ফ্রি ট্রায়াল চালু হয়েছে। এখন আপনি কোর্সটির ক্লাসগুলো ফ্রিতে দেখতে পারবেন।"
+                    AppLang.tr(
+                        "Your $durationLabelBn free trial is active! You can start exploring classes now.",
+                        "অভিনন্দন! আপনার $durationLabelBn ফ্রি ট্রায়াল চালু হয়েছে। এখন ক্লাসগুলো ফ্রিতে দেখতে পারবেন।"
+                    )
                 }
                 return@withContext Result.success(finalMsg)
             } else {
-                return@withContext Result.failure(Exception("ফ্রি ট্রায়াল চালু করতে সমস্যা হয়েছে। অনুগ্রহ করে ডাটাবেজে ট্রায়াল SQL রান করা আছে কিনা নিশ্চিত করুন।"))
+                return@withContext Result.failure(
+                    Exception(AppLang.tr("Failed to start free trial. Please try again later.", "ফ্রি ট্রায়াল চালু করতে সমস্যা হয়েছে। পরে আবার চেষ্টা করুন।"))
+                )
             }
         } catch (e: Throwable) {
-            return@withContext Result.failure(Exception("নেটওয়ার্ক ত্রুটি: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            return@withContext Result.failure(
+                Exception(AppLang.tr("Network error: ${e.localizedMessage ?: "Please try again"}", "নেটওয়ার্ক ত্রুটি: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            )
         }
     }
 

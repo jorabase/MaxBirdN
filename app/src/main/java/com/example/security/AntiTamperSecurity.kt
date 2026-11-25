@@ -10,6 +10,7 @@ import android.os.Debug
 import android.view.Window
 import android.view.WindowManager
 import com.example.BuildConfig
+import com.example.utils.AppLang
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.io.BufferedReader
@@ -156,8 +157,14 @@ object AntiTamperSecurity {
             if (proxyDetail != null) {
                 return SecurityViolation(
                     code = "NETWORK_PROXY_DETECTED",
-                    titleBn = "অ্যাপের ওপর নেটওয়ার্ক ক্যাপচার / প্রক্সি চালু রয়েছে!",
-                    messageBn = "অ্যাপের ডাটা সুরক্ষার স্বার্থে এই অ্যাপের ওপর Reqable, HttpCanary বা অন্য কোনো Network Capture / Proxy চালু রেখে ব্যবহার করা যাবে না। অনুগ্রহ করে ক্যাপচারটি বন্ধ করে 'পুনরায় যাচাই করুন' বাটনে ট্যাপ করুন (অ্যাপ আনইনস্টল করার প্রয়োজন নেই)।",
+                    titleBn = AppLang.tr(
+                        "Network Capture / Proxy Active!",
+                        "অ্যাপের ওপর নেটওয়ার্ক ক্যাপচার / প্রক্সি চালু রয়েছে!"
+                    ),
+                    messageBn = AppLang.tr(
+                        "For data security, network capture or proxy tools (Reqable, HttpCanary, etc.) cannot run on this app. Please disable capture and tap Recheck.",
+                        "অ্যাপের ডাটা সুরক্ষার স্বার্থে Reqable, HttpCanary বা অন্য কোনো Network Capture / Proxy চালু রেখে ব্যবহার করা যাবে না। ক্যাপচার বন্ধ করে পুনরায় যাচাই করুন।"
+                    ),
                     detectedDetail = proxyDetail
                 )
             }
@@ -172,8 +179,14 @@ object AntiTamperSecurity {
                 } else {
                     return SecurityViolation(
                         code = "ACTIVE_MITM_CAPTURE_DETECTED",
-                        titleBn = "অ্যাপের নেটওয়ার্ক ট্রাফিক ক্যাপচার শনাক্ত হয়েছে!",
-                        messageBn = "এই অ্যাপের নেটওয়ার্ক রিকোয়েস্ট Reqable বা অন্য কোনো ক্যাপচার টুল দিয়ে ইন্টারসেপ্ট করার চেষ্টা শনাক্ত হয়েছে। অনুগ্রহ করে এই অ্যাপের ওপর থেকে ক্যাপচার বা VPN ইন্টারসেপশন বন্ধ করে 'পুনরায় যাচাই করুন' বাটনে ট্যাপ করুন।",
+                        titleBn = AppLang.tr(
+                            "Traffic Capture Detected!",
+                            "অ্যাপের নেটওয়ার্ক ট্রাফিক ক্যাপচার শনাক্ত হয়েছে!"
+                        ),
+                        messageBn = AppLang.tr(
+                            "Network interception was detected on this app. Please stop traffic capture or VPN interception and tap Recheck.",
+                            "এই অ্যাপের নেটওয়ার্ক রিকোয়েস্ট ইন্টারসেপ্ট করার চেষ্টা শনাক্ত হয়েছে। ক্যাপচার বা VPN ইন্টারসেপশন বন্ধ করে পুনরায় যাচাই করুন।"
+                        ),
                         detectedDetail = mitmDetail
                     )
                 }
@@ -185,8 +198,11 @@ object AntiTamperSecurity {
             if (isVpnConnectionActive(ctx)) {
                 return SecurityViolation(
                     code = "VPN_DETECTED",
-                    titleBn = "VPN কানেকশন শনাক্ত হয়েছে!",
-                    messageBn = "নিরাপত্তার স্বার্থে VPN বা টানেল সার্ভিস চালু রেখে এই অ্যাপ ব্যবহার করা যাবে না। অনুগ্রহ করে আপনার VPN বন্ধ করে পুনরায় চেষ্টা করুন।",
+                    titleBn = AppLang.tr("VPN Connection Detected!", "VPN কানেকশন শনাক্ত হয়েছে!"),
+                    messageBn = AppLang.tr(
+                        "For security, this app cannot be used while a VPN or tunnel service is active. Please disconnect VPN and try again.",
+                        "নিরাপত্তার স্বার্থে VPN বা টানেল সার্ভিস চালু রেখে এই অ্যাপ ব্যবহার করা যাবে না। VPN বন্ধ করে আবার চেষ্টা করুন।"
+                    ),
                     detectedDetail = "Active VPN Transport / Tunnel Interface"
                 )
             }
@@ -197,8 +213,11 @@ object AntiTamperSecurity {
             if (ctx != null && isDebuggerAttached(ctx)) {
                 return SecurityViolation(
                     code = "DEBUGGER_DETECTED",
-                    titleBn = "ডিবাগার / ট্রেসার শনাক্ত হয়েছে!",
-                    messageBn = "অ্যাপের নিরাপত্তা সুরক্ষার কারণে কোনো ডিবাগার বা রিভার্স ইঞ্জিনিয়ারিং টুল সংযুক্ত অবস্থায় অ্যাপটি চলবে না।",
+                    titleBn = AppLang.tr("Debugger Detected!", "ডিবাগার / ট্রেসার শনাক্ত হয়েছে!"),
+                    messageBn = AppLang.tr(
+                        "For security, this app cannot run with a debugger or reverse-engineering tool attached.",
+                        "নিরাপত্তার কারণে কোনো ডিবাগার বা রিভার্স ইঞ্জিনিয়ারিং টুল সংযুক্ত অবস্থায় অ্যাপটি চলবে না।"
+                    ),
                     detectedDetail = "Active Debugger / TracerPid"
                 )
             }
@@ -207,8 +226,11 @@ object AntiTamperSecurity {
             if (hookDetail != null) {
                 return SecurityViolation(
                     code = "HOOK_TAMPER_DETECTED",
-                    titleBn = "অননুমোদিত হুক / মডিফিকেশন শনাক্ত হয়েছে!",
-                    messageBn = "আপনার ডিভাইসে Frida, Xposed, LSPosed বা SSL-Unpinning হুক শনাক্ত হয়েছে। নিরাপত্তার স্বার্থে এগুলো বন্ধ করে অ্যাপটি পুনরায় চালু করুন।",
+                    titleBn = AppLang.tr("Unauthorized Hook Detected!", "অননুমোদিত হুক / মডিফিকেশন শনাক্ত হয়েছে!"),
+                    messageBn = AppLang.tr(
+                        "Frida, Xposed, LSPosed, or an SSL-Unpinning hook was detected on this device. Please disable it and restart the app.",
+                        "আপনার ডিভাইসে Frida, Xposed, LSPosed বা SSL-Unpinning হুক শনাক্ত হয়েছে। এগুলো বন্ধ করে অ্যাপটি পুনরায় চালু করুন।"
+                    ),
                     detectedDetail = hookDetail
                 )
             }

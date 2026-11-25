@@ -28,6 +28,7 @@ import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.components.QuizRichContent
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,7 +131,10 @@ fun LiveCqUploadDashboardScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${formatToBengaliNumber(totalQuestions)}টা প্রশ্নের উত্তর আপলোড হওয়ার পর একবারে সবগুলো সাবমিট করো",
+                            text = tr(
+                                "Submit all answers after uploading ${formatToBengaliNumber(totalQuestions)} questions",
+                                "${formatToBengaliNumber(totalQuestions)}টা প্রশ্নের উত্তর আপলোড হওয়ার পর একবারে সবগুলো সাবমিট করো"
+                            ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
@@ -158,10 +162,10 @@ fun LiveCqUploadDashboardScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("সাবমিট হচ্ছে...", color = Color.White)
+                            Text(tr("Submitting...", "সাবমিট হচ্ছে..."), color = Color.White)
                         } else {
                             Text(
-                                text = "সবগুলো সাবমিট করো",
+                                text = tr("Submit All", "সবগুলো সাবমিট করো"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -238,7 +242,10 @@ fun LiveCqUploadDashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "উত্তরপত্র আপলোড করার সময় ${formatToBengaliNumber(uploadMins)} মিনিট",
+                                text = tr(
+                                    "Upload window: ${formatToBengaliNumber(uploadMins)} min",
+                                    "উত্তরপত্র আপলোড করার সময় ${formatToBengaliNumber(uploadMins)} মিনিট"
+                                ),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Medium
@@ -249,7 +256,7 @@ fun LiveCqUploadDashboardScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "প্রশ্নের উত্তরপত্র আপলোড করো",
+                        text = tr("Upload Answer Sheets", "প্রশ্নের উত্তরপত্র আপলোড করো"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
@@ -317,7 +324,7 @@ fun LiveCqUploadDashboardScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
 
                                 Text(
-                                    text = "${formatToBengaliNumber(qNo)} নম্বর প্রশ্ন",
+                                    text = tr("Question ${formatToBengaliNumber(qNo)}", "${formatToBengaliNumber(qNo)} নম্বর প্রশ্ন"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -333,7 +340,7 @@ fun LiveCqUploadDashboardScreen(
                                 )
                             } else {
                                 Text(
-                                    text = "সম্পূর্ণ প্রশ্ন দেখো",
+                                    text = tr("View Question", "সম্পূর্ণ প্রশ্ন দেখো"),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
@@ -361,7 +368,7 @@ fun LiveCqUploadDashboardScreen(
                                     .height(44.dp)
                             ) {
                                 Text(
-                                    text = "উত্তরপত্র রিভিউ করো",
+                                    text = tr("Review Answers", "উত্তরপত্র রিভিউ করো"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -386,7 +393,7 @@ fun LiveCqUploadDashboardScreen(
                                     .height(44.dp)
                             ) {
                                 Text(
-                                    text = "উত্তরপত্র আপলোড করো",
+                                    text = tr("Upload Answer Sheet", "উত্তরপত্র আপলোড করো"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -428,7 +435,7 @@ fun LiveCqUploadDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "প্রশ্ন বিবরণী",
+                            text = tr("Question Details", "প্রশ্ন বিবরণী"),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -488,7 +495,7 @@ fun LiveCqUploadDashboardScreen(
                             .fillMaxWidth()
                             .height(44.dp)
                     ) {
-                        Text("ঠিক আছে", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(tr("OK", "ঠিক আছে"), fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -529,7 +536,7 @@ fun LiveCqUploadDashboardScreen(
                     Spacer(modifier = Modifier.height(18.dp))
 
                     Text(
-                        text = "তুমি কি টেস্ট সাবমিট করতে চাও?",
+                        text = tr("Submit this test?", "তুমি কি টেস্ট সাবমিট করতে চাও?"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -539,7 +546,10 @@ fun LiveCqUploadDashboardScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "একবার সাবমিট করলে আর সাবমিট করতে পারবে না",
+                        text = tr(
+                            "Once submitted, you cannot edit or resubmit.",
+                            "একবার সাবমিট করলে আর সাবমিট করতে পারবে না"
+                        ),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -558,7 +568,7 @@ fun LiveCqUploadDashboardScreen(
                             .height(46.dp)
                     ) {
                         Text(
-                            text = "হ্যাঁ, সাবমিট করবো",
+                            text = tr("Yes, Submit", "হ্যাঁ, সাবমিট করবো"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -572,7 +582,7 @@ fun LiveCqUploadDashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = "না, এখন নয়",
+                            text = tr("Not Now", "না, এখন নয়"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)

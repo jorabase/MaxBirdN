@@ -24,7 +24,7 @@ data class DailyQuestItem(
 data class GamificationStats(
     val totalXp: Int = 120,
     val level: Int = 1,
-    val rankTitleBn: String = "নবীন অভিযাত্রী",
+    val rankTitleBn: String = com.example.utils.AppLang.tr("New Explorer", "নবীন অভিযাত্রী"),
     val currentLevelXp: Int = 120,
     val nextLevelXpThreshold: Int = 250,
     val levelProgressFraction: Float = 0.48f,
@@ -129,13 +129,13 @@ object StudentGamificationManager {
 
     fun getRankTitleForLevel(level: Int): String {
         return when {
-            level <= 1 -> "নবীন অভিযাত্রী"
-            level == 2 -> "জ্ঞান সন্ধানী"
-            level == 3 -> "মেধাবী যোদ্ধা"
-            level == 4 -> "অধ্যায় বিজেতা"
-            level == 5 -> "কুইজ চ্যাম্পিয়ন"
-            level in 6..8 -> "এলিট স্কলার"
-            else -> "গ্র্যান্ডমাস্টার লিজেন্ড"
+            level <= 1 -> com.example.utils.AppLang.tr("New Explorer", "নবীন অভিযাত্রী")
+            level == 2 -> com.example.utils.AppLang.tr("Knowledge Seeker", "জ্ঞান সন্ধানী")
+            level == 3 -> com.example.utils.AppLang.tr("Bright Warrior", "মেধাবী যোদ্ধা")
+            level == 4 -> com.example.utils.AppLang.tr("Chapter Conqueror", "অধ্যায় বিজেতা")
+            level == 5 -> com.example.utils.AppLang.tr("Quiz Champion", "কুইজ চ্যাম্পিয়ন")
+            level in 6..8 -> com.example.utils.AppLang.tr("Elite Scholar", "এলিট স্কলার")
+            else -> com.example.utils.AppLang.tr("Grandmaster Legend", "গ্র্যান্ডমাস্টার লিজেন্ড")
         }
     }
 
@@ -174,27 +174,27 @@ object StudentGamificationManager {
         val quests = listOf(
             DailyQuestItem(
                 id = "quest_class",
-                titleBn = "ক্লাস মিশন: লেকচার সম্পন্ন করো",
-                subtitleBn = "যেকোনো ১টি রেকর্ডেড বা লাইভ ক্লাসে অংশ নাও",
+                titleBn = com.example.utils.AppLang.tr("Class Mission: Complete a Lecture", "ক্লাস মিশন: লেকচার সম্পন্ন করো"),
+                subtitleBn = com.example.utils.AppLang.tr("Attend any 1 recorded or live class", "যেকোনো ১টি রেকর্ডেড বা লাইভ ক্লাসে অংশ নাও"),
                 xpReward = 100,
                 isCompleted = lessonQuestDone,
-                progressTextBn = if (lessonQuestDone) "সম্পন্ন ✓" else "০/১"
+                progressTextBn = if (lessonQuestDone) com.example.utils.AppLang.tr("Done ✓", "সম্পন্ন ✓") else com.example.utils.AppLang.tr("0/1", "০/১")
             ),
             DailyQuestItem(
                 id = "quest_anim",
-                titleBn = "অ্যানিমেশন মিশন: থ্রিডি লেসন দেখো",
-                subtitleBn = "অধ্যায়ের যেকোনো ১টি অ্যানিমেটেড ভিডিও দেখো",
+                titleBn = com.example.utils.AppLang.tr("Animation Mission: Watch 3D Lesson", "অ্যানিমেশন মিশন: থ্রিডি লেসন দেখো"),
+                subtitleBn = com.example.utils.AppLang.tr("Watch any 1 animated chapter video", "অধ্যায়ের যেকোনো ১টি অ্যানিমেটেড ভিডিও দেখো"),
                 xpReward = 50,
                 isCompleted = animatedQuestDone,
-                progressTextBn = if (animatedQuestDone) "সম্পন্ন ✓" else "০/১"
+                progressTextBn = if (animatedQuestDone) com.example.utils.AppLang.tr("Done ✓", "সম্পন্ন ✓") else com.example.utils.AppLang.tr("0/1", "০/১")
             ),
             DailyQuestItem(
                 id = "quest_quiz_save",
-                titleBn = "স্কলার মিশন: কুইজ বা নোট সেভ করো",
-                subtitleBn = "গুরুত্বপূর্ণ প্রশ্ন বা ক্লাস নোট বুকমার্ক করো",
+                titleBn = com.example.utils.AppLang.tr("Scholar Mission: Save a Quiz or Note", "স্কলার মিশন: কুইজ বা নোট সেভ করো"),
+                subtitleBn = com.example.utils.AppLang.tr("Bookmark an important question or note", "গুরুত্বপূর্ণ প্রশ্ন বা ক্লাস নোট বুকমার্ক করো"),
                 xpReward = 30,
                 isCompleted = savedQuestDone,
-                progressTextBn = if (savedQuestDone) "সম্পন্ন ✓" else "০/১"
+                progressTextBn = if (savedQuestDone) com.example.utils.AppLang.tr("Done ✓", "সম্পন্ন ✓") else com.example.utils.AppLang.tr("0/1", "০/১")
             )
         )
 

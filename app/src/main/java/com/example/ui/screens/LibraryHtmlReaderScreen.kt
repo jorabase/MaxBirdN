@@ -45,17 +45,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.download.AppFileDownloadManager
 import com.example.library.LibraryRepository
 import com.example.tts.OfflineBookTtsManager
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import com.example.utils.toBengaliDigits
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import java.io.File
 import kotlin.math.roundToInt
 
-private enum class ReaderThemeMode(val labelBn: String) {
-    ORIGINAL("মূল"),
-    LIGHT("লাইট"),
-    SEPIA("সেপিয়া"),
-    DARK("ডার্ক")
+private enum class ReaderThemeMode(val labelEn: String, val labelBn: String) {
+    ORIGINAL("Original", "মূল"),
+    LIGHT("Light", "লাইট"),
+    SEPIA("Sepia", "সেপিয়া"),
+    DARK("Dark", "ডার্ক");
+
+    val displayLabel: String get() = AppLang.tr(labelEn, labelBn)
 }
 
 /**
@@ -214,11 +219,11 @@ fun LibraryHtmlReaderScreen(
                             loadedFromOffline = false
                             isLoadingHtml = false
                         }.onFailure { err ->
-                            loadError = err.localizedMessage ?: "বইটি লোড করা যায়নি।"
+                            loadError = err.localizedMessage ?: AppLang.tr("Unable to load book.", "বইটি লোড করা যায়নি।")
                             isLoadingHtml = false
                         }
                     } else {
-                        loadError = it.localizedMessage ?: "অফলাইন ফাইল পাওয়া যায়নি।"
+                        loadError = it.localizedMessage ?: AppLang.tr("Offline file not found.", "অফলাইন ফাইল পাওয়া যায়নি।")
                         isLoadingHtml = false
                     }
                 }
@@ -229,7 +234,7 @@ fun LibraryHtmlReaderScreen(
                     loadedFromOffline = false
                     isLoadingHtml = false
                 }.onFailure { err ->
-                    loadError = err.localizedMessage ?: "ইন্টারনেট থেকে বইটি লোড করা যায়নি।"
+                    loadError = err.localizedMessage ?: AppLang.tr("Unable to load book online.", "অনলাইন থেকে বইটি লোড করা যায়নি।")
                     isLoadingHtml = false
                 }
             }
@@ -331,14 +336,14 @@ fun LibraryHtmlReaderScreen(
                     }
                 }
                 if (paras.isEmpty()) {
-                    Toast.makeText(context, "এই পাতায় পড়ার মতো লেখা পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, AppLang.tr("No readable text found on this page", "এই পাতায় পড়ার মতো লেখা পাওয়া যায়নি"), Toast.LENGTH_SHORT).show()
                 } else {
                     extractedParagraphs = paras
                     val startIdx = if (currentParagraphIdx in paras.indices) currentParagraphIdx else 0
                     speakParagraphAt(startIdx, paras)
                 }
             } catch (_: Throwable) {
-                Toast.makeText(context, "টেক্সট প্রসেস করা যায়নি", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, AppLang.tr("Unable to process text", "টেক্সট প্রসেস করা যায়নি"), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -453,21 +458,21 @@ fun LibraryHtmlReaderScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "লাইব্রেরিতে ফিরে যান",
+                            contentDescription = tr("Back", "পেছনে"),
                             tint = Color(0xFF10B981)
                         )
                     }
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = title.ifBlank { "HTML বই" },
+                            text = title.ifBlank { tr("Book", "বই") },
                             fontSize = 15.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        val modeTag = if (loadedFromOffline) "অফলাইন কপি" else "অনলাইন মোড"
+                        val modeTag = if (loadedFromOffline) tr("Offline", "অফলাইন") else tr("Online", "অনলাইন")
                         Text(
                             text = if (subtitle.isNotBlank()) "$subtitle • $modeTag" else modeTag,
                             fontSize = 11.5.sp,
@@ -483,7 +488,6 @@ fun LibraryHtmlReaderScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Toggle Native Audio Reader Bar
                     val audioActive = ttsState.isSpeaking || showTtsControlBar
                     Surface(
                         onClick = {
@@ -515,12 +519,12 @@ fun LibraryHtmlReaderScreen(
                         ) {
                             Icon(
                                 imageVector = if (ttsState.isSpeaking) Icons.Default.VolumeUp else Icons.Default.Headphones,
-                                contentDescription = "অডিও রিডার",
+                                contentDescription = tr("Audio", "অডিও"),
                                 tint = if (audioActive) Color.White else Color(0xFF10B981),
                                 modifier = Modifier.size(22.dp)
                             )
                             Text(
-                                text = if (audioActive) "অডিও বন্ধ" else "অডিও রিডার",
+                                text = if (audioActive) tr("Stop Audio", "অডিও বন্ধ") else tr("Read Aloud", "অডিও রিডার"),
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (audioActive) Color.White else MaterialTheme.colorScheme.onSurface,
@@ -540,10 +544,18 @@ fun LibraryHtmlReaderScreen(
                                     subtitle = subtitle,
                                     remoteUrl = remoteUrl
                                 )
-                                Toast.makeText(context, "অফলাইনের জন্য ডাউনলোড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    AppLang.tr("Saving for offline reading...", "অফলাইনের জন্য ডাউনলোড শুরু হয়েছে..."),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                                 showReaderOptionsSheet = false
                             } else if (isOfflineAvailable) {
-                                Toast.makeText(context, "এই বইটি অফলাইনে সেভ করা আছে", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    AppLang.tr("Already saved offline", "বইটি আগেই অফলাইনে সেভ করা আছে"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         },
                         shape = RoundedCornerShape(16.dp),
@@ -570,16 +582,16 @@ fun LibraryHtmlReaderScreen(
                             } else {
                                 Icon(
                                     imageVector = if (isOfflineAvailable) Icons.Default.DownloadDone else Icons.Default.DownloadForOffline,
-                                    contentDescription = "অফলাইন ডাউনলোড",
+                                    contentDescription = tr("Offline Download", "ডাউনলোড"),
                                     tint = if (isOfflineAvailable) Color(0xFF10B981) else Color(0xFF0284C7),
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                             Text(
                                 text = when {
-                                    isDownloadingNow -> "ডাউনলোড..."
-                                    isOfflineAvailable -> "অফলাইন সেভড"
-                                    else -> "ডাউনলোড"
+                                    isDownloadingNow -> tr("Saving...", "ডাউনলোড...")
+                                    isOfflineAvailable -> tr("Saved", "সেভড")
+                                    else -> tr("Download", "ডাউনলোড")
                                 },
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -608,12 +620,12 @@ fun LibraryHtmlReaderScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.RecordVoiceOver,
-                                contentDescription = "ভয়েস সেটিংস",
+                                contentDescription = tr("Voice", "ভয়েস"),
                                 tint = Color(0xFF8B5CF6),
                                 modifier = Modifier.size(22.dp)
                             )
                             Text(
-                                text = "ভয়েস সেটিংস",
+                                text = tr("Voice", "ভয়েস"),
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -626,7 +638,7 @@ fun LibraryHtmlReaderScreen(
                 // Reading Theme Selector
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "পড়ার থিম",
+                        text = tr("Theme", "পড়ার থিম"),
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -635,6 +647,7 @@ fun LibraryHtmlReaderScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val isBnNow = isBangla()
                         ReaderThemeMode.entries.forEach { mode ->
                             val selected = readerTheme == mode
                             Surface(
@@ -650,7 +663,7 @@ fun LibraryHtmlReaderScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = mode.labelBn,
+                                        text = if (isBnNow) mode.labelBn else mode.labelEn,
                                         fontSize = 12.5.sp,
                                         fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
                                         color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
@@ -668,7 +681,7 @@ fun LibraryHtmlReaderScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "লেখার সাইজ",
+                        text = tr("Text Size", "লেখার সাইজ"),
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -716,7 +729,7 @@ fun LibraryHtmlReaderScreen(
                                 onClick = { textZoomPercent = 100 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                             ) {
-                                Text("রিসেট", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                                Text(tr("Reset", "রিসেট"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
                             }
                         }
                     }
@@ -750,7 +763,7 @@ fun LibraryHtmlReaderScreen(
                     ) {
                         CircularProgressIndicator(color = Color(0xFF10B981))
                         Text(
-                            text = "বইটি খোলা হচ্ছে...",
+                            text = tr("Opening book...", "বইটি খোলা হচ্ছে..."),
                             fontSize = 13.5.sp,
                             color = Color.White.copy(alpha = 0.85f)
                         )
@@ -776,7 +789,7 @@ fun LibraryHtmlReaderScreen(
                                 modifier = Modifier.size(48.dp)
                             )
                             Text(
-                                text = loadError ?: "বইটি লোড করা যায়নি",
+                                text = loadError ?: tr("Unable to load book", "বইটি লোড করা যায়নি"),
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -785,7 +798,7 @@ fun LibraryHtmlReaderScreen(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
                             ) {
-                                Text("আবার চেষ্টা করুন", fontWeight = FontWeight.Bold)
+                                Text(tr("Try Again", "আবার চেষ্টা করুন"), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -891,7 +904,7 @@ fun LibraryHtmlReaderScreen(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
-                                contentDescription = "রিডার অপশন মেনু",
+                                contentDescription = tr("Reader options", "রিডার অপশন"),
                                 tint = Color.White,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -946,10 +959,13 @@ fun LibraryHtmlReaderScreen(
                             Text(
                                 text = when {
                                     ttsState.isSpeaking && isNativeAutoReading && extractedParagraphs.isNotEmpty() ->
-                                        "পড়া হচ্ছে (${(currentParagraphIdx + 1).toBengaliDigits()}/${extractedParagraphs.size.toBengaliDigits()}) • ${if (ttsState.detectedLanguage == "en") "English" else "বাংলা"}"
+                                        tr(
+                                            "Reading (${currentParagraphIdx + 1}/${extractedParagraphs.size}) • ${if (ttsState.detectedLanguage == "en") "English" else "Bangla"}",
+                                            "পড়া হচ্ছে (${(currentParagraphIdx + 1).toBengaliDigits()}/${extractedParagraphs.size.toBengaliDigits()}) • ${if (ttsState.detectedLanguage == "en") "English" else "বাংলা"}"
+                                        )
                                     ttsState.isSpeaking ->
-                                        "${ttsState.engineLabelBn} • ${if (ttsState.detectedLanguage == "en") "English" else "বাংলা"}"
-                                    ttsState.isPaused -> "পজ করা আছে"
+                                        "${ttsState.engineLabelBn} • ${if (ttsState.detectedLanguage == "en") "English" else tr("Bangla", "বাংলা")}"
+                                    ttsState.isPaused -> tr("Paused", "পজ করা")
                                     else -> ttsState.engineLabelBn
                                 },
                                 fontSize = 11.5.sp,
@@ -999,7 +1015,7 @@ fun LibraryHtmlReaderScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = "বন্ধ করুন",
+                                    contentDescription = tr("Close", "বন্ধ করুন"),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -1018,7 +1034,7 @@ fun LibraryHtmlReaderScreen(
                                 },
                                 enabled = extractedParagraphs.isNotEmpty() && currentParagraphIdx > 0
                             ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "আগের প্যারাগ্রাফ")
+                                Icon(Icons.Default.SkipPrevious, contentDescription = tr("Previous", "আগের"))
                             }
 
                             FilledIconButton(
@@ -1039,7 +1055,7 @@ fun LibraryHtmlReaderScreen(
                             ) {
                                 Icon(
                                     imageVector = if (ttsState.isSpeaking) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (ttsState.isSpeaking) "পজ" else "চালু করুন",
+                                    contentDescription = if (ttsState.isSpeaking) tr("Pause", "পজ") else tr("Play", "চালু"),
                                     modifier = Modifier.size(26.dp)
                                 )
                             }
@@ -1052,7 +1068,7 @@ fun LibraryHtmlReaderScreen(
                                 },
                                 enabled = extractedParagraphs.isNotEmpty() && currentParagraphIdx < extractedParagraphs.lastIndex
                             ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "পরের প্যারাগ্রাফ")
+                                Icon(Icons.Default.SkipNext, contentDescription = tr("Next", "পরের"))
                             }
 
                             IconButton(
@@ -1065,7 +1081,7 @@ fun LibraryHtmlReaderScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Stop,
-                                    contentDescription = "থামান",
+                                    contentDescription = tr("Stop", "থামান"),
                                     tint = Color(0xFFEF4444)
                                 )
                             }

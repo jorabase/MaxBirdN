@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.library.TtsModelPackInfo
 import com.example.tts.OfflineBookTtsManager
+import com.example.utils.tr
 
 /**
  * Clean dialog for testing and configuring Google Offline TTS (Bangla + English).
@@ -70,13 +71,13 @@ fun LibraryVoiceSettingsDialog(
                 }
                 Column {
                     Text(
-                        text = "অফলাইন ভয়েস ও TTS",
+                        text = tr("Offline Voice", "অফলাইন ভয়েস"),
                         fontSize = 16.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Google অফলাইন বাংলা ও ইংরেজি ভয়েস",
+                        text = tr("Google Offline TTS", "Google অফলাইন ভয়েস"),
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -120,9 +121,15 @@ fun LibraryVoiceSettingsDialog(
                         }
                         Text(
                             text = if (previewState.hasOfflineBanglaVoice) {
-                                "অফলাইন বাংলা ও ইংরেজি ভয়েস প্রস্তুত রয়েছে। ইন্টারনেট ছাড়াই বই শুনে পড়তে পারবেন।"
+                                tr(
+                                    "Offline Bangla & English voices are ready for book reading.",
+                                    "অফলাইন বাংলা ও ইংরেজি ভয়েস প্রস্তুত। ইন্টারনেট ছাড়াই বই শুনে পড়তে পারবেন।"
+                                )
                             } else {
-                                "ভালো মানের বাংলা উচ্চারণের জন্য নিচের বাটন থেকে Google অফলাইন বাংলা (bn-BD) ভয়েস ডাউনলোড করে নিন।"
+                                tr(
+                                    "Download Google Offline Bangla (bn-BD) voice from system settings below for better pronunciation.",
+                                    "ভালো বাংলা উচ্চারণের জন্য নিচের বাটন থেকে Google অফলাইন বাংলা (bn-BD) ভয়েস ডাউনলোড করুন।"
+                                )
                             },
                             fontSize = 11.5.sp,
                             lineHeight = 16.sp,
@@ -163,7 +170,7 @@ fun LibraryVoiceSettingsDialog(
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
-                            text = if (previewState.isSpeaking) "থামান" else "বাংলা টেস্ট",
+                            text = if (previewState.isSpeaking) tr("Stop", "থামান") else tr("Bangla Test", "বাংলা টেস্ট"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
@@ -227,14 +234,17 @@ fun LibraryVoiceSettingsDialog(
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "Google অফলাইন ভয়েস সেটিংস",
+                                text = tr("System TTS Settings", "Google ভয়েস সেটিংস"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Text(
-                            text = "ফোনের Google Speech Services সেটিংস থেকে অফলাইন বাংলা (Bangladesh) ভয়েস প্যাক ডাউনলোড বা পরিবর্তন করতে পারবেন।",
+                            text = tr(
+                                "Manage or download offline Bangla (Bangladesh) voice packs from Google Speech Services.",
+                                "Google Speech Services সেটিংস থেকে অফলাইন বাংলা (Bangladesh) ভয়েস প্যাক ডাউনলোড বা পরিবর্তন করুন।"
+                            ),
                             fontSize = 11.5.sp,
                             lineHeight = 16.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -257,7 +267,7 @@ fun LibraryVoiceSettingsDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "ফোনের Google ভয়েস সেটিংস খুলুন",
+                                text = tr("Open System Voice Settings", "সিস্টেম ভয়েস সেটিংস খুলুন"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -276,7 +286,7 @@ fun LibraryVoiceSettingsDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                 modifier = Modifier.testTag("close_voice_settings_button")
             ) {
-                Text("ঠিক আছে", fontWeight = FontWeight.Bold)
+                Text(tr("Done", "ঠিক আছে"), fontWeight = FontWeight.Bold)
             }
         }
     )

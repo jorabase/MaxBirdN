@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 /**
  * Main Exam Final Overall Result Screen (GetModelTestPreResult)
@@ -49,7 +50,7 @@ fun ModelTestResultScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "সার্বিক ফলাফল",
+                        text = tr("Overall Result", "সার্বিক ফলাফল"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -84,7 +85,7 @@ fun ModelTestResultScreen(
                     ) {
                         Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("হোম")
+                        Text(tr("Home", "হোম"))
                     }
 
                     Button(
@@ -96,7 +97,7 @@ fun ModelTestResultScreen(
                     ) {
                         Icon(Icons.Default.Analytics, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("ফিডব্যাক", fontWeight = FontWeight.Bold)
+                        Text(tr("Feedback", "ফিডব্যাক"), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -139,7 +140,7 @@ fun ModelTestResultScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = result?.model_test_title ?: "মডেল টেস্টের সামগ্রিক ফলাফল",
+                                text = result?.model_test_title ?: tr("Model Test Result", "মডেল টেস্টের ফলাফল"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF93C5FD),
@@ -158,7 +159,7 @@ fun ModelTestResultScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             Text(
-                                text = "মোট প্রাপ্ত নম্বর",
+                                text = tr("Total Score", "মোট প্রাপ্ত নম্বর"),
                                 fontSize = 13.sp,
                                 color = Color(0xFFCBD5E1)
                             )
@@ -172,13 +173,13 @@ fun ModelTestResultScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     ScoreDetailBox(
-                        title = "MCQ স্কোর",
+                        title = tr("MCQ Score", "MCQ স্কোর"),
                         score = "${toBengaliDigits((result?.mcq_score?.toInt() ?: 0).toString())} / ${toBengaliDigits((result?.mcq_total_marks?.toInt() ?: 30).toString())}",
                         icon = Icons.Default.Quiz,
                         modifier = Modifier.weight(1f)
                     )
                     ScoreDetailBox(
-                        title = "CQ স্কোর",
+                        title = tr("CQ Score", "CQ স্কোর"),
                         score = "${toBengaliDigits((result?.cq_score?.toInt() ?: 0).toString())} / ${toBengaliDigits((result?.cq_total_marks?.toInt() ?: 70).toString())}",
                         icon = Icons.Default.Description,
                         modifier = Modifier.weight(1f)
@@ -194,7 +195,7 @@ fun ModelTestResultScreen(
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
-                            text = "পারফরম্যান্স মেট্রিক্স",
+                            text = tr("Performance", "পারফরম্যান্স"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -207,7 +208,7 @@ fun ModelTestResultScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "সঠিকতার হার (Accuracy)",
+                                text = tr("Accuracy", "সঠিকতার হার"),
                                 fontSize = 13.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -231,12 +232,12 @@ fun ModelTestResultScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "মেধা অবস্থান (Rank)",
+                                    text = tr("Rank", "মেধা অবস্থান"),
                                     fontSize = 13.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "${toBengaliDigits(result.rank.toString())} তম",
+                                    text = tr("#${toBengaliDigits(result.rank.toString())}", "${toBengaliDigits(result.rank.toString())} তম"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF3B82F6)

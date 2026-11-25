@@ -28,10 +28,11 @@ class ClassAlarmReceiver : BroadcastReceiver() {
             return
         }
 
-        val subjectName = intent.getStringExtra("subject_name") ?: "কোর্স"
-        val lessonTitle = intent.getStringExtra("lesson_title") ?: "লাইভ ক্লাস"
+        com.example.utils.AppLang.init(context)
+        val subjectName = intent.getStringExtra("subject_name") ?: com.example.utils.AppLang.tr("Course", "কোর্স")
+        val lessonTitle = intent.getStringExtra("lesson_title") ?: com.example.utils.AppLang.tr("Live Class", "লাইভ ক্লাস")
         val lessonId = intent.getStringExtra("lesson_id") ?: ""
-        val classStartTimeStr = intent.getStringExtra("class_start_time_str") ?: "নির্দিষ্ট সময়ে"
+        val classStartTimeStr = intent.getStringExtra("class_start_time_str") ?: com.example.utils.AppLang.tr("scheduled time", "নির্দিষ্ট সময়ে")
         val mentorName = intent.getStringExtra("mentor_name") ?: ""
         val mentorAvatar = intent.getStringExtra("mentor_avatar") ?: ""
         val isStartNow = intent.getBooleanExtra("is_start_now", false)
@@ -41,20 +42,34 @@ class ClassAlarmReceiver : BroadcastReceiver() {
         val customTitle = intent.getStringExtra("custom_title")
         val customBody = intent.getStringExtra("custom_body") ?: intent.getStringExtra("custom_note")
 
-        // Exact Shikho notification formats
         val title = customTitle ?: if (isStartNow) {
-            "🔴 লাইভ ক্লাস শুরু হয়েছে: $subjectName"
+            com.example.utils.AppLang.tr(
+                "🔴 Live Class Started: $subjectName",
+                "🔴 লাইভ ক্লাস শুরু হয়েছে: $subjectName"
+            )
         } else {
-            "⏰ $classStartTimeStr -এ $subjectName"
+            com.example.utils.AppLang.tr(
+                "⏰ $subjectName at $classStartTimeStr",
+                "⏰ $classStartTimeStr -এ $subjectName"
+            )
         }
 
         val body = customBody ?: if (isStartNow) {
-            "আপনার $subjectName ($lessonTitle) ক্লাস এখন শুরু হয়ে গেছে, এখনই ক্লাসে জয়েন করো! 🚀"
+            com.example.utils.AppLang.tr(
+                "Your $subjectName ($lessonTitle) class has started! Join now! 🚀",
+                "আপনার $subjectName ($lessonTitle) ক্লাস এখন শুরু হয়ে গেছে, এখনই ক্লাসে জয়েন করো! 🚀"
+            )
         } else {
             if (mentorName.isNotBlank()) {
-                "হ্যালো! আজকে $subjectName মেন্টর $mentorName-এর ক্লাস ঠিক $classStartTimeStr -এ! 🔥"
+                com.example.utils.AppLang.tr(
+                    "Hey! Today's $subjectName class with mentor $mentorName starts at $classStartTimeStr! 🔥",
+                    "হ্যালো! আজকে $subjectName মেন্টর $mentorName-এর ক্লাস ঠিক $classStartTimeStr -এ! 🔥"
+                )
             } else {
-                "হ্যালো! আজকে $subjectName এর ক্লাস ঠিক $classStartTimeStr -এ! 🔥"
+                com.example.utils.AppLang.tr(
+                    "Hey! Today's $subjectName class starts at $classStartTimeStr! 🔥",
+                    "হ্যালো! আজকে $subjectName এর ক্লাস ঠিক $classStartTimeStr -এ! 🔥"
+                )
             }
         }
 

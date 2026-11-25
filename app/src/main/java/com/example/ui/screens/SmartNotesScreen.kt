@@ -48,6 +48,8 @@ import com.example.smartnotes.SmartNotesUiEvent
 import com.example.smartnotes.SmartNotesViewModel
 import com.example.ui.components.AttachmentListDialog
 import com.example.ui.components.SlideViewerDialog
+import com.example.utils.AppLang
+import com.example.utils.tr
 
 private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
@@ -106,7 +108,7 @@ fun SmartNotesScreen(
     uiState.activeAttachment?.let { attachment ->
         SlideViewerDialog(
             slideUrl = attachment.url ?: "",
-            title = attachment.title ?: "ই-বুক / স্মার্ট নোট",
+            title = attachment.title ?: tr("Smart Note", "ই-বুক / স্মার্ট নোট"),
             onDismiss = {
                 viewModel.dismissActiveAttachment()
             }
@@ -118,7 +120,7 @@ fun SmartNotesScreen(
     if (tagAttachments != null && uiState.activeAttachment == null) {
         AttachmentListDialog(
             attachments = tagAttachments,
-            title = uiState.selectedTagTitle ?: "ডকুমেন্ট লিস্ট",
+            title = uiState.selectedTagTitle ?: tr("Documents", "ডকুমেন্ট লিস্ট"),
             accentColor = parsedSubjectColor,
             onAttachmentClick = { attachment ->
                 viewModel.selectAttachment(attachment)
@@ -173,7 +175,7 @@ fun SmartNotesScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = subjectTitle.ifBlank { "স্মার্ট নোট ও ই-বুক" },
+                                text = subjectTitle.ifBlank { tr("Smart Notes", "স্মার্ট নোট") },
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -181,7 +183,7 @@ fun SmartNotesScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "ই-বুক ও রিসোর্সেস",
+                                text = tr("E-Books & Notes", "ই-বুক ও নোট"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -227,7 +229,7 @@ fun SmartNotesScreen(
                                         modifier = Modifier.padding(vertical = 10.dp)
                                     ) {
                                         Text(
-                                            text = "সাবজেক্ট রিসোর্সেস",
+                                            text = tr("Subject Notes", "সাবজেক্ট রিসোর্স"),
                                             fontSize = 13.sp,
                                             fontWeight = if (isTab0) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isTab0) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -240,7 +242,7 @@ fun SmartNotesScreen(
 
                                 Spacer(modifier = Modifier.width(4.dp))
 
-                                // Tab 1: চ্যাপ্টার রিসোর্সেস
+                                // Tab 1: Chapter Resources
                                 val isTab1 = uiState.selectedTab == 1
                                 Surface(
                                     shape = RoundedCornerShape(26.dp),
@@ -257,7 +259,7 @@ fun SmartNotesScreen(
                                         modifier = Modifier.padding(vertical = 10.dp)
                                     ) {
                                         Text(
-                                            text = "চ্যাপ্টার রিসোর্সেস",
+                                            text = tr("Chapter Notes", "চ্যাপ্টার রিসোর্স"),
                                             fontSize = 13.sp,
                                             fontWeight = if (isTab1) FontWeight.Bold else FontWeight.Medium,
                                             color = if (isTab1) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -302,7 +304,7 @@ fun SmartNotesScreen(
                                 )
                                 Spacer(modifier = Modifier.height(14.dp))
                                 Text(
-                                    text = "রিসোর্স লোড হচ্ছে...",
+                                    text = tr("Loading resources...", "রিসোর্স লোড হচ্ছে..."),
                                     fontSize = 14.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -311,7 +313,7 @@ fun SmartNotesScreen(
 
                         uiState.subjectResources.isEmpty() -> {
                             EmptyResourceView(
-                                message = "এই বিষয়ের কোনো সাবজেক্ট রিসোর্স পাওয়া যায়নি",
+                                message = tr("No subject resources found", "এই বিষয়ের কোনো সাবজেক্ট রিসোর্স পাওয়া যায়নি"),
                                 onRetry = {
                                     viewModel.loadSubjectResources(subjectCode, phaseId)
                                 }
@@ -339,7 +341,7 @@ fun SmartNotesScreen(
                                                 subjectCode = subjectCode,
                                                 tagId = tagId,
                                                 isSubjectSpecific = true,
-                                                resourceTitle = resource.title ?: "ই-বুক"
+                                                resourceTitle = resource.title ?: AppLang.tr("E-Book", "ই-বুক")
                                             )
                                         }
                                     )
@@ -351,7 +353,7 @@ fun SmartNotesScreen(
 
                 1 -> {
                     // ==========================================
-                    // Tab 2: চ্যাপ্টার রিসোর্সেস (Chapter List)
+                    // Tab 2: Chapter Resources (Chapter List)
                     // ==========================================
                     when {
                         uiState.isChaptersLoading -> {
@@ -369,7 +371,7 @@ fun SmartNotesScreen(
                                 )
                                 Spacer(modifier = Modifier.height(14.dp))
                                 Text(
-                                    text = "অধ্যায়সমূহ লোড হচ্ছে...",
+                                    text = tr("Loading chapters...", "অধ্যায়সমূহ লোড হচ্ছে..."),
                                     fontSize = 14.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -378,7 +380,7 @@ fun SmartNotesScreen(
 
                         uiState.chapters.isEmpty() -> {
                             EmptyResourceView(
-                                message = "কোনো অধ্যায় পাওয়া যায়নি",
+                                message = tr("No chapters found", "কোনো অধ্যায় পাওয়া যায়নি"),
                                 onRetry = {
                                     viewModel.loadChapters(subjectCode, phaseId)
                                 }
@@ -484,7 +486,7 @@ fun ResourceGridCard(
 
                 // Title
                 Text(
-                    text = resource.title ?: "রিসোর্স",
+                    text = resource.title ?: tr("Resource", "রিসোর্স"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -547,7 +549,7 @@ fun ChapterResourceListItem(
             ) {
                 if (chapter.effectiveNo != null) {
                     Text(
-                        text = "অধ্যায় ${toBengaliDigits(chapter.effectiveNo.toString())}",
+                        text = tr("Chapter ${chapter.effectiveNo}", "অধ্যায় ${toBengaliDigits(chapter.effectiveNo.toString())}"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = accentColor
@@ -636,7 +638,7 @@ fun EmptyResourceView(
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
-            Text("পুনরায় চেষ্টা করুন")
+            Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
         }
     }
 }

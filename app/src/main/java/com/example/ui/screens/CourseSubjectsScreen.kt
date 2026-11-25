@@ -11,7 +11,10 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.res.painterResource
 import com.example.R
+import com.example.utils.AppLang
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -79,11 +82,11 @@ fun CourseSubjectsScreen(
         viewModel.fetchEnrolledPrograms()
     }
 
-    // Show Confirmation Dialog when user clicks "কোর্সে এক্সেস পান"
+    // Show Confirmation Dialog when user clicks "Get Access"
     confirmAccessProgram?.let { targetProgram ->
         val isReq = uiState.requestingAccessProgramId == targetProgram.id
         CourseAccessRequestConfirmDialog(
-            courseTitle = targetProgram.title_bn ?: "কোর্স",
+            courseTitle = targetProgram.title_bn ?: tr("Course", "কোর্স"),
             isRequesting = isReq,
             onDismiss = {
                 if (!isReq) confirmAccessProgram = null
@@ -93,7 +96,7 @@ fun CourseSubjectsScreen(
                 confirmAccessProgram = null
                 viewModel.requestCoursePurchaseAccess(
                     programId = progToRequest.id,
-                    programTitle = progToRequest.title_bn ?: "কোর্স",
+                    programTitle = progToRequest.title_bn ?: AppLang.tr("Course", "কোর্স"),
                     bannerUrl = progToRequest.banner_url,
                     isFreeOnShikho = progToRequest.is_free == true,
                     context = context
@@ -104,7 +107,7 @@ fun CourseSubjectsScreen(
 
     val activePaymentProgId = uiState.activePaymentSheetProgramId
     if (!activePaymentProgId.isNullOrBlank()) {
-        val activePaymentCourseTitle = uiState.activePaymentSheetCourseTitle.ifBlank { "কোর্স" }
+        val activePaymentCourseTitle = uiState.activePaymentSheetCourseTitle.ifBlank { tr("Course", "কোর্স") }
         val commerceItem = uiState.commerceSnapshot.resolveCourseItemState(
             programId = activePaymentProgId,
             titleBn = activePaymentCourseTitle
@@ -173,7 +176,7 @@ fun CourseSubjectsScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = selectedProgram.title_bn ?: "কোর্স",
+                                text = selectedProgram.title_bn ?: tr("Course", "কোর্স"),
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -181,7 +184,7 @@ fun CourseSubjectsScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "বিষয়সমূহ ও কুয়েস্ট ম্যাপ",
+                                text = tr("Subjects & Lessons", "বিষয় ও অধ্যায়"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -238,14 +241,14 @@ fun CourseSubjectsScreen(
                         onStartFreeTrial = { otherProgram ->
                             viewModel.startCourseFreeTrial(
                                 programId = otherProgram.id,
-                                programTitle = otherProgram.title_bn ?: "কোর্স",
+                                programTitle = otherProgram.title_bn ?: AppLang.tr("Course", "কোর্স"),
                                 context = context
                             )
                         },
                         onOpenPurchaseSheet = { otherProgram ->
                             viewModel.openPaymentSheetForCourse(
                                 programId = otherProgram.id,
-                                courseTitle = otherProgram.title_bn ?: "কোর্স"
+                                courseTitle = otherProgram.title_bn ?: AppLang.tr("Course", "কোর্স")
                             )
                         },
                         onRefresh = {
@@ -363,7 +366,7 @@ private fun MyCoursesListView(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "আমার কোর্স ও মিশন",
+                            text = tr("Courses", "কোর্সসমূহ"),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -379,7 +382,7 @@ private fun MyCoursesListView(
                                 border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f))
                             ) {
                                 Text(
-                                    text = "${toBengaliDigits(enrolled.size)}টি সক্রিয়",
+                                    text = tr("${enrolled.size} Active", "${toBengaliDigits(enrolled.size)}টি সক্রিয়"),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF10B981),
@@ -391,7 +394,11 @@ private fun MyCoursesListView(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = if (enrolled.isEmpty()) "নিচের কোর্সগুলো থেকে এক্সেস নিয়ে ক্লাস শুরু করো" else "চলমান শিক্ষাবর্ষ ও ভর্তি হওয়া কোর্সসমূহ",
+                        text = if (enrolled.isEmpty()) {
+                            tr("Request access to start learning", "এক্সেস নিয়ে পড়াশোনা শুরু করুন")
+                        } else {
+                            tr("Enrolled & available courses", "সক্রিয় ও অন্যান্য কোর্স")
+                        },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -413,7 +420,7 @@ private fun MyCoursesListView(
             ) {
                 item {
                     CourseFilterChip(
-                        label = "সকল কোর্স (${toBengaliDigits(enrolled.size + other.size)})",
+                        label = tr("All (${enrolled.size + other.size})", "সবগুলো (${toBengaliDigits(enrolled.size + other.size)})"),
                         selected = selectedFilter == "all",
                         onClick = { selectedFilter = "all" }
                     )
@@ -421,7 +428,7 @@ private fun MyCoursesListView(
                 if (enrolled.isNotEmpty()) {
                     item {
                         CourseFilterChip(
-                            label = "আমার সক্রিয় (${toBengaliDigits(enrolled.size)})",
+                            label = tr("Active (${enrolled.size})", "সক্রিয় (${toBengaliDigits(enrolled.size)})"),
                             selected = selectedFilter == "enrolled",
                             onClick = { selectedFilter = "enrolled" }
                         )
@@ -430,7 +437,7 @@ private fun MyCoursesListView(
                 if (other.isNotEmpty()) {
                     item {
                         CourseFilterChip(
-                            label = "কোর্স কিনুন (${toBengaliDigits(other.size)})",
+                            label = tr("Explore (${other.size})", "কিনুন (${toBengaliDigits(other.size)})"),
                             selected = selectedFilter == "other",
                             onClick = { selectedFilter = "other" }
                         )
@@ -456,7 +463,7 @@ private fun MyCoursesListView(
                         modifier = Modifier.size(36.dp)
                     )
                     Text(
-                        text = "কোর্স লোড হচ্ছে...",
+                        text = tr("Loading courses...", "কোর্স লোড হচ্ছে..."),
                         fontSize = 14.sp,
                         color = Color(0xFF64748B)
                     )
@@ -480,7 +487,7 @@ private fun MyCoursesListView(
                         modifier = Modifier.size(48.dp)
                     )
                     Text(
-                        text = "কোনো কোর্স পাওয়া যায়নি",
+                        text = tr("No courses found", "কোনো কোর্স পাওয়া যায়নি"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E293B)
@@ -490,7 +497,7 @@ private fun MyCoursesListView(
                         shape = RoundedCornerShape(20.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                     ) {
-                        Text("পুনরায় চেষ্টা করুন")
+                        Text(tr("Retry", "আবার চেষ্টা করুন"))
                     }
                 }
             }
@@ -504,7 +511,7 @@ private fun MyCoursesListView(
                 if (enrolled.isNotEmpty() && (selectedFilter == "all" || selectedFilter == "enrolled")) {
                     item {
                         Text(
-                            text = "আমার তালিকাভুক্ত সক্রিয় কোর্স",
+                            text = tr("My Courses", "আমার কোর্স"),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -540,7 +547,7 @@ private fun MyCoursesListView(
                             },
                             onClick = { onOpenEnrolledCourse(program) },
                             onPayNextInstallment = {
-                                onPayInstallment(program.id, program.title_bn ?: "কোর্স")
+                                onPayInstallment(program.id, program.title_bn ?: AppLang.tr("Course", "কোর্স"))
                             }
                         )
                     }
@@ -559,13 +566,13 @@ private fun MyCoursesListView(
                         ) {
                             Column {
                                 Text(
-                                    text = if (enrolled.isEmpty()) "সকল কোর্সসমূহ (এক্সেস নিয়ে ভর্তি হও)" else "অন্যান্য কোর্সসমূহ (কিনুন ও ভর্তি হোন)",
+                                    text = if (enrolled.isEmpty()) tr("Available Courses", "সকল কোর্স") else tr("More Courses", "অন্যান্য কোর্স"),
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "কোর্সে প্রবেশ করতে 'কোর্সে এক্সেস পান' ক্লিক করে এককালীন বা কিস্তিতে ভর্তি হোন",
+                                    text = tr("Tap Get Access to unlock via full payment or installments", "এককালীন বা কিস্তিতে ভর্তি হতে এক্সেস নিন"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -635,7 +642,7 @@ private fun EnrolledCourseBannerCard(
     onPayNextInstallment: () -> Unit
 ) {
     val context = LocalContext.current
-    val title = program.title_bn?.trim() ?: "কোর্স"
+    val title = program.title_bn?.trim() ?: tr("Course", "কোর্স")
     val cardGradient = remember(program.id, title) { getCourseGradient(title) }
     val isTrialActive = commerceState.isTrialCurrentlyActive
     val hasActiveInstallmentDue = !isTrialActive && commerceState.dueAmount > 0.0
@@ -684,7 +691,7 @@ private fun EnrolledCourseBannerCard(
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = if (isTrialActive) "ফ্রি ট্রায়াল চলমান" else "ভর্তি হয়েছো (আনলকড)",
+                                text = if (isTrialActive) tr("Free Trial Active", "ফ্রি ট্রায়াল চলমান") else tr("Enrolled", "ভর্তি সক্রিয়"),
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFECFDF5),
@@ -715,7 +722,7 @@ private fun EnrolledCourseBannerCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (remTrialText.isNotBlank()) "$remTrialText বাকি" else "ট্রায়াল সক্রিয়",
+                                    text = if (remTrialText.isNotBlank()) remTrialText else tr("Trial Active", "ট্রায়াল সক্রিয়"),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFEF3C7),
@@ -741,7 +748,7 @@ private fun EnrolledCourseBannerCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "কিস্তি চলমান",
+                                    text = tr("Installment", "কিস্তি চলমান"),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFEF3C7),
@@ -756,7 +763,7 @@ private fun EnrolledCourseBannerCard(
                             border = BorderStroke(1.dp, Color(0xFF7DD3FC).copy(alpha = 0.5f))
                         ) {
                             Text(
-                                text = "সম্পূর্ণ পরিশোধিত",
+                                text = tr("Paid in Full", "পরিশোধিত"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFE0F2FE),
@@ -839,14 +846,21 @@ private fun EnrolledCourseBannerCard(
                         Column(modifier = Modifier.padding(14.dp)) {
                             val remTrial = commerceState.getRemainingTrialTimeTextBn()
                             Text(
-                                text = if (remTrial.isNotBlank()) "🎁 ফ্রি ট্রায়ালে কোর্সটি আনলক আছে • বাকি সময়: $remTrial" else "🎁 ফ্রি ট্রায়ালে কোর্সটি আনলক আছে",
+                                text = if (remTrial.isNotBlank()) {
+                                    tr("Free trial unlocked • $remTrial", "ফ্রি ট্রায়ালে আনলক আছে • $remTrial")
+                                } else {
+                                    tr("Free trial unlocked", "ফ্রি ট্রায়ালে আনলক আছে")
+                                },
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFDDD6FE)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "ট্রায়াল শেষ হওয়ার আগে বা পরে যেকোনো সময় পূর্ণ মেয়াদে কোর্সটি কিনে নিতে পারবেন।",
+                                text = tr(
+                                    "Upgrade to full access anytime before or after the trial ends.",
+                                    "ট্রায়াল শেষ হওয়ার আগে বা পরে যেকোনো সময় পূর্ণ মেয়াদে কিনতে পারবেন।"
+                                ),
                                 fontSize = 11.5.sp,
                                 color = Color.White.copy(alpha = 0.85f),
                                 lineHeight = 16.sp
@@ -876,7 +890,10 @@ private fun EnrolledCourseBannerCard(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "পূর্ণ মেয়াদে কোর্সটি কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})",
+                                            text = tr(
+                                                "Buy Full Course (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})",
+                                                "পূর্ণ মেয়াদে কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                            ),
                                             fontSize = 12.5.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color(0xFF064E3B),
@@ -906,7 +923,10 @@ private fun EnrolledCourseBannerCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "পরিশোধিত: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} / ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}",
+                                    text = tr(
+                                        "Paid: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} / ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}",
+                                        "পরিশোধিত: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} / ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}"
+                                    ),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF4ADE80),
@@ -916,7 +936,10 @@ private fun EnrolledCourseBannerCard(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "বকেয়া: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}",
+                                    text = tr(
+                                        "Due: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}",
+                                        "বকেয়া: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}"
+                                    ),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFCA5A5),
@@ -959,11 +982,15 @@ private fun EnrolledCourseBannerCard(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                val isBn = isBangla()
                                 Text(
                                     text = buildString {
-                                        append("পরবর্তী কিস্তি: ${CourseCommerceItemState.formatTakaBn(nextAmt)}")
+                                        append(
+                                            if (isBn) "পরবর্তী কিস্তি: ${CourseCommerceItemState.formatTakaBn(nextAmt)}"
+                                            else "Next installment: ${CourseCommerceItemState.formatTakaBn(nextAmt)}"
+                                        )
                                         if (dueDateText.isNotBlank()) {
-                                            append(" • শেষ তারিখ: $dueDateText")
+                                            append(if (isBn) " • শেষ তারিখ: $dueDateText" else " • Due: $dueDateText")
                                         }
                                     },
                                     fontSize = 11.5.sp,
@@ -992,7 +1019,7 @@ private fun EnrolledCourseBannerCard(
                                         )
                                         Spacer(modifier = Modifier.width(5.dp))
                                         Text(
-                                            text = "সময় বাকি: $remainingTimeText",
+                                            text = tr("Time left: $remainingTimeText", "সময় বাকি: $remainingTimeText"),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFFDE68A),
@@ -1005,7 +1032,10 @@ private fun EnrolledCourseBannerCard(
                             if (commerceState.rejectionReason.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "❌ কিস্তি পেমেন্ট রিজেক্ট হয়েছে: ${commerceState.rejectionReason}",
+                                    text = tr(
+                                        "Installment rejected: ${commerceState.rejectionReason}",
+                                        "কিস্তি পেমেন্ট রিজেক্ট হয়েছে: ${commerceState.rejectionReason}"
+                                    ),
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFCA5A5)
@@ -1020,7 +1050,10 @@ private fun EnrolledCourseBannerCard(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "⏳ পরবর্তী কিস্তির পেমেন্ট যাচাই চলছে (TrxID: ${commerceState.pendingInstallmentTxId})",
+                                        text = tr(
+                                            "Verifying installment payment (TrxID: ${commerceState.pendingInstallmentTxId})",
+                                            "পরবর্তী কিস্তির পেমেন্ট যাচাই চলছে (TrxID: ${commerceState.pendingInstallmentTxId})"
+                                        ),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFEF3C7),
@@ -1052,7 +1085,10 @@ private fun EnrolledCourseBannerCard(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "পরবর্তী কিস্তি পরিশোধ করুন (${CourseCommerceItemState.formatTakaBn(nextAmt)})",
+                                            text = tr(
+                                                "Pay Next Installment (${CourseCommerceItemState.formatTakaBn(nextAmt)})",
+                                                "পরবর্তী কিস্তি দিন (${CourseCommerceItemState.formatTakaBn(nextAmt)})"
+                                            ),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color(0xFF0F172A),
@@ -1080,7 +1116,7 @@ private fun EnrolledCourseBannerCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Full Width High-Contrast Action Button: "শেখো"
+                // Full Width High-Contrast Action Button
                 Surface(
                     shape = RoundedCornerShape(26.dp),
                     color = Color.White,
@@ -1105,7 +1141,7 @@ private fun EnrolledCourseBannerCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "শেখো",
+                            text = tr("Start Learning", "পড়াশোনা শুরু করুন"),
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
@@ -1139,7 +1175,7 @@ private fun OtherCourseBannerCard(
     onRefreshStatus: () -> Unit
 ) {
     val context = LocalContext.current
-    val title = program.title_bn ?: "কোর্স"
+    val title = program.title_bn ?: tr("Course", "কোর্স")
     val cardGradient = remember(program.id, title) { getCourseGradient(title) }
     val state = commerceState.effectiveState
     val isLockedPriorToApproval = state == CourseAccessState.LOCKED_BLURRED || state == CourseAccessState.ACCESS_REQUESTED
@@ -1185,13 +1221,13 @@ private fun OtherCourseBannerCard(
                 ) {
                     val (badgeText, badgeBg, badgeBorder, badgeIcon) = when (state) {
                         CourseAccessState.LOCKED_BLURRED -> Quadruple(
-                            "কোর্সে এক্সেস নিন",
+                            tr("Get Access", "এক্সেস নিন"),
                             Color.Black.copy(alpha = 0.45f),
                             Color.White.copy(alpha = 0.35f),
                             Icons.Default.Lock
                         )
                         CourseAccessState.ACCESS_REQUESTED -> Quadruple(
-                            "এক্সেস রিকোয়েস্ট পেন্ডিং",
+                            tr("Request Pending", "রিকোয়েস্ট পেন্ডিং"),
                             Color(0xFFF59E0B).copy(alpha = 0.28f),
                             Color(0xFFFBBF24).copy(alpha = 0.65f),
                             Icons.Default.Schedule
@@ -1199,21 +1235,21 @@ private fun OtherCourseBannerCard(
                         CourseAccessState.APPROVED_TO_BUY -> {
                             if (commerceState.isTrialExpiredNow) {
                                 Quadruple(
-                                    "ফ্রি ট্রায়াল শেষ • এখন কিনুন",
+                                    tr("Trial Ended • Buy Now", "ট্রায়াল শেষ • কিনুন"),
                                     Color(0xFFF59E0B).copy(alpha = 0.32f),
                                     Color(0xFFFBBF24).copy(alpha = 0.75f),
                                     Icons.Default.TimerOff
                                 )
                             } else if (commerceState.canStartFreeTrial) {
                                 Quadruple(
-                                    "🎁 ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়ালসহ অনুমোদিত",
+                                    tr("${commerceState.getTrialDurationLabelBn()} Free Trial Ready", "${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়ালসহ অনুমোদিত"),
                                     Color(0xFF7C3AED).copy(alpha = 0.35f),
                                     Color(0xFFC4B5FD).copy(alpha = 0.75f),
                                     Icons.Default.CardGiftcard
                                 )
                             } else {
                                 Quadruple(
-                                    "কেনার এক্সেস অনুমোদিত",
+                                    tr("Approved to Enroll", "কেনার এক্সেস অনুমোদিত"),
                                     Color(0xFF10B981).copy(alpha = 0.25f),
                                     Color(0xFF34D399).copy(alpha = 0.65f),
                                     Icons.Default.LockOpen
@@ -1221,25 +1257,25 @@ private fun OtherCourseBannerCard(
                             }
                         }
                         CourseAccessState.PAYMENT_PENDING -> Quadruple(
-                            "পেমেন্ট যাচাই চলছে",
+                            tr("Verifying Payment", "পেমেন্ট যাচাই চলছে"),
                             Color(0xFF3B82F6).copy(alpha = 0.28f),
                             Color(0xFF60A5FA).copy(alpha = 0.65f),
                             Icons.Default.HourglassTop
                         )
                         CourseAccessState.PAYMENT_REJECTED -> Quadruple(
-                            "পেমেন্ট রিজেক্ট হয়েছে",
+                            tr("Payment Rejected", "পেমেন্ট রিজেক্ট হয়েছে"),
                             Color(0xFFEF4444).copy(alpha = 0.32f),
                             Color(0xFFF87171).copy(alpha = 0.75f),
                             Icons.Default.ErrorOutline
                         )
                         CourseAccessState.INSTALLMENT_OVERDUE -> Quadruple(
-                            "কিস্তির মেয়াদ শেষ • লকড",
+                            tr("Installment Overdue", "কিস্তির মেয়াদ শেষ"),
                             Color(0xFFEF4444).copy(alpha = 0.35f),
                             Color(0xFFF87171).copy(alpha = 0.8f),
                             Icons.Default.WarningAmber
                         )
                         CourseAccessState.ACTIVE -> Quadruple(
-                            "সক্রিয়",
+                            tr("Active", "সক্রিয়"),
                             Color(0xFF10B981).copy(alpha = 0.25f),
                             Color(0xFF34D399).copy(alpha = 0.6f),
                             Icons.Default.CheckCircle
@@ -1284,7 +1320,10 @@ private fun OtherCourseBannerCard(
                             shadowElevation = 2.dp
                         ) {
                             Text(
-                                text = "মূল্য: ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}",
+                                text = tr(
+                                    "Price: ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}",
+                                    "মূল্য: ${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)}"
+                                ),
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF0F172A),
@@ -1360,7 +1399,10 @@ private fun OtherCourseBannerCard(
                 when (state) {
                     CourseAccessState.LOCKED_BLURRED -> {
                         Text(
-                            text = "এই কোর্সটি কিনতে, ফ্রি ট্রায়াল নিতে বা কিস্তির দাম জানতে নিচের 'কোর্সে এক্সেস পান' বাটনে ক্লিক করুন।",
+                            text = tr(
+                                "Tap 'Get Access' below to view pricing, free trial, or installment plans.",
+                                "এই কোর্সটি কিনতে, ফ্রি ট্রায়াল নিতে বা কিস্তির দাম জানতে নিচের 'এক্সেস নিন' বাটনে ক্লিক করুন।"
+                            ),
                             fontSize = 12.5.sp,
                             color = Color.White.copy(alpha = 0.88f),
                             lineHeight = 18.sp
@@ -1375,7 +1417,10 @@ private fun OtherCourseBannerCard(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "⏳ আপনার রিকোয়েস্ট অ্যাডমিন অ্যাপে পাঠানো হয়েছে! অ্যাডমিন এই কোর্সের দাম, কিস্তি ও ফ্রি ট্রায়াল সেট করে এপ্রুভ করলেই আপনি কোর্সটি শুরু করতে পারবেন।",
+                                text = tr(
+                                    "Your request has been sent to Admin. Once approved with pricing and trial/installment options, you can start learning.",
+                                    "আপনার রিকোয়েস্ট অ্যাডমিনের কাছে পাঠানো হয়েছে। অ্যাডমিন দাম, কিস্তি ও ফ্রি ট্রায়াল অনুমোদন করলেই কোর্স শুরু করতে পারবেন।"
+                                ),
                                 fontSize = 12.5.sp,
                                 color = Color(0xFFFEF3C7),
                                 lineHeight = 18.sp,
@@ -1400,7 +1445,10 @@ private fun OtherCourseBannerCard(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = "⏰ আপনার ফ্রি ট্রায়ালের সময় শেষ হয়েছে! এখন এককালীন বা কিস্তিতে ভর্তি হয়ে পুরো কোর্সটি আনলক করুন।",
+                                            text = tr(
+                                                "Your free trial has ended. Enroll via full payment or installments to unlock.",
+                                                "আপনার ফ্রি ট্রায়ালের সময় শেষ হয়েছে। এককালীন বা কিস্তিতে ভর্তি হয়ে পুরো কোর্স আনলক করুন।"
+                                            ),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFFEF3C7),
@@ -1417,7 +1465,10 @@ private fun OtherCourseBannerCard(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = "🎁 কেনার আগে এই কোর্সটি ${commerceState.getTrialDurationLabelBn()} সম্পূর্ণ ফ্রিতে ট্রায়াল হিসেবে পড়ে দেখতে পারবেন!",
+                                            text = tr(
+                                                "Try this course completely free for ${commerceState.getTrialDurationLabelBn()} before buying.",
+                                                "কেনার আগে এই কোর্সটি ${commerceState.getTrialDurationLabelBn()} সম্পূর্ণ ফ্রিতে পড়ে দেখতে পারবেন।"
+                                            ),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFEDE9FE),
@@ -1434,7 +1485,7 @@ private fun OtherCourseBannerCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "নির্ধারিত কোর্স ফি:",
+                                        text = tr("Course Fee:", "নির্ধারিত কোর্স ফি:"),
                                         fontSize = 13.sp,
                                         color = Color.White.copy(alpha = 0.9f),
                                         fontWeight = FontWeight.Medium
@@ -1452,7 +1503,7 @@ private fun OtherCourseBannerCard(
                                     HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "💳 কিস্তিতে ভর্তির সুবিধা রয়েছে:",
+                                        text = tr("Installment options available:", "কিস্তিতে ভর্তির সুবিধা:"),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFEF08A)
@@ -1471,7 +1522,7 @@ private fun OtherCourseBannerCard(
                                 if (commerceState.adminNote.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "অ্যাডমিন নোট: ${commerceState.adminNote}",
+                                        text = tr("Admin note: ${commerceState.adminNote}", "অ্যাডমিন নোট: ${commerceState.adminNote}"),
                                         fontSize = 11.5.sp,
                                         color = Color(0xFFBAE6FD)
                                     )
@@ -1489,14 +1540,17 @@ private fun OtherCourseBannerCard(
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text(
-                                    text = "⏳ আপনার পেমেন্ট যাচাই চলছে",
+                                    text = tr("Payment verification in progress", "আপনার পেমেন্ট যাচাই চলছে"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF93C5FD)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "মাধ্যম: ${commerceState.lastPaymentMethod} • পাঠানো টাকা: ${CourseCommerceItemState.formatTakaBn(commerceState.lastPaymentAmount)} • TrxID: ${commerceState.lastTransactionId}\nঅ্যাডমিন পেমেন্ট এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।",
+                                    text = tr(
+                                        "Method: ${commerceState.lastPaymentMethod} • Paid: ${CourseCommerceItemState.formatTakaBn(commerceState.lastPaymentAmount)} • TrxID: ${commerceState.lastTransactionId}\nCourse will unlock as soon as Admin approves.",
+                                        "মাধ্যম: ${commerceState.lastPaymentMethod} • পাঠানো টাকা: ${CourseCommerceItemState.formatTakaBn(commerceState.lastPaymentAmount)} • TrxID: ${commerceState.lastTransactionId}\nঅ্যাডমিন অনুমোদন করলেই কোর্স আনলক হয়ে যাবে।"
+                                    ),
                                     fontSize = 12.sp,
                                     color = Color.White.copy(alpha = 0.9f),
                                     lineHeight = 17.sp
@@ -1514,14 +1568,17 @@ private fun OtherCourseBannerCard(
                         ) {
                             Column(modifier = Modifier.padding(13.dp)) {
                                 Text(
-                                    text = "❌ আপনার পেমেন্ট রিজেক্ট করা হয়েছে!",
+                                    text = tr("Payment Rejected", "আপনার পেমেন্ট রিজেক্ট করা হয়েছে"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFCA5A5)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "কারণ: ${commerceState.rejectionReason.ifBlank { "প্রদত্ত ট্রানজেকশন আইডি বা টাকার পরিমাণ সঠিক নয়।" }}",
+                                    text = tr(
+                                        "Reason: ${commerceState.rejectionReason.ifBlank { "Transaction ID or amount did not match." }}",
+                                        "কারণ: ${commerceState.rejectionReason.ifBlank { "প্রদত্ত ট্রানজেকশন আইডি বা টাকার পরিমাণ সঠিক নয়।" }}"
+                                    ),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White
@@ -1539,14 +1596,17 @@ private fun OtherCourseBannerCard(
                         ) {
                             Column(modifier = Modifier.padding(13.dp)) {
                                 Text(
-                                    text = "⚠️ কিস্তি পরিশোধ না করায় এক্সেস অফ হয়ে গেছে!",
+                                    text = tr("Access paused due to overdue installment", "কিস্তি বকেয়া থাকায় এক্সেস বন্ধ রয়েছে"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFDE68A)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "পরিশোধিত: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} • বাকি বকেয়া: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}\nনির্ধারিত সময়ের মধ্যে কিস্তি পরিশোধ না করায় কোর্সটি লক হয়েছে। এখন পরবর্তী কিস্তি পরিশোধ করলেই আবার চালু হবে।",
+                                    text = tr(
+                                        "Paid: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} • Due: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}\nPay your next installment to restore access immediately.",
+                                        "পরিশোধিত: ${CourseCommerceItemState.formatTakaBn(commerceState.paidAmount)} • বকেয়া: ${CourseCommerceItemState.formatTakaBn(commerceState.dueAmount)}\nপরবর্তী কিস্তি পরিশোধ করলেই কোর্সটি আবার চালু হবে।"
+                                    ),
                                     fontSize = 12.sp,
                                     color = Color.White,
                                     lineHeight = 17.sp
@@ -1554,7 +1614,10 @@ private fun OtherCourseBannerCard(
                                 if (commerceState.rejectionReason.isNotBlank()) {
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "❌ সর্বশেষ পেমেন্ট বাতিলের কারণ: ${commerceState.rejectionReason}",
+                                        text = tr(
+                                            "Last rejection: ${commerceState.rejectionReason}",
+                                            "সর্বশেষ বাতিলের কারণ: ${commerceState.rejectionReason}"
+                                        ),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFFCA5A5)
@@ -1597,7 +1660,7 @@ private fun OtherCourseBannerCard(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "রিকোয়েস্ট পাঠানো হচ্ছে...",
+                                        text = tr("Sending request...", "রিকোয়েস্ট পাঠানো হচ্ছে..."),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF0F172A)
@@ -1611,7 +1674,7 @@ private fun OtherCourseBannerCard(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "কোর্সে এক্সেস পান",
+                                        text = tr("Get Access", "কোর্সে এক্সেস নিন"),
                                         fontSize = 14.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFF0F172A)
@@ -1646,7 +1709,11 @@ private fun OtherCourseBannerCard(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (state == CourseAccessState.ACCESS_REQUESTED) "অ্যাডমিন অনুমোদন চেক করুন" else "পেমেন্ট স্ট্যাটাস রিফ্রেশ করুন",
+                                    text = if (state == CourseAccessState.ACCESS_REQUESTED) {
+                                        tr("Check Approval", "অনুমোদন চেক করুন")
+                                    } else {
+                                        tr("Refresh Payment Status", "পেমেন্ট স্ট্যাটাস দেখুন")
+                                    },
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -1684,7 +1751,7 @@ private fun OtherCourseBannerCard(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "ফ্রি ট্রায়াল চালু হচ্ছে...",
+                                                text = tr("Starting free trial...", "ফ্রি ট্রায়াল চালু হচ্ছে..."),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color(0xFF0F172A)
@@ -1698,7 +1765,10 @@ private fun OtherCourseBannerCard(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "🎁 ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল শুরু করুন",
+                                                text = tr(
+                                                    "Start ${commerceState.getTrialDurationLabelBn()} Free Trial",
+                                                    "${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল শুরু করুন"
+                                                ),
                                                 fontSize = 14.5.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color(0xFF0F172A)
@@ -1734,9 +1804,15 @@ private fun OtherCourseBannerCard(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = if (commerceState.allowInstallments) {
-                                            "কোর্সটি কিনুন / কিস্তিতে ভর্তি হোন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                            tr(
+                                                "Enroll / Installments (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})",
+                                                "কিনুন / কিস্তিতে ভর্তি (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                            )
                                         } else {
-                                            "কোর্সটি কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                            tr(
+                                                "Enroll Now (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})",
+                                                "কোর্সটি কিনুন (${CourseCommerceItemState.formatTakaBn(commerceState.totalPrice)})"
+                                            )
                                         },
                                         fontSize = 14.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -1772,7 +1848,7 @@ private fun OtherCourseBannerCard(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "সঠিক তথ্য দিয়ে আবার পেমেন্ট জমা দিন",
+                                    text = tr("Resubmit Payment", "আবার পেমেন্ট জমা দিন"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFFDC2626)
@@ -1807,7 +1883,10 @@ private fun OtherCourseBannerCard(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "বকেয়া কিস্তি (${CourseCommerceItemState.formatTakaBn(nextDueAmt)}) দিয়ে আনলক করুন",
+                                    text = tr(
+                                        "Pay Due (${CourseCommerceItemState.formatTakaBn(nextDueAmt)}) to Unlock",
+                                        "বকেয়া (${CourseCommerceItemState.formatTakaBn(nextDueAmt)}) দিয়ে আনলক করুন"
+                                    ),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF0F172A)
@@ -1881,9 +1960,9 @@ private fun ShikhoServerEnrollmentSection(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (isFreeCourse) {
-                            "ফ্রি ক্লাস অ্যাক্সেস সক্রিয়"
+                            tr("Free Access Active", "ফ্রি ক্লাস অ্যাক্সেস সক্রিয়")
                         } else {
-                            "${toBengaliDigits(trialDays)} দিনের ফ্রি অ্যাক্সেস সক্রিয়"
+                            tr("$trialDays-Day Free Access Active", "${toBengaliDigits(trialDays)} দিনের ফ্রি অ্যাক্সেস সক্রিয়")
                         },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
@@ -1916,13 +1995,13 @@ private fun ShikhoServerEnrollmentSection(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Sync,
-                                contentDescription = "পুনরায় সিঙ্ক",
+                                contentDescription = tr("Resync", "পুনরায় সিঙ্ক"),
                                 tint = Color.White,
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "সিঙ্ক",
+                                text = tr("Sync", "সিঙ্ক"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -1964,7 +2043,7 @@ private fun ShikhoServerEnrollmentSection(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "ফ্রি অ্যাক্সেস চালু হচ্ছে...",
+                        text = tr("Activating free access...", "ফ্রি অ্যাক্সেস চালু হচ্ছে..."),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -1979,9 +2058,9 @@ private fun ShikhoServerEnrollmentSection(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (isFreeCourse) {
-                            "ফ্রি ক্লাস অ্যাক্সেস চালু করুন"
+                            tr("Activate Free Access", "ফ্রি ক্লাস অ্যাক্সেস চালু করুন")
                         } else {
-                            "${toBengaliDigits(trialDays)} দিনের ফ্রি অ্যাক্সেস চালু করুন"
+                            tr("Activate $trialDays-Day Free Access", "${toBengaliDigits(trialDays)} দিনের ফ্রি অ্যাক্সেস চালু করুন")
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -2028,7 +2107,7 @@ private fun CourseSubjectsDetailView(
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
-                    text = "কোর্সের বিষয়সমূহ",
+                    text = tr("Subjects", "বিষয়সমূহ"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -2037,7 +2116,7 @@ private fun CourseSubjectsDetailView(
                 )
                 if (uiState.subjects.isNotEmpty()) {
                     Text(
-                        text = "মোট ${toBengaliDigits(uiState.subjects.size)} টি বিষয় অন্তর্ভুক্ত",
+                        text = tr("${uiState.subjects.size} subjects", "মোট ${toBengaliDigits(uiState.subjects.size)}টি বিষয়"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2055,7 +2134,7 @@ private fun CourseSubjectsDetailView(
                 modifier = Modifier.heightIn(min = 36.dp)
             ) {
                 Text(
-                    text = "অন্য কোর্স",
+                    text = tr("Switch", "অন্য কোর্স"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
@@ -2087,7 +2166,7 @@ private fun CourseSubjectsDetailView(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "বিষয়সমূহ লোড হচ্ছে...",
+                            text = tr("Loading subjects...", "বিষয়সমূহ লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -2111,7 +2190,7 @@ private fun CourseSubjectsDetailView(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = uiState.subjectsErrorMessage ?: "বিষয় পাওয়া যায়নি",
+                            text = uiState.subjectsErrorMessage ?: tr("No subjects found", "বিষয় পাওয়া যায়নি"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -2124,7 +2203,7 @@ private fun CourseSubjectsDetailView(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Retry", "আবার চেষ্টা করুন"))
                         }
                     }
                 }
@@ -2145,7 +2224,7 @@ private fun CourseSubjectsDetailView(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "এই কোর্সে কোনো বিষয় পাওয়া যায়নি",
+                            text = tr("No subjects in this course", "এই কোর্সে কোনো বিষয় নেই"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -2266,7 +2345,7 @@ fun SubjectGridCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = subject.display_bn ?: subject.code ?: "বিষয়",
+                    text = subject.display_bn ?: subject.code ?: tr("Subject", "বিষয়"),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -2290,7 +2369,10 @@ fun SubjectGridCard(
                             color = parsedColor.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "${toBengaliDigits(item.completedChapters)}/${toBengaliDigits(item.totalChapters)} মিশন",
+                                text = tr(
+                                    "${item.completedChapters}/${item.totalChapters} Chapters",
+                                    "${toBengaliDigits(item.completedChapters)}/${toBengaliDigits(item.totalChapters)} অধ্যায়"
+                                ),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = parsedColor,
@@ -2343,7 +2425,7 @@ fun SubjectGridCard(
                                 modifier = Modifier.size(11.dp)
                             )
                             Text(
-                                text = "অধ্যায় মিশন দেখুন",
+                                text = tr("View Chapters", "অধ্যায় দেখুন"),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = parsedColor

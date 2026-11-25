@@ -34,6 +34,8 @@ import com.example.smartnotes.SmartNotesUiEvent
 import com.example.smartnotes.SmartNotesViewModel
 import com.example.ui.components.AttachmentListDialog
 import com.example.ui.components.SlideViewerDialog
+import com.example.utils.AppLang
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +103,7 @@ fun ChapterResourcesScreen(
     if (tagAttachments != null && uiState.activeAttachment == null) {
         AttachmentListDialog(
             attachments = tagAttachments,
-            title = uiState.selectedTagTitle ?: "ডকুমেন্ট লিস্ট",
+            title = uiState.selectedTagTitle ?: tr("Documents", "ডকুমেন্ট লিস্ট"),
             accentColor = parsedSubjectColor,
             onAttachmentClick = { attachment ->
                 viewModel.selectAttachment(attachment)
@@ -152,7 +154,7 @@ fun ChapterResourcesScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = chapterName.ifBlank { "অধ্যায় রিসোর্সেস" },
+                            text = chapterName.ifBlank { tr("Resources", "রিসোর্স") },
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -160,7 +162,7 @@ fun ChapterResourcesScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "অধ্যায়ভিত্তিক রিসোর্সেস ও ই-বুক",
+                            text = tr("Notes & E-Books", "রিসোর্স ও ই-বুক"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -193,7 +195,7 @@ fun ChapterResourcesScreen(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "অধ্যায়ের রিসোর্স লোড হচ্ছে...",
+                            text = tr("Loading resources...", "রিসোর্স লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -202,7 +204,7 @@ fun ChapterResourcesScreen(
 
                 uiState.chapterResources.isEmpty() -> {
                     EmptyResourceView(
-                        message = "এই অধ্যায়ের জন্য কোনো রিসোর্স পাওয়া যায়নি",
+                        message = tr("No resources found for this chapter", "এই অধ্যায়ের জন্য কোনো রিসোর্স পাওয়া যায়নি"),
                         onRetry = {
                             viewModel.loadChapterResources(
                                 chapterId = chapterId,
@@ -236,7 +238,7 @@ fun ChapterResourcesScreen(
                                         chapterId = chapterId,
                                         tagId = tagId,
                                         isSubjectSpecific = false,
-                                        resourceTitle = "${resource.title ?: "নোট"} - $chapterName"
+                                        resourceTitle = "${resource.title ?: AppLang.tr("Note", "নোট")} - $chapterName"
                                     )
                                 }
                             )

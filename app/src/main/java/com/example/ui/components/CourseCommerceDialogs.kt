@@ -50,6 +50,9 @@ import com.example.course.CourseCommerceItemState
 import com.example.course.InstallmentPlanOption
 import com.example.course.PaymentMethodOption
 import com.example.security.AntiTamperSecurity
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 
 private fun resolveMethodBrandColor(method: PaymentMethodOption): Color {
     if (method.colorHex.isNotBlank()) {
@@ -92,8 +95,9 @@ fun CoursePurchasePaymentBottomSheet(
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    val isBn = isBangla()
     val isSubsequentInstallment = commerceState.completedInstallments > 0 && commerceState.dueAmount > 0.0
-    val availablePlans = remember(commerceState) {
+    val availablePlans = remember(commerceState, isBn) {
         if (commerceState.installmentPlans.isNotEmpty()) {
             commerceState.installmentPlans
         } else {
@@ -101,7 +105,10 @@ fun CoursePurchasePaymentBottomSheet(
             listOf(
                 InstallmentPlanOption(
                     planId = "full",
-                    titleBn = "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(price)})",
+                    titleBn = AppLang.tr(
+                        "One-Time Full Payment (${CourseCommerceItemState.formatTakaBn(price)})",
+                        "এককালীন সম্পূর্ণ পেমেন্ট (${CourseCommerceItemState.formatTakaBn(price)})"
+                    ),
                     installmentsCount = 1,
                     intervalDays = 0,
                     firstAmount = price,
@@ -192,7 +199,7 @@ fun CoursePurchasePaymentBottomSheet(
                     }
                     Column {
                         Text(
-                            text = if (isSubsequentInstallment) "পরবর্তী কিস্তি পরিশোধ করুন" else "কোর্স কিনুন / কিস্তিতে ভর্তি হোন",
+                            text = if (isSubsequentInstallment) tr("Pay Next Installment", "পরবর্তী কিস্তি দিন") else tr("Course Payment", "কোর্স পেমেন্ট"),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
@@ -210,7 +217,7 @@ fun CoursePurchasePaymentBottomSheet(
                 IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "বন্ধ করুন",
+                        contentDescription = tr("Close", "বন্ধ করুন"),
                         tint = Color(0xFF64748B)
                     )
                 }
@@ -239,14 +246,14 @@ fun CoursePurchasePaymentBottomSheet(
                         )
                         Column {
                             Text(
-                                text = "পূর্ববর্তী পেমেন্ট রিজেক্ট হয়েছে!",
+                                text = tr("Previous Payment Rejected", "পূর্ববর্তী পেমেন্ট রিজেক্ট হয়েছে"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFB91C1C)
                             )
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = "কারণ: ${commerceState.rejectionReason}",
+                                text = tr("Reason: ${commerceState.rejectionReason}", "কারণ: ${commerceState.rejectionReason}"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF7F1D1D)
@@ -278,14 +285,17 @@ fun CoursePurchasePaymentBottomSheet(
                         )
                         Column {
                             Text(
-                                text = "কিস্তির সময়সীমা উত্তীর্ণ হয়েছে!",
+                                text = tr("Installment Overdue", "কিস্তির সময়সীমা উত্তীর্ণ হয়েছে"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFB45309)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "নির্ধারিত সময়ের মধ্যে কিস্তি পরিশোধ না করায় কোর্স এক্সেস সাময়িক বন্ধ রয়েছে। এখন কিস্তি পরিশোধ করলে আবার সাথে সাথে আনলক হয়ে যাবে।",
+                                text = tr(
+                                    "Access is temporarily paused due to an overdue installment. Pay now to unlock immediately.",
+                                    "নির্ধারিত সময়ের মধ্যে কিস্তি পরিশোধ না করায় এক্সেস সাময়িক বন্ধ রয়েছে। এখন পরিশোধ করলে সাথে সাথে আনলক হয়ে যাবে।"
+                                ),
                                 fontSize = 12.5.sp,
                                 color = Color(0xFF92400E)
                             )
@@ -324,13 +334,19 @@ fun CoursePurchasePaymentBottomSheet(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "🎁 কেনার আগে ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল নিন!",
+                                    text = tr(
+                                        "Try Free for ${commerceState.getTrialDurationLabelBn()}",
+                                        "কেনার আগে ${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল নিন"
+                                    ),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF065F46)
                                 )
                                 Text(
-                                    text = "অ্যাডমিন আপনাকে এই কোর্সটি ফ্রিতে যাচাই করে দেখার সুযোগ দিয়েছেন। ট্রায়াল শেষে পছন্দ হলে কিনতে পারবেন।",
+                                    text = tr(
+                                        "Admin enabled a free trial for this course. You can purchase anytime after trying.",
+                                        "অ্যাডমিন আপনাকে ফ্রিতে যাচাই করার সুযোগ দিয়েছেন। ট্রায়াল শেষে পছন্দ হলে কিনতে পারবেন।"
+                                    ),
                                     fontSize = 12.sp,
                                     color = Color(0xFF047857),
                                     lineHeight = 16.sp
@@ -355,12 +371,15 @@ fun CoursePurchasePaymentBottomSheet(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("ফ্রি ট্রায়াল চালু হচ্ছে...", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(tr("Starting trial...", "ফ্রি ট্রায়াল চালু হচ্ছে..."), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             } else {
                                 Icon(Icons.Default.CardGiftcard, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল শুরু করুন",
+                                    text = tr(
+                                        "Start ${commerceState.getTrialDurationLabelBn()} Free Trial",
+                                        "${commerceState.getTrialDurationLabelBn()} ফ্রি ট্রায়াল শুরু করুন"
+                                    ),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
@@ -389,14 +408,17 @@ fun CoursePurchasePaymentBottomSheet(
                         )
                         Column {
                             Text(
-                                text = "আপনার ফ্রি ট্রায়ালের মেয়াদ শেষ হয়েছে!",
+                                text = tr("Free Trial Ended", "ফ্রি ট্রায়ালের মেয়াদ শেষ হয়েছে"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFB45309)
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "কোর্সটির সকল ক্লাস ও রিসোর্স আনলক রাখতে নিচে এককালীন অথবা কিস্তিতে ভর্তি সম্পন্ন করুন।",
+                                text = tr(
+                                    "Complete full payment or start an installment plan below to keep all classes unlocked.",
+                                    "সকল ক্লাস ও রিসোর্স আনলক রাখতে নিচে এককালীন অথবা কিস্তিতে ভর্তি সম্পন্ন করুন।"
+                                ),
                                 fontSize = 12.5.sp,
                                 color = Color(0xFF92400E)
                             )
@@ -420,7 +442,7 @@ fun CoursePurchasePaymentBottomSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "কোর্সের নির্ধারিত মূল্য",
+                            text = tr("Course Fee", "কোর্স ফি"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF475569)
@@ -442,7 +464,7 @@ fun CoursePurchasePaymentBottomSheet(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text("পরিশোধিত", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text(tr("Paid", "পরিশোধিত"), fontSize = 12.sp, color = Color(0xFF64748B))
                                 Text(
                                     text = CourseCommerceItemState.formatTakaBn(commerceState.paidAmount),
                                     fontSize = 15.sp,
@@ -451,7 +473,7 @@ fun CoursePurchasePaymentBottomSheet(
                                 )
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("বাকি বকেয়া", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text(tr("Due", "বকেয়া"), fontSize = 12.sp, color = Color(0xFF64748B))
                                 Text(
                                     text = CourseCommerceItemState.formatTakaBn(commerceState.dueAmount),
                                     fontSize = 15.sp,
@@ -460,7 +482,14 @@ fun CoursePurchasePaymentBottomSheet(
                                 )
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text("এবারের কিস্তি (#${CourseCommerceItemState.toBanglaDigits((commerceState.completedInstallments + 1).toString())})", fontSize = 12.sp, color = Color(0xFF64748B))
+                                Text(
+                                    tr(
+                                        "Installment #${commerceState.completedInstallments + 1}",
+                                        "কিস্তি (#${CourseCommerceItemState.toBanglaDigits((commerceState.completedInstallments + 1).toString())})"
+                                    ),
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF64748B)
+                                )
                                 Text(
                                     text = CourseCommerceItemState.formatTakaBn(initialSuggestedAmount),
                                     fontSize = 15.sp,
@@ -478,7 +507,7 @@ fun CoursePurchasePaymentBottomSheet(
             // Step 1: Choose Full Payment vs Installment Plan (only on initial purchase)
             if (!isSubsequentInstallment && availablePlans.size > 1) {
                 Text(
-                    text = "১. পেমেন্ট বা কিস্তি প্ল্যান নির্বাচন করুন",
+                    text = tr("1. Select Payment Plan", "১. পেমেন্ট প্ল্যান নির্বাচন করুন"),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF1E293B)
@@ -532,13 +561,16 @@ fun CoursePurchasePaymentBottomSheet(
                                     )
                                     if (plan.installmentsCount > 1) {
                                         Text(
-                                            text = "মোট ${CourseCommerceItemState.toBanglaDigits(plan.installmentsCount.toString())} কিস্তি • প্রতি ${CourseCommerceItemState.toBanglaDigits(plan.intervalDays.toString())} দিন পরপর • ১ম কিস্তি ${CourseCommerceItemState.formatTakaBn(plan.firstAmount)}",
+                                            text = tr(
+                                                "${plan.installmentsCount} installments • Every ${plan.intervalDays}d • 1st: ${CourseCommerceItemState.formatTakaBn(plan.firstAmount)}",
+                                                "মোট ${CourseCommerceItemState.toBanglaDigits(plan.installmentsCount.toString())} কিস্তি • প্রতি ${CourseCommerceItemState.toBanglaDigits(plan.intervalDays.toString())} দিন • ১ম ${CourseCommerceItemState.formatTakaBn(plan.firstAmount)}"
+                                            ),
                                             fontSize = 12.sp,
                                             color = Color(0xFF64748B)
                                         )
                                     } else {
                                         Text(
-                                            text = "একবারে সম্পূর্ণ কোর্স ফি পরিশোধ (কোনো বকেয়া থাকবে না)",
+                                            text = tr("One-time full payment (no dues)", "একবারে সম্পূর্ণ পরিশোধ (বকেয়া নেই)"),
                                             fontSize = 12.sp,
                                             color = Color(0xFF16A34A)
                                         )
@@ -560,7 +592,7 @@ fun CoursePurchasePaymentBottomSheet(
 
             // Step 2: Payment Method & Admin Send Money Number (100% Dynamic from Admin App, Zero Dummy Data)
             Text(
-                text = "২. পেমেন্ট মাধ্যম নির্বাচন ও টাকা পাঠান",
+                text = tr("2. Payment Method & Send Money", "২. পেমেন্ট মাধ্যম ও টাকা পাঠান"),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1E293B)
@@ -586,7 +618,10 @@ fun CoursePurchasePaymentBottomSheet(
                             modifier = Modifier.size(22.dp)
                         )
                         Text(
-                            text = "অ্যাডমিন এখনো কোনো পেমেন্ট নম্বর চালু করেননি। অনুগ্রহ করে অ্যাডমিনের সাথে যোগাযোগ করুন।",
+                            text = tr(
+                                "Admin hasn't enabled any payment numbers yet. Please contact support.",
+                                "অ্যাডমিন এখনো কোনো পেমেন্ট নম্বর চালু করেননি। অনুগ্রহ করে যোগাযোগ করুন।"
+                            ),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF92400E)
@@ -664,7 +699,10 @@ fun CoursePurchasePaymentBottomSheet(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "${activeMethod.nameBn} নম্বর (${activeMethod.accountType})",
+                                    text = tr(
+                                        "${activeMethod.nameBn} Number (${activeMethod.accountType})",
+                                        "${activeMethod.nameBn} নম্বর (${activeMethod.accountType})"
+                                    ),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF166534)
@@ -681,7 +719,11 @@ fun CoursePurchasePaymentBottomSheet(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                     clipboard?.setPrimaryClip(ClipData.newPlainText("Payment Number", activeMethod.accountNumber))
-                                    Toast.makeText(context, "নম্বর কপি হয়েছে: ${activeMethod.accountNumber}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        AppLang.tr("Copied: ${activeMethod.accountNumber}", "নম্বর কপি হয়েছে: ${activeMethod.accountNumber}"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 },
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = Color(0xFFDCFCE7),
@@ -692,11 +734,11 @@ fun CoursePurchasePaymentBottomSheet(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "কপি",
+                                    contentDescription = tr("Copy", "কপি"),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("কপি করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(tr("Copy", "কপি"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         val effectiveInstruction = activeMethod.instructionBn.ifBlank { paymentSettings.instructionBn }
@@ -716,7 +758,7 @@ fun CoursePurchasePaymentBottomSheet(
 
             // Step 3: Sender Mobile, Amount Sent, Transaction ID
             Text(
-                text = "৩. আপনার পেমেন্টের তথ্য দিন",
+                text = tr("3. Enter Payment Details", "৩. পেমেন্টের তথ্য দিন"),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1E293B)
@@ -729,7 +771,7 @@ fun CoursePurchasePaymentBottomSheet(
                     senderMobile = it
                     validationError = null
                 },
-                label = { Text("যে মোবাইল নম্বর থেকে টাকা পাঠিয়েছেন") },
+                label = { Text(tr("Sender Mobile Number", "যে নম্বর থেকে টাকা পাঠিয়েছেন")) },
                 placeholder = { Text("017XXXXXXXX") },
                 leadingIcon = {
                     Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Color(0xFF5648F9))
@@ -750,8 +792,8 @@ fun CoursePurchasePaymentBottomSheet(
                     amountInput = it
                     validationError = null
                 },
-                label = { Text("কত টাকা পাঠিয়েছেন (টাকার পরিমাণ)") },
-                placeholder = { Text("যেমন: 200 বা 500 বা 1000") },
+                label = { Text(tr("Amount Sent (BDT)", "পাঠানো টাকার পরিমাণ")) },
+                placeholder = { Text(tr("e.g. 200, 500, 1000", "যেমন: 200 বা 500 বা 1000")) },
                 leadingIcon = {
                     Text(
                         text = "৳",
@@ -777,8 +819,8 @@ fun CoursePurchasePaymentBottomSheet(
                     transactionId = it
                     validationError = null
                 },
-                label = { Text("ট্রানজেকশন আইডি (Transaction ID / TrxID)") },
-                placeholder = { Text("যেমন: BKS84920X") },
+                label = { Text(tr("Transaction ID (TrxID)", "ট্রানজেকশন আইডি (TrxID)")) },
+                placeholder = { Text(tr("e.g. BKS84920X", "যেমন: BKS84920X")) },
                 leadingIcon = {
                     Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = Color(0xFF5648F9))
                 },
@@ -819,16 +861,28 @@ fun CoursePurchasePaymentBottomSheet(
 
                     when {
                         activeMethod == null -> {
-                            validationError = "অ্যাডমিন এখনো কোনো পেমেন্ট মাধ্যম চালু করেননি।"
+                            validationError = AppLang.tr(
+                                "Admin hasn't enabled any payment method yet.",
+                                "অ্যাডমিন এখনো কোনো পেমেন্ট মাধ্যম চালু করেননি।"
+                            )
                         }
                         cleanPhone.length < 10 -> {
-                            validationError = "অনুগ্রহ করে সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।"
+                            validationError = AppLang.tr(
+                                "Please enter a valid 11-digit mobile number.",
+                                "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন।"
+                            )
                         }
                         parsedAmt <= 0.0 -> {
-                            validationError = "অনুগ্রহ করে কত টাকা পাঠিয়েছেন তা লিখুন।"
+                            validationError = AppLang.tr(
+                                "Please enter the amount sent.",
+                                "কত টাকা পাঠিয়েছেন তা লিখুন।"
+                            )
                         }
                         cleanTrx.length < 4 -> {
-                            validationError = "অনুগ্রহ করে সঠিক ট্রানজেকশন আইডি (TrxID) লিখুন।"
+                            validationError = AppLang.tr(
+                                "Please enter a valid Transaction ID (TrxID).",
+                                "সঠিক ট্রানজেকশন আইডি (TrxID) লিখুন।"
+                            )
                         }
                         else -> {
                             onSubmitPayment(
@@ -856,12 +910,12 @@ fun CoursePurchasePaymentBottomSheet(
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text("পেমেন্ট জমা হচ্ছে...", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Submitting payment...", "পেমেন্ট জমা হচ্ছে..."), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 } else {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isSubsequentInstallment) "কিস্তির পেমেন্ট জমা দিন" else "পেমেন্ট তথ্য জমা দিন",
+                        text = if (isSubsequentInstallment) tr("Submit Installment", "কিস্তির পেমেন্ট জমা দিন") else tr("Submit Payment", "পেমেন্ট জমা দিন"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -928,7 +982,7 @@ fun CourseAccessRequestConfirmDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "কোর্সের এক্সেস রিকোয়েস্ট নিশ্চিত করুন",
+                    text = tr("Request Course Access", "কোর্স এক্সেস রিকোয়েস্ট"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -956,7 +1010,10 @@ fun CourseAccessRequestConfirmDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "আপনি কি এই কোর্সটির দাম, কিস্তির সুবিধা ও ফ্রি ট্রায়াল পাওয়ার জন্য অ্যাডমিনের কাছে রিকোয়েস্ট পাঠাতে চান?",
+                    text = tr(
+                        "Send a request to Admin for pricing, installment plans, and free trial access?",
+                        "এই কোর্সের দাম, কিস্তির সুবিধা ও ফ্রি ট্রায়ালের জন্য অ্যাডমিনের কাছে রিকোয়েস্ট পাঠাতে চান?"
+                    ),
                     fontSize = 13.5.sp,
                     color = Color(0xFFCBD5E1),
                     textAlign = TextAlign.Center,
@@ -983,7 +1040,7 @@ fun CourseAccessRequestConfirmDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "রিকোয়েস্ট পাঠানো হচ্ছে...",
+                            text = tr("Sending request...", "রিকোয়েস্ট পাঠানো হচ্ছে..."),
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -997,7 +1054,7 @@ fun CourseAccessRequestConfirmDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "হ্যাঁ, আমি এক্সেস নিতে চাই",
+                            text = tr("Yes, Request Access", "হ্যাঁ, এক্সেস চাই"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White
@@ -1019,7 +1076,7 @@ fun CourseAccessRequestConfirmDialog(
                         .testTag("confirm_course_access_cancel_button")
                 ) {
                     Text(
-                        text = "না, এখন থাক",
+                        text = tr("Cancel", "না, থাক"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )

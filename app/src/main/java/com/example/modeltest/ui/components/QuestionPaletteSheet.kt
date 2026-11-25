@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 /**
  * Question Palette Bottom Sheet ('সবগুলো দেখো')
@@ -53,7 +54,7 @@ fun QuestionPaletteBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "সবগুলো প্রশ্ন (${toBengaliDigits(totalQuestions)})",
+                    text = tr("All Questions (${toBengaliDigits(totalQuestions)})", "সবগুলো প্রশ্ন (${toBengaliDigits(totalQuestions)})"),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -70,9 +71,9 @@ fun QuestionPaletteBottomSheet(
                     .padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                LegendItem(color = Color(0xFF10B981), label = "উত্তর দেওয়া")
-                LegendItem(color = Color(0xFF3B82F6), label = "বর্তমান")
-                LegendItem(color = Color(0xFFE2E8F0), label = "উত্তরহীন", textColor = Color(0xFF64748B))
+                LegendItem(color = Color(0xFF10B981), label = tr("Answered", "উত্তর দেওয়া"))
+                LegendItem(color = Color(0xFF3B82F6), label = tr("Current", "বর্তমান"))
+                LegendItem(color = Color(0xFFE2E8F0), label = tr("Unanswered", "উত্তরহীন"), textColor = Color(0xFF64748B))
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

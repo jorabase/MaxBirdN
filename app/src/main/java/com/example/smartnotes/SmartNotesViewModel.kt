@@ -133,7 +133,7 @@ class SmartNotesViewModel(
                 _uiState.update {
                     it.copy(
                         isSubjectResourcesLoading = false,
-                        errorMessage = "রিসোর্স লোড করতে সমস্যা হয়েছে"
+                        errorMessage = com.example.utils.AppLang.tr("Failed to load resources", "রিসোর্স লোড করতে সমস্যা হয়েছে")
                     )
                 }
             }
@@ -272,7 +272,7 @@ class SmartNotesViewModel(
                             newDirectMap[attId] = att
                             TaggableResourceItem(
                                 id = attId,
-                                title = att.title ?: "অধ্যায় ই-বুক / নোট",
+                                title = att.title ?: com.example.utils.AppLang.tr("Chapter e-Book / Notes", "অধ্যায় ই-বুক / নোট"),
                                 icon_url = "https://cdn.shikho.com/resources/icons/ebook.svg",
                                 is_chapter_resource = true,
                                 is_subject_resource = false
@@ -296,7 +296,7 @@ class SmartNotesViewModel(
                             newDirectMap[attId] = att
                             TaggableResourceItem(
                                 id = attId,
-                                title = att.title ?: "লেকচার শিট ও স্লাইড",
+                                title = att.title ?: com.example.utils.AppLang.tr("Lecture Sheet & Slides", "লেকচার শিট ও স্লাইড"),
                                 icon_url = "https://cdn.shikho.com/resources/icons/ebook.svg",
                                 is_chapter_resource = true,
                                 is_subject_resource = false
@@ -317,7 +317,7 @@ class SmartNotesViewModel(
                 _uiState.update {
                     it.copy(
                         isChapterResourcesLoading = false,
-                        errorMessage = "অধ্যায়ের রিসোর্স লোড করতে ব্যর্থ হয়েছে"
+                        errorMessage = com.example.utils.AppLang.tr("Failed to load chapter resources", "অধ্যায়ের রিসোর্স লোড করতে ব্যর্থ হয়েছে")
                     )
                 }
             }
@@ -331,7 +331,7 @@ class SmartNotesViewModel(
         chapterId: String? = null,
         tagId: String,
         isSubjectSpecific: Boolean,
-        resourceTitle: String = "পিডিএফ নোট",
+        resourceTitle: String = com.example.utils.AppLang.tr("PDF Notes", "পিডিএফ নোট"),
         onUrlReady: ((String) -> Unit)? = null
     ) {
         viewModelScope.launch {
@@ -404,7 +404,7 @@ class SmartNotesViewModel(
                             openingTagId = null
                         )
                     }
-                    _events.emit(SmartNotesUiEvent.ShowToast("এই রিসোর্সের কোন পিডিএফ পাওয়া যায়নি"))
+                    _events.emit(SmartNotesUiEvent.ShowToast(com.example.utils.AppLang.tr("No PDF found for this resource", "এই রিসোর্সের কোন পিডিএফ পাওয়া যায়নি")))
                 }
             } catch (e: Exception) {
                 Log.e("SmartNotesVM", "Error opening resource PDF: ${e.message}", e)
@@ -412,10 +412,13 @@ class SmartNotesViewModel(
                     it.copy(
                         isOpeningPdf = false,
                         openingTagId = null,
-                        errorMessage = "পিডিএফ লোড করা যায়নি: ${e.localizedMessage}"
+                        errorMessage = com.example.utils.AppLang.tr(
+                            "Could not load PDF: ${e.localizedMessage}",
+                            "পিডিএফ লোড করা যায়নি: ${e.localizedMessage}"
+                        )
                     )
                 }
-                _events.emit(SmartNotesUiEvent.ShowToast("পিডিএফ লোড করতে ত্রুটি ঘটেছে"))
+                _events.emit(SmartNotesUiEvent.ShowToast(com.example.utils.AppLang.tr("Error loading PDF", "পিডিএফ লোড করতে ত্রুটি ঘটেছে")))
             }
         }
     }

@@ -62,6 +62,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
+import com.example.utils.tr
 import java.util.regex.Pattern
 
 /**
@@ -335,7 +336,7 @@ fun QuizImageCard(
     ) {
         SubcomposeAsyncImage(
             model = imageRequest,
-            contentDescription = altText ?: "চিত্র",
+            contentDescription = altText ?: tr("Image", "চিত্র"),
             modifier = Modifier
                 .heightIn(min = 40.dp, max = maxHeight)
                 .wrapContentHeight()
@@ -363,7 +364,7 @@ fun QuizImageCard(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "ছবি লোড হচ্ছে...",
+                                text = tr("Loading image...", "ছবি লোড হচ্ছে..."),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -389,7 +390,7 @@ fun QuizImageCard(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "ছবি লোড করা যায়নি (ক্লিক করুন)",
+                                text = tr("Image failed to load (Tap)", "ছবি লোড করা যায়নি (ক্লিক করুন)"),
                                 fontSize = 12.sp,
                                 color = Color(0xFFDC2626)
                             )
@@ -412,7 +413,7 @@ fun QuizImageCard(
         ) {
             Icon(
                 imageVector = Icons.Default.ZoomIn,
-                contentDescription = "বড় করে দেখুন",
+                contentDescription = tr("Zoom in", "বড় করে দেখুন"),
                 tint = Color.White,
                 modifier = Modifier.size(14.dp)
             )
@@ -478,7 +479,7 @@ fun QuizImageZoomDialog(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "জুম বা প্যান করুন",
+                            text = tr("Pinch to zoom or pan", "জুম বা প্যান করুন"),
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
@@ -498,7 +499,7 @@ fun QuizImageZoomDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
-                                contentDescription = "রিসেট",
+                                contentDescription = tr("Reset", "রিসেট"),
                                 tint = Color.White
                             )
                         }
@@ -511,7 +512,7 @@ fun QuizImageZoomDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "বন্ধ করুন",
+                            contentDescription = tr("Close", "বন্ধ করুন"),
                             tint = Color.White
                         )
                     }
@@ -532,7 +533,7 @@ fun QuizImageZoomDialog(
                         .decoderFactory(SvgDecoder.Factory())
                         .crossfade(true)
                         .build(),
-                    contentDescription = "ফুলস্ক্রিন চিত্র",
+                    contentDescription = tr("Fullscreen image", "ফুলস্ক্রিন চিত্র"),
                     modifier = Modifier
                         .fillMaxWidth()
                         .graphicsLayer(
@@ -558,7 +559,7 @@ fun QuizImageZoomDialog(
                                 modifier = Modifier.size(48.dp)
                             )
                             Text(
-                                text = "চিত্রটি লোড করা সম্ভব হয়নি",
+                                text = tr("Unable to load image", "চিত্রটি লোড করা সম্ভব হয়নি"),
                                 color = Color.White,
                                 fontSize = 14.sp
                             )

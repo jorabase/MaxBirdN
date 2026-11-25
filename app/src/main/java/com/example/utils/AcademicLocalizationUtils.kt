@@ -27,74 +27,67 @@ object AcademicLocalizationUtils {
     // 1. Empty questions state based on ordinal (0: Subject level, 1: Chapter level)
     fun getEmptyQuestionsTitle(ordinal: Int): String {
         return if (ordinal == 0) {
-            "এই বিষয়ের জন্য এখনো পর্যাপ্ত প্রশ্ন নেই"
+            AppLang.tr("Not enough questions for this subject yet", "এই বিষয়ের জন্য এখনো পর্যাপ্ত প্রশ্ন নেই")
         } else {
-            "এই চ্যাপ্টারের জন্য এখনো পর্যাপ্ত প্রশ্ন নেই"
+            AppLang.tr("Not enough questions for this chapter yet", "এই চ্যাপ্টারের জন্য এখনো পর্যাপ্ত প্রশ্ন নেই")
         }
     }
 
     fun getEmptyQuestionsSubtitle(ordinal: Int): String {
         return if (ordinal == 0) {
-            "এই বিষয়ের জন্য আরও প্রশ্ন যোগ করা হচ্ছে। কিছুদিন পর আবার চেষ্টা করো।"
+            AppLang.tr("More questions are being added for this subject. Please try again later.", "এই বিষয়ের জন্য আরও প্রশ্ন যোগ করা হচ্ছে। কিছুদিন পর আবার চেষ্টা করো।")
         } else {
-            "এই চ্যাপ্টারের জন্য আরও প্রশ্ন যোগ করা হচ্ছে। কিছুদিন পর আবার চেষ্টা করো।"
+            AppLang.tr("More questions are being added for this chapter. Please try again later.", "এই চ্যাপ্টারের জন্য আরও প্রশ্ন যোগ করা হচ্ছে। কিছুদিন পর আবার চেষ্টা করো।")
         }
     }
 
     // 2. Answer review state
     fun getAnswerStatus(answered: Boolean, yourAnswer: String? = null): String {
         return if (!answered) {
-            "তুমি কোন উত্তর দাও নি!"
+            AppLang.tr("You did not answer!", "তুমি কোন উত্তর দাও নি!")
         } else {
-            if (!yourAnswer.isNullOrBlank()) "তোমার উত্তর : $yourAnswer" else "তোমার উত্তর : "
+            val prefix = AppLang.tr("Your Answer: ", "তোমার উত্তর : ")
+            if (!yourAnswer.isNullOrBlank()) "$prefix$yourAnswer" else prefix
         }
     }
 
-    // Constants
-    const val CORRECT_ANSWER = "সঠিক উত্তর : "
-    const val ACTION_OK = "ঠিক আছে"
-    const val ACTION_ALL_CHAPTERS = "সকল অধ্যায়"
-    const val TIME_UNIT = " মিনিট"
-    const val CHAPTER_PREFIX = "অধ্যায় "
+    // Localized getters (source-compatible with existing property usages)
+    val CORRECT_ANSWER: String get() = AppLang.tr("Correct Answer: ", "সঠিক উত্তর : ")
+    val ACTION_OK: String get() = AppLang.tr("OK", "ঠিক আছে")
+    val ACTION_ALL_CHAPTERS: String get() = AppLang.tr("All Chapters", "সকল অধ্যায়")
+    val TIME_UNIT: String get() = AppLang.tr(" min", " মিনিট")
+    val CHAPTER_PREFIX: String get() = AppLang.tr("Chapter ", "অধ্যায় ")
 
     // 3. Content type mapping: "Live", "Video", "SmartNotes", "Exam"
     fun translateContentType(type: String?): String {
-        if (type.isNullOrBlank()) return "লাইভ ক্লাস"
+        if (type.isNullOrBlank()) return AppLang.tr("Live Class", "লাইভ ক্লাস")
         val lower = type.trim().lowercase()
         return when {
-            lower == "live" || lower == "liveclass" || lower.contains("live") -> "লাইভ ক্লাস"
-            lower == "video" || lower.contains("video") -> "ভিডিও লেকচার"
-            lower == "smartnotes" || lower == "smart_notes" || lower == "ebook" || lower.contains("note") -> "ই-বুক"
-            lower == "exam" || lower == "liveexam" || lower == "quiz" || lower == "modeltest" || lower.contains("exam") || lower.contains("quiz") -> "কুইজ এবং এক্সাম"
-            else -> "লাইভ ক্লাস"
+            lower == "live" || lower == "liveclass" || lower.contains("live") -> AppLang.tr("Live Class", "লাইভ ক্লাস")
+            lower == "video" || lower.contains("video") -> AppLang.tr("Video Lecture", "ভিডিও লেকচার")
+            lower == "smartnotes" || lower == "smart_notes" || lower == "ebook" || lower.contains("note") -> AppLang.tr("E-Book", "ই-বুক")
+            lower == "exam" || lower == "liveexam" || lower == "quiz" || lower == "modeltest" || lower.contains("exam") || lower.contains("quiz") -> AppLang.tr("Quiz & Exam", "কুইজ এবং এক্সাম")
+            else -> AppLang.tr("Live Class", "লাইভ ক্লাস")
         }
     }
 
     // 4. Class types mapping
     fun translateClassType(raw: String?): String {
-        if (raw.isNullOrBlank()) return "লেকচার ক্লাস"
+        if (raw.isNullOrBlank()) return AppLang.tr("Lecture", "লেকচার ক্লাস")
         val lower = raw.trim().lowercase()
         return when {
-            lower.contains("doubt") -> "ডাউট  ক্লাস"
-            lower.contains("orientation") -> "ওরিয়েনটেশন ক্লাস"
-            lower.contains("solving") || lower.contains("solution") -> "সলভিং ক্লাস"
-            lower.contains("concept") -> "কনসেপ্ট ক্লাস"
-            lower.contains("analysis") || lower.contains("analytic") -> "অ্যানালাইসিস ক্লাস"
-            lower.contains("extra") -> "এক্সট্রা ক্লাস"
-            lower.contains("lecture") -> "লেকচার ক্লাস"
-            else -> "লেকচার ক্লাস"
+            lower.contains("doubt") -> AppLang.tr("Doubt Class", "ডাউট ক্লাস")
+            lower.contains("orientation") -> AppLang.tr("Orientation", "ওরিয়েনটেশন ক্লাস")
+            lower.contains("solving") || lower.contains("solution") -> AppLang.tr("Solving Class", "সলভিং ক্লাস")
+            lower.contains("concept") -> AppLang.tr("Concept Class", "কনসেপ্ট ক্লাস")
+            lower.contains("analysis") || lower.contains("analytic") -> AppLang.tr("Analysis Class", "অ্যানালাইসিস ক্লাস")
+            lower.contains("extra") -> AppLang.tr("Extra Class", "এক্সট্রা ক্লাস")
+            lower.contains("lecture") -> AppLang.tr("Lecture", "লেকচার ক্লাস")
+            else -> AppLang.tr("Lecture", "লেকচার ক্লাস")
         }
     }
 }
 
-/**
- * Reusable Card component for displaying empty questions state.
- * Supports:
- * - ordinal == 0: Subject level
- * - ordinal == 1: Chapter level
- * - action_ok ("ঠিক আছে")
- * - action_all_chapters ("সকল অধ্যায়")
- */
 @Composable
 fun EmptyQuestionsCard(
     ordinal: Int,
@@ -103,6 +96,8 @@ fun EmptyQuestionsCard(
     modifier: Modifier = Modifier,
     accentColor: Color = Color(0xFF10B981)
 ) {
+    // Subscribe to LocalAppLanguage changes for instant recomposition
+    val isBn = isBangla()
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
@@ -140,9 +135,9 @@ fun EmptyQuestionsCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Title
             Text(
-                text = AcademicLocalizationUtils.getEmptyQuestionsTitle(ordinal),
+                text = if (isBn) AcademicLocalizationUtils.getEmptyQuestionsTitle(ordinal)
+                else AcademicLocalizationUtils.getEmptyQuestionsTitle(ordinal),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -151,7 +146,6 @@ fun EmptyQuestionsCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Subtitle
             Text(
                 text = AcademicLocalizationUtils.getEmptyQuestionsSubtitle(ordinal),
                 fontSize = 13.sp,
@@ -162,7 +156,6 @@ fun EmptyQuestionsCard(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Action Buttons Row: "ঠিক আছে" (action_ok) and "সকল অধ্যায়" (action_all_chapters)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -182,7 +175,7 @@ fun EmptyQuestionsCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = AcademicLocalizationUtils.ACTION_ALL_CHAPTERS,
+                        text = tr("All Chapters", "সকল অধ্যায়"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -203,7 +196,7 @@ fun EmptyQuestionsCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = AcademicLocalizationUtils.ACTION_OK,
+                        text = tr("OK", "ঠিক আছে"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -213,13 +206,6 @@ fun EmptyQuestionsCard(
     }
 }
 
-/**
- * Question Review / Answer State Row:
- * Displays:
- * - answered == false → "তুমি কোন উত্তর দাও নি!"
- * - answered == true → "তোমার উত্তর : [userAnswer]"
- * - correct_answer → "সঠিক উত্তর : [correctAnswer]"
- */
 @Composable
 fun QuestionAnswerReviewItem(
     questionText: String,
@@ -230,6 +216,7 @@ fun QuestionAnswerReviewItem(
     timeSpentSeconds: Int? = null,
     modifier: Modifier = Modifier
 ) {
+    val isBn = isBangla()
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -248,7 +235,6 @@ fun QuestionAnswerReviewItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Status badge
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = if (!answered) Color(0xFFEF4444).copy(alpha = 0.12f)
@@ -257,8 +243,8 @@ fun QuestionAnswerReviewItem(
                 ) {
                     Text(
                         text = if (!answered) AcademicLocalizationUtils.getAnswerStatus(false)
-                        else if (userAnswer == correctAnswer) "সঠিক"
-                        else "ভুল",
+                        else if (userAnswer == correctAnswer) tr("Correct", "সঠিক")
+                        else tr("Wrong", "ভুল"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (!answered) Color(0xFFEF4444)
@@ -271,7 +257,7 @@ fun QuestionAnswerReviewItem(
                 if (timeSpentSeconds != null && timeSpentSeconds > 0) {
                     val minutes = (timeSpentSeconds / 60).coerceAtLeast(1)
                     Text(
-                        text = "$minutes${AcademicLocalizationUtils.TIME_UNIT}",
+                        text = "${toBengaliDigits(minutes)}${if (isBn) " মিনিট" else " min"}",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -280,7 +266,6 @@ fun QuestionAnswerReviewItem(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Question Text
             Text(
                 text = questionText,
                 fontSize = 14.sp,
@@ -290,7 +275,6 @@ fun QuestionAnswerReviewItem(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // User Answer Row
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = AcademicLocalizationUtils.getAnswerStatus(answered, userAnswer),
@@ -300,12 +284,11 @@ fun QuestionAnswerReviewItem(
                 )
             }
 
-            // Correct Answer Row
             if (!correctAnswer.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "${AcademicLocalizationUtils.CORRECT_ANSWER}$correctAnswer",
+                        text = "${tr("Correct Answer: ", "সঠিক উত্তর : ")}$correctAnswer",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF059669)
@@ -313,7 +296,6 @@ fun QuestionAnswerReviewItem(
                 }
             }
 
-            // Explanation
             if (!explanation.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
@@ -322,7 +304,7 @@ fun QuestionAnswerReviewItem(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "ব্যাখ্যা: $explanation",
+                        text = "${tr("Explanation: ", "ব্যাখ্যা: ")}$explanation",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(10.dp)

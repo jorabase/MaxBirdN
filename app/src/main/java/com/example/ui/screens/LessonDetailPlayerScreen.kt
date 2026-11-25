@@ -141,7 +141,7 @@ fun LessonDetailPlayerScreen(
             ?: lesson?.live_class?.session_id?.takeIf { it.isNotBlank() }
             ?: lesson?.content_id?.takeIf { it.isNotBlank() }
             ?: lesson?.id ?: ""
-        val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson?.title ?: "পরীক্ষা")
+        val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson?.title ?: tr("Exam", "পরীক্ষা"))
         val chapterName = lesson?.subject_name ?: subjectName
 
         LaunchedEffect(sessionId) {
@@ -273,7 +273,7 @@ fun LessonDetailPlayerScreen(
     var showQualityDialog by remember { mutableStateOf(false) }
     var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var availableQualities by remember { mutableStateOf<List<VideoTrackQuality>>(emptyList()) }
-    var selectedQualityLabel by remember { mutableStateOf("অটো") }
+    var selectedQualityLabel by remember { mutableStateOf(AppLang.tr("Auto", "অটো")) }
 
     // Video Playback Progress & Resume Management
     val videoProgressManager = remember { com.example.player.VideoProgressManager.getInstance(context) }
@@ -347,12 +347,12 @@ fun LessonDetailPlayerScreen(
         if (isMuted) {
             exoPlayer.volume = if (previousVolume > 0f) previousVolume else 1f
             isMuted = false
-            Toast.makeText(context, "🔊 সাউন্ড চালু করা হয়েছে", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("🔊 Sound unmuted", "🔊 সাউন্ড চালু করা হয়েছে"), Toast.LENGTH_SHORT).show()
         } else {
             previousVolume = if (exoPlayer.volume > 0f) exoPlayer.volume else 1f
             exoPlayer.volume = 0f
             isMuted = true
-            Toast.makeText(context, "🔇 সাউন্ড বন্ধ করা হয়েছে (Muted)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("🔇 Sound muted", "🔇 সাউন্ড বন্ধ করা হয়েছে"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -361,10 +361,10 @@ fun LessonDetailPlayerScreen(
         val act = context as? Activity
         if (isAudioOnlyMode) {
             act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(context, "অডিও মোড চালু হয়েছে! এখন স্ক্রিন বন্ধ করলেও লেকচার শুনতে পারবেন। 🎧", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Audio mode enabled! You can listen with screen off. 🎧", "অডিও মোড চালু হয়েছে! এখন স্ক্রিন বন্ধ করলেও লেকচার শুনতে পারবেন। 🎧"), Toast.LENGTH_SHORT).show()
         } else {
             act?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(context, "ভিডিও মোডে ফিরে আসা হয়েছে", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Switched back to Video mode", "ভিডিও মোডে ফিরে আসা হয়েছে"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -372,7 +372,7 @@ fun LessonDetailPlayerScreen(
         exoPlayer.seekTo(0L)
         resumeNotificationText = null
         videoProgressManager.resetProgress(videoKey)
-        Toast.makeText(context, "শুরু থেকে প্লে করা হচ্ছে", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, AppLang.tr("Playing from beginning", "শুরু থেকে প্লে করা হচ্ছে"), Toast.LENGTH_SHORT).show()
     }
 
     val toggleResizeMode: () -> Unit = {
@@ -384,10 +384,10 @@ fun LessonDetailPlayerScreen(
             else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
         val modeName = when (resizeMode) {
-            AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ভিডিও সাইজ: ফিট স্ক্রিন (১৬:৯)"
-            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন"
-            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ভিডিও সাইজ: ফুল স্ক্রিন স্ট্রেচ"
-            else -> "ফিট স্ক্রিন"
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AppLang.tr("Video Size: Fit Screen (16:9)", "ভিডিও সাইজ: ফিট স্ক্রিন (১৬:৯)")
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AppLang.tr("Video Size: Zoom & Fill", "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন")
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AppLang.tr("Video Size: Full Screen Stretch", "ভিডিও সাইজ: ফুল স্ক্রিন স্ট্রেচ")
+            else -> AppLang.tr("Fit Screen", "ফিট স্ক্রিন")
         }
         Toast.makeText(context, modeName, Toast.LENGTH_SHORT).show()
     }
@@ -398,7 +398,7 @@ fun LessonDetailPlayerScreen(
 
     val handleViewSlide: (LessonAttachmentItem) -> Unit = { item ->
         val url = item.downloadUrl.orEmpty()
-        val slideTitle = item.displayTitle.ifBlank { lesson?.title ?: "লেকচার স্লাইড" }
+        val slideTitle = item.displayTitle.ifBlank { lesson?.title ?: AppLang.tr("Lecture Slide", "লেকচার স্লাইড") }
         if (onNavigateToPdfViewer != null && url.isNotBlank()) {
             exoPlayer.pause()
             onNavigateToPdfViewer(url, slideTitle)
@@ -422,10 +422,10 @@ fun LessonDetailPlayerScreen(
         when (videoDownloadedItem?.status) {
             DownloadedItemEntity.STATUS_DOWNLOADING -> {
                 downloadManager.cancelDownload(videoDownloadId)
-                Toast.makeText(context, "ভিডিও ডাউনলোড বাতিল করা হয়েছে", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, AppLang.tr("Video download cancelled", "ভিডিও ডাউনলোড বাতিল করা হয়েছে"), Toast.LENGTH_SHORT).show()
             }
             DownloadedItemEntity.STATUS_COMPLETED -> {
-                Toast.makeText(context, "এই ভিডিওটি ইতিমধ্যে অফলাইনে ডাউনলোড করা আছে। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, AppLang.tr("Video already downloaded offline. View it in the Downloads tab.", "এই ভিডিওটি ইতিমধ্যে অফলাইনে ডাউনলোড করা আছে। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।"), Toast.LENGTH_LONG).show()
             }
             else -> {
                 val downloadUrl = activeStreamUrl.ifBlank {
@@ -436,7 +436,7 @@ fun LessonDetailPlayerScreen(
                 if (downloadUrl.isNotBlank() && downloadUrl != "null") {
                     showDownloadQualityDialog = true
                 } else {
-                    Toast.makeText(context, "ভিডিও ডাউনলোড লিংক পাওয়া যায়নি বা লাইভ ক্লাস এখনও চলছে।", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, AppLang.tr("Download link unavailable or live class is still ongoing.", "ভিডিও ডাউনলোড লিংক পাওয়া যায়নি বা লাইভ ক্লাস এখনও চলছে।"), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -450,21 +450,24 @@ fun LessonDetailPlayerScreen(
         }
         VideoDownloadQualityDialog(
             videoUrl = downloadSourceUrl,
-            title = lesson?.title ?: "ক্লাস ভিডিও",
+            title = lesson?.title ?: tr("Class Video", "ক্লাস ভিডিও"),
             downloadedItem = videoDownloadedItem,
             onDismiss = { showDownloadQualityDialog = false },
             onConfirmDownload = { selectedQuality ->
                 showDownloadQualityDialog = false
                 downloadManager.downloadFile(
                     id = videoDownloadId,
-                    title = lesson?.title ?: "ক্লাস ভিডিও লেকচার",
+                    title = lesson?.title ?: AppLang.tr("Class Video Lecture", "ক্লাস ভিডিও লেকচার"),
                     subtitle = subjectName,
                     fileType = DownloadedItemEntity.FILE_TYPE_VIDEO,
                     remoteUrl = selectedQuality.targetM3u8Url
                 )
                 Toast.makeText(
                     context,
-                    "ভিডিও ডাউনলোড শুরু হয়েছে (${selectedQuality.labelBangla})। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।",
+                    AppLang.tr(
+                        "Download started (${selectedQuality.labelBangla}). Check the Downloads tab.",
+                        "ভিডিও ডাউনলোড শুরু হয়েছে (${selectedQuality.labelBangla})। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।"
+                    ),
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -536,8 +539,8 @@ fun LessonDetailPlayerScreen(
                 exoPlayer.playWhenReady = true
             } catch (e: Exception) {
                 isBuffering = false
-                playbackError = "প্লেয়ার প্রস্তুত করতে ব্যর্থ"
-                playbackErrorDetails = e.localizedMessage ?: "অজানা ত্রুটি"
+                playbackError = AppLang.tr("Failed to prepare player", "প্লেয়ার প্রস্তুত করতে ব্যর্থ")
+                playbackErrorDetails = e.localizedMessage ?: AppLang.tr("Unknown error", "অজানা ত্রুটি")
             }
         } else {
             isBuffering = false
@@ -579,8 +582,8 @@ fun LessonDetailPlayerScreen(
                                     exoPlayer.seekTo(target)
                                 }
                                 currentPosition = target
-                                val timeFormatted = ShikhoPlayerManager.formatTime(target, true)
-                                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                                val timeFormatted = ShikhoPlayerManager.formatTime(target, AppLang.isBn())
+                                resumeNotificationText = AppLang.tr("Resumed from $timeFormatted", "পূর্বের $timeFormatted মিনিট থেকে চলছে")
                                 coroutineScope.launch {
                                     delay(6000)
                                     resumeNotificationText = null
@@ -620,14 +623,14 @@ fun LessonDetailPlayerScreen(
                 val httpCode = httpEx?.responseCode
 
                 val detail = when {
-                    httpCode == 404 -> "ভিডিও ফাইলটি সার্ভারে পাওয়া যায়নি (HTTP 404)"
-                    httpCode == 403 -> "CDN অ্যাক্সেস রিজেক্টেড (HTTP 403)"
-                    httpCode != null -> "CDN নেটওয়ার্ক রেসপন্স ত্রুটি (HTTP $httpCode)"
-                    cause is java.net.UnknownHostException -> "ইন্টারনেট সংযোগ নেই বা CDN সার্ভারে পৌঁছানো যাচ্ছে না"
-                    cause is java.net.SocketTimeoutException -> "সার্ভার সংযোগ সময়োত্তীর্ণ (Connection Timeout)"
-                    else -> error.localizedMessage ?: "অজানা প্লেব্যাক ত্রুটি"
+                    httpCode == 404 -> AppLang.tr("Video file not found on server (HTTP 404)", "ভিডিও ফাইলটি সার্ভারে পাওয়া যায়নি (HTTP 404)")
+                    httpCode == 403 -> AppLang.tr("CDN access rejected (HTTP 403)", "CDN অ্যাক্সেস রিজেক্টেড (HTTP 403)")
+                    httpCode != null -> AppLang.tr("CDN network response error (HTTP $httpCode)", "CDN নেটওয়ার্ক রেসপন্স ত্রুটি (HTTP $httpCode)")
+                    cause is java.net.UnknownHostException -> AppLang.tr("No internet connection or CDN unreachable", "ইন্টারনেট সংযোগ নেই বা CDN সার্ভারে পৌঁছানো যাচ্ছে না")
+                    cause is java.net.SocketTimeoutException -> AppLang.tr("Connection timed out", "সার্ভার সংযোগ সময়োত্তীর্ণ")
+                    else -> error.localizedMessage ?: AppLang.tr("Unknown playback error", "অজানা প্লেব্যাক ত্রুটি")
                 }
-                playbackError = "প্লেব্যাক এরর"
+                playbackError = AppLang.tr("Playback Error", "প্লেব্যাক এরর")
                 playbackErrorDetails = detail
             }
         }
@@ -648,7 +651,7 @@ fun LessonDetailPlayerScreen(
                 videoProgressManager.saveProgress(
                     videoKey = videoKey,
                     lessonId = lesson?.id,
-                    title = lesson?.title ?: "ক্লাস লেকচার",
+                    title = lesson?.title ?: AppLang.tr("Class Lecture", "ক্লাস লেকচার"),
                     subjectName = subjectName,
                     courseId = lesson?.phase_id,
                     positionMs = pos,
@@ -668,8 +671,8 @@ fun LessonDetailPlayerScreen(
                 exoPlayer.seekTo(dbProgress.positionMs)
                 currentPosition = dbProgress.positionMs
                 lastPlaybackPositionMs = dbProgress.positionMs
-                val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
-                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, AppLang.isBn())
+                resumeNotificationText = AppLang.tr("Resumed from $timeFormatted", "পূর্বের $timeFormatted মিনিট থেকে চলছে")
                 coroutineScope.launch {
                     delay(6000)
                     resumeNotificationText = null
@@ -732,7 +735,7 @@ fun LessonDetailPlayerScreen(
                                 }
                                 exoPlayer.prepare()
                                 exoPlayer.playWhenReady = true
-                                Toast.makeText(context, "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, AppLang.tr("Back online, resuming class...", "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে..."), Toast.LENGTH_SHORT).show()
                             }
                         } catch (e: Exception) {
                             android.util.Log.e("LectureDebug", "Auto-resume error: ${e.message}")
@@ -985,7 +988,7 @@ fun LessonDetailPlayerScreen(
                 // Ambient Audio Only Mode Screen
                 if (isAudioOnlyMode) {
                     AmbientAudioVisualizerOverlay(
-                        title = lesson?.title ?: "রেকর্ডকৃত ক্লাস",
+                        title = lesson?.title ?: tr("Recorded Class", "রেকর্ডকৃত ক্লাস"),
                         subjectName = subjectName,
                         isPlaying = isPlaying,
                         isMuted = isMuted,
@@ -1001,7 +1004,7 @@ fun LessonDetailPlayerScreen(
                 // Fullscreen Player Controls Overlay
                 val seekStep = if (classType == PlayerClassType.ANIMATED) 5000L else 10000L
                 PlayerControlsOverlay(
-                    title = lesson?.title ?: "রেকর্ডকৃত ক্লাস",
+                    title = lesson?.title ?: tr("Recorded Class", "রেকর্ডকৃত ক্লাস"),
                     subjectName = subjectName,
                     isPlaying = isPlaying,
                     isBuffering = isBuffering,
@@ -1086,7 +1089,7 @@ fun LessonDetailPlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "ক্লাস লোড হচ্ছে...",
+                            text = tr("Loading class...", "ক্লাস লোড হচ্ছে..."),
                             color = Color.White,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1126,7 +1129,7 @@ fun LessonDetailPlayerScreen(
                                     ?: lesson?.content_id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.id ?: ""
                                 val lessonId = lesson?.id ?: ""
-                                val title = lesson?.title ?: "লাইভ ক্লাস"
+                                val title = lesson?.title ?: AppLang.tr("Live Class", "লাইভ ক্লাস")
                                 onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
                             }
                         )
@@ -1142,7 +1145,7 @@ fun LessonDetailPlayerScreen(
                                     ?: lesson?.content_id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.id ?: ""
                                 val lessonId = lesson?.id ?: ""
-                                val title = lesson?.title ?: "লাইভ ক্লাস"
+                                val title = lesson?.title ?: AppLang.tr("Live Class", "লাইভ ক্লাস")
                                 onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
                             },
                             onViewSlide = handleViewSlide
@@ -1212,7 +1215,7 @@ fun LessonDetailPlayerScreen(
                         // Ambient Audio Mode Visualizer Screen in Portrait
                         if (isAudioOnlyMode) {
                             AmbientAudioVisualizerOverlay(
-                                title = lesson?.title ?: "ক্লাস",
+                                title = lesson?.title ?: tr("Class", "ক্লাস"),
                                 subjectName = subjectName,
                                 isPlaying = isPlaying,
                                 isMuted = isMuted,
@@ -1230,7 +1233,7 @@ fun LessonDetailPlayerScreen(
                             val slideUrlForError = lesson?.resolvedSlideUrl
                                 ?: lesson?.live_class?.lectureSlideUrl
                             PlayerErrorOverlay(
-                                playbackError = playbackError ?: "ক্লাস লোড ব্যর্থ হয়েছে",
+                                playbackError = playbackError ?: tr("Failed to load class", "ক্লাস লোড ব্যর্থ হয়েছে"),
                                 playbackErrorDetails = playbackErrorDetails,
                                 slideUrl = slideUrlForError,
                                 onRefreshLesson = onRefreshLesson,
@@ -1250,7 +1253,7 @@ fun LessonDetailPlayerScreen(
                             // Player Controls Overlay
                             val seekStep = if (classType == PlayerClassType.ANIMATED) 5000L else 10000L
                             PlayerControlsOverlay(
-                                title = lesson?.title ?: "ক্লাস",
+                                title = lesson?.title ?: tr("Class", "ক্লাস"),
                                 subjectName = subjectName,
                                 isPlaying = isPlaying,
                                 isBuffering = isBuffering,
@@ -1343,7 +1346,7 @@ fun LessonDetailPlayerScreen(
                                 )
                                 Spacer(modifier = Modifier.height(14.dp))
                                 Text(
-                                    text = "ভিডিও ও স্টাডি মেটেরিয়াল লোড করা হচ্ছে...",
+                                    text = tr("Loading video & materials...", "ভিডিও ও স্টাডি মেটেরিয়াল লোড করা হচ্ছে..."),
                                     color = Color.White,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -1351,7 +1354,7 @@ fun LessonDetailPlayerScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন",
+                                    text = tr("Please wait a moment", "অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন"),
                                     color = Color.White.copy(alpha = 0.65f),
                                     fontSize = 12.sp,
                                     textAlign = TextAlign.Center
@@ -1374,7 +1377,7 @@ fun LessonDetailPlayerScreen(
                                     ?: lesson?.content_id?.takeIf { it.isNotBlank() }
                                     ?: lesson?.id ?: ""
                                 val lessonId = lesson?.id ?: ""
-                                val title = lesson?.title ?: "লাইভ ক্লাস"
+                                val title = lesson?.title ?: AppLang.tr("Live Class", "লাইভ ক্লাস")
                                 onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
                             }
                         )
@@ -1390,14 +1393,14 @@ fun LessonDetailPlayerScreen(
                             coroutineScope.launch {
                                 if (isLessonSaved) {
                                     savedDao.deleteSavedItemById(lessonIdForSave)
-                                    Toast.makeText(context, "সংরক্ষণ থেকে সরানো হয়েছে", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, AppLang.tr("Removed from saved", "সংরক্ষণ থেকে সরানো হয়েছে"), Toast.LENGTH_SHORT).show()
                                 } else {
                                     val teacherName = lesson?.live_class?.teacher?.displayName
                                         ?: lesson?.live_class?.instructor?.displayName
                                     val entity = com.example.database.SavedItemEntity(
                                         id = lessonIdForSave,
                                         type = com.example.database.SavedItemEntity.TYPE_CLASS,
-                                        title = lesson?.title ?: "ক্লাস লেকচার",
+                                        title = lesson?.title ?: AppLang.tr("Class Lecture", "ক্লাস লেকচার"),
                                         subtitle = listOfNotNull(subjectName, lesson?.chapter_name).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { null },
                                         contentJson = com.example.database.SavedItemEntity.buildClassContentJson(
                                             lessonId = lessonIdForSave,
@@ -1409,7 +1412,7 @@ fun LessonDetailPlayerScreen(
                                         timestamp = System.currentTimeMillis()
                                     )
                                     savedDao.insertSavedItem(entity)
-                                    Toast.makeText(context, "ক্লাসটি সফলভাবে সংরক্ষিত হয়েছে", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, AppLang.tr("Class saved", "ক্লাসটি সফলভাবে সংরক্ষিত হয়েছে"), Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -1633,7 +1636,7 @@ fun LessonAnimatedLessonsSection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "অ্যানিমেটেড লেসন",
+                text = tr("Animated Lessons", "অ্যানিমেটেড লেসন"),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground
@@ -1644,7 +1647,7 @@ fun LessonAnimatedLessonsSection(
                     color = themeColor.copy(alpha = 0.12f)
                 ) {
                     Text(
-                        text = "${toBengaliDigits(animatedTopics.size)}টি",
+                        text = tr("${animatedTopics.size}", "${toBengaliDigits(animatedTopics.size)}টি"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = themeColor,
@@ -1670,7 +1673,7 @@ fun LessonAnimatedLessonsSection(
                     color = themeColor
                 )
                 Text(
-                    text = "অ্যানিমেটেড লেসন লোড হচ্ছে...",
+                    text = tr("Loading animated lessons...", "অ্যানিমেটেড লেসন লোড হচ্ছে..."),
                     fontSize = 12.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1688,7 +1691,7 @@ fun LessonAnimatedLessonsSection(
                     val video = topic.videos?.data?.firstOrNull { !it.playback_url.isNullOrBlank() }
                     val playbackUrl = video?.playback_url ?: ""
                     val thumbnail = video?.video_thumbnail_url?.firstOrNull()
-                    val topicTitle = topic.name ?: "অ্যানিমেটেড লেসন"
+                    val topicTitle = topic.name ?: tr("Animated Lesson", "অ্যানিমেটেড লেসন")
                     val serialText = topic.no?.let { toBengaliDigits(it) } ?: ""
 
                     AnimatedLessonMiniCard(
@@ -1810,7 +1813,7 @@ fun AnimatedLessonMiniCard(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "প্লে করুন",
+                        contentDescription = tr("Play", "প্লে করুন"),
                         tint = Color(0xFF1E293B),
                         modifier = Modifier.size(24.dp)
                     )
@@ -1942,7 +1945,7 @@ fun UpcomingCountdownPlayerHeader(
                             .background(if (isLiveReady) Color(0xFFEF4444) else Color(0xFF38BDF8))
                     )
                     Text(
-                        text = if (isLiveReady) "লাইভ শুরু হয়েছে" else "আপকামিং লাইভ ক্লাস",
+                        text = if (isLiveReady) tr("Live Now", "লাইভ শুরু হয়েছে") else tr("Upcoming Live", "আপকামিং লাইভ"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isLiveReady) Color(0xFFF87171) else Color(0xFF7DD3FC)
@@ -1962,7 +1965,7 @@ fun UpcomingCountdownPlayerHeader(
         ) {
             if (isLiveReady) {
                 Text(
-                    text = "ক্লাসটি এখন লাইভ চলছে!",
+                    text = tr("Class is live now!", "ক্লাসটি এখন লাইভ চলছে!"),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -1977,7 +1980,7 @@ fun UpcomingCountdownPlayerHeader(
                     Icon(Icons.Default.LiveTv, null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     val isAttended = lesson?.user_activity_state.equals("ATTENDED", true) || lesson?.user_activity_state.equals("COMPLETED", true)
-                    Text(if (isAttended) "লাইভে পুনরায় যোগ দিন" else "লাইভে যোগ দিন", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(if (isAttended) tr("Rejoin Live", "লাইভে পুনরায় যোগ দিন") else tr("Join Live", "লাইভে যোগ দিন"), fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             } else {
                 Row(
@@ -1986,7 +1989,7 @@ fun UpcomingCountdownPlayerHeader(
                 ) {
                     Icon(Icons.Default.AccessTime, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(15.dp))
                     Text(
-                        text = "লাইভ ক্লাস শুরু হতে বাকি",
+                        text = tr("Live class starts in", "লাইভ ক্লাস শুরু হতে বাকি"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFE2E8F0)
@@ -2001,20 +2004,20 @@ fun UpcomingCountdownPlayerHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (days > 0) {
-                        CompactCountdownTile(value = days.toString(), label = "দিন")
+                        CompactCountdownTile(value = days.toString(), label = tr("Days", "দিন"))
                         Text(":", color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
-                    CompactCountdownTile(value = hours.toString().padStart(2, '0'), label = "ঘণ্টা")
+                    CompactCountdownTile(value = hours.toString().padStart(2, '0'), label = tr("Hrs", "ঘণ্টা"))
                     Text(":", color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    CompactCountdownTile(value = minutes.toString().padStart(2, '0'), label = "মিনিট")
+                    CompactCountdownTile(value = minutes.toString().padStart(2, '0'), label = tr("Min", "মিনিট"))
                     Text(":", color = Color(0xFF64748B), fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    CompactCountdownTile(value = seconds.toString().padStart(2, '0'), label = "সেকেন্ড")
+                    CompactCountdownTile(value = seconds.toString().padStart(2, '0'), label = tr("Sec", "সেকেন্ড"))
                 }
 
                 if (formattedDate.isNotBlank() || formattedTime.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "নির্ধারিত সময়: ${listOfNotNull(formattedDate.takeIf { it.isNotBlank() }, formattedTime.takeIf { it.isNotBlank() }).joinToString(" • ")}",
+                        text = tr("Scheduled: ", "নির্ধারিত সময়: ") + listOfNotNull(formattedDate.takeIf { it.isNotBlank() }, formattedTime.takeIf { it.isNotBlank() }).joinToString(" • "),
                         fontSize = 11.5.sp,
                         color = Color(0xFF94A3B8),
                         maxLines = 1,
@@ -2125,7 +2128,7 @@ fun RecordingProcessingHeader(
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
-                        text = "রেকর্ড প্রসেসিং হচ্ছে",
+                        text = tr("Processing Recording", "রেকর্ড প্রসেসিং হচ্ছে"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFDE68A)
@@ -2144,7 +2147,7 @@ fun RecordingProcessingHeader(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "লাইভ ক্লাস সম্পন্ন হয়েছে",
+                text = tr("Live Class Ended", "লাইভ ক্লাস সম্পন্ন হয়েছে"),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -2153,7 +2156,7 @@ fun RecordingProcessingHeader(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "লাইভ ক্লাস শেষ হওয়ার পর সাধারণত ০ মিনিট থেকে ১ ঘণ্টার মধ্যে রেকর্ডিং সার্ভারে প্রসেস হয়ে যুক্ত হয়।",
+                text = tr("Recordings usually finish processing and become available within 1 hour after the live class ends.", "লাইভ ক্লাস শেষ হওয়ার পর সাধারণত ০ মিনিট থেকে ১ ঘণ্টার মধ্যে রেকর্ডিং সার্ভারে প্রসেস হয়ে যুক্ত হয়।"),
                 fontSize = 11.5.sp,
                 color = Color.White.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center,
@@ -2175,7 +2178,7 @@ fun RecordingProcessingHeader(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("সার্ভার রিফ্রেশ", fontSize = 12.sp)
+                        Text(tr("Refresh", "সার্ভার রিফ্রেশ"), fontSize = 12.sp)
                     }
                 }
 
@@ -2189,7 +2192,7 @@ fun RecordingProcessingHeader(
                     ) {
                         Icon(Icons.Default.LiveTv, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("লাইভে জয়েন চেক", fontSize = 11.5.sp)
+                        Text(tr("Check Live", "লাইভে জয়েন চেক"), fontSize = 11.5.sp)
                     }
                 }
             }
@@ -2200,7 +2203,7 @@ fun RecordingProcessingHeader(
                     onClick = {
                         onViewSlide(
                             LessonAttachmentItem(
-                                title = "লেকচার স্লাইড ও নোটস",
+                                title = AppLang.tr("Lecture Slides & Notes", "লেকচার স্লাইড ও নোটস"),
                                 url = slideUrl,
                                 file_type = "pdf"
                             )
@@ -2210,7 +2213,7 @@ fun RecordingProcessingHeader(
                 ) {
                     Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("লেকচার স্লাইড ও ক্লাস নোটস পড়ুন", fontSize = 11.5.sp)
+                    Text(tr("Read Lecture Slides & Notes", "লেকচার স্লাইড ও ক্লাস নোটস পড়ুন"), fontSize = 11.5.sp)
                 }
             }
         }
@@ -2264,7 +2267,7 @@ fun ChapterOtherClassesSection(
                             Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = themeColor, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "পূর্ববর্তী ক্লাস",
+                                text = tr("Prev Class", "পূর্ববর্তী ক্লাস"),
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = themeColor,
@@ -2281,7 +2284,7 @@ fun ChapterOtherClassesSection(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = "পরবর্তী ক্লাস",
+                                text = tr("Next Class", "পরবর্তী ক্লাস"),
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -2323,13 +2326,13 @@ fun ChapterOtherClassesSection(
                 }
                 Column {
                     Text(
-                        text = "এই অধ্যায়ের সকল ক্লাস প্লেলিস্ট",
+                        text = tr("Chapter Playlist", "অধ্যায়ের প্লেলিস্ট"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "ব্যাক না করেই যেকোনো ক্লাসে সরাসরি সুইচ করুন",
+                        text = tr("Switch classes directly from here", "যেকোনো ক্লাসে সরাসরি সুইচ করুন"),
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2342,7 +2345,7 @@ fun ChapterOtherClassesSection(
                 border = BorderStroke(1.dp, themeColor.copy(alpha = 0.3f))
             ) {
                 Text(
-                    text = "${toBengaliDigits(classLessons.size)}টি ক্লাস",
+                    text = tr("${classLessons.size} Classes", "${toBengaliDigits(classLessons.size)}টি ক্লাস"),
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = themeColor,
@@ -2357,7 +2360,7 @@ fun ChapterOtherClassesSection(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             classLessons.forEachIndexed { idx, item ->
                 val isCurrent = item.id == currentLessonId
-                val cleanTitle = ClassTypeUtils.formatLessonTitle(item.title ?: "ক্লাস ${toBengaliDigits(idx + 1)}")
+                val cleanTitle = ClassTypeUtils.formatLessonTitle(item.title ?: tr("Class ${idx + 1}", "ক্লাস ${toBengaliDigits(idx + 1)}"))
                 val teacher = item.live_class?.teacher?.displayName ?: item.live_class?.instructor?.displayName ?: ""
 
                 Surface(
@@ -2394,7 +2397,7 @@ fun ChapterOtherClassesSection(
                                 if (isCurrent) {
                                     Icon(
                                         imageVector = Icons.Default.GraphicEq,
-                                        contentDescription = "চলছে",
+                                        contentDescription = tr("Playing", "চলছে"),
                                         tint = Color.White,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -2420,7 +2423,7 @@ fun ChapterOtherClassesSection(
                                         color = themeColor
                                     ) {
                                         Text(
-                                            text = "এখন চলছে",
+                                            text = tr("Playing", "এখন চলছে"),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
@@ -2436,7 +2439,7 @@ fun ChapterOtherClassesSection(
                                         color = Color(0xFF10B981).copy(alpha = 0.15f)
                                     ) {
                                         Text(
-                                            text = "সম্পন্ন ✓",
+                                            text = tr("Done ✓", "সম্পন্ন ✓"),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF10B981),

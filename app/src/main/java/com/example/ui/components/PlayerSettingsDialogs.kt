@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.player.VideoTrackQuality
+import com.example.utils.tr
 import java.util.Locale
 
 @Composable
@@ -62,7 +63,7 @@ fun PlaybackSpeedDialog(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Text("প্লেব্যাক স্পিড (Speed Control)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(tr("Playback Speed", "প্লেব্যাক স্পিড"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         },
         text = {
@@ -162,7 +163,7 @@ fun PlaybackSpeedDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "দ্রুত নির্বাচন (Presets):",
+                    text = tr("Presets:", "দ্রুত নির্বাচন:"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -191,7 +192,7 @@ fun PlaybackSpeedDialog(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Text("সম্পূর্ণ", fontWeight = FontWeight.Bold)
+                Text(tr("Done", "সম্পন্ন"), fontWeight = FontWeight.Bold)
             }
         }
     )
@@ -226,9 +227,9 @@ fun VideoQualityDialog(
                     )
                 }
                 Column {
-                    Text("ভিডিও রেজোলিউশন / কোয়ালিটি", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(tr("Video Quality", "ভিডিও কোয়ালিটি"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Text(
-                        text = "স্ট্রিমিং কোয়ালিটি নির্বাচন করুন",
+                        text = tr("Select streaming quality", "স্ট্রিমিং কোয়ালিটি নির্বাচন করুন"),
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -244,7 +245,7 @@ fun VideoQualityDialog(
             ) {
                 if (availableQualities.isEmpty()) {
                     Text(
-                        "অটো রেজোলিউশন চলছে (বা স্ট্রিমে একটাই কোয়ালিটি লভ্য)",
+                        tr("Auto quality active (or only one stream available)", "অটো রেজোলিউশন চলছে (বা একটিই কোয়ালিটি রয়েছে)"),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         modifier = Modifier.padding(8.dp)
@@ -253,7 +254,7 @@ fun VideoQualityDialog(
                     availableQualities.forEach { quality ->
                         val isSelected = selectedQualityLabel == quality.label ||
                             selectedQualityLabel == quality.id ||
-                            (quality.height == 0 && selectedQualityLabel.startsWith("অটো")) ||
+                            (quality.height == 0 && (selectedQualityLabel.startsWith("অটো") || selectedQualityLabel.startsWith("Auto", ignoreCase = true))) ||
                             (quality.height > 0 && selectedQualityLabel.startsWith("${quality.height}p"))
                         val badge = quality.badgeText.ifBlank {
                             when {
@@ -266,7 +267,7 @@ fun VideoQualityDialog(
                         }
                         val subText = quality.subtitle.ifBlank {
                             when {
-                                quality.height == 0 -> "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন"
+                                quality.height == 0 -> tr("Best quality for your network", "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন")
                                 quality.bitrate > 0 -> "${quality.bitrate / 1000} kbps"
                                 else -> ""
                             }
@@ -351,7 +352,7 @@ fun VideoQualityDialog(
                                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                     ) {
                                         Text(
-                                            text = "সক্রিয়",
+                                            text = tr("Active", "সক্রিয়"),
                                             color = MaterialTheme.colorScheme.primary,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
@@ -367,7 +368,7 @@ fun VideoQualityDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("বন্ধ করুন", fontWeight = FontWeight.Bold)
+                Text(tr("Close", "বন্ধ করুন"), fontWeight = FontWeight.Bold)
             }
         }
     )

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.utils.formatLocalizedDigits
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -109,7 +111,7 @@ fun LivePollQuestionDialog(
     }
 
     val resolvedTeacher = poll.teacherName.ifBlank { teacherName }
-    val quizOrPollLabel = if (poll.type.equals("quiz", ignoreCase = true)) "Quiz" else "Poll"
+    val quizOrPollLabel = if (poll.type.equals("quiz", ignoreCase = true)) tr("Quiz", "কুইজ") else tr("Poll", "পোল")
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -195,7 +197,7 @@ fun LivePollQuestionDialog(
                         color = if (poll.isEnded) Color(0xFF374151) else Color(0xFFDC2626)
                     ) {
                         Text(
-                            text = if (poll.isEnded) "ENDED" else "LIVE",
+                            text = if (poll.isEnded) tr("ENDED", "শেষ") else tr("LIVE", "লাইভ"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -241,7 +243,7 @@ fun LivePollQuestionDialog(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = "$resolvedTeacher started a $quizOrPollLabel",
+                                    text = tr("$resolvedTeacher started a $quizOrPollLabel", "$resolvedTeacher একটি $quizOrPollLabel শুরু করেছেন"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFFD1D5DB),
@@ -267,7 +269,7 @@ fun LivePollQuestionDialog(
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "পোলের প্রশ্ন লোড হচ্ছে...",
+                                    text = tr("Loading poll question...", "পোলের প্রশ্ন লোড হচ্ছে..."),
                                     fontSize = 13.sp,
                                     color = Color(0xFF9CA3AF)
                                 )
@@ -431,7 +433,7 @@ fun LivePollQuestionDialog(
                                                         color = Color(0xFF334155)
                                                     ) {
                                                         Text(
-                                                            text = "Your Answer",
+                                                            text = tr("Your Answer", "আপনার উত্তর"),
                                                             fontSize = 11.sp,
                                                             color = Color(0xFFE2E8F0),
                                                             fontWeight = FontWeight.Medium,
@@ -444,7 +446,7 @@ fun LivePollQuestionDialog(
                                                     val pct = ((option.votesCount * 100.0) / totalOptionVotes).toInt()
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Text(
-                                                        text = "$pct%",
+                                                        text = "${formatLocalizedDigits(pct)}%",
                                                         fontSize = 12.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color(0xFF94A3B8)
@@ -478,7 +480,10 @@ fun LivePollQuestionDialog(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Text(
-                                        text = "আপনার উত্তর সফলভাবে জমা হয়েছে! পোল শেষ হলে চূড়ান্ত ফলাফল ও লিডারবোর্ড দেখতে পাবেন।",
+                                        text = tr(
+                                            "Your answer has been submitted! Results and leaderboard will appear once the poll ends.",
+                                            "আপনার উত্তর সফলভাবে জমা হয়েছে! পোল শেষ হলে চূড়ান্ত ফলাফল ও লিডারবোর্ড দেখতে পাবেন।"
+                                        ),
                                         fontSize = 12.5.sp,
                                         color = Color(0xFFD1FAE5),
                                         lineHeight = 17.sp,
@@ -523,9 +528,12 @@ fun LivePollQuestionDialog(
                             ) {
                                 Text(
                                     text = if (canUseAutoPoll) {
-                                        "Answer (${formatPollDelayMsToSeconds(autoPollDelayMs)}s)"
+                                        tr(
+                                            "Submit (${formatPollDelayMsToSeconds(autoPollDelayMs)}s)",
+                                            "উত্তর দিন (${formatPollDelayMsToSeconds(autoPollDelayMs)}s)"
+                                        )
                                     } else {
-                                        "Answer"
+                                        tr("Submit Answer", "উত্তর দিন")
                                     },
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold
@@ -548,7 +556,7 @@ fun LivePollQuestionDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "View Results",
+                                    text = tr("View Results", "ফলাফল দেখুন"),
                                     fontSize = 14.5.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -675,7 +683,7 @@ fun LivePollResultDialog(
                         border = BorderStroke(1.dp, if (poll.isEnded) Color(0xFF334155) else Color(0xFFEF4444))
                     ) {
                         Text(
-                            text = if (poll.isEnded) "Ended" else "Live",
+                            text = if (poll.isEnded) tr("Ended", "শেষ") else tr("Live", "লাইভ"),
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFE2E8F0),
@@ -693,7 +701,7 @@ fun LivePollResultDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Participation Summary",
+                        text = tr("Participation Summary", "অংশগ্রহণের সারসংক্ষেপ"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -727,13 +735,13 @@ fun LivePollResultDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     PollSummaryCard(
-                        title = "YOUR RANK",
+                        title = tr("YOUR RANK", "আপনার র‍্যাঙ্ক"),
                         value = userRankText,
                         accentColor = Color(0xFFFBBF24),
                         modifier = Modifier.weight(1f)
                     )
                     PollSummaryCard(
-                        title = "POINTS",
+                        title = tr("POINTS", "পয়েন্ট"),
                         value = userPointsText,
                         accentColor = Color(0xFF38BDF8),
                         modifier = Modifier.weight(1f)
@@ -747,13 +755,13 @@ fun LivePollResultDialog(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     PollSummaryCard(
-                        title = "TIME TAKEN",
+                        title = tr("TIME TAKEN", "ব্যয়িত সময়"),
                         value = timeTakenText,
                         accentColor = Color(0xFFA78BFA),
                         modifier = Modifier.weight(1f)
                     )
                     PollSummaryCard(
-                        title = "CORRECT ANSWERS",
+                        title = tr("CORRECT ANSWERS", "সঠিক উত্তর"),
                         value = correctAnswersText,
                         accentColor = Color(0xFF34D399),
                         modifier = Modifier.weight(1f)
@@ -769,14 +777,14 @@ fun LivePollResultDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Leaderboard",
+                        text = tr("Leaderboard", "লিডারবোর্ড"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     if (leaderboard.isNotEmpty()) {
                         Text(
-                            text = "মোট ${leaderboard.size} জন",
+                            text = tr("Total ${leaderboard.size}", "মোট ${formatLocalizedDigits(leaderboard.size)} জন"),
                             fontSize = 12.sp,
                             color = Color(0xFF94A3B8)
                         )
@@ -808,7 +816,7 @@ fun LivePollResultDialog(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "এখনো কোনো ফলাফল পাওয়া যায়নি",
+                                    text = tr("No results available yet", "এখনো কোনো ফলাফল পাওয়া যায়নি"),
                                     fontSize = 13.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -887,7 +895,7 @@ private fun LeaderboardRowItem(
     displayUserNameOverride: String? = null
 ) {
     val resolvedName = (displayUserNameOverride ?: entry.userName).trim()
-        .ifBlank { "শিক্ষার্থী #${entry.position}" }
+        .ifBlank { tr("Student #${entry.position}", "শিক্ষার্থী #${entry.position}") }
 
     val circleBg = when (entry.position) {
         1 -> Color(0xFFD99000) // Gold circle for 1st
@@ -951,7 +959,7 @@ private fun LeaderboardRowItem(
                             color = Color(0xFF0284C7)
                         ) {
                             Text(
-                                text = "আপনি",
+                                text = tr("You", "আপনি"),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -964,7 +972,7 @@ private fun LeaderboardRowItem(
                 Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
-                    text = "${entry.score}/${entry.totalScore} points",
+                    text = tr("${entry.score}/${entry.totalScore} points", "${formatLocalizedDigits(entry.score)}/${formatLocalizedDigits(entry.totalScore)} পয়েন্ট"),
                     fontSize = 11.5.sp,
                     color = Color(0xFF94A3B8)
                 )
@@ -1071,7 +1079,7 @@ fun PreviousPollsDialog(
                     Spacer(modifier = Modifier.width(10.dp))
 
                     Text(
-                        text = "পোল ও কুইজ (Poll/Quiz)",
+                        text = tr("Polls & Quizzes", "পোল ও কুইজ"),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -1085,7 +1093,7 @@ fun PreviousPollsDialog(
                             border = BorderStroke(1.dp, Color(0xFF334155))
                         ) {
                             Text(
-                                text = "${polls.size}টি",
+                                text = tr("${polls.size}", "${formatLocalizedDigits(polls.size)}টি"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF38BDF8),
@@ -1116,7 +1124,7 @@ fun PreviousPollsDialog(
                     }
 
                     Text(
-                        text = "সকল পোল ও কুইজ তালিকা",
+                        text = tr("All Polls & Quizzes", "সকল পোল ও কুইজ"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFCBD5E1)
@@ -1141,7 +1149,7 @@ fun PreviousPollsDialog(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
-                                    text = "এখনো কোনো পোল বা কুইজ শুরু হয়নি",
+                                    text = tr("No polls or quizzes started yet", "এখনো কোনো পোল বা কুইজ শুরু হয়নি"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF94A3B8),
@@ -1223,7 +1231,7 @@ fun PreviousPollsDialog(
                                         ) {
                                             val hasVoted = pollItem.userResponse != null && pollItem.userResponse.selectedOptionIndex > 0
                                             Text(
-                                                text = if (hasVoted) "✓ আপনি উত্তর দিয়েছেন" else "উত্তর দেওয়া হয়নি",
+                                                text = if (hasVoted) tr("✓ Answered", "✓ আপনি উত্তর দিয়েছেন") else tr("Not answered", "উত্তর দেওয়া হয়নি"),
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = if (hasVoted) Color(0xFF34D399) else Color(0xFF94A3B8)
@@ -1240,7 +1248,7 @@ fun PreviousPollsDialog(
                                                 modifier = Modifier.height(34.dp)
                                             ) {
                                                 Text(
-                                                    text = if (pollItem.isLive && !hasVoted) "উত্তর দিন" else "View",
+                                                    text = if (pollItem.isLive && !hasVoted) tr("Answer", "উত্তর দিন") else tr("View", "দেখুন"),
                                                     fontSize = 13.sp,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -1288,7 +1296,7 @@ fun LivePollFloatingNotification(
             )
 
             Text(
-                text = "লাইভ পোল: ${activePoll.title}",
+                text = tr("Live Poll: ${activePoll.title}", "লাইভ পোল: ${activePoll.title}"),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -1302,7 +1310,7 @@ fun LivePollFloatingNotification(
                 color = Color(0xFF0284C7)
             ) {
                 Text(
-                    text = "উত্তর দিন",
+                    text = tr("Answer", "উত্তর দিন"),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -1385,7 +1393,7 @@ fun AutoPollControlCard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "অটো পোল ও টাইম (Auto)",
+                                text = tr("Auto Poll & Timing", "অটো পোল ও টাইম"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -1404,7 +1412,10 @@ fun AutoPollControlCard(
                             }
                         }
                         Text(
-                            text = "দশমিক বা মিলিসেকেন্ড সেট করুন (যেমন 0.67 বা 1.21 সেকেন্ড)। অন থাকলে ${formattedDelay}s এ অটো সাবমিট হবে।",
+                            text = tr(
+                                "Set decimal seconds (e.g. 0.67 or 1.21s). When ON, submits automatically in ${formattedDelay}s.",
+                                "দশমিক বা মিলিসেকেন্ড সেট করুন (যেমন 0.67 বা 1.21 সেকেন্ড)। অন থাকলে ${formattedDelay}s এ অটো সাবমিট হবে।"
+                            ),
                             fontSize = 11.sp,
                             color = Color(0xFF94A3B8),
                             lineHeight = 14.5.sp
@@ -1437,7 +1448,7 @@ fun AutoPollControlCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
-                    text = "সময় (Sec):",
+                    text = tr("Time (Sec):", "সময় (Sec):"),
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFFCBD5E1)

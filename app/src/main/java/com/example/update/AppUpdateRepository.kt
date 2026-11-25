@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.example.BuildConfig
 import com.example.security.DeviceActivationRepository
+import com.example.utils.AppLang
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,8 +30,11 @@ data class AppUpdateInfo(
     val buttonText: String,
     val signatureHash: String?,
     val isKillSwitchActive: Boolean = false,
-    val killSwitchTitleBn: String = "অ্যাপ আপডেটের কাজ চলছে",
-    val killSwitchMessageBn: String = "অ্যাপটিকে আরও উন্নত, দ্রুত ও নিরাপদ করতে বর্তমানে সার্ভার ও সিস্টেম আপডেটের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত। কাজ শেষ হওয়া মাত্রই অ্যাপটি পুনরায় চালু হবে।",
+    val killSwitchTitleBn: String = AppLang.tr("App Update in Progress", "অ্যাপ আপডেটের কাজ চলছে"),
+    val killSwitchMessageBn: String = AppLang.tr(
+        "We are currently updating our servers and systems to make the app faster, better, and more secure. Sorry for the temporary inconvenience. The app will resume shortly.",
+        "অ্যাপটিকে আরও উন্নত, দ্রুত ও নিরাপদ করতে বর্তমানে সার্ভার ও সিস্টেম আপডেটের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত। কাজ শেষ হওয়া মাত্রই অ্যাপটি পুনরায় চালু হবে।"
+    ),
     val estimatedBackTimeBn: String? = null,
     val fileSizeMb: Double? = null
 )
@@ -141,10 +145,10 @@ object AppUpdateRepository {
                                 versionName = BuildConfig.VERSION_NAME,
                                 minSupportedVersionCode = BuildConfig.VERSION_CODE,
                                 isForce = true,
-                                titleBn = "অ্যাপ আপডেটের কাজ চলছে",
+                                titleBn = AppLang.tr("App Update in Progress", "অ্যাপ আপডেটের কাজ চলছে"),
                                 changelogBn = "",
                                 downloadUrl = "",
-                                buttonText = "এখনই ডাউনলোড ও আপডেট করুন",
+                                buttonText = AppLang.tr("Download & Update Now", "এখনই ডাউনলোড ও আপডেট করুন"),
                                 signatureHash = null,
                                 isKillSwitchActive = true
                             )
@@ -172,19 +176,22 @@ object AppUpdateRepository {
                         versionCode
                     }
                     val isForce = true
-                    val titleBn = cleanStr("title", "নির্ধারিত সংস্করণ ইনস্টল করুন")
-                    val changelogBn = cleanStr("changelog", "অ্যাপে নতুন ফিচার এবং সিকিউরিটি আপডেট যুক্ত করা হয়েছে।")
+                    val titleBn = cleanStr("title", AppLang.tr("Install Required Version", "নির্ধারিত সংস্করণ ইনস্টল করুন"))
+                    val changelogBn = cleanStr("changelog", AppLang.tr("New features and security updates have been added.", "অ্যাপে নতুন ফিচার এবং সিকিউরিটি আপডেট যুক্ত করা হয়েছে।"))
                     val downloadUrl = cleanStr("download_url")
-                    val buttonText = cleanStr("button_text", "এখনই ডাউনলোড ও আপডেট করুন")
+                    val buttonText = cleanStr("button_text", AppLang.tr("Download & Update Now", "এখনই ডাউনলোড ও আপডেট করুন"))
                     val signatureHash = cleanStr("apk_checksum_sha256").takeIf { it.isNotBlank() }
 
                     val isKillSwitchActive = obj.optBoolean("is_kill_switch", false) ||
                         obj.optBoolean("is_maintenance", false)
 
-                    val killSwitchTitleBn = cleanStr("kill_switch_title", "অ্যাপ আপডেটের কাজ চলছে")
+                    val killSwitchTitleBn = cleanStr("kill_switch_title", AppLang.tr("App Update in Progress", "অ্যাপ আপডেটের কাজ চলছে"))
                     val killSwitchMessageBn = cleanStr(
                         "kill_switch_message",
-                        "অ্যাপটিকে আরও উন্নত, দ্রুত ও নিরাপদ করতে বর্তমানে সার্ভার ও সিস্টেম আপডেটের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত। কাজ শেষ হওয়া মাত্রই অ্যাপটি পুনরায় চালু হবে।"
+                        AppLang.tr(
+                            "We are currently updating our servers and systems to make the app faster, better, and more secure. Sorry for the temporary inconvenience. The app will resume shortly.",
+                            "অ্যাপটিকে আরও উন্নত, দ্রুত ও নিরাপদ করতে বর্তমানে সার্ভার ও সিস্টেম আপডেটের কাজ চলছে। সাময়িক অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত। কাজ শেষ হওয়া মাত্রই অ্যাপটি পুনরায় চালু হবে।"
+                        )
                     )
                     val estimatedBackTimeBn = cleanStr("estimated_back_time").takeIf { it.isNotBlank() }
                     val fileSizeMb = if (obj.has("file_size_mb") && !obj.isNull("file_size_mb")) {

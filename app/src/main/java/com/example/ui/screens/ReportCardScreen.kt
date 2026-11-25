@@ -53,12 +53,14 @@ import com.example.reportcard.ReportCardUiState
 import com.example.reportcard.ReportCardViewModel
 import com.example.reportcard.ReportTab
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
 import com.example.utils.AvatarUtils
 import com.example.utils.SubjectColorUtils
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
-// Bengali digit conversion helpers (delegating to central utility)
-private fun Number?.toBn(): String = if (this == null) "০" else toBengaliDigits(this)
+// Localized digit conversion helpers (delegating to central utility)
+private fun Number?.toBn(): String = if (this == null) AppLang.tr("0", "০") else toBengaliDigits(this)
 
 private fun String?.toBn(): String = if (this == null) "" else toBengaliDigits(this)
 
@@ -171,19 +173,25 @@ fun ReportCardScreen(
         Scaffold(
         topBar = {
             ReportCardTopBar(
-                title = if (uiState.selectedTab == ReportTab.RESULT_DETAILS) "রিপোর্ট কার্ড" else "বিষয়ভিত্তিক লিডারবোর্ড",
+                title = if (uiState.selectedTab == ReportTab.RESULT_DETAILS) tr("Report Card", "রিপোর্ট কার্ড") else tr("Leaderboard", "লিডারবোর্ড"),
                 subtitle = uiState.programTitle,
                 onBack = onBack,
                 onShare = {
                     val shareText = if (uiState.selectedTab == ReportTab.RESULT_DETAILS) {
                         val score = uiState.reportData?.performance_report?.total_score?.percentage ?: 0
                         val rank = uiState.reportData?.performance_report?.class_rank?.rank ?: 0
-                        "আমার কোয়ার্টার রিপোর্ট কার্ড:\nমোট স্কোর: ${score}%\nর‍্যাঙ্ক: ${rank}তম\nMaxBird অ্যাপে আমার সাথে যুক্ত হও!"
+                        AppLang.tr(
+                            "My Quarter Report Card:\nTotal Score: ${score}%\nRank: #$rank\nJoin me on MaxBird!",
+                            "আমার কোয়ার্টার রিপোর্ট কার্ড:\nমোট স্কোর: ${score}%\nর‍্যাঙ্ক: ${rank}তম\nMaxBird অ্যাপে আমার সাথে যুক্ত হও!"
+                        )
                     } else {
                         val rank = uiState.leaderboardData?.user_rank ?: 0
                         val marks = uiState.leaderboardData?.user_marks ?: 0
-                        val subName = uiState.selectedLeaderboardSubject?.display_bn ?: "সকল বিষয়"
-                        "বিষয়: $subName | আমার মেধা র‍্যাঙ্ক: ${rank}তম (প্রাপ্ত নম্বর: ${marks}%)\nMaxBird অ্যাপ থেকে।"
+                        val subName = uiState.selectedLeaderboardSubject?.display_bn ?: AppLang.tr("All Subjects", "সকল বিষয়")
+                        AppLang.tr(
+                            "Subject: $subName | My Rank: #$rank (Score: ${marks}%)\nFrom MaxBird.",
+                            "বিষয়: $subName | আমার মেধা র‍্যাঙ্ক: ${rank}তম (প্রাপ্ত নম্বর: ${marks}%)\nMaxBird অ্যাপ থেকে।"
+                        )
                     }
                     runCatching {
                         val sendIntent = Intent().apply {
@@ -191,10 +199,10 @@ fun ReportCardScreen(
                             putExtra(Intent.EXTRA_TEXT, shareText)
                             type = "text/plain"
                         }
-                        val shareIntent = Intent.createChooser(sendIntent, "রিপোর্ট কার্ড শেয়ার করো")
+                        val shareIntent = Intent.createChooser(sendIntent, AppLang.tr("Share Report Card", "রিপোর্ট কার্ড শেয়ার করো"))
                         context.startActivity(shareIntent)
                     }.onFailure {
-                        Toast.makeText(context, "শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, AppLang.tr("No app available to share", "শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি"), Toast.LENGTH_SHORT).show()
                     }
                 }
             )
@@ -229,18 +237,21 @@ fun ReportCardScreen(
                     onShare = {
                         val rank = uiState.leaderboardData?.user_rank ?: 0
                         val marks = uiState.leaderboardData?.user_marks ?: 0
-                        val subName = uiState.selectedLeaderboardSubject?.display_bn ?: "সকল বিষয়"
-                        val shareText = "বিষয়: $subName\nআমার জাতীয় মেধা র‍্যাঙ্ক: ${rank}তম\nপ্রাপ্ত নম্বর: ${marks}%\nMaxBird লাইভ ক্লাসে অংশ নাও!"
+                        val subName = uiState.selectedLeaderboardSubject?.display_bn ?: AppLang.tr("All Subjects", "সকল বিষয়")
+                        val shareText = AppLang.tr(
+                            "Subject: $subName\nMy Merit Rank: #$rank\nScore: ${marks}%\nJoin live classes on MaxBird!",
+                            "বিষয়: $subName\nআমার জাতীয় মেধা র‍্যাঙ্ক: ${rank}তম\nপ্রাপ্ত নম্বর: ${marks}%\nMaxBird লাইভ ক্লাসে অংশ নাও!"
+                        )
                         runCatching {
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
                                 putExtra(Intent.EXTRA_TEXT, shareText)
                                 type = "text/plain"
                             }
-                            val shareIntent = Intent.createChooser(sendIntent, "লিডারবোর্ড শেয়ার করো")
+                            val shareIntent = Intent.createChooser(sendIntent, AppLang.tr("Share Leaderboard", "লিডারবোর্ড শেয়ার করো"))
                             context.startActivity(shareIntent)
                         }.onFailure {
-                            Toast.makeText(context, "শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("No app available to share", "শেয়ার করার জন্য কোনো অ্যাপ পাওয়া যায়নি"), Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -352,7 +363,7 @@ fun ReportCardScreen(
                                 .padding(horizontal = 16.dp, vertical = 6.dp),
                             placeholder = {
                                 Text(
-                                    text = "নাম, মোবাইল বা কলেজ দিয়ে ডাটাবেজে খুঁজুন...",
+                                    text = tr("Search by name, phone, or college...", "নাম, মোবাইল বা কলেজ দিয়ে খুঁজুন..."),
                                     fontSize = 13.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -430,7 +441,7 @@ fun ReportCardScreen(
                                             border = BorderStroke(1.dp, palette.accentText.copy(alpha = 0.35f))
                                         ) {
                                             Text(
-                                                text = "সরাসরি ডাটাবেজ সার্চ",
+                                                text = tr("Live Search", "ডাটাবেজ সার্চ"),
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = palette.accentText,
@@ -439,7 +450,7 @@ fun ReportCardScreen(
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "ফলাফল (${filteredUsers.size.toBn()} জন)",
+                                            text = tr("Results (${filteredUsers.size})", "ফলাফল (${filteredUsers.size.toBn()} জন)"),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = palette.textBody
@@ -491,7 +502,10 @@ fun ReportCardScreen(
                                             )
                                             Spacer(modifier = Modifier.height(12.dp))
                                             Text(
-                                                text = "\"${uiState.searchQuery}\" দিয়ে ডাটাবেজে কোনো অ্যাকাউন্ট পাওয়া যায়নি",
+                                                text = tr(
+                                                    "No account found for \"${uiState.searchQuery}\"",
+                                                    "\"${uiState.searchQuery}\" দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি"
+                                                ),
                                                 color = Color(0xFF475569),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Medium,
@@ -499,7 +513,10 @@ fun ReportCardScreen(
                                             )
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
-                                                text = "নামের বানান সঠিক কিনা যাচাই করুন অথবা মোবাইল নম্বর দিয়ে চেষ্টা করুন",
+                                                text = tr(
+                                                    "Check spelling or try searching with a phone number",
+                                                    "নামের বানান যাচাই করুন অথবা মোবাইল নম্বর দিয়ে চেষ্টা করুন"
+                                                ),
                                                 color = Color(0xFF94A3B8),
                                                 fontSize = 12.sp,
                                                 textAlign = TextAlign.Center
@@ -534,7 +551,10 @@ fun ReportCardScreen(
                                 if (restUsers.isNotEmpty()) {
                                     item {
                                         Text(
-                                            text = "অন্যান্য শীর্ষ মেধাবী শিক্ষার্থী (${filteredUsers.size.toBn()} জন)",
+                                            text = tr(
+                                                "Top Students (${filteredUsers.size})",
+                                                "অন্যান্য শীর্ষ শিক্ষার্থী (${filteredUsers.size.toBn()} জন)"
+                                            ),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = palette.textHeading,
@@ -578,7 +598,7 @@ fun ReportCardScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
-                                                    text = "আরও অ্যাকাউন্ট লোড করা হচ্ছে...",
+                                                    text = tr("Loading more...", "আরও লোড হচ্ছে..."),
                                                     fontSize = 13.sp,
                                                     color = Color(0xFF64748B)
                                                 )
@@ -603,7 +623,10 @@ fun ReportCardScreen(
                                             )
                                             Spacer(modifier = Modifier.height(12.dp))
                                             Text(
-                                                text = "এই বিষয়ের জন্য এখনো লিডারবোর্ড ডেটা পাওয়া যায়নি",
+                                                text = tr(
+                                                    "No leaderboard data for this subject yet",
+                                                    "এই বিষয়ের জন্য এখনো লিডারবোর্ড ডেটা পাওয়া যায়নি"
+                                                ),
                                                 color = Color(0xFF64748B),
                                                 fontSize = 14.sp,
                                                 textAlign = TextAlign.Center
@@ -774,14 +797,17 @@ fun QuarterSwitcherSection(
 
                     Column {
                         Text(
-                            text = phase.title ?: "কোয়ার্টার",
+                            text = phase.title ?: tr("Quarter", "কোয়ার্টার"),
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                             color = if (isSelected) Color.White else palette.textHeading
                         )
                         if (phase.course_progress_percentage != null && phase.course_progress_percentage > 0) {
                             Text(
-                                text = "অগ্রগতি: ${phase.course_progress_percentage.toInt().toBn()}%",
+                                text = tr(
+                                    "Progress: ${phase.course_progress_percentage.toInt()}%",
+                                    "অগ্রগতি: ${phase.course_progress_percentage.toInt().toBn()}%"
+                                ),
                                 fontSize = 11.sp,
                                 color = if (isSelected) Color(0xFF93C5FD) else palette.textSecondary
                             )
@@ -811,7 +837,7 @@ fun ReportTabSwitcher(
                 .fillMaxWidth()
                 .padding(4.dp)
         ) {
-            // Tab 1: রেজাল্টের বিস্তারিত
+            // Tab 1: Result Details
             val isTab1 = selectedTab == ReportTab.RESULT_DETAILS
             Box(
                 modifier = Modifier
@@ -831,7 +857,7 @@ fun ReportTabSwitcher(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "রেজাল্টের বিস্তারিত",
+                        text = tr("Overview", "রেজাল্ট"),
                         fontSize = 13.sp,
                         fontWeight = if (isTab1) FontWeight.Bold else FontWeight.Medium,
                         color = if (isTab1) palette.tabSelectedContent else palette.textSecondary
@@ -839,7 +865,7 @@ fun ReportTabSwitcher(
                 }
             }
 
-            // Tab 2: বিষয়ভিত্তিক লিডারবোর্ড
+            // Tab 2: Leaderboard
             val isTab2 = selectedTab == ReportTab.LEADERBOARD
             Box(
                 modifier = Modifier
@@ -859,7 +885,7 @@ fun ReportTabSwitcher(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "বিষয়ভিত্তিক লিডারবোর্ড",
+                        text = tr("Leaderboard", "লিডারবোর্ড"),
                         fontSize = 13.sp,
                         fontWeight = if (isTab2) FontWeight.Bold else FontWeight.Medium,
                         color = if (isTab2) palette.tabSelectedContent else palette.textSecondary
@@ -919,7 +945,7 @@ fun PerformanceReportBanner(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "পারফরম্যান্স রিপোর্ট",
+                                text = tr("Performance Report", "পারফরম্যান্স রিপোর্ট"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFCD34D)
@@ -930,7 +956,7 @@ fun PerformanceReportBanner(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "সর্বমোট স্কোর",
+                        text = tr("Total Score", "সর্বমোট স্কোর"),
                         fontSize = 13.sp,
                         color = Color(0xFF94A3B8)
                     )
@@ -953,7 +979,10 @@ fun PerformanceReportBanner(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "মেধা র‍্যাঙ্ক: ${rank.toBn()}তম ${if (totalStudents != null) "(${totalStudents.toBn()} জনের মধ্যে)" else ""}",
+                                text = tr(
+                                    "Rank: #$rank${if (totalStudents != null) " (of $totalStudents)" else ""}",
+                                    "মেধা র‍্যাঙ্ক: ${rank.toBn()}তম ${if (totalStudents != null) "(${totalStudents.toBn()} জনের মধ্যে)" else ""}"
+                                ),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF38BDF8)
@@ -1012,15 +1041,15 @@ fun LearningProgressCards(
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Card 1: ক্লাস কমপ্লিশন
+        // Card 1: Class Completion
         val classAttended = classComp?.attended_classes ?: 0
         val classTotal = (classComp?.total_classes ?: 1).coerceAtLeast(1)
         val classPct = classComp?.percentage ?: ((classAttended.toDouble() / classTotal) * 100).toInt()
 
         ProgressCircularCard(
-            title = "ক্লাস কমপ্লিশন",
+            title = tr("Classes", "ক্লাস কমপ্লিশন"),
             valueText = "${classAttended.toBn()}/${classTotal.toBn()}",
-            subText = "উপস্থিতি সংখ্যা",
+            subText = tr("Attended", "উপস্থিতি সংখ্যা"),
             percentage = classPct,
             primaryColor = Color(0xFF3B82F6),
             secondaryColor = Color(0xFFDBEAFE),
@@ -1028,15 +1057,15 @@ fun LearningProgressCards(
             modifier = Modifier.weight(1f)
         )
 
-        // Card 2: চ্যাপ্টার এক্সাম স্কোর
+        // Card 2: Chapter Exam Score
         val examObtained = examProg?.obtained ?: 0
         val examTotal = (examProg?.total ?: 100).coerceAtLeast(1)
         val examPct = examProg?.percentage ?: ((examObtained.toDouble() / examTotal) * 100).toInt()
 
         ProgressCircularCard(
-            title = "চ্যাপ্টার এক্সাম স্কোর",
+            title = tr("Exams", "চ্যাপ্টার এক্সাম"),
             valueText = "${examObtained.toBn()}/${examTotal.toBn()}",
-            subText = "প্রাপ্ত মোট নম্বর",
+            subText = tr("Marks Obtained", "প্রাপ্ত মোট নম্বর"),
             percentage = examPct,
             primaryColor = Color(0xFF10B981),
             secondaryColor = Color(0xFFD1FAE5),
@@ -1170,7 +1199,7 @@ fun LearningActivitySummarySection(
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Text(
-            text = "লার্নিং এক্টিভিটির হিসাব",
+            text = tr("Learning Activity", "লার্নিং এক্টিভিটি"),
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = palette.textHeading
@@ -1184,7 +1213,7 @@ fun LearningActivitySummarySection(
         ) {
             ActivityChip(
                 count = quizCount,
-                label = "প্র্যাকটিস কুইজ দিয়েছো",
+                label = tr("Quizzes Attempted", "প্র্যাকটিস কুইজ দিয়েছো"),
                 icon = Icons.Default.EditNote,
                 iconBg = Color(0xFFFEF3C7),
                 iconColor = Color(0xFFD97706),
@@ -1193,7 +1222,7 @@ fun LearningActivitySummarySection(
 
             ActivityChip(
                 count = resourceCount,
-                label = "লার্নিং রিসোর্স দেখেছো",
+                label = tr("Resources Viewed", "লার্নিং রিসোর্স দেখেছো"),
                 icon = Icons.Default.MenuBook,
                 iconBg = Color(0xFFEDE9FE),
                 iconColor = Color(0xFF7C3AED),
@@ -1203,7 +1232,7 @@ fun LearningActivitySummarySection(
             if (animatedCount > 0) {
                 ActivityChip(
                     count = animatedCount,
-                    label = "অ্যানিমেটেড লেসন দেখেছো",
+                    label = tr("Animated Watched", "অ্যানিমেটেড লেসন দেখেছো"),
                     icon = Icons.Default.PlayCircle,
                     iconBg = Color(0xFFFCE7F3),
                     iconColor = Color(0xFFDB2777),
@@ -1253,7 +1282,7 @@ fun ActivityChip(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "${count.toBn()}টি",
+                text = tr("$count", "${count.toBn()}টি"),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = palette.textPrimary
@@ -1302,14 +1331,14 @@ fun PerformanceTrendCard(
             ) {
                 Column {
                     Text(
-                        text = "পারফরম্যান্স ট্রেন্ড",
+                        text = tr("Performance Trend", "পারফরম্যান্স ট্রেন্ড"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = palette.textHeading
                     )
                     val avg = trendData?.summary?.current_average ?: 0
                     Text(
-                        text = "বর্তমান গড়: ${avg.toBn()}%",
+                        text = tr("Current Avg: $avg%", "বর্তমান গড়: ${avg.toBn()}%"),
                         fontSize = 12.sp,
                         color = palette.accentText,
                         fontWeight = FontWeight.SemiBold
@@ -1331,7 +1360,7 @@ fun PerformanceTrendCard(
                                 .padding(horizontal = 8.dp, vertical = 5.dp)
                         ) {
                             Text(
-                                text = "ক্লাস",
+                                text = tr("Class", "ক্লাস"),
                                 fontSize = 11.sp,
                                 fontWeight = if (isClass) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isClass) Color.White else palette.textSecondary
@@ -1347,7 +1376,7 @@ fun PerformanceTrendCard(
                                 .padding(horizontal = 8.dp, vertical = 5.dp)
                         ) {
                             Text(
-                                text = "এক্সাম",
+                                text = tr("Exam", "এক্সাম"),
                                 fontSize = 11.sp,
                                 fontWeight = if (isExam) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isExam) Color.White else palette.textSecondary
@@ -1504,7 +1533,7 @@ fun SubjectWisePerformanceSection(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "আমার বিষয়ভিত্তিক পারফরম্যান্স",
+            text = tr("Subject Performance", "বিষয়ভিত্তিক পারফরম্যান্স"),
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = palette.textHeading
@@ -1520,7 +1549,7 @@ fun SubjectWisePerformanceSection(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "কোনো বিষয়ভিত্তিক তথ্য পাওয়া যায়নি",
+                    text = tr("No subject performance data found", "কোনো বিষয়ভিত্তিক তথ্য পাওয়া যায়নি"),
                     color = palette.textSecondary,
                     fontSize = 13.sp
                 )
@@ -1577,7 +1606,7 @@ fun PerformanceGroupBlock(
                     color = badgeBg
                 ) {
                     Text(
-                        text = group.label ?: "পারফরম্যান্স",
+                        text = group.label ?: tr("Performance", "পারফরম্যান্স"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = badgeTextColor,
@@ -1587,7 +1616,7 @@ fun PerformanceGroupBlock(
 
                 val count = group.subjects?.size ?: 0
                 Text(
-                    text = "${count.toBn()}টি বিষয়",
+                    text = tr("$count subjects", "${count.toBn()}টি বিষয়"),
                     fontSize = 11.sp,
                     color = palette.textSecondary,
                     fontWeight = FontWeight.Medium
@@ -1641,7 +1670,7 @@ fun SubjectPerformanceItemRow(
                     )
                 } else {
                     Text(
-                        text = item.title?.take(1) ?: "ব",
+                        text = item.title?.take(1) ?: tr("S", "ব"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = subjColor
@@ -1654,7 +1683,7 @@ fun SubjectPerformanceItemRow(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = item.title ?: "বিষয়",
+                        text = item.title ?: tr("Subject", "বিষয়"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = palette.textHeading
@@ -1666,7 +1695,7 @@ fun SubjectPerformanceItemRow(
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                text = "টপার 👑",
+                                text = tr("Topper 👑", "টপার 👑"),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (palette.isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
@@ -1684,14 +1713,14 @@ fun SubjectPerformanceItemRow(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "তোমার: ${studentScore.toBn()}%",
+                        text = tr("Yours: $studentScore%", "তোমার: ${studentScore.toBn()}%"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (studentScore >= 70) Color(0xFF10B981) else Color(0xFFEF4444)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "টপার: ${topperScore.toBn()}%",
+                        text = tr("Topper: $topperScore%", "টপার: ${topperScore.toBn()}%"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = palette.textSecondary
@@ -1706,7 +1735,7 @@ fun SubjectPerformanceItemRow(
             ) {
                 Icon(
                     imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "সংকুচিত করুন" else "বিস্তারিত দেখুন",
+                    contentDescription = if (isExpanded) tr("Collapse", "সংকুচিত করুন") else tr("Expand", "বিস্তারিত দেখুন"),
                     tint = palette.textSecondary
                 )
             }
@@ -1729,9 +1758,9 @@ fun SubjectPerformanceItemRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = "লাইভ ক্লাস সম্পন্ন", fontSize = 12.sp, color = palette.textSecondary)
+                    Text(text = tr("Live Classes Completed", "লাইভ ক্লাস সম্পন্ন"), fontSize = 12.sp, color = palette.textSecondary)
                     Text(
-                        text = "${completedLive.toBn()}/${totalLive.toBn()}টি",
+                        text = tr("$completedLive/$totalLive", "${completedLive.toBn()}/${totalLive.toBn()}টি"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = palette.textPrimary
@@ -1747,7 +1776,7 @@ fun SubjectPerformanceItemRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(text = "চ্যাপ্টার এক্সাম নম্বর", fontSize = 12.sp, color = palette.textSecondary)
+                    Text(text = tr("Chapter Exam Score", "চ্যাপ্টার এক্সাম নম্বর"), fontSize = 12.sp, color = palette.textSecondary)
                     Text(
                         text = "${obtainedExam.toBn()}/${totalExam.toBn()}",
                         fontSize = 12.sp,
@@ -1807,7 +1836,7 @@ fun SubjectPickerChips(
                         Spacer(modifier = Modifier.width(4.dp))
                     }
                     Text(
-                        text = subject.display_bn ?: subject.code ?: "বিষয়",
+                        text = subject.display_bn ?: subject.code ?: tr("Subject", "বিষয়"),
                         fontSize = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) Color.White else palette.textBody
@@ -1846,7 +1875,7 @@ fun LeaderboardPodiumView(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "🏆 শীর্ষ ৩ মেধাবী শিক্ষার্থী",
+                text = tr("🏆 Top 3 Students", "🏆 শীর্ষ ৩ মেধাবী শিক্ষার্থী"),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = palette.textHeading
@@ -1866,7 +1895,7 @@ fun LeaderboardPodiumView(
                         rank = 2,
                         pedestalHeight = 90.dp,
                         podiumColor = Color(0xFF94A3B8),
-                        badgeText = "২য়",
+                        badgeText = tr("2nd", "২য়"),
                         onClick = { onUserClick(second) },
                         modifier = Modifier.weight(1f)
                     )
@@ -1879,7 +1908,7 @@ fun LeaderboardPodiumView(
                         rank = 1,
                         pedestalHeight = 120.dp,
                         podiumColor = Color(0xFFF59E0B),
-                        badgeText = "১ম",
+                        badgeText = tr("1st", "১ম"),
                         isWinner = true,
                         onClick = { onUserClick(first) },
                         modifier = Modifier.weight(1.15f)
@@ -1893,7 +1922,7 @@ fun LeaderboardPodiumView(
                         rank = 3,
                         pedestalHeight = 75.dp,
                         podiumColor = Color(0xFFD97706),
-                        badgeText = "৩য়",
+                        badgeText = tr("3rd", "৩য়"),
                         onClick = { onUserClick(third) },
                         modifier = Modifier.weight(1f)
                     )
@@ -1917,7 +1946,7 @@ fun PodiumColumn(
     val user = userItem.user
     val score = userItem.effectiveScore
     val avatarUrl = user?.effectiveAvatar
-    val name = user?.effectiveName ?: "শিক্ষার্থী"
+    val name = user?.effectiveName ?: tr("Student", "শিক্ষার্থী")
     val school = user?.effectiveCollege ?: ""
 
     Column(
@@ -2047,7 +2076,7 @@ fun UserInitialBadge(
     textStyle: TextStyle = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
 ) {
     val cleanName = name.trim()
-    val initial = cleanName.take(1).ifBlank { "শ" }
+    val initial = cleanName.take(1).ifBlank { tr("S", "শ") }
     val hash = kotlin.math.abs(cleanName.hashCode())
     val gradientPairs = listOf(
         Pair(Color(0xFF2563EB), Color(0xFF60A5FA)),
@@ -2086,7 +2115,7 @@ fun LeaderboardUserRowItem(
     val rank = userItem.rank ?: 0
     val score = userItem.effectiveScore
     val user = userItem.user
-    val name = user?.effectiveName ?: "শিক্ষার্থী"
+    val name = user?.effectiveName ?: tr("Student", "শিক্ষার্থী")
     val avatar = user?.effectiveAvatar
     val school = user?.effectiveCollege ?: ""
 
@@ -2257,13 +2286,19 @@ fun StickyMyRankBar(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "তোমার র‍্যাঙ্ক: ${(userRank ?: 0).toBn()}তম (প্রোফাইল দেখুন)",
+                    text = tr(
+                        "Your Rank: #${userRank ?: 0}",
+                        "তোমার র‍্যাঙ্ক: ${(userRank ?: 0).toBn()}তম"
+                    ),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White
                 )
                 Text(
-                    text = "প্রাপ্ত মোট নম্বর: ${(userScore ?: 0).toBn()}%",
+                    text = tr(
+                        "Score: ${userScore ?: 0}%",
+                        "প্রাপ্ত নম্বর: ${(userScore ?: 0).toBn()}%"
+                    ),
                     fontSize = 12.sp,
                     color = Color(0xFF94A3B8)
                 )
@@ -2286,7 +2321,7 @@ fun StickyMyRankBar(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "শেয়ার",
+                    text = tr("Share", "শেয়ার"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -2298,13 +2333,13 @@ fun StickyMyRankBar(
 
 fun downloadProfileImage(context: Context, imageUrl: String, studentName: String) {
     if (imageUrl.isBlank()) {
-        Toast.makeText(context, "ডাউনলোড করার মত ছবি নেই", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, AppLang.tr("No image available to download", "ডাউনলোড করার মত ছবি নেই"), Toast.LENGTH_SHORT).show()
         return
     }
     try {
         val request = DownloadManager.Request(android.net.Uri.parse(imageUrl)).apply {
-            setTitle("$studentName - প্রোফাইল ছবি")
-            setDescription("ছবি ডাউনলোড হচ্ছে...")
+            setTitle(AppLang.tr("$studentName - Profile Photo", "$studentName - প্রোফাইল ছবি"))
+            setDescription(AppLang.tr("Downloading image...", "ছবি ডাউনলোড হচ্ছে..."))
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationInExternalPublicDir(
                 Environment.DIRECTORY_DOWNLOADS,
@@ -2316,12 +2351,12 @@ fun downloadProfileImage(context: Context, imageUrl: String, studentName: String
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
         if (manager != null) {
             manager.enqueue(request)
-            Toast.makeText(context, "ডাউনলোড শুরু হয়েছে! নোটিফিকেশন বার চেক করুন", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, AppLang.tr("Download started! Check notifications.", "ডাউনলোড শুরু হয়েছে! নোটিফিকেশন বার চেক করুন"), Toast.LENGTH_LONG).show()
         } else {
-            Toast.makeText(context, "ডাউনলোড ম্যানেজার পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Download manager unavailable", "ডাউনলোড ম্যানেজার পাওয়া যায়নি"), Toast.LENGTH_SHORT).show()
         }
     } catch (e: Exception) {
-        Toast.makeText(context, "ডাউনলোড করতে সমস্যা হয়েছে: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, AppLang.tr("Download failed: ${e.localizedMessage}", "ডাউনলোড করতে সমস্যা হয়েছে: ${e.localizedMessage}"), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -2372,7 +2407,7 @@ fun FullScreenImageViewerDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "বন্ধ করুন",
+                        contentDescription = tr("Close", "বন্ধ করুন"),
                         tint = Color.White
                     )
                 }
@@ -2441,13 +2476,13 @@ fun FullScreenImageViewerDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Download,
-                            contentDescription = "ডাউনলোড",
+                            contentDescription = tr("Download", "ডাউনলোড"),
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "ছবি ডাউনলোড",
+                            text = tr("Download", "ছবি ডাউনলোড"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -2459,7 +2494,7 @@ fun FullScreenImageViewerDialog(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             val clip = android.content.ClipData.newPlainText("Profile Image URL", formattedUrl)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "ছবির লিংক কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Image link copied!", "ছবির লিংক কপি করা হয়েছে!"), Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -2469,13 +2504,13 @@ fun FullScreenImageViewerDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "কপি লিংক",
+                            contentDescription = tr("Copy Link", "কপি লিংক"),
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "লিংক কপি",
+                            text = tr("Copy Link", "লিংক কপি"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -2525,7 +2560,7 @@ fun SocialContactSection(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "সরাসরি যোগাযোগ করুন",
+                    text = tr("Direct Contact", "সরাসরি যোগাযোগ করুন"),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = palette.textPrimary
@@ -2549,7 +2584,7 @@ fun SocialContactSection(
                                 }
                                 context.startActivity(waIntent)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "WhatsApp খোলা সম্ভব হয়নি", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, AppLang.tr("Unable to open WhatsApp", "WhatsApp খোলা সম্ভব হয়নি"), Toast.LENGTH_SHORT).show()
                             }
                         },
                     shape = RoundedCornerShape(12.dp),
@@ -2583,7 +2618,7 @@ fun SocialContactSection(
                                 }
                                 context.startActivity(tgIntent)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Telegram খোলা সম্ভব হয়নি", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, AppLang.tr("Unable to open Telegram", "Telegram খোলা সম্ভব হয়নি"), Toast.LENGTH_SHORT).show()
                             }
                         },
                     shape = RoundedCornerShape(12.dp),
@@ -2629,13 +2664,13 @@ fun SocialContactSection(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Call,
-                            contentDescription = "কল",
+                            contentDescription = tr("Call", "কল"),
                             tint = Color(0xFF334155),
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "কল করুন",
+                            text = tr("Call", "কল করুন"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF334155)
@@ -2676,8 +2711,8 @@ fun StudentProfileDetailDialog(
     val gender = run {
         val raw = (fullProfile?.gender ?: userItem.gender ?: userItem.user?.gender)?.trim()?.takeIf { it.isNotBlank() && it != "null" }
         when (raw?.lowercase()) {
-            "female", "f", "নারী", "মহিলা" -> "মহিলা"
-            "male", "m", "পুরুষ" -> "পুরুষ"
+            "female", "f", "নারী", "মহিলা" -> AppLang.tr("Female", "মহিলা")
+            "male", "m", "পুরুষ" -> AppLang.tr("Male", "পুরুষ")
             else -> raw
         }
     }
@@ -2689,7 +2724,7 @@ fun StudentProfileDetailDialog(
                 val parseFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
                 val date = parseFormat.parse(raw)
                 if (date != null) {
-                    java.text.SimpleDateFormat("dd MMMM, yyyy", java.util.Locale.US).format(date)
+                    java.text.SimpleDateFormat("dd MMMM, yyyy", AppLang.locale()).format(date)
                 } else raw
             } catch (_: Exception) {
                 raw
@@ -2706,8 +2741,8 @@ fun StudentProfileDetailDialog(
 
     val shift = fullProfile?.shift?.trim()?.takeIf { it.isNotBlank() && it != "null" }?.let {
         when (it.lowercase()) {
-            "morning" -> "মর্নিং"
-            "day" -> "ডে"
+            "morning" -> AppLang.tr("Morning", "মর্নিং")
+            "day" -> AppLang.tr("Day", "ডে")
             else -> it
         }
     }
@@ -2716,8 +2751,8 @@ fun StudentProfileDetailDialog(
     val division = (fullProfile?.school?.address?.division?.display ?: userItem.division ?: userItem.user?.division)?.trim()?.takeIf { it.isNotBlank() && it != "null" }
     val college = (fullProfile?.school?.name ?: userItem.effectiveCollege)?.trim()?.takeIf { it.isNotBlank() && it != "null" }
 
-    val sscBoard = (fullProfile?.ssc_board_name ?: division?.let { "$it শিক্ষা বোর্ড" })?.trim()?.takeIf { it.isNotBlank() && it != "null" }
-    val hscBoard = (fullProfile?.hsc_board_name ?: division?.let { "$it শিক্ষা বোর্ড" })?.trim()?.takeIf { it.isNotBlank() && it != "null" }
+    val sscBoard = (fullProfile?.ssc_board_name ?: division?.let { AppLang.tr("$it Education Board", "$it শিক্ষা বোর্ড") })?.trim()?.takeIf { it.isNotBlank() && it != "null" }
+    val hscBoard = (fullProfile?.hsc_board_name ?: division?.let { AppLang.tr("$it Education Board", "$it শিক্ষা বোর্ড") })?.trim()?.takeIf { it.isNotBlank() && it != "null" }
 
     val sscRoll = (fullProfile?.board_roll_number ?: userItem.effectiveRoll)?.trim()?.takeIf { it.isNotBlank() && it != "null" }
     val hscRoll = fullProfile?.hsc_board_roll_number?.trim()?.takeIf { it.isNotBlank() && it != "null" }
@@ -2781,7 +2816,7 @@ fun StudentProfileDetailDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "শিক্ষার্থীর সম্পূর্ণ প্রোফাইল",
+                        text = tr("Student Profile", "শিক্ষার্থীর প্রোফাইল"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = palette.textPrimary,
@@ -2795,7 +2830,7 @@ fun StudentProfileDetailDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "বন্ধ করুন",
+                        contentDescription = tr("Close", "বন্ধ করুন"),
                         tint = palette.textSecondary
                     )
                 }
@@ -2823,7 +2858,7 @@ fun StudentProfileDetailDialog(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "সার্ভার থেকে সম্পূর্ণ প্রোফাইল তথ্য লোড হচ্ছে...",
+                            text = tr("Loading full profile...", "সম্পূর্ণ প্রোফাইল লোড হচ্ছে..."),
                             fontSize = 12.sp,
                             color = palette.accentText,
                             fontWeight = FontWeight.Medium
@@ -2846,13 +2881,13 @@ fun StudentProfileDetailDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "সম্পূর্ণ বিবরণ লোড করা যায়নি",
+                            text = tr("Failed to load details", "সম্পূর্ণ বিবরণ লোড করা যায়নি"),
                             fontSize = 12.sp,
                             color = if (palette.isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
                             fontWeight = FontWeight.Medium
                         )
                         TextButton(onClick = onRetry) {
-                            Text("পুনরায় চেষ্টা করুন", fontSize = 12.sp, color = palette.accentText, fontWeight = FontWeight.Bold)
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"), fontSize = 12.sp, color = palette.accentText, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2925,7 +2960,7 @@ fun StudentProfileDetailDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ZoomIn,
-                                    contentDescription = "বড় করে দেখুন",
+                                    contentDescription = tr("Zoom In", "বড় করে দেখুন"),
                                     tint = Color.White,
                                     modifier = Modifier.size(14.dp)
                                 )
@@ -2935,7 +2970,7 @@ fun StudentProfileDetailDialog(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "🔍 ছবিতে চাপ দিয়ে বড় করুন ও ডাউনলোড করুন",
+                            text = tr("🔍 Tap photo to zoom & download", "🔍 ছবিতে চাপ দিয়ে বড় করুন ও ডাউনলোড করুন"),
                             fontSize = 11.sp,
                             color = palette.accentText,
                             fontWeight = FontWeight.Medium
@@ -2969,7 +3004,7 @@ fun StudentProfileDetailDialog(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "🏆 র‍্যাংক: #${rank.toBn()}",
+                                            text = tr("🏆 Rank: #$rank", "🏆 র‍্যাংক: #${rank.toBn()}"),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFB45309)
@@ -2985,7 +3020,7 @@ fun StudentProfileDetailDialog(
                                     border = BorderStroke(1.dp, Color(0xFF86EFAC))
                                 ) {
                                     Text(
-                                        text = "📊 স্কোয়ার: ${score.toBn()}%",
+                                        text = tr("📊 Score: $score%", "📊 স্কোর: ${score.toBn()}%"),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF15803D),
@@ -3002,25 +3037,28 @@ fun StudentProfileDetailDialog(
                     SocialContactSection(phone = phone, context = context)
                 }
 
-                // Section 1: 👤 ব্যক্তিগত তথ্য (Personal Information)
+                val notSetText = tr("Not provided", "তথ্য দেওয়া নেই")
+
+                // Section 1: Personal Information
                 ProfileSectionCard(
-                    sectionTitle = "ব্যক্তিগত তথ্য",
+                    sectionTitle = tr("Personal Info", "ব্যক্তিগত তথ্য"),
                     sectionIcon = Icons.Default.Person,
                     sectionColor = Color(0xFF2563EB)
                 ) {
                     ProfileInfoRow(
                         icon = Icons.Default.Badge,
                         iconTint = Color(0xFF2563EB),
-                        label = "পূর্ণ নাম",
-                        value = name
+                        label = tr("Full Name", "পূর্ণ নাম"),
+                        value = name,
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Phone,
                         iconTint = Color(0xFF16A34A),
-                        label = "ফোন নম্বর",
+                        label = tr("Phone", "ফোন নম্বর"),
                         value = phone,
-                        missingText = "তথ্য দেয়া নেই",
+                        missingText = notSetText,
                         isClickable = !phone.isNullOrBlank(),
                         onClick = {
                             if (!phone.isNullOrBlank()) {
@@ -3037,48 +3075,50 @@ fun StudentProfileDetailDialog(
                     ProfileInfoRow(
                         icon = Icons.Default.Wc,
                         iconTint = Color(0xFF8B5CF6),
-                        label = "লিঙ্গ",
-                        value = gender
+                        label = tr("Gender", "লিঙ্গ"),
+                        value = gender,
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Cake,
                         iconTint = Color(0xFFEC4899),
-                        label = "জন্ম তারিখ",
+                        label = tr("Date of Birth", "জন্ম তারিখ"),
                         value = dob,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                     if (!email.isNullOrBlank()) {
                         HorizontalDivider(color = Color(0xFFF1F5F9))
                         ProfileInfoRow(
                             icon = Icons.Default.Email,
                             iconTint = Color(0xFF2563EB),
-                            label = "ইমেইল",
-                            value = email
+                            label = tr("Email", "ইমেইল"),
+                            value = email,
+                            missingText = notSetText
                         )
                     }
                 }
 
-                // Section 2: 👪 অভিভাবকের তথ্য (Guardian Information)
+                // Section 2: Guardian Information
                 ProfileSectionCard(
-                    sectionTitle = "অভিভাবকের তথ্য",
+                    sectionTitle = tr("Guardian Info", "অভিভাবকের তথ্য"),
                     sectionIcon = Icons.Default.FamilyRestroom,
                     sectionColor = Color(0xFF7C3AED)
                 ) {
                     ProfileInfoRow(
                         icon = Icons.Default.Person,
                         iconTint = Color(0xFF7C3AED),
-                        label = "অভিভাবকের নাম",
+                        label = tr("Guardian Name", "অভিভাবকের নাম"),
                         value = guardianName,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Phone,
                         iconTint = Color(0xFF16A34A),
-                        label = "অভিভাবকের মোবাইল নম্বর",
+                        label = tr("Guardian Mobile", "অভিভাবকের মোবাইল নম্বর"),
                         value = guardianPhone,
-                        missingText = "তথ্য দেয়া নেই",
+                        missingText = notSetText,
                         isClickable = !guardianPhone.isNullOrBlank(),
                         onClick = {
                             if (!guardianPhone.isNullOrBlank()) {
@@ -3093,9 +3133,9 @@ fun StudentProfileDetailDialog(
                     )
                 }
 
-                // Section 3: 🎓 শিক্ষা প্রতিষ্ঠান (Educational Institution)
+                // Section 3: Educational Institution
                 ProfileSectionCard(
-                    sectionTitle = "শিক্ষা প্রতিষ্ঠান",
+                    sectionTitle = tr("Institution", "শিক্ষা প্রতিষ্ঠান"),
                     sectionIcon = Icons.Default.School,
                     sectionColor = Color(0xFFD97706)
                 ) {
@@ -3105,92 +3145,98 @@ fun StudentProfileDetailDialog(
                     ProfileInfoRow(
                         icon = Icons.Default.Class,
                         iconTint = Color(0xFFD97706),
-                        label = "শ্রেণী ও বিভাগ",
-                        value = classDisplay
+                        label = tr("Class & Group", "শ্রেণী ও বিভাগ"),
+                        value = classDisplay,
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Schedule,
                         iconTint = Color(0xFF0284C7),
-                        label = "শিফট (Shift)",
-                        value = shift
+                        label = tr("Shift", "শিফট"),
+                        value = shift,
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Map,
                         iconTint = Color(0xFF059669),
-                        label = "বিভাগ (Division)",
-                        value = division
+                        label = tr("Division", "বিভাগ (Division)"),
+                        value = division,
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.LocationOn,
                         iconTint = Color(0xFFE11D48),
-                        label = "জেলা (District)",
-                        value = district
+                        label = tr("District", "জেলা (District)"),
+                        value = district,
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.School,
                         iconTint = Color(0xFF2563EB),
-                        label = "প্রতিষ্ঠান (স্কুল / কলেজ)",
-                        value = college
+                        label = tr("School / College", "প্রতিষ্ঠান (স্কুল / কলেজ)"),
+                        value = college,
+                        missingText = notSetText
                     )
                     if (!passingYear.isNullOrBlank()) {
                         HorizontalDivider(color = Color(0xFFF1F5F9))
                         ProfileInfoRow(
                             icon = Icons.Default.CalendarToday,
                             iconTint = Color(0xFF8B5CF6),
-                            label = "শিক্ষাবর্ষ / ব্যাচ",
-                            value = "এইচএসসি $passingYear"
+                            label = tr("Batch", "শিক্ষাবর্ষ / ব্যাচ"),
+                            value = tr("HSC $passingYear", "এইচএসসি $passingYear"),
+                            missingText = notSetText
                         )
                     }
                 }
 
-                // Section 4: 📋 বোর্ড পরীক্ষার তথ্য (Board Exam Information)
+                // Section 4: Board Exam Information
                 ProfileSectionCard(
-                    sectionTitle = "বোর্ড পরীক্ষার তথ্য",
+                    sectionTitle = tr("Board Exam Info", "বোর্ড পরীক্ষার তথ্য"),
                     sectionIcon = Icons.Default.Assignment,
                     sectionColor = Color(0xFF059669)
                 ) {
                     ProfileInfoRow(
                         icon = Icons.Default.AccountBalance,
                         iconTint = Color(0xFF059669),
-                        label = "এসএসসি বোর্ড",
+                        label = tr("SSC Board", "এসএসসি বোর্ড"),
                         value = sscBoard,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Numbers,
                         iconTint = Color(0xFF6366F1),
-                        label = "এসএসসি রোল নম্বর",
+                        label = tr("SSC Roll", "এসএসসি রোল নম্বর"),
                         value = sscRoll,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Pin,
                         iconTint = Color(0xFF8B5CF6),
-                        label = "বোর্ড রেজিস্ট্রেশন নম্বর",
+                        label = tr("Registration No.", "বোর্ড রেজিস্ট্রেশন নম্বর"),
                         value = regNo,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.AccountBalance,
                         iconTint = Color(0xFF0284C7),
-                        label = "এইচএসসি বোর্ড",
+                        label = tr("HSC Board", "এইচএসসি বোর্ড"),
                         value = hscBoard,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                     HorizontalDivider(color = Color(0xFFF1F5F9))
                     ProfileInfoRow(
                         icon = Icons.Default.Numbers,
                         iconTint = Color(0xFFD97706),
-                        label = "এইচএসসি রোল নম্বর",
+                        label = tr("HSC Roll", "এইচএসসি রোল নম্বর"),
                         value = hscRoll,
-                        missingText = "তথ্য দেয়া নেই"
+                        missingText = notSetText
                     )
                 }
             }
@@ -3204,17 +3250,24 @@ fun StudentProfileDetailDialog(
             ) {
                 OutlinedButton(
                     onClick = {
-                        val shareText = "🏆 লিডারবোর্ড স্থান অর্জন করেছেন $name!\n" +
-                                (college?.let { "🏛️ কলেজ: $it\n" } ?: "") +
-                                (score?.let { "📊 স্কোর: ${it}% " } ?: "") +
-                                (rank?.let { "(র‍্যাংক #${it})\n" } ?: "\n") +
-                                (phone?.let { "📱 মোবাইল: $it" } ?: "")
+                        val shareText = AppLang.tr(
+                            "🏆 Leaderboard achiever: $name!\n" +
+                                    (college?.let { "🏛️ Institution: $it\n" } ?: "") +
+                                    (score?.let { "📊 Score: ${it}% " } ?: "") +
+                                    (rank?.let { "(Rank #${it})\n" } ?: "\n") +
+                                    (phone?.let { "📱 Phone: $it" } ?: ""),
+                            "🏆 লিডারবোর্ড স্থান অর্জন করেছেন $name!\n" +
+                                    (college?.let { "🏛️ কলেজ: $it\n" } ?: "") +
+                                    (score?.let { "📊 স্কোর: ${it}% " } ?: "") +
+                                    (rank?.let { "(র‍্যাংক #${it})\n" } ?: "\n") +
+                                    (phone?.let { "📱 মোবাইল: $it" } ?: "")
+                        )
                         runCatching {
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, shareText.trim())
                             }
-                            context.startActivity(Intent.createChooser(intent, "প্রোফাইল শেয়ার করুন"))
+                            context.startActivity(Intent.createChooser(intent, AppLang.tr("Share Profile", "প্রোফাইল শেয়ার করুন")))
                         }
                     },
                     modifier = Modifier
@@ -3225,13 +3278,13 @@ fun StudentProfileDetailDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
-                        contentDescription = "শেয়ার",
+                        contentDescription = tr("Share", "শেয়ার"),
                         tint = palette.accentText,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "শেয়ার করুন",
+                        text = tr("Share", "শেয়ার করুন"),
                         color = palette.accentText,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
@@ -3249,7 +3302,7 @@ fun StudentProfileDetailDialog(
                     )
                 ) {
                     Text(
-                        text = "বন্ধ করুন",
+                        text = tr("Close", "বন্ধ করুন"),
                         color = Color.White,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
@@ -3309,7 +3362,7 @@ private fun ProfileInfoRow(
     iconTint: Color,
     label: String,
     value: String?,
-    missingText: String = "তথ্য দেয়া নেই",
+    missingText: String = AppLang.tr("Not provided", "তথ্য দেয়া নেই"),
     isClickable: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {

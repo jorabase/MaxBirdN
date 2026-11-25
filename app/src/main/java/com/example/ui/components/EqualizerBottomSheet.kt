@@ -31,6 +31,9 @@ import coil.compose.AsyncImage
 import com.example.player.EqualizerManager
 import com.example.player.ExternalEqualizerAppInfo
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -55,7 +58,8 @@ fun EqualizerBottomSheet(
     var band3 by remember { mutableFloatStateOf(EqualizerManager.getCustomBandPercent(context, 3).toFloat()) }
     var band4 by remember { mutableFloatStateOf(EqualizerManager.getCustomBandPercent(context, 4).toFloat()) }
 
-    val installedEqualizerApps = remember {
+    val isBn = isBangla()
+    val installedEqualizerApps = remember(isBn) {
         EqualizerManager.scanInstalledEqualizerApps(context)
     }
 
@@ -131,15 +135,15 @@ fun EqualizerBottomSheet(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "অডিও ইকুলাইজার স্টুডিও",
+                                text = tr("Audio Equalizer", "অডিও ইকুলাইজার"),
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
                             )
                             val activeLabel = when {
-                                !selectedExtName.isNullOrBlank() -> "সংযুক্ত: $selectedExtName"
-                                enabled -> "বিল্ট-ইন ইকুলাইজার সক্রিয়"
-                                else -> "পছন্দের ইকুলাইজার সিলেক্ট করুন"
+                                !selectedExtName.isNullOrBlank() -> tr("Connected: $selectedExtName", "সংযুক্ত: $selectedExtName")
+                                enabled -> tr("Built-in EQ active", "বিল্ট-ইন ইকুলাইজার সক্রিয়")
+                                else -> tr("Choose your equalizer", "পছন্দের ইকুলাইজার বেছে নিন")
                             }
                             Text(
                                 text = activeLabel,
@@ -169,7 +173,7 @@ fun EqualizerBottomSheet(
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "Auto-Save",
+                                text = tr("Auto-Save", "অটো-সেভ"),
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF6EE7B7)
@@ -190,8 +194,8 @@ fun EqualizerBottomSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 val tabs = listOf(
-                    "মোবাইল ইকুলাইজার" to Icons.Default.PhoneAndroid,
-                    "বিল্ট-ইন কন্ট্রোল" to Icons.Default.Tune
+                    tr("Device EQ", "ডিভাইস ইকুলাইজার") to Icons.Default.PhoneAndroid,
+                    tr("Built-in EQ", "বিল্ট-ইন কন্ট্রোল") to Icons.Default.Tune
                 )
                 tabs.forEachIndexed { idx, (label, icon) ->
                     val isSelected = activeTab == idx
@@ -271,13 +275,13 @@ fun EqualizerBottomSheet(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "$selectedExtName সিলেক্ট করা আছে",
+                                    text = tr("$selectedExtName selected", "$selectedExtName সিলেক্ট করা আছে"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = primaryText
                                 )
                                 Text(
-                                    text = "প্রতিবার ক্লাস প্লে করলে এটি স্বয়ংক্রিয়ভাবে কাজ করবে",
+                                    text = tr("Connects automatically whenever you play a class", "প্রতিবার ক্লাস প্লে করলে এটি স্বয়ংক্রিয়ভাবে কাজ করবে"),
                                     fontSize = 11.5.sp,
                                     color = secondaryText
                                 )
@@ -287,7 +291,7 @@ fun EqualizerBottomSheet(
                 }
 
                 Text(
-                    text = "আপনার মোবাইলে থাকা ইকুলাইজার নির্বাচন করুন:",
+                    text = tr("Select Device Equalizer", "ডিভাইসের ইকুলাইজার নির্বাচন করুন"),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = primaryText
@@ -310,7 +314,7 @@ fun EqualizerBottomSheet(
                                 selectedExtName = appInfo.appName
                                 Toast.makeText(
                                     context,
-                                    "'${appInfo.appName}' স্থায়ীভাবে সিলেক্ট করা হয়েছে!",
+                                    AppLang.tr("'${appInfo.appName}' saved as default", "'${appInfo.appName}' স্থায়ীভাবে সিলেক্ট করা হয়েছে!"),
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
@@ -347,7 +351,7 @@ fun EqualizerBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "ডিভাইসের সাউন্ড কন্ট্রোল প্যানেল খুলুন",
+                        text = tr("Open Device Sound Panel", "ডিভাইসের সাউন্ড প্যানেল খুলুন"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0284C7)
@@ -398,13 +402,13 @@ fun EqualizerBottomSheet(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "বিল্ট-ইন স্টুডিও ইকুলাইজার",
+                                    text = tr("Built-in Equalizer", "বিল্ট-ইন ইকুলাইজার"),
                                     fontSize = 14.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = primaryText
                                 )
                                 Text(
-                                    text = if (enabled) "কাস্টম সাউন্ড বুস্টার সক্রিয় আছে" else "চালু করতে সুইচটি অন করুন",
+                                    text = if (enabled) tr("Custom sound booster active", "কাস্টম সাউন্ড বুস্টার সক্রিয় আছে") else tr("Toggle on to enable", "চালু করতে সুইচটি অন করুন"),
                                     fontSize = 11.5.sp,
                                     color = secondaryText
                                 )
@@ -429,7 +433,7 @@ fun EqualizerBottomSheet(
                 // Sound Presets Grid
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "সাউন্ড প্রিসেট প্রোফাইল",
+                        text = tr("Sound Presets", "সাউন্ড প্রিসেট"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = primaryText
@@ -473,7 +477,7 @@ fun EqualizerBottomSheet(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
-                                            text = preset.nameBn,
+                                            text = tr(preset.nameEn, preset.nameBn),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = if (isSelected) Color.White else primaryText,
@@ -490,7 +494,7 @@ fun EqualizerBottomSheet(
                                         }
                                     }
                                     Text(
-                                        text = preset.subtitleBn,
+                                        text = tr(preset.subtitleEn, preset.subtitleBn),
                                         fontSize = 10.5.sp,
                                         color = if (isSelected) Color.White.copy(alpha = 0.85f) else secondaryText,
                                         maxLines = 1,
@@ -529,7 +533,7 @@ fun EqualizerBottomSheet(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "ভয়েস ও লাউডনেস বুস্টার",
+                                        text = tr("Voice & Loudness Boost", "ভয়েস ও লাউডনেস বুস্টার"),
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = primaryText
@@ -584,7 +588,7 @@ fun EqualizerBottomSheet(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "ডিপ বেস বুস্টার (Bass Boost)",
+                                        text = tr("Deep Bass Boost", "ডিপ বেস বুস্টার"),
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = primaryText
@@ -640,7 +644,7 @@ fun EqualizerBottomSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "৫-ব্যান্ড ফ্রিকোয়েন্সি টিউনার",
+                                text = tr("5-Band Frequency Tuner", "৫-ব্যান্ড ফ্রিকোয়েন্সি টিউনার"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = primaryText
@@ -653,7 +657,7 @@ fun EqualizerBottomSheet(
                                 },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                             ) {
-                                Text("রিসেট (0 dB)", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                Text(tr("Reset (0 dB)", "রিসেট (0 dB)"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 
@@ -809,9 +813,9 @@ private fun MobileEqualizerSelectCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = if (isSelected) {
-                        "স্থায়ীভাবে সিলেক্টেড • অটো-কানেক্ট চালু"
+                        tr("Saved as default • Auto-connect on", "স্থায়ীভাবে সিলেক্টেড • অটো-কানেক্ট চালু")
                     } else {
-                        "সিলেক্ট করতে ট্যাপ করুন"
+                        tr("Tap to select", "সিলেক্ট করতে ট্যাপ করুন")
                     },
                     fontSize = 11.5.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,

@@ -28,6 +28,8 @@ import com.example.api.StudentLessonItem
 import com.example.utils.ClassTypeUtils
 import com.example.utils.RoutineDateUtils
 import com.example.utils.SubjectColorUtils
+import com.example.utils.isBangla
+import com.example.utils.tr
 
 @Composable
 fun TimelineRoutineCard(
@@ -43,7 +45,8 @@ fun TimelineRoutineCard(
     val startCal = remember(st) { RoutineDateUtils.parseIsoToDhakaCalendar(st) }
     val endCal = remember(et) { RoutineDateUtils.parseIsoToDhakaCalendar(et, isEndOfDay = true) }
 
-    val formattedTime = remember(startCal, endCal) {
+    val isBn = isBangla()
+    val formattedTime = remember(startCal, endCal, isBn) {
         val timeRange = RoutineDateUtils.formatTimeRange(startCal, endCal)
         val duration = RoutineDateUtils.calculateDurationText(startCal, endCal)
         if (duration.isNotBlank()) "$timeRange • $duration" else timeRange
@@ -64,16 +67,16 @@ fun TimelineRoutineCard(
 
     val classTypeBadge = ClassTypeUtils.getClassTypeBadgeStyle(lesson)
     val typeText = when {
-        isLiveNow -> "🔴 লাইভ চলছে"
-        isModelTestNow -> "✍️ মডেল টেস্ট চলছে"
-        isModelTest -> "✍️ মডেল টেস্ট (Model Test)"
-        isExamNow -> "✍️ পরীক্ষা চলছে"
-        isLiveExam || isExam -> "✍️ চ্যাপ্টার এক্সাম"
+        isLiveNow -> tr("🔴 Live Now", "🔴 লাইভ চলছে")
+        isModelTestNow -> tr("✍️ Model Test Live", "✍️ মডেল টেস্ট চলছে")
+        isModelTest -> tr("✍️ Model Test", "✍️ মডেল টেস্ট")
+        isExamNow -> tr("✍️ Exam Live", "✍️ পরীক্ষা চলছে")
+        isLiveExam || isExam -> tr("✍️ Chapter Exam", "✍️ চ্যাপ্টার এক্সাম")
         else -> classTypeBadge.label
     }
 
-    val subjectName = lesson.subject_name ?: "বিষয়"
-    val titleText = ClassTypeUtils.formatLessonTitle(lesson.title ?: lesson.live_class?.chapter_name ?: "অনলাইন ক্লাস")
+    val subjectName = lesson.subject_name ?: tr("Subject", "বিষয়")
+    val titleText = ClassTypeUtils.formatLessonTitle(lesson.title ?: lesson.live_class?.chapter_name ?: tr("Online Class", "অনলাইন ক্লাস"))
     val subjectColors = SubjectColorUtils.getColorScheme(subjectName)
 
     val handleCardClick = { onClick() }
@@ -229,7 +232,7 @@ fun TimelineRoutineCard(
                                             .clip(CircleShape)
                                             .background(Color.White)
                                     )
-                                    Text("লাইভ ক্লাস", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(tr("Live Class", "লাইভ ক্লাস"), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         } else if (isExamNow) {
@@ -246,7 +249,7 @@ fun TimelineRoutineCard(
                                             .clip(CircleShape)
                                             .background(Color.White)
                                     )
-                                    Text("লাইভ এক্সাম", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text(tr("Live Exam", "লাইভ এক্সাম"), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }
@@ -271,11 +274,11 @@ fun TimelineRoutineCard(
                         if (!isLiveNow && !isExamNow) {
                             val (posLabel, posBg, posColor) = when {
                                 isLiveExam || isExam || isModelTest -> when {
-                                    lesson.isExamUpcoming -> Triple("আপকামিং এক্সাম", Color(0xFFEDE9FE), Color(0xFF7C3AED))
-                                    else -> Triple("রেকর্ড এক্সাম", Color(0xFFFEF3C7), Color(0xFFD97706))
+                                    lesson.isExamUpcoming -> Triple(tr("Upcoming Exam", "আপকামিং এক্সাম"), Color(0xFFEDE9FE), Color(0xFF7C3AED))
+                                    else -> Triple(tr("Recorded Exam", "রেকর্ড এক্সাম"), Color(0xFFFEF3C7), Color(0xFFD97706))
                                 }
-                                lesson.isUpcoming -> Triple("আপকামিং ক্লাস", Color(0xFFE0F2FE), Color(0xFF0284C7))
-                                else -> Triple("রেকর্ড ক্লাস", Color(0xFFEFF6FF), Color(0xFF2563EB))
+                                lesson.isUpcoming -> Triple(tr("Upcoming Class", "আপকামিং ক্লাস"), Color(0xFFE0F2FE), Color(0xFF0284C7))
+                                else -> Triple(tr("Recorded", "রেকর্ড ক্লাস"), Color(0xFFEFF6FF), Color(0xFF2563EB))
                             }
                             Surface(
                                 shape = RoundedCornerShape(8.dp),

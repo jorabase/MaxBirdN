@@ -33,16 +33,17 @@ import com.example.database.SavedItemEntity
 import com.example.saved.SavedItemFilter
 import com.example.saved.SavedViewModel
 import com.example.ui.components.QuizRichContent
+import com.example.utils.AppLang
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 private fun toBengaliOptionLetter(optionNo: String?): String {
     return com.example.utils.McqAnswerUtils.toBengaliLetter(optionNo)
 }
 
 private fun formatTimestamp(millis: Long): String {
-    val sdf = SimpleDateFormat("dd MMM, yyyy • hh:mm a", Locale.getDefault())
+    val sdf = SimpleDateFormat("dd MMM, yyyy • hh:mm a", AppLang.locale())
     return sdf.format(Date(millis))
 }
 
@@ -72,12 +73,15 @@ fun SavedItemsScreen(
                 title = {
                     Column {
                         Text(
-                            text = "সংরক্ষিত তালিকা",
+                            text = tr("Saved", "সংরক্ষিত"),
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
                         Text(
-                            text = "${com.example.utils.toBengaliDigits(uiState.items.size)}টি আইটেম সংরক্ষিত",
+                            text = tr(
+                                "${uiState.items.size} saved items",
+                                "${com.example.utils.toBengaliDigits(uiState.items.size)}টি আইটেম সংরক্ষিত"
+                            ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -123,7 +127,13 @@ fun SavedItemsScreen(
                         onClick = { viewModel.setFilter(filter) },
                         label = {
                             Text(
-                                text = filter.label,
+                                text = when (filter) {
+                                    SavedItemFilter.ALL -> tr("All", "সবগুলো")
+                                    SavedItemFilter.QUESTIONS -> tr("Questions", "প্রশ্ন")
+                                    SavedItemFilter.NOTES -> tr("Notes", "নোট")
+                                    SavedItemFilter.CLASSES -> tr("Classes", "ক্লাস")
+                                    SavedItemFilter.OTHERS -> tr("Others", "অন্যান্য")
+                                },
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 fontSize = 13.sp
                             )
@@ -233,9 +243,9 @@ fun SavedItemCard(
                     ) {
                         Text(
                             text = when (item.type) {
-                                SavedItemEntity.TYPE_QUESTION -> "প্রশ্ন"
-                                SavedItemEntity.TYPE_NOTE -> "নোট"
-                                SavedItemEntity.TYPE_CLASS -> "ক্লাস"
+                                SavedItemEntity.TYPE_QUESTION -> tr("Question", "প্রশ্ন")
+                                SavedItemEntity.TYPE_NOTE -> tr("Note", "নোট")
+                                SavedItemEntity.TYPE_CLASS -> tr("Class", "ক্লাস")
                                 else -> item.type
                             },
                             fontSize = 11.sp,
@@ -333,7 +343,7 @@ fun SavedItemCard(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = if (isExpanded) "সমাধান লুকান" else "ব্যাখ্যা ও সমাধান দেখুন",
+                                text = if (isExpanded) tr("Hide Solution", "সমাধান লুকান") else tr("View Explanation", "ব্যাখ্যা ও সমাধান দেখুন"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFD97706)
@@ -396,7 +406,7 @@ fun SavedItemCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "লেকচার নোট / পিডিএফ ওপেন করুন",
+                        text = tr("Open Note / PDF", "নোট / পিডিএফ ওপেন করুন"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -427,7 +437,7 @@ fun SavedItemCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "ক্লাসটি দেখুন",
+                        text = tr("Watch Class", "ক্লাসটি দেখুন"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -570,7 +580,7 @@ fun EmptySavedState(filter: SavedItemFilter) {
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "কোনো সংরক্ষিত আইটেম পাওয়া যায়নি",
+                text = tr("No Saved Items", "কোনো সংরক্ষিত আইটেম পাওয়া যায়নি"),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -580,8 +590,14 @@ fun EmptySavedState(filter: SavedItemFilter) {
 
             Text(
                 text = when (filter) {
-                    SavedItemFilter.QUESTIONS -> "কুইজ দেওয়ার সময় বা ফলাফল দেখার পর বুকমার্ক আইকনে চাপ দিয়ে গুরুত্বপূর্ণ প্রশ্ন সংরক্ষণ করুন।"
-                    else -> "আপনার প্রয়োজনীয় প্রশ্ন, নোট বা ক্লাস সংরক্ষণ করে পরবর্তীতে অফলাইনেও দেখতে পারবেন।"
+                    SavedItemFilter.QUESTIONS -> tr(
+                        "Tap the bookmark icon during quizzes or results to save important questions.",
+                        "কুইজ দেওয়ার সময় বা ফলাফল দেখার পর বুকমার্ক আইকনে চাপ দিয়ে গুরুত্বপূর্ণ প্রশ্ন সংরক্ষণ করুন।"
+                    )
+                    else -> tr(
+                        "Bookmark important questions, notes, or classes to access them anytime.",
+                        "আপনার প্রয়োজনীয় প্রশ্ন, নোট বা ক্লাস সংরক্ষণ করে পরবর্তীতে অফলাইনেও দেখতে পারবেন।"
+                    )
                 },
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -97,7 +97,7 @@ class LiveClassService(
             val responseBody = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 Log.e(TAG, "GraphQL JoinLiveClass failed (${response.code}): $responseBody")
-                return Pair(null, "সার্ভারের সাথে সংযোগ স্থাপন করা যায়নি (কোড ${response.code})")
+                return Pair(null, com.example.utils.AppLang.tr("Could not connect to server (Code ${response.code})", "সার্ভারের সাথে সংযোগ স্থাপন করা যায়নি (কোড ${response.code})"))
             }
 
             val jsonResponse = JSONObject(responseBody)
@@ -161,7 +161,7 @@ class LiveClassService(
                 Result.success(roomId)
             } else {
                 val errorMsg = lastErrorMsg
-                    ?: "লাইভ ক্লাসের রুম পাওয়া যায়নি বা ক্লাসটি এখনো শুরু হয়নি।"
+                    ?: com.example.utils.AppLang.tr("Live class room not found or class has not started yet.", "লাইভ ক্লাসের রুম পাওয়া যায়নি বা ক্লাসটি এখনো শুরু হয়নি।")
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
@@ -203,7 +203,7 @@ class LiveClassService(
                 val responseBody = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     return Result.failure(
-                        Exception("লাইভ ক্লাস টোকেন সংগ্রহে ত্রুটি হয়েছে (কোড ${response.code})")
+                        Exception(com.example.utils.AppLang.tr("Failed to fetch live class token (Code ${response.code})", "লাইভ ক্লাস টোকেন সংগ্রহে ত্রুটি হয়েছে (কোড ${response.code})"))
                     )
                 }
 
@@ -313,7 +313,7 @@ class LiveClassService(
         } else {
             Result.failure(
                 primaryRes.exceptionOrNull()
-                    ?: Exception("লাইভ ক্লাস টোকেন সংগ্রহে ত্রুটি হয়েছে")
+                    ?: Exception(com.example.utils.AppLang.tr("Failed to fetch live class token", "লাইভ ক্লাস টোকেন সংগ্রহে ত্রুটি হয়েছে"))
             )
         }
     }
@@ -480,7 +480,7 @@ class LiveClassService(
                                         val matId = mat.optString("id").ifBlank { "slide_${i + 1}" }
                                         val matName = mat.optString("name")
                                             .takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
-                                            ?: "লেকচার নোট ${i + 1}"
+                                            ?: com.example.utils.AppLang.tr("Lecture Note ${i + 1}", "লেকচার নোট ${i + 1}")
                                         studyMaterials.add(
                                             LiveStudyMaterial(
                                                 id = matId,

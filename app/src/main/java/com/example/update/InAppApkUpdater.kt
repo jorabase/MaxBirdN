@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import com.example.security.AntiTamperSecurity
+import com.example.utils.AppLang
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -373,14 +374,20 @@ object InAppApkUpdater {
         val rawUrl = updateInfo.downloadUrl.trim()
         if (rawUrl.isBlank() || rawUrl.equals("https://t.me/", ignoreCase = true)) {
             _downloadState.value = ApkUpdateDownloadState.Error(
-                messageBn = "ডাটাবেজে বৈধ APK ডাউনলোড লিংক দেওয়া হয়নি। অ্যাডমিন প্যানেল থেকে সরাসরি APK ডাউনলোড লিংক যুক্ত করুন।",
+                messageBn = AppLang.tr(
+                    "No valid APK download link found. Please configure a direct APK link from the admin panel.",
+                    "ডাটাবেজে বৈধ APK ডাউনলোড লিংক দেওয়া হয়নি। অ্যাডমিন প্যানেল থেকে সরাসরি APK ডাউনলোড লিংক যুক্ত করুন।"
+                ),
                 fallbackUrl = rawUrl
             )
             return
         }
         if (!isHttpsUrl(rawUrl)) {
             _downloadState.value = ApkUpdateDownloadState.Error(
-                messageBn = "নিরাপত্তা সতর্কতা: শুধুমাত্র নিরাপদ HTTPS ডাউনলোড লিংক অনুমোদিত।",
+                messageBn = AppLang.tr(
+                    "Security alert: Only secure HTTPS download links are allowed.",
+                    "নিরাপত্তা সতর্কতা: শুধুমাত্র নিরাপদ HTTPS ডাউনলোড লিংক অনুমোদিত।"
+                ),
                 fallbackUrl = ""
             )
             return
@@ -420,7 +427,10 @@ object InAppApkUpdater {
                 val resolvedUrl = normalizeDirectDownloadUrl(rawUrl)
                 if (!isHttpsUrl(resolvedUrl)) {
                     _downloadState.value = ApkUpdateDownloadState.Error(
-                        messageBn = "নিরাপত্তা সতর্কতা: অনিরাপদ (HTTP) ডাউনলোড লিংক ব্লক করা হয়েছে।",
+                        messageBn = AppLang.tr(
+                            "Security alert: Insecure (HTTP) download link blocked.",
+                            "নিরাপত্তা সতর্কতা: অনিরাপদ (HTTP) ডাউনলোড লিংক ব্লক করা হয়েছে।"
+                        ),
                         fallbackUrl = ""
                     )
                     return@launch
@@ -441,7 +451,10 @@ object InAppApkUpdater {
                 if (!isValidApkArchive(appContext, tempFile, expectedVersionCode = null)) {
                     tempFile.delete()
                     _downloadState.value = ApkUpdateDownloadState.Error(
-                        messageBn = "ডাউনলোডকৃত ফাইলটি এই অ্যাপের বৈধ APK নয় (প্যাকেজ নাম বা ফাইল গঠন মেলেনি)।",
+                        messageBn = AppLang.tr(
+                            "Downloaded file is not a valid APK for this app (package name or archive structure mismatch).",
+                            "ডাউনলোডকৃত ফাইলটি এই অ্যাপের বৈধ APK নয় (প্যাকেজ নাম বা ফাইল গঠন মেলেনি)।"
+                        ),
                         fallbackUrl = rawUrl
                     )
                     return@launch
@@ -450,7 +463,10 @@ object InAppApkUpdater {
                 if (!verifyApkSigningCertificateMatchesInstalledApp(appContext, tempFile)) {
                     tempFile.delete()
                     _downloadState.value = ApkUpdateDownloadState.Error(
-                        messageBn = "নিরাপত্তা সতর্কতা: ডাউনলোডকৃত APK-এর ডিজিটাল সিগনেচার আসল অ্যাপের সাথে মেলেনি! এটি অননুমোদিত বা পরিবর্তিত ফাইল হতে পারে।",
+                        messageBn = AppLang.tr(
+                            "Security alert: Downloaded APK signature does not match the installed app! File may be unauthorized or tampered.",
+                            "নিরাপত্তা সতর্কতা: ডাউনলোডকৃত APK-এর ডিজিটাল সিগনেচার আসল অ্যাপের সাথে মেলেনি! এটি অননুমোদিত বা পরিবর্তিত ফাইল হতে পারে।"
+                        ),
                         fallbackUrl = ""
                     )
                     return@launch
@@ -459,7 +475,10 @@ object InAppApkUpdater {
                 if (!verifySha256IfRequired(tempFile, updateInfo.signatureHash)) {
                     tempFile.delete()
                     _downloadState.value = ApkUpdateDownloadState.Error(
-                        messageBn = "APK ফাইলের সিকিউরিটি চেকসাম (SHA-256) মেলেনি। পুনরায় ডাউনলোড করুন।",
+                        messageBn = AppLang.tr(
+                            "APK security checksum (SHA-256) mismatch. Please download again.",
+                            "APK ফাইলের সিকিউরিটি চেকসাম (SHA-256) মেলেনি। পুনরায় ডাউনলোড করুন।"
+                        ),
                         fallbackUrl = rawUrl
                     )
                     return@launch
@@ -483,7 +502,10 @@ object InAppApkUpdater {
             } catch (e: Throwable) {
                 Log.e(TAG, "In-app APK download failed: ${e.message}", e)
                 _downloadState.value = ApkUpdateDownloadState.Error(
-                    messageBn = "ডাউনলোড ব্যর্থ হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক সংযোগ যাচাই করে আবার চেষ্টা করুন"}",
+                    messageBn = AppLang.tr(
+                        "Download failed: ${e.localizedMessage ?: "Check your network connection and try again"}",
+                        "ডাউনলোড ব্যর্থ হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক সংযোগ যাচাই করে আবার চেষ্টা করুন"}"
+                    ),
                     fallbackUrl = rawUrl
                 )
             }
@@ -505,7 +527,10 @@ object InAppApkUpdater {
             _downloadState.value = ApkUpdateDownloadState.ReadyToInstall(apkFile)
         } else {
             _downloadState.value = ApkUpdateDownloadState.Error(
-                messageBn = "অটোমেটিক ইনস্টলার চালু করা যায়নি। নিচের বাটনে ট্যাপ করে পুনরায় চেষ্টা করুন।",
+                messageBn = AppLang.tr(
+                    "Could not launch automatic installer. Tap the button below to try again.",
+                    "অটোমেটিক ইনস্টলার চালু করা যায়নি। নিচের বাটনে ট্যাপ করে পুনরায় চেষ্টা করুন।"
+                ),
                 fallbackUrl = ""
             )
         }
@@ -579,7 +604,10 @@ object InAppApkUpdater {
         }
         if (_downloadState.value !is ApkUpdateDownloadState.Error && lastErrorMsg.isNotBlank()) {
             _downloadState.value = ApkUpdateDownloadState.Error(
-                messageBn = "ডাউনলোড সংযোগ বিচ্ছিন্ন হয়েছে: $lastErrorMsg। আবার চেষ্টা করুন।",
+                messageBn = AppLang.tr(
+                    "Download connection interrupted: $lastErrorMsg. Please try again.",
+                    "ডাউনলোড সংযোগ বিচ্ছিন্ন হয়েছে: $lastErrorMsg। আবার চেষ্টা করুন।"
+                ),
                 fallbackUrl = fallbackOriginalUrl
             )
         }
@@ -603,14 +631,20 @@ object InAppApkUpdater {
         downloadClient.newCall(request).execute().use { response ->
             if (!response.request.url.isHttps) {
                 _downloadState.value = ApkUpdateDownloadState.Error(
-                    messageBn = "নিরাপত্তা সতর্কতা: ডাউনলোড রিডাইরেক্টটি অনিরাপদ (HTTP) হওয়ায় বাতিল করা হয়েছে।",
+                    messageBn = AppLang.tr(
+                        "Security alert: Download redirect cancelled because it was insecure (HTTP).",
+                        "নিরাপত্তা সতর্কতা: ডাউনলোড রিডাইরেক্টটি অনিরাপদ (HTTP) হওয়ায় বাতিল করা হয়েছে।"
+                    ),
                     fallbackUrl = ""
                 )
                 return false
             }
             if (!response.isSuccessful) {
                 _downloadState.value = ApkUpdateDownloadState.Error(
-                    messageBn = "সার্ভার থেকে APK ফাইল ডাউনলোড করা যায়নি (HTTP ${response.code})। লিংকটি সচল আছে কিনা যাচাই করুন।",
+                    messageBn = AppLang.tr(
+                        "Could not download APK from server (HTTP ${response.code}). Verify the link is active.",
+                        "সার্ভার থেকে APK ফাইল ডাউনলোড করা যায়নি (HTTP ${response.code})। লিংকটি সচল আছে কিনা যাচাই করুন।"
+                    ),
                     fallbackUrl = fallbackOriginalUrl
                 )
                 return false
@@ -625,7 +659,10 @@ object InAppApkUpdater {
                 if (!confirmedUrl.isNullOrBlank() && confirmedUrl != initialUrl) {
                     if (!isHttpsUrl(confirmedUrl)) {
                         _downloadState.value = ApkUpdateDownloadState.Error(
-                            messageBn = "নিরাপত্তা সতর্কতা: সেকেন্ডারি ডাউনলোড লিংকটি HTTPS নয়।",
+                            messageBn = AppLang.tr(
+                                "Security alert: Secondary download link is not HTTPS.",
+                                "নিরাপত্তা সতর্কতা: সেকেন্ডারি ডাউনলোড লিংকটি HTTPS নয়।"
+                            ),
                             fallbackUrl = ""
                         )
                         return false
@@ -633,7 +670,10 @@ object InAppApkUpdater {
                     return streamConfirmedUrlToFile(confirmedUrl, destinationFile, fallbackOriginalUrl)
                 }
                 _downloadState.value = ApkUpdateDownloadState.Error(
-                    messageBn = "প্রদত্ত লিংকটি সরাসরি APK ফাইলের পরিবর্তে একটি ওয়েবপেজ রিটার্ন করেছে। সরাসরি .apk বা Google Drive/GitHub ডিরেক্ট লিংক দিন।",
+                    messageBn = AppLang.tr(
+                        "The link returned a webpage instead of an APK file. Use a direct .apk, Google Drive, or GitHub link.",
+                        "প্রদত্ত লিংকটি সরাসরি APK ফাইলের পরিবর্তে একটি ওয়েবপেজ রিটার্ন করেছে। সরাসরি .apk বা Google Drive/GitHub ডিরেক্ট লিংক দিন।"
+                    ),
                     fallbackUrl = fallbackOriginalUrl
                 )
                 return false
@@ -660,14 +700,20 @@ object InAppApkUpdater {
         downloadClient.newCall(request).execute().use { response ->
             if (!response.request.url.isHttps) {
                 _downloadState.value = ApkUpdateDownloadState.Error(
-                    messageBn = "নিরাপত্তা সতর্কতা: ডাউনলোড রিডাইরেক্টটি অনিরাপদ (HTTP) হওয়ায় বাতিল করা হয়েছে।",
+                    messageBn = AppLang.tr(
+                        "Security alert: Download redirect cancelled because it was insecure (HTTP).",
+                        "নিরাপত্তা সতর্কতা: ডাউনলোড রিডাইরেক্টটি অনিরাপদ (HTTP) হওয়ায় বাতিল করা হয়েছে।"
+                    ),
                     fallbackUrl = ""
                 )
                 return false
             }
             if (!response.isSuccessful) {
                 _downloadState.value = ApkUpdateDownloadState.Error(
-                    messageBn = "ডিরেক্ট সার্ভার থেকে ফাইল ডাউনলোড ব্যর্থ হয়েছে (HTTP ${response.code})।",
+                    messageBn = AppLang.tr(
+                        "Failed to download file from direct server (HTTP ${response.code}).",
+                        "ডিরেক্ট সার্ভার থেকে ফাইল ডাউনলোড ব্যর্থ হয়েছে (HTTP ${response.code})।"
+                    ),
                     fallbackUrl = fallbackOriginalUrl
                 )
                 return false

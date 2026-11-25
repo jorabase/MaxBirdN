@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.api.*
 import com.example.auth.SessionManager
 import com.example.quiz.PracticeQuizRepository
+import com.example.utils.AppLang
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -200,7 +201,7 @@ class ChapterExamViewModel(
             cachedLesson?.subject_name ?: cachedLesson?.live_class?.subject_name ?: ""
         }
         val effExamTitle = examTitle.ifBlank {
-            cachedLesson?.title ?: effChapterName.ifBlank { "অধ্যায় পরীক্ষা" }
+            cachedLesson?.title ?: effChapterName.ifBlank { AppLang.tr("Chapter Exam", "অধ্যায় পরীক্ষা") }
         }
 
         _uiState.update {
@@ -281,8 +282,8 @@ class ChapterExamViewModel(
                             end_time = cachedLesson?.end_time,
                             title = mcqSession.title?.takeIf { it.isNotBlank() } ?: effExamTitle,
                             markdown_version = 2,
-                            chapters = listOf(ExamChapterInfo(id = effChapterId, name = effChapterName.ifBlank { "অধ্যায়" }, no = "1")),
-                            subject = ExamSubjectInfo(display = effSubjectTitle.ifBlank { "বিষয়" }),
+                            chapters = listOf(ExamChapterInfo(id = effChapterId, name = effChapterName.ifBlank { AppLang.tr("Chapter", "অধ্যায়") }, no = "1")),
+                            subject = ExamSubjectInfo(display = effSubjectTitle.ifBlank { AppLang.tr("Subject", "বিষয়") }),
                             total_number_of_question = preloadedQuestions.size
                         )
                         break
@@ -304,7 +305,7 @@ class ChapterExamViewModel(
                             no = "1"
                         )
                     ),
-                    subject = ExamSubjectInfo(display = effSubjectTitle.ifBlank { "বিষয়" }),
+                    subject = ExamSubjectInfo(display = effSubjectTitle.ifBlank { AppLang.tr("Subject", "বিষয়") }),
                     total_number_of_question = 25
                 )
             }
@@ -434,7 +435,10 @@ class ChapterExamViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "প্রশ্ন লোড করা সম্ভব হয়নি। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।"
+                        errorMessage = AppLang.tr(
+                            "Could not load questions. Please check your internet connection and try again.",
+                            "প্রশ্ন লোড করা সম্ভব হয়নি। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করে আবার চেষ্টা করুন।"
+                        )
                     )
                 }
             }
@@ -730,7 +734,7 @@ class ChapterExamViewModel(
             completedItemRepository?.markCompleted(
                 itemId = examId,
                 itemType = "EXAM",
-                title = state.examInfo?.title ?: "পরিক্ষা"
+                title = state.examInfo?.title ?: AppLang.tr("Exam", "পরীক্ষা")
             )
 
             // Fetch performance analysis
@@ -970,7 +974,7 @@ class ChapterExamViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "সমাধান লোড করা সম্ভব হয়নি।"
+                        errorMessage = AppLang.tr("Could not load solutions.", "সমাধান লোড করা সম্ভব হয়নি।")
                     )
                 }
             }

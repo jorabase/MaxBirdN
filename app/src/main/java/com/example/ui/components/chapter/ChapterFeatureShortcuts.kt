@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.utils.AcademicLocalizationUtils
+import com.example.utils.tr
 
 @Composable
 fun ChapterFeatureShortcuts(
@@ -42,23 +43,23 @@ fun ChapterFeatureShortcuts(
     ) {
         ChapterShortcutButton(
             title = AcademicLocalizationUtils.translateContentType("Exam"),
-            subtitle = "অনুশীলন",
+            subtitle = tr("Practice", "অনুশীলন"),
             icon = Icons.Default.FactCheck,
             color = Color(0xFF10B981),
             modifier = Modifier.weight(1f),
             onClick = onOpenPracticeQuiz
         )
         ChapterShortcutButton(
-            title = "ই-বুক",
-            subtitle = "নোটস",
+            title = tr("E-Book", "ই-বুক"),
+            subtitle = tr("Notes", "নোটস"),
             icon = Icons.Default.MenuBook,
             color = Color(0xFFF59E0B),
             modifier = Modifier.weight(1f),
             onClick = onOpenEbook
         )
         ChapterShortcutButton(
-            title = "অ্যানিমেটেড",
-            subtitle = "লেসনস",
+            title = tr("Animated", "অ্যানিমেটেড"),
+            subtitle = tr("Lessons", "লেসনস"),
             icon = Icons.Default.SmartDisplay,
             color = Color(0xFF8B5CF6),
             modifier = Modifier.weight(1f),

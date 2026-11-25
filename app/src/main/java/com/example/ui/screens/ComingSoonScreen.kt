@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.navigation.NavigationItem
+import com.example.utils.tr
 
 @Composable
 fun ComingSoonScreen(
@@ -97,7 +98,7 @@ fun ComingSoonScreen(
 
                 // Tab Name
                 Text(
-                    text = tabItem.title,
+                    text = tr(tabItem.titleEn, tabItem.titleBn),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -108,7 +109,7 @@ fun ComingSoonScreen(
 
                 // Subtitle
                 Text(
-                    text = "এই মডিউলটির কাজ শীঘ্রই শুরু হবে",
+                    text = tr("This module is coming soon", "এই মডিউলটি শীঘ্রই আসছে"),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Normal,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -138,7 +139,7 @@ fun ComingSoonScreen(
                                 .background(MaterialTheme.colorScheme.primary)
                         )
                         Text(
-                            text = "পরবর্তী আপডেট",
+                            text = tr("Next Update", "পরবর্তী আপডেট"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer

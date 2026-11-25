@@ -40,7 +40,8 @@ object ClassAlarmScheduler {
     private const val KEY_NOTIFIED_START_IDS = "notified_start_class_ids"
 
     const val CHANNEL_ID = "shikho_class_alarms_channel"
-    const val CHANNEL_NAME = "ক্লাস রিমাইন্ডার ও এলার্ম"
+    val CHANNEL_NAME: String
+        get() = com.example.utils.AppLang.tr("Class Reminders & Alarms", "ক্লাস রিমাইন্ডার ও এলার্ম")
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -55,7 +56,10 @@ object ClassAlarmScheduler {
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "নির্দিষ্ট সময়ে শিখোর লাইভ ক্লাস ও পরীক্ষা শুরুর নোটিফিকেশন"
+                description = com.example.utils.AppLang.tr(
+                    "Timely notifications for live classes and exams",
+                    "নির্দিষ্ট সময়ে শিখোর লাইভ ক্লাস ও পরীক্ষা শুরুর নোটিফিকেশন"
+                )
                 enableLights(true)
                 enableVibration(true)
                 setSound(soundUri, audioAttributes)
@@ -112,8 +116,8 @@ object ClassAlarmScheduler {
             val startMs = resolveLessonStartMillis(lesson) ?: continue
             if (startMs <= now) continue
 
-            val lessonTitle = lesson.title ?: lesson.live_class?.chapter_name ?: "লাইভ ক্লাস"
-            val subjectName = lesson.subject_name ?: lesson.live_class?.subject_name ?: "কোর্স"
+            val lessonTitle = lesson.title ?: lesson.live_class?.chapter_name ?: com.example.utils.AppLang.tr("Live Class", "লাইভ ক্লাস")
+            val subjectName = lesson.subject_name ?: lesson.live_class?.subject_name ?: com.example.utils.AppLang.tr("Course", "কোর্স")
             val lessonId = lesson.id.ifBlank { lesson.live_class?.id ?: "lesson_$index" }
             val isExam = lesson.isExam || lesson.content_type?.contains("Exam", ignoreCase = true) == true
 
@@ -238,8 +242,8 @@ object ClassAlarmScheduler {
 
         for ((index, lesson) in lessons.withIndex()) {
             val classStartTimeMillis = resolveLessonStartMillis(lesson) ?: continue
-            val lessonTitle = lesson.title ?: lesson.live_class?.chapter_name ?: "লাইভ ক্লাস"
-            val subjectName = lesson.subject_name ?: lesson.live_class?.subject_name ?: "কোর্স"
+            val lessonTitle = lesson.title ?: lesson.live_class?.chapter_name ?: com.example.utils.AppLang.tr("Live Class", "লাইভ ক্লাস")
+            val subjectName = lesson.subject_name ?: lesson.live_class?.subject_name ?: com.example.utils.AppLang.tr("Course", "কোর্স")
             val lessonId = lesson.id.ifBlank { lesson.live_class?.id ?: "lesson_$index" }
 
             val isExam = lesson.isExam || lesson.content_type?.contains("Exam", ignoreCase = true) == true
@@ -260,7 +264,7 @@ object ClassAlarmScheduler {
                 val classStartTimeDisplay = try {
                     timeFormat12Hr.format(Date(classStartTimeMillis))
                 } catch (_: Exception) {
-                    "নির্দিষ্ট সময়ে"
+                    com.example.utils.AppLang.tr("scheduled time", "নির্দিষ্ট সময়ে")
                 }
 
                 // 0. If Shikho server reports this class is LIVE RIGHT NOW (`is_on_going == true`)
@@ -409,14 +413,14 @@ object ClassAlarmScheduler {
                 restored.add(
                     StudentLessonItem(
                         id = obj.optString("id", "restored_$i"),
-                        title = obj.optString("title", "লাইভ ক্লাস"),
-                        subject_name = obj.optString("subject_name", "কোর্স"),
+                        title = obj.optString("title", com.example.utils.AppLang.tr("Live Class", "লাইভ ক্লাস")),
+                        subject_name = obj.optString("subject_name", com.example.utils.AppLang.tr("Course", "কোর্স")),
                         start_time = startStr,
                         content_type = obj.optString("content_type", "LiveClass"),
                         live_class = LiveClassDetails(
                             id = obj.optString("id", "restored_$i"),
-                            chapter_name = obj.optString("title", "লাইভ ক্লাস"),
-                            subject_name = obj.optString("subject_name", "কোর্স"),
+                            chapter_name = obj.optString("title", com.example.utils.AppLang.tr("Live Class", "লাইভ ক্লাস")),
+                            subject_name = obj.optString("subject_name", com.example.utils.AppLang.tr("Course", "কোর্স")),
                             start_time = startStr
                         )
                     )

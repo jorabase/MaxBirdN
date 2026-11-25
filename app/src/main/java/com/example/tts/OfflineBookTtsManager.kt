@@ -7,6 +7,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Log
+import com.example.utils.AppLang
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,7 +32,7 @@ data class TtsPlaybackState(
     val isPaused: Boolean = false,
     val speechRate: Float = 1.0f,
     val detectedLanguage: String = "bn", // "bn" or "en"
-    val engineLabelBn: String = "Google অফলাইন TTS প্রস্তুত হচ্ছে...",
+    val engineLabelBn: String = AppLang.tr("Preparing Google Offline TTS...", "Google অফলাইন TTS প্রস্তুত হচ্ছে..."),
     val hasOfflineBanglaVoice: Boolean = false,
     val hasOfflineEnglishVoice: Boolean = false,
     val selectedBanglaVoiceName: String = "",
@@ -75,47 +76,81 @@ class OfflineBookTtsManager(context: Context) {
         }
 
         /**
-         * Cleans HTML artifacts and splits mixed Bangla + English text into natural speech segments,
-         * keeping each segment compact so synthesis starts immediately with zero latency.
+         * Cleans HTML artifacts and splits mixed Bangla + English text into natural speech segments.
+         *
+         * Key optimization for Google TTS:
+         * - Google's `bn-BD` voice natively pronounces inline English terms (e.g. "Sociology", "Auguste Comte",
+         *   "HSC", "MCQ") seamlessly with ZERO pause. Switching `tts.voice` between `bn-BD` and `en-US` reloads
+         *   the native voice model and causes a noticeable 0.5–1.5s freeze.
+         * - Therefore, short inline English phrases (up to 5 words) inside Bangla text stay merged in the `"bn"`
+         *   segment. We only switch to the `"en"` voice for pure-English text or long standalone English passages
+         *   (6+ consecutive English words).
          */
-        fun splitByLanguageAndSentences(rawText: String, maxChunkChars: Int = 340): List<BilingualTextSegment> {
+        fun splitByLanguageAndSentences(rawText: String, maxChunkChars: Int = 420): List<BilingualTextSegment> {
             val cleaned = rawText
                 .replace(Regex("[\\u200B-\\u200D\\uFEFF]"), "")
                 .replace(Regex("\\s+"), " ")
                 .trim()
             if (cleaned.isBlank()) return emptyList()
 
-            val primaryLang = detectDominantLanguage(cleaned)
-            val rawRuns = mutableListOf<BilingualTextSegment>()
-            val currentBuf = StringBuilder()
-            var currentLang = primaryLang
+            val hasAnyBangla = cleaned.any { isBanglaChar(it) }
+            val mergedRuns: List<BilingualTextSegment> = if (!hasAnyBangla) {
+                listOf(BilingualTextSegment("en", cleaned))
+            } else {
+                val primaryLang = detectDominantLanguage(cleaned)
+                val rawRuns = mutableListOf<BilingualTextSegment>()
+                val currentBuf = StringBuilder()
+                var currentLang = primaryLang
 
-            val words = cleaned.split(" ")
-            for (word in words) {
-                if (word.isBlank()) continue
-                val hasBn = word.any { isBanglaChar(it) }
-                val hasEn = word.any { it in 'A'..'Z' || it in 'a'..'z' }
-                val wordLang = when {
-                    hasBn -> "bn"
-                    hasEn -> "en"
-                    else -> currentLang
+                val words = cleaned.split(" ")
+                for (word in words) {
+                    if (word.isBlank()) continue
+                    val hasBn = word.any { isBanglaChar(it) }
+                    val hasEn = word.any { it in 'A'..'Z' || it in 'a'..'z' }
+                    val wordLang = when {
+                        hasBn -> "bn"
+                        hasEn -> "en"
+                        else -> currentLang
+                    }
+
+                    if (currentBuf.isNotEmpty() && wordLang != currentLang) {
+                        rawRuns.add(BilingualTextSegment(currentLang, currentBuf.toString().trim()))
+                        currentBuf.clear()
+                    }
+                    currentLang = wordLang
+                    if (currentBuf.isNotEmpty()) currentBuf.append(' ')
+                    currentBuf.append(word)
                 }
-
-                if (currentBuf.isNotEmpty() && wordLang != currentLang) {
+                if (currentBuf.isNotEmpty()) {
                     rawRuns.add(BilingualTextSegment(currentLang, currentBuf.toString().trim()))
-                    currentBuf.clear()
                 }
-                currentLang = wordLang
-                if (currentBuf.isNotEmpty()) currentBuf.append(' ')
-                currentBuf.append(word)
-            }
-            if (currentBuf.isNotEmpty()) {
-                rawRuns.add(BilingualTextSegment(currentLang, currentBuf.toString().trim()))
+
+                // Merge short inline English runs (<= 5 English words) into Bangla so Google bn-BD
+                // reads them inline without any voice-switching pause.
+                val normalized = mutableListOf<BilingualTextSegment>()
+                for (run in rawRuns) {
+                    val effectiveLang = if (run.lang == "en") {
+                        val englishWordCount = run.text.split(" ").count { token ->
+                            token.any { it in 'A'..'Z' || it in 'a'..'z' }
+                        }
+                        if (englishWordCount <= 5) "bn" else "en"
+                    } else {
+                        run.lang
+                    }
+
+                    val last = normalized.lastOrNull()
+                    if (last != null && last.lang == effectiveLang) {
+                        normalized[normalized.lastIndex] = last.copy(text = "${last.text} ${run.text}".trim())
+                    } else {
+                        normalized.add(BilingualTextSegment(effectiveLang, run.text))
+                    }
+                }
+                normalized
             }
 
             // Sub-split overly long runs at sentence punctuation (`।`, `?`, `!`, `.`, `;`) for responsive pause/stop
             val finalSegments = mutableListOf<BilingualTextSegment>()
-            for (run in rawRuns) {
+            for (run in mergedRuns) {
                 if (run.text.length <= maxChunkChars) {
                     finalSegments.add(run)
                 } else {
@@ -182,6 +217,8 @@ class OfflineBookTtsManager(context: Context) {
     private val androidTtsReady = CompletableDeferred<Boolean>()
     private var bestBanglaVoice: Voice? = null
     private var bestEnglishVoice: Voice? = null
+    @Volatile
+    private var activeVoiceLang: String? = null
 
     private val speakGeneration = AtomicLong(0L)
     @Volatile
@@ -299,6 +336,15 @@ class OfflineBookTtsManager(context: Context) {
 
             bestBanglaVoice = bnVoice
             bestEnglishVoice = enVoice
+            activeVoiceLang = null
+
+            // Pre-select Bangla voice once during init so the very first utterance starts immediately
+            if (bnVoice != null) {
+                runCatching {
+                    tts.voice = bnVoice
+                    activeVoiceLang = "bn"
+                }
+            }
 
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {}
@@ -318,9 +364,9 @@ class OfflineBookTtsManager(context: Context) {
         val hasOfflineBn = bnVoice != null && !bnVoice.isNetworkConnectionRequired
         val hasOfflineEn = enVoice != null && !enVoice.isNetworkConnectionRequired
         val engineLabel = if (hasOfflineBn) {
-            "Google অফলাইন TTS (বাংলা + ইংরেজি)"
+            AppLang.tr("Google Offline TTS (Bangla + English)", "Google অফলাইন TTS (বাংলা + ইংরেজি)")
         } else {
-            "ডিভাইস অফলাইন TTS (বাংলা + ইংরেজি)"
+            AppLang.tr("Device Offline TTS (Bangla + English)", "ডিভাইস অফলাইন TTS (বাংলা + ইংরেজি)")
         }
 
         _state.update {
@@ -405,7 +451,9 @@ class OfflineBookTtsManager(context: Context) {
                 speakSegmentViaAndroidTts(segment, rate, gen)
 
                 if (idx < segments.lastIndex && isActive && speakGeneration.get() == gen) {
-                    delay(55L)
+                    if (segments[idx + 1].lang != segment.lang) {
+                        delay(20L)
+                    }
                 }
             }
 
@@ -430,13 +478,17 @@ class OfflineBookTtsManager(context: Context) {
         val targetVoice = if (segment.lang == "bn") bestBanglaVoice else bestEnglishVoice
 
         try {
-            if (targetVoice != null) {
-                tts.voice = targetVoice
-            } else {
-                val res = tts.setLanguage(targetLocale)
-                if (segment.lang == "bn" && (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED)) {
-                    tts.setLanguage(Locale("bn", "IN"))
+            // Only switch TTS voice when the language actually changes to avoid model reload pauses
+            if (activeVoiceLang != segment.lang) {
+                if (targetVoice != null) {
+                    tts.voice = targetVoice
+                } else {
+                    val res = tts.setLanguage(targetLocale)
+                    if (segment.lang == "bn" && (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED)) {
+                        tts.setLanguage(Locale("bn", "IN"))
+                    }
                 }
+                activeVoiceLang = segment.lang
             }
             tts.setSpeechRate(rate)
             tts.setPitch(0.98f)
@@ -498,6 +550,7 @@ class OfflineBookTtsManager(context: Context) {
 
     fun release() {
         stop()
+        activeVoiceLang = null
         runCatching { androidTts?.shutdown() }
         androidTts = null
     }

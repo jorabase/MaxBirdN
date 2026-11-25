@@ -43,6 +43,10 @@ import com.example.home.HomeViewModel
 import com.example.notification.ClassAlarmScheduler
 import com.example.notification.ScheduledClassAlarmInfo
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.*
@@ -167,13 +171,13 @@ fun NotificationSettingsScreen(
                 title = {
                     Column {
                         Text(
-                            text = "নোটিফিকেশন ও ক্লাস অ্যালার্ম",
-                            fontSize = 17.5.sp,
+                            text = tr("Notifications", "নোটিফিকেশন"),
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = primaryText
                         )
                         Text(
-                            text = "স্মার্ট রুটিন রিমাইন্ডার ও স্টাডি অ্যালার্ম কন্ট্রোল",
+                            text = tr("Class reminders & study alarms", "ক্লাস রিমাইন্ডার ও স্টাডি অ্যালার্ম"),
                             fontSize = 11.5.sp,
                             color = secondaryText
                         )
@@ -202,7 +206,7 @@ fun NotificationSettingsScreen(
                 containerColor = Color(0xFF0284C7),
                 contentColor = Color.White,
                 icon = { Icon(Icons.Default.AlarmAdd, contentDescription = null) },
-                text = { Text("নতুন স্টাডি অ্যালার্ম", fontWeight = FontWeight.Bold) },
+                text = { Text(tr("New Alarm", "নতুন অ্যালার্ম"), fontWeight = FontWeight.Bold) },
                 modifier = Modifier.testTag("add_custom_alarm_fab")
             )
         },
@@ -239,13 +243,13 @@ fun NotificationSettingsScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "নোটিফিকেশন পারমিশন বন্ধ আছে",
+                                    text = tr("Notifications Disabled", "নোটিফিকেশন পারমিশন বন্ধ আছে"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
                                 )
                                 Text(
-                                    text = "ক্লাসের সঠিক সময়ে অ্যালার্ম পেতে পারমিশন চালু করুন",
+                                    text = tr("Enable permission to receive timely class alarms", "ক্লাসের সঠিক সময়ে অ্যালার্ম পেতে পারমিশন চালু করুন"),
                                     fontSize = 12.sp,
                                     color = if (isDark) Color(0xFFFECACA) else Color(0xFFB91C1C)
                                 )
@@ -258,7 +262,7 @@ fun NotificationSettingsScreen(
                                 shape = RoundedCornerShape(10.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
-                                Text("চালু করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text(tr("Enable", "চালু করুন"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -313,16 +317,16 @@ fun NotificationSettingsScreen(
                                     Spacer(modifier = Modifier.width(14.dp))
                                     Column {
                                         Text(
-                                            text = "মাস্টার নোটিফিকেশন ও অ্যালার্ম",
+                                            text = tr("Master Alarms", "মাস্টার অ্যালার্ম"),
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color.White
                                         )
                                         Text(
                                             text = if (allEnabled) {
-                                                "সকল ক্লাস ও পরীক্ষার স্বয়ংক্রিয় রিমাইন্ডার সক্রিয়"
+                                                tr("Auto reminders active for classes & exams", "সকল ক্লাস ও পরীক্ষার স্বয়ংক্রিয় রিমাইন্ডার সক্রিয়")
                                             } else {
-                                                "সকল নোটিফিকেশন ও অ্যালার্ম সাময়িকভাবে বন্ধ"
+                                                tr("All notifications & alarms are paused", "সকল নোটিফিকেশন ও অ্যালার্ম সাময়িকভাবে বন্ধ")
                                             },
                                             fontSize = 12.sp,
                                             color = Color.White.copy(alpha = 0.85f)
@@ -356,8 +360,8 @@ fun NotificationSettingsScreen(
                             ) {
                                 AlarmStatPill(
                                     icon = Icons.Default.Schedule,
-                                    label = "অগ্রিম সময়",
-                                    value = "$leadTimeMinutes মি. আগে",
+                                    label = tr("Lead Time", "অগ্রিম সময়"),
+                                    value = tr("$leadTimeMinutes min before", "${toBengaliDigits(leadTimeMinutes)} মি. আগে"),
                                     modifier = Modifier.weight(1f)
                                 )
                                 Box(
@@ -368,8 +372,8 @@ fun NotificationSettingsScreen(
                                 )
                                 AlarmStatPill(
                                     icon = Icons.Default.EventAvailable,
-                                    label = "রুটিন অ্যালার্ম",
-                                    value = "${activeRoutineAlarmCount}টি সক্রিয়",
+                                    label = tr("Routine", "রুটিন অ্যালার্ম"),
+                                    value = tr("$activeRoutineAlarmCount active", "${toBengaliDigits(activeRoutineAlarmCount)}টি সক্রিয়"),
                                     modifier = Modifier.weight(1f)
                                 )
                                 Box(
@@ -380,8 +384,8 @@ fun NotificationSettingsScreen(
                                 )
                                 AlarmStatPill(
                                     icon = Icons.Default.AlarmOn,
-                                    label = "রিমাইন্ডার",
-                                    value = "${customAlarms.count { it.isEnabled }}টি সেট",
+                                    label = tr("Custom", "রিমাইন্ডার"),
+                                    value = tr("${customAlarms.count { it.isEnabled }} set", "${toBengaliDigits(customAlarms.count { it.isEnabled })}টি সেট"),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -425,13 +429,13 @@ fun NotificationSettingsScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "ক্লাসের কতক্ষণ আগে অ্যালার্ম বাজবে?",
+                                    text = tr("Reminder Lead Time", "ক্লাসের কতক্ষণ আগে অ্যালার্ম বাজবে?"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = primaryText
                                 )
                                 Text(
-                                    text = "নির্ধারিত সময়ের ঠিক এত মিনিট আগে আপনাকে জানানো হবে",
+                                    text = tr("Get notified this many minutes before class starts", "নির্ধারিত সময়ের ঠিক এত মিনিট আগে আপনাকে জানানো হবে"),
                                     fontSize = 11.5.sp,
                                     color = secondaryText
                                 )
@@ -441,14 +445,14 @@ fun NotificationSettingsScreen(
                         Spacer(modifier = Modifier.height(14.dp))
 
                         val timeOptions = listOf(
-                            5 to "৫ মিনিট",
-                            10 to "১০ মিনিট",
-                            15 to "১৫ মিনিট",
-                            20 to "২০ মিনিট",
-                            25 to "২৫ মিনিট",
-                            30 to "৩০ মিনিট",
-                            45 to "৪৫ মিনিট",
-                            60 to "১ ঘণ্টা"
+                            5 to tr("5 min", "৫ মিনিট"),
+                            10 to tr("10 min", "১০ মিনিট"),
+                            15 to tr("15 min", "১৫ মিনিট"),
+                            20 to tr("20 min", "২০ মিনিট"),
+                            25 to tr("25 min", "২৫ মিনিট"),
+                            30 to tr("30 min", "৩০ মিনিট"),
+                            45 to tr("45 min", "৪৫ মিনিট"),
+                            60 to tr("1 hr", "১ ঘণ্টা")
                         )
 
                         FlowRow(
@@ -457,7 +461,7 @@ fun NotificationSettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             maxItemsInEachRow = 4
                         ) {
-                            timeOptions.forEach { (mins, labelBn) ->
+                            timeOptions.forEach { (mins, labelText) ->
                                 val isSelected = leadTimeMinutes == mins
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
@@ -474,7 +478,10 @@ fun NotificationSettingsScreen(
                                             syncAllAlarms()
                                             Toast.makeText(
                                                 context,
-                                                "ক্লাসের $labelBn আগে রিমাইন্ডার সেট করা হয়েছে",
+                                                AppLang.tr(
+                                                    "Reminder set $labelText before class",
+                                                    "ক্লাসের $labelText আগে রিমাইন্ডার সেট করা হয়েছে"
+                                                ),
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -485,7 +492,7 @@ fun NotificationSettingsScreen(
                                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp)
                                     ) {
                                         Text(
-                                            text = labelBn,
+                                            text = labelText,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isSelected) Color.White else primaryText,
@@ -513,8 +520,8 @@ fun NotificationSettingsScreen(
                             NotificationToggleRow(
                                 icon = Icons.Default.Videocam,
                                 iconColor = Color(0xFF2563EB),
-                                title = "লাইভ ক্লাস অ্যালার্ম",
-                                subtitle = "রুটিনের সকল লাইভ ক্লাস শুরু হওয়ার আগে রিমাইন্ডার",
+                                title = tr("Live Class Alarms", "লাইভ ক্লাস অ্যালার্ম"),
+                                subtitle = tr("Remind before scheduled live classes start", "রুটিনের সকল লাইভ ক্লাস শুরু হওয়ার আগে রিমাইন্ডার"),
                                 isDark = isDark,
                                 checked = liveClassEnabled,
                                 onCheckedChange = {
@@ -530,8 +537,8 @@ fun NotificationSettingsScreen(
                             NotificationToggleRow(
                                 icon = Icons.Default.Quiz,
                                 iconColor = Color(0xFF9333EA),
-                                title = "মডেল টেস্ট ও লাইভ এক্সাম",
-                                subtitle = "পরীক্ষা ও এমসিকিউ কুইজের সময়সূচী নোটিফিকেশন",
+                                title = tr("Exams & Quizzes", "মডেল টেস্ট ও লাইভ এক্সাম"),
+                                subtitle = tr("Schedule reminders for exams & MCQ quizzes", "পরীক্ষা ও এমসিকিউ কুইজের সময়সূচী নোটিফিকেশন"),
                                 isDark = isDark,
                                 checked = examEnabled,
                                 onCheckedChange = {
@@ -547,8 +554,8 @@ fun NotificationSettingsScreen(
                             NotificationToggleRow(
                                 icon = Icons.Default.VolumeUp,
                                 iconColor = Color(0xFF059669),
-                                title = "নোটিফিকেশন সাউন্ড",
-                                subtitle = "রিমাইন্ডার আসার সময় অ্যালার্ম সাউন্ড বাজবে",
+                                title = tr("Sound", "নোটিফিকেশন সাউন্ড"),
+                                subtitle = tr("Play alert sound for reminders", "রিমাইন্ডার আসার সময় অ্যালার্ম সাউন্ড বাজবে"),
                                 isDark = isDark,
                                 checked = soundEnabled,
                                 onCheckedChange = {
@@ -563,8 +570,8 @@ fun NotificationSettingsScreen(
                             NotificationToggleRow(
                                 icon = Icons.Default.Vibration,
                                 iconColor = Color(0xFFEA580C),
-                                title = "ভাইব্রেশন অ্যালার্ট",
-                                subtitle = "নোটিফিকেশন আসার সময় ফোন ভাইব্রেট করবে",
+                                title = tr("Vibration", "ভাইব্রেশন অ্যালার্ট"),
+                                subtitle = tr("Vibrate when a reminder arrives", "নোটিফিকেশন আসার সময় ফোন ভাইব্রেট করবে"),
                                 isDark = isDark,
                                 checked = vibrateEnabled,
                                 onCheckedChange = {
@@ -593,7 +600,10 @@ fun NotificationSettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "নিজস্ব স্টাডি রিমাইন্ডার (${customAlarms.size})",
+                            text = tr(
+                                "Study Reminders (${customAlarms.size})",
+                                "নিজস্ব রিমাইন্ডার (${toBengaliDigits(customAlarms.size)})"
+                            ),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = primaryText
@@ -606,7 +616,7 @@ fun NotificationSettingsScreen(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("নতুন যোগ করুন", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Add New", "নতুন যোগ করুন"), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -642,13 +652,13 @@ fun NotificationSettingsScreen(
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "কোনো নিজস্ব স্টাডি রিমাইন্ডার সেট করা নেই",
+                                    text = tr("No custom reminders set", "কোনো নিজস্ব রিমাইন্ডার সেট করা নেই"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = primaryText
                                 )
                                 Text(
-                                    text = "নিজের পড়ার রুটিন বা রিভিশনের জন্য নির্দিষ্ট তারিখ ও সময়ে অ্যালার্ম সেট করুন",
+                                    text = tr("Set alarms for your own study or revision schedule", "নিজের পড়ার রুটিন বা রিভিশনের জন্য নির্দিষ্ট তারিখ ও সময়ে অ্যালার্ম সেট করুন"),
                                     fontSize = 11.5.sp,
                                     color = secondaryText
                                 )
@@ -677,7 +687,7 @@ fun NotificationSettingsScreen(
                             val updated = customAlarms.filterNot { it.id == alarm.id }
                             customAlarms = updated
                             sessionManager.saveCustomAlarms(updated)
-                            Toast.makeText(context, "রিমাইন্ডার মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Reminder deleted", "রিমাইন্ডার মুছে ফেলা হয়েছে"), Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
@@ -701,7 +711,10 @@ fun NotificationSettingsScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "রুটিন অনুযায়ী আসন্ন ক্লাস ও পরীক্ষা (${upcomingRoutineAlarms.size})",
+                            text = tr(
+                                "Upcoming Routine (${upcomingRoutineAlarms.size})",
+                                "আসন্ন ক্লাস ও পরীক্ষা (${toBengaliDigits(upcomingRoutineAlarms.size)})"
+                            ),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = primaryText
@@ -732,13 +745,13 @@ fun NotificationSettingsScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "বর্তমানে রুটিনে কোনো আসন্ন লাইভ ক্লাস বা পরীক্ষা নেই",
+                                text = tr("No upcoming live classes or exams", "বর্তমানে রুটিনে কোনো আসন্ন ক্লাস বা পরীক্ষা নেই"),
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = primaryText
                             )
                             Text(
-                                text = "নতুন ক্লাস যুক্ত হলে স্বয়ংক্রিয়ভাবে অ্যালার্ম সেট হয়ে যাবে",
+                                text = tr("Alarms will be scheduled automatically when new classes arrive", "নতুন ক্লাস যুক্ত হলে স্বয়ংক্রিয়ভাবে অ্যালার্ম সেট হয়ে যাবে"),
                                 fontSize = 12.sp,
                                 color = secondaryText
                             )
@@ -772,7 +785,7 @@ fun NotificationSettingsScreen(
                 sessionManager.saveCustomAlarms(updated)
                 ClassAlarmScheduler.scheduleCustomAlarm(context, newAlarm)
                 showAddAlarmDialog = false
-                Toast.makeText(context, "নতুন স্টাডি অ্যালার্ম সেট করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, AppLang.tr("Study alarm saved!", "নতুন স্টাডি অ্যালার্ম সেট করা হয়েছে!"), Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -882,14 +895,15 @@ private fun ScheduledClassAlarmCard(
     isDark: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
+    val isBn = isBangla()
     val dhakaTz = remember { TimeZone.getTimeZone("Asia/Dhaka") }
-    val dateStr = remember(item.startTimeMs) {
-        SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.forLanguageTag("bn-BD")).apply {
+    val dateStr = remember(item.startTimeMs, isBn) {
+        SimpleDateFormat("dd MMM yyyy, hh:mm a", AppLang.locale()).apply {
             timeZone = dhakaTz
         }.format(Date(item.startTimeMs))
     }
-    val alarmTriggerStr = remember(item.alarmTriggerMs) {
-        SimpleDateFormat("hh:mm a", Locale.forLanguageTag("bn-BD")).apply {
+    val alarmTriggerStr = remember(item.alarmTriggerMs, isBn) {
+        SimpleDateFormat("hh:mm a", AppLang.locale()).apply {
             timeZone = dhakaTz
         }.format(Date(item.alarmTriggerMs))
     }
@@ -947,7 +961,7 @@ private fun ScheduledClassAlarmCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (item.isEnabled) "অ্যালার্ম: $alarmTriggerStr" else "অ্যালার্ম অফ",
+                            text = if (item.isEnabled) tr("Alarm: $alarmTriggerStr", "অ্যালার্ম: $alarmTriggerStr") else tr("Alarm Off", "অ্যালার্ম অফ"),
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (item.isEnabled) Color(0xFF10B981) else secondaryText
@@ -981,7 +995,10 @@ private fun ScheduledClassAlarmCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "ক্লাসের সময়: $dateStr ($leadTimeMinutes মি. আগে রিমাইন্ডার)",
+                            text = tr(
+                                "Time: $dateStr (${leadTimeMinutes}m before)",
+                                "ক্লাসের সময়: $dateStr (${toBengaliDigits(leadTimeMinutes)} মি. আগে রিমাইন্ডার)"
+                            ),
                             fontSize = 11.5.sp,
                             color = secondaryText
                         )
@@ -1008,9 +1025,10 @@ private fun CustomAlarmCard(
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit
 ) {
+    val isBn = isBangla()
     val dhakaTz = remember { TimeZone.getTimeZone("Asia/Dhaka") }
-    val formattedDate = remember(alarm.triggerTimeMs) {
-        SimpleDateFormat("dd MMM yyyy • hh:mm a", Locale.forLanguageTag("bn-BD")).apply {
+    val formattedDate = remember(alarm.triggerTimeMs, isBn) {
+        SimpleDateFormat("dd MMM yyyy • hh:mm a", AppLang.locale()).apply {
             timeZone = dhakaTz
         }.format(Date(alarm.triggerTimeMs))
     }
@@ -1065,7 +1083,7 @@ private fun CustomAlarmCard(
                 }
                 Spacer(modifier = Modifier.height(3.dp))
                 Text(
-                    text = if (isPast) "$formattedDate (সময় পার হয়েছে)" else formattedDate,
+                    text = if (isPast) tr("$formattedDate (Expired)", "$formattedDate (সময় পার হয়েছে)") else formattedDate,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isPast) Color(0xFFEF4444) else Color(0xFF7C3AED)
@@ -1098,6 +1116,7 @@ private fun AddCustomAlarmDialog(
     onSave: (CustomAlarmData) -> Unit
 ) {
     val context = LocalContext.current
+    val isBn = isBangla()
     val calendar = remember {
         Calendar.getInstance(TimeZone.getTimeZone("Asia/Dhaka")).apply {
             add(Calendar.MINUTE, 30)
@@ -1105,24 +1124,24 @@ private fun AddCustomAlarmDialog(
         }
     }
 
-    var title by remember { mutableStateOf("পড়ার ও রিভিশন রিমাইন্ডার") }
-    var message by remember { mutableStateOf("নির্ধারিত অধ্যায়ের নোট ও প্র্যাকটিস কুইজ সমাধান করার সময় হয়েছে!") }
+    var title by remember { mutableStateOf(AppLang.tr("Study & Revision Reminder", "পড়ার ও রিভিশন রিমাইন্ডার")) }
+    var message by remember { mutableStateOf(AppLang.tr("Time to review chapter notes and solve practice quizzes!", "নির্ধারিত অধ্যায়ের নোট ও প্র্যাকটিস কুইজ সমাধান করার সময় হয়েছে!")) }
     var selectedYear by remember { mutableIntStateOf(calendar.get(Calendar.YEAR)) }
     var selectedMonth by remember { mutableIntStateOf(calendar.get(Calendar.MONTH)) }
     var selectedDay by remember { mutableIntStateOf(calendar.get(Calendar.DAY_OF_MONTH)) }
     var selectedHour by remember { mutableIntStateOf(calendar.get(Calendar.HOUR_OF_DAY)) }
     var selectedMinute by remember { mutableIntStateOf(calendar.get(Calendar.MINUTE)) }
 
-    val formattedDate = remember(selectedYear, selectedMonth, selectedDay) {
+    val formattedDate = remember(selectedYear, selectedMonth, selectedDay, isBn) {
         val c = Calendar.getInstance().apply { set(selectedYear, selectedMonth, selectedDay) }
-        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(c.time)
+        SimpleDateFormat("dd MMM yyyy", AppLang.locale()).format(c.time)
     }
-    val formattedTime = remember(selectedHour, selectedMinute) {
+    val formattedTime = remember(selectedHour, selectedMinute, isBn) {
         val c = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, selectedHour)
             set(Calendar.MINUTE, selectedMinute)
         }
-        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(c.time)
+        SimpleDateFormat("hh:mm a", AppLang.locale()).format(c.time)
     }
 
     val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
@@ -1141,7 +1160,7 @@ private fun AddCustomAlarmDialog(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "নতুন স্টাডি রিমাইন্ডার",
+                    text = tr("New Reminder", "নতুন স্টাডি রিমাইন্ডার"),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = primaryText
@@ -1153,14 +1172,14 @@ private fun AddCustomAlarmDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("রিমাইন্ডার শিরোনাম") },
+                    label = { Text(tr("Title", "রিমাইন্ডার শিরোনাম")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = message,
                     onValueChange = { message = it },
-                    label = { Text("বিস্তারিত বার্তা") },
+                    label = { Text(tr("Message", "বিস্তারিত বার্তা")) },
                     maxLines = 2,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1227,12 +1246,12 @@ private fun AddCustomAlarmDialog(
                         set(Calendar.MILLISECOND, 0)
                     }
                     if (triggerCal.timeInMillis <= System.currentTimeMillis()) {
-                        Toast.makeText(context, "ভবিষ্যতের কোনো সময় নির্বাচন করুন", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, AppLang.tr("Please select a future time", "ভবিষ্যতের কোনো সময় নির্বাচন করুন"), Toast.LENGTH_SHORT).show()
                     } else {
                         onSave(
                             CustomAlarmData(
-                                title = title.ifBlank { "স্টাডি রিমাইন্ডার" },
-                                message = message.ifBlank { "পড়ার সময় হয়েছে!" },
+                                title = title.ifBlank { AppLang.tr("Study Reminder", "স্টাডি রিমাইন্ডার") },
+                                message = message.ifBlank { AppLang.tr("Time to study!", "পড়ার সময় হয়েছে!") },
                                 triggerTimeMs = triggerCal.timeInMillis,
                                 isEnabled = true
                             )
@@ -1242,12 +1261,12 @@ private fun AddCustomAlarmDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("অ্যালার্ম সেভ করুন", fontWeight = FontWeight.Bold)
+                Text(tr("Save Alarm", "অ্যালার্ম সেভ করুন"), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("বাতিল")
+                Text(tr("Cancel", "বাতিল"))
             }
         }
     )

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 /**
  * Score Popup Dialog: "MCQ টেস্টের স্কোর X/Y"
@@ -65,7 +66,7 @@ fun ScorePopupDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "MCQ টেস্টের স্কোর",
+                    text = tr("MCQ Test Score", "MCQ টেস্টের স্কোর"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -84,9 +85,15 @@ fun ScorePopupDialog(
 
                 Text(
                     text = if (isPractice)
-                        "তোমার প্র্যাকটিস MCQ টেস্ট সম্পন্ন হয়েছে! এবার CQ প্রশ্নগুলো দেখে নিতে পারো।"
+                        tr(
+                            "Your practice MCQ test is complete! You can now review the CQ questions.",
+                            "তোমার প্র্যাকটিস MCQ টেস্ট সম্পন্ন হয়েছে! এবার CQ প্রশ্নগুলো দেখে নিতে পারো।"
+                        )
                     else
-                        "তোমার মেইন MCQ টেস্ট সফলভাবে জমা হয়েছে। এখন CQ উত্তর আপলোড করার জন্য প্রস্তুত হও।",
+                        tr(
+                            "Your main MCQ test has been submitted. Get ready to upload your CQ answers.",
+                            "তোমার মেইন MCQ টেস্ট সফলভাবে জমা হয়েছে। এখন CQ উত্তর আপলোড করার জন্য প্রস্তুত হও।"
+                        ),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -103,7 +110,7 @@ fun ScorePopupDialog(
                     .height(48.dp)
             ) {
                 Text(
-                    text = if (isPractice) "CQ প্রশ্নগুলো পড়ো" else "CQ উত্তর আপলোড করো",
+                    text = if (isPractice) tr("View CQ Questions", "CQ প্রশ্নগুলো পড়ো") else tr("Upload CQ Answers", "CQ উত্তর আপলোড করো"),
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
@@ -133,7 +140,7 @@ fun ExitExamConfirmDialog(
         },
         title = {
             Text(
-                text = "তুমি কি পরীক্ষা ছেড়ে যেতে চাও?",
+                text = tr("Leave this exam?", "তুমি কি পরীক্ষা ছেড়ে যেতে চাও?"),
                 fontWeight = FontWeight.Bold,
                 fontSize = 17.sp,
                 textAlign = TextAlign.Center
@@ -141,7 +148,10 @@ fun ExitExamConfirmDialog(
         },
         text = {
             Text(
-                text = "এখন পরীক্ষা থেকে বের হয়ে গেলে তোমার বর্তমান অগ্রগতি হারিয়ে যেতে পারে এবং টেস্ট অসম্পূর্ণ থাকবে।",
+                text = tr(
+                    "Leaving now may lose your current progress and leave the test incomplete.",
+                    "এখন পরীক্ষা থেকে বের হয়ে গেলে তোমার বর্তমান অগ্রগতি হারিয়ে যেতে পারে এবং টেস্ট অসম্পূর্ণ থাকবে।"
+                ),
                 fontSize = 13.5.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -152,7 +162,7 @@ fun ExitExamConfirmDialog(
                 onClick = onConfirmExit,
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
             ) {
-                Text("হ্যাঁ, বের হও", fontWeight = FontWeight.Bold)
+                Text(tr("Yes, Exit", "হ্যাঁ, বের হও"), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -160,7 +170,7 @@ fun ExitExamConfirmDialog(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("পরীক্ষায় থাকো")
+                Text(tr("Stay", "পরীক্ষায় থাকো"))
             }
         }
     )

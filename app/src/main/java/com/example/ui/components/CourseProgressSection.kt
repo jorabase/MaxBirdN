@@ -32,6 +32,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.PhaseItem
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -87,13 +90,13 @@ fun CourseProgressSection(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "কোর্স প্রগ্রেস",
+                            text = tr("Course Progress", "কোর্স প্রগ্রেস"),
                             fontSize = 19.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "ধাপে ধাপে তোমার সিলেবাস অগ্রগতি",
+                            text = tr("Step-by-step syllabus progress", "ধাপে ধাপে সিলেবাস অগ্রগতি"),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -106,7 +109,10 @@ fun CourseProgressSection(
                     border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.35f))
                 ) {
                     Text(
-                        text = "${completedCount.toString().toBengaliDigits()}/${displayPhases.size.toString().toBengaliDigits()} সম্পন্ন",
+                        text = tr(
+                            "${completedCount.toString().toBengaliDigits()}/${displayPhases.size.toString().toBengaliDigits()} Done",
+                            "${completedCount.toString().toBengaliDigits()}/${displayPhases.size.toString().toBengaliDigits()} সম্পন্ন"
+                        ),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isDark) Color(0xFF34D399) else Color(0xFF059669),
@@ -260,11 +266,12 @@ private fun QuarterCard(
 ) {
     val isDark = com.example.ui.theme.isAppInDarkTheme()
 
-    // LOGIC: badge text/colors হুবহু সেম
+    val isBn = isBangla()
+
     val (badgeText, badgeBg, badgeTextColor) = when {
-        isCompleted -> Triple("পড়ানো শেষ", Color(0xFFDCFCE7), Color(0xFF15803D))
-        isActive -> Triple("চলছে", Color(0xFFDBEAFE), Color(0xFF1E40AF))
-        else -> Triple("ভর্তি হয়েছো", Color(0xFFDCFCE7), Color(0xFF15803D))
+        isCompleted -> Triple(tr("Completed", "পড়ানো শেষ"), Color(0xFFDCFCE7), Color(0xFF15803D))
+        isActive -> Triple(tr("Ongoing", "চলছে"), Color(0xFFDBEAFE), Color(0xFF1E40AF))
+        else -> Triple(tr("Enrolled", "ভর্তি হয়েছো"), Color(0xFFDCFCE7), Color(0xFF15803D))
     }
 
     val interaction = remember { MutableInteractionSource() }
@@ -332,7 +339,7 @@ private fun QuarterCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
-                            text = phase.title ?: "কোয়ার্টার",
+                            text = phase.title ?: tr("Quarter", "কোয়ার্টার"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (isUpcoming) upcomingTitleColor else Color.White,
@@ -356,7 +363,7 @@ private fun QuarterCard(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    val dateRangeText = remember(phase.start_date, phase.end_date, phase.title, index) {
+                    val dateRangeText = remember(phase.start_date, phase.end_date, phase.title, index, isBn) {
                         formatQuarterDateRange(phase.start_date, phase.end_date, phase.title, index)
                     }
                     if (dateRangeText.isNotBlank()) {
@@ -444,6 +451,11 @@ private val bengaliMonths = arrayOf(
     "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
 )
 
+private val englishMonths = arrayOf(
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+)
+
 private fun parseDateSafe(dateStr: String?): java.util.Date? {
     if (dateStr.isNullOrBlank()) return null
     val formats = listOf(
@@ -479,40 +491,48 @@ private fun formatQuarterDateRange(
     val end = parseDateSafe(endDateStr)
     val dhakaZone = TimeZone.getTimeZone("Asia/Dhaka")
     val cal = Calendar.getInstance(dhakaZone)
+    val isBn = AppLang.isBn()
+    val months = if (isBn) bengaliMonths else englishMonths
 
     if (start != null || end != null) {
         fun formatSingle(date: java.util.Date): String {
             cal.time = date
             val monthIdx = cal.get(Calendar.MONTH)
-            val monthName = bengaliMonths.getOrElse(monthIdx) { "" }
+            val monthName = months.getOrElse(monthIdx) { "" }
             val year = cal.get(Calendar.YEAR) % 100
-            val yearBn = String.format(Locale.US, "%02d", year).toBengaliDigits()
-            return "$monthName'$yearBn"
+            val yearFormatted = String.format(Locale.US, "%02d", year).toBengaliDigits()
+            return "$monthName'$yearFormatted"
         }
 
-        val startBn = start?.let { formatSingle(it) } ?: ""
-        val endBn = end?.let { formatSingle(it) } ?: ""
+        val startFormatted = start?.let { formatSingle(it) } ?: ""
+        val endFormatted = end?.let { formatSingle(it) } ?: ""
 
-        if (startBn.isNotBlank() && endBn.isNotBlank()) {
-            return "$startBn - $endBn"
-        } else if (startBn.isNotBlank()) {
-            return "শুরু: $startBn"
-        } else if (endBn.isNotBlank()) {
-            return "পর্যন্ত: $endBn"
+        if (startFormatted.isNotBlank() && endFormatted.isNotBlank()) {
+            return "$startFormatted - $endFormatted"
+        } else if (startFormatted.isNotBlank()) {
+            return AppLang.tr("Start: $startFormatted", "শুরু: $startFormatted")
+        } else if (endFormatted.isNotBlank()) {
+            return AppLang.tr("Until: $endFormatted", "পর্যন্ত: $endFormatted")
         }
     }
 
     // Dynamic year calculation instead of static hardcoded year
     val currentYearShort = cal.get(Calendar.YEAR) % 100
-    val prevYearBn = String.format(Locale.US, "%02d", (currentYearShort - 1).coerceAtLeast(0)).toBengaliDigits()
-    val currYearBn = String.format(Locale.US, "%02d", currentYearShort).toBengaliDigits()
+    val prevYear = String.format(Locale.US, "%02d", (currentYearShort - 1).coerceAtLeast(0)).toBengaliDigits()
+    val currYear = String.format(Locale.US, "%02d", currentYearShort).toBengaliDigits()
 
     return when {
-        phaseTitle?.contains("১") == true || phaseTitle?.contains("1") == true || index == 0 -> "সেপ্টেম্বর'$prevYearBn - ডিসেম্বর'$prevYearBn"
-        phaseTitle?.contains("২") == true || phaseTitle?.contains("2") == true || index == 1 -> "জানুয়ারি'$currYearBn - মার্চ'$currYearBn"
-        phaseTitle?.contains("৩") == true || phaseTitle?.contains("3") == true || index == 2 -> "এপ্রিল'$currYearBn - জুন'$currYearBn"
-        phaseTitle?.contains("৪") == true || phaseTitle?.contains("4") == true || index == 3 -> "জুলাই'$currYearBn - সেপ্টেম্বর'$currYearBn"
-        phaseTitle?.contains("৫") == true || phaseTitle?.contains("5") == true || index == 4 -> "অক্টোবর'$currYearBn - ডিসেম্বর'$currYearBn"
-        else -> "সেপ্টেম্বর'$prevYearBn - ডিসেম্বর'$prevYearBn"
+        phaseTitle?.contains("১") == true || phaseTitle?.contains("1") == true || index == 0 ->
+            "${months[8]}'$prevYear - ${months[11]}'$prevYear"
+        phaseTitle?.contains("২") == true || phaseTitle?.contains("2") == true || index == 1 ->
+            "${months[0]}'$currYear - ${months[2]}'$currYear"
+        phaseTitle?.contains("৩") == true || phaseTitle?.contains("3") == true || index == 2 ->
+            "${months[3]}'$currYear - ${months[5]}'$currYear"
+        phaseTitle?.contains("৪") == true || phaseTitle?.contains("4") == true || index == 3 ->
+            "${months[6]}'$currYear - ${months[8]}'$currYear"
+        phaseTitle?.contains("৫") == true || phaseTitle?.contains("5") == true || index == 4 ->
+            "${months[9]}'$currYear - ${months[11]}'$currYear"
+        else ->
+            "${months[8]}'$prevYear - ${months[11]}'$prevYear"
     }
 }

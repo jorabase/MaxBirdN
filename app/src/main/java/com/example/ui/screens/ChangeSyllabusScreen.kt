@@ -31,6 +31,8 @@ import com.example.api.StudyGroupItem
 import com.example.syllabus.ChangeSyllabusViewModel
 import com.example.syllabus.bengaliClassName
 import com.example.syllabus.convertToBengaliDigits
+import com.example.utils.isBangla
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,7 +85,7 @@ fun ChangeSyllabusScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "সিলেবাস পরিবর্তন করতে চাও?",
+                    text = tr("Change Syllabus?", "সিলেবাস পরিবর্তন করতে চাও?"),
                     fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -104,7 +106,7 @@ fun ChangeSyllabusScreen(
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "নির্বাচিত বিবরণ",
+                            text = tr("Selected Summary", "নির্বাচিত বিবরণ"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -133,7 +135,10 @@ fun ChangeSyllabusScreen(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "সিলেবাস পরিবর্তন করলে অ্যাপটি রিস্টার্ট হবে এবং পূর্বের কিছু ক্যাশে রিসেট হতে পারে।",
+                        text = tr(
+                            "Changing syllabus will restart the app and reset some cached data.",
+                            "সিলেবাস পরিবর্তন করলে অ্যাপটি রিস্টার্ট হবে এবং পূর্বের কিছু ক্যাশে রিসেট হতে পারে।"
+                        ),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -158,10 +163,10 @@ fun ChangeSyllabusScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("পরিবর্তন হচ্ছে...")
+                        Text(tr("Updating...", "পরিবর্তন হচ্ছে..."))
                     } else {
                         Text(
-                            text = "হ্যাঁ, পরিবর্তন করো",
+                            text = tr("Confirm Change", "হ্যাঁ, পরিবর্তন করো"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -176,7 +181,7 @@ fun ChangeSyllabusScreen(
                     enabled = !uiState.isSubmitting
                 ) {
                     Text(
-                        text = "না, এখন নয়",
+                        text = tr("Not Now", "না, এখন নয়"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
@@ -192,7 +197,7 @@ fun ChangeSyllabusScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "সিলেবাস পরিবর্তন",
+                        text = tr("Syllabus", "সিলেবাস"),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -249,7 +254,7 @@ fun ChangeSyllabusScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "এগিয়ে যাও",
+                                    text = tr("Continue", "এগিয়ে যাও"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -303,14 +308,17 @@ fun ChangeSyllabusScreen(
                     }
                     Column {
                         Text(
-                            text = "তোমার শ্রেণি নির্বাচন করো",
+                            text = tr("Select Your Class", "তোমার শ্রেণি নির্বাচন করো"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "সঠিক শ্রেণি নির্বাচন করলে তোমার জন্য নির্দিষ্ট কোর্স ও লেসন সাজানো হবে।",
+                            text = tr(
+                                "Your courses and lessons will be tailored to your selected class.",
+                                "সঠিক শ্রেণি নির্বাচন করলে তোমার জন্য নির্দিষ্ট কোর্স ও লেসন সাজানো হবে।"
+                            ),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 16.sp
@@ -348,7 +356,7 @@ fun ChangeSyllabusScreen(
             // ===== 1. Class Section =====
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "শ্রেণি",
+                    text = tr("Class", "শ্রেণি"),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -382,7 +390,7 @@ fun ChangeSyllabusScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("পুনরায় চেষ্টা করুন")
+                        Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                     }
                 }
             }
@@ -397,7 +405,7 @@ fun ChangeSyllabusScreen(
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "বিভাগ / গ্রুপ",
+                        text = tr("Group", "বিভাগ / গ্রুপ"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -445,7 +453,7 @@ fun ChangeSyllabusScreen(
                             strokeWidth = 2.dp
                         )
                         Text(
-                            text = "ব্যাচ লোড হচ্ছে...",
+                            text = tr("Loading batches...", "ব্যাচ লোড হচ্ছে..."),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -454,7 +462,7 @@ fun ChangeSyllabusScreen(
             } else if (uiState.batchOptions.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "পরীক্ষার সাল / ব্যাচ",
+                        text = tr("Exam Year / Batch", "পরীক্ষার সাল / ব্যাচ"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -607,7 +615,7 @@ private fun ClassSelectionCard(
                     color = MaterialTheme.colorScheme.tertiaryContainer
                 ) {
                     Text(
-                        text = "বর্তমান",
+                        text = tr("Current", "বর্তমান"),
                         fontSize = 9.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,

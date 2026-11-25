@@ -28,6 +28,7 @@ import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 /**
  * Practice Mode CQ Screen: 100% Read-Only!
@@ -70,7 +71,7 @@ fun CQExamScreen(
             },
             title = {
                 Text(
-                    text = "প্র্যাকটিস টেস্ট সমাপ্ত!",
+                    text = tr("Practice Complete!", "প্র্যাকটিস টেস্ট সমাপ্ত!"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -78,7 +79,10 @@ fun CQExamScreen(
             },
             text = {
                 Text(
-                    text = "প্র্যাকটিস টেস্টে অংশগ্রহণ করার জন্য তোমাকে ধন্যবাদ! এখন তোমার MCQ পরীক্ষার উত্তর ও বিস্তারিত ব্যাখ্যা দেখে নাও।",
+                    text = tr(
+                        "Thank you for taking the practice test! View your MCQ answers and detailed explanations now.",
+                        "প্র্যাকটিস টেস্টে অংশগ্রহণ করার জন্য তোমাকে ধন্যবাদ! এখন তোমার MCQ পরীক্ষার উত্তর ও বিস্তারিত ব্যাখ্যা দেখে নাও।"
+                    ),
                     fontSize = 13.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -94,7 +98,7 @@ fun CQExamScreen(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("ফিডব্যাক দেখো", fontWeight = FontWeight.Bold)
+                    Text(tr("View Feedback", "ফিডব্যাক দেখো"), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -105,7 +109,7 @@ fun CQExamScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "CQ প্রশ্নাবলী (প্র্যাকটিস)",
+                        text = tr("CQ Practice", "CQ প্রশ্নাবলী"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -139,7 +143,7 @@ fun CQExamScreen(
                     ) {
                         Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("টেস্ট শেষ করো", fontWeight = FontWeight.Bold)
+                        Text(tr("Finish Test", "টেস্ট শেষ করো"), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -181,7 +185,10 @@ fun CQExamScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "এই টেস্টটি তুমি শুধু প্র্যাকটিসের জন্য দিতে পারবে এবং উত্তরপত্র সাবমিট করতে পারবে না। CQ উত্তরপত্র সাবমিট ও মূল্যায়নের জন্য নির্ধারিত সময়ে মূল মডেল টেস্ট দিতে হবে।",
+                            text = tr(
+                                "This test is for practice only — answer sheets cannot be uploaded. Take the live model test during the scheduled window for CQ evaluation.",
+                                "এই টেস্টটি তুমি শুধু প্র্যাকটিসের জন্য দিতে পারবে এবং উত্তরপত্র সাবমিট করতে পারবে না। CQ উত্তরপত্র সাবমিট ও মূল্যায়নের জন্য নির্ধারিত সময়ে মূল মডেল টেস্ট দিতে হবে।"
+                            ),
                             fontSize = 12.5.sp,
                             color = if (isDark) Color(0xFFBFDBFE) else Color(0xFF1E40AF),
                             lineHeight = 17.sp
@@ -197,7 +204,7 @@ fun CQExamScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "কোনো CQ প্রশ্ন পাওয়া যায়নি",
+                            text = tr("No CQ questions found", "কোনো CQ প্রশ্ন পাওয়া যায়নি"),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -211,7 +218,10 @@ fun CQExamScreen(
                         ) {
                             Column(modifier = Modifier.padding(18.dp)) {
                                 Text(
-                                    text = "সৃজনশীল প্রশ্ন ${toBengaliDigits((qIdx + 1).toString())}",
+                                    text = tr(
+                                        "Creative Question ${toBengaliDigits((qIdx + 1).toString())}",
+                                        "সৃজনশীল প্রশ্ন ${toBengaliDigits((qIdx + 1).toString())}"
+                                    ),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary
@@ -248,7 +258,12 @@ fun CQExamScreen(
                                 val subList = cq.sub_questions ?: emptyList()
                                 subList.forEach { sub ->
                                     val keyLabel = sub.key ?: ""
-                                    val markText = if (sub.marks != null) "${toBengaliDigits(sub.marks.toInt().toString())} নম্বর" else ""
+                                    val markText = if (sub.marks != null) {
+                                        tr(
+                                            "${toBengaliDigits(sub.marks.toInt().toString())} marks",
+                                            "${toBengaliDigits(sub.marks.toInt().toString())} নম্বর"
+                                        )
+                                    } else ""
 
                                     Row(
                                         modifier = Modifier

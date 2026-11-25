@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.LessonAttachmentItem
 import com.example.api.StudentLessonItem
+import com.example.utils.AppLang
 import com.example.utils.formatBanglaDateTime
+import com.example.utils.tr
 
 /**
  * Diagnostic error overlay displayed on top of the player when a stream error occurs.
@@ -73,7 +75,7 @@ fun PlayerErrorOverlay(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = playbackErrorDetails ?: "সার্ভার রেসপন্স চেক করুন",
+                text = playbackErrorDetails ?: tr("Please check server response", "সার্ভার রেসপন্স চেক করুন"),
                 color = Color.White.copy(alpha = 0.85f),
                 fontSize = 12.sp,
                 textAlign = TextAlign.Center,
@@ -93,7 +95,7 @@ fun PlayerErrorOverlay(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("পুনরায় চেষ্টা", fontSize = 12.sp)
+                    Text(tr("Retry", "পুনরায় চেষ্টা"), fontSize = 12.sp)
                 }
 
                 Button(
@@ -104,7 +106,7 @@ fun PlayerErrorOverlay(
                 ) {
                     Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("ব্রাউজার প্লেয়ার", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Web Player", "ব্রাউজার প্লেয়ার"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -114,7 +116,7 @@ fun PlayerErrorOverlay(
                     onClick = {
                         onViewSlide(
                             LessonAttachmentItem(
-                                title = "লেকচার স্লাইড ও নোটস",
+                                title = AppLang.tr("Lecture Slides & Notes", "লেকচার স্লাইড ও নোটস"),
                                 url = slideUrl,
                                 file_type = "pdf"
                             )
@@ -124,7 +126,7 @@ fun PlayerErrorOverlay(
                 ) {
                     Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("লেকচার স্লাইড ও ক্লাস নোটস পড়ুন", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(tr("Read Lecture Slides & Notes", "লেকচার স্লাইড ও নোটস পড়ুন"), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -141,7 +143,7 @@ fun PlayerErrorOverlay(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "ফিরে যান",
+                contentDescription = tr("Back", "ফিরে যান"),
                 tint = Color.White
             )
         }
@@ -180,7 +182,7 @@ fun LessonStreamPlaceholder(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (lesson?.isLiveClass == true) "লাইভ ক্লাসের ভিডিও প্রসেসিং বা চলছে" else "এই ক্লাসের সরাসরি রেকর্ডিং লিংক পাওয়া যায়নি",
+                text = if (lesson?.isLiveClass == true) tr("Live class video is processing or live", "লাইভ ক্লাসের ভিডিও প্রসেসিং বা চলছে") else tr("Recording link unavailable", "এই ক্লাসের রেকর্ডিং লিংক পাওয়া যায়নি"),
                 color = Color.White,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
@@ -188,7 +190,7 @@ fun LessonStreamPlaceholder(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = if (lesson?.isLiveClass == true) "লাইভ ক্লাস শেষ হওয়ার পর সাধারণত ০ মিনিট থেকে ১ ঘণ্টার মধ্যে রেকর্ডিং যুক্ত হয়। লাইভ ক্লাস চালু থাকলে নিচের বাটনে যোগ দিন।" else "কোর্সে সরাসরি ভর্তি না থাকলে বা ক্লাস অপ্রস্তুত থাকলে Shikho API লিংক পাঠায় না।",
+                text = if (lesson?.isLiveClass == true) tr("Recordings are usually added within 1 hour after a live class ends. Tap below if the class is live now.", "লাইভ ক্লাস শেষ হওয়ার পর সাধারণত ১ ঘণ্টার মধ্যে রেকর্ডিং যুক্ত হয়। লাইভ চালু থাকলে নিচের বাটনে যোগ দিন।") else tr("No direct recording stream is currently available for this class.", "কোর্সে ভর্তি না থাকলে বা ক্লাস অপ্রস্তুত থাকলে রেকর্ডিং লিংক পাওয়া যায় না।"),
                 color = Color.White.copy(alpha = 0.75f),
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
@@ -208,7 +210,7 @@ fun LessonStreamPlaceholder(
                     ) {
                         Icon(Icons.Default.LiveTv, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("লাইভ ক্লাসে যোগ দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Join Live Class", "লাইভ ক্লাসে যোগ দিন"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
                 if (onRefreshLesson != null) {
@@ -220,7 +222,7 @@ fun LessonStreamPlaceholder(
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("সার্ভার রিফ্রেশ", fontSize = 12.sp)
+                        Text(tr("Refresh", "রিফ্রেশ"), fontSize = 12.sp)
                     }
                 }
             }
@@ -231,7 +233,7 @@ fun LessonStreamPlaceholder(
                     onClick = {
                         onViewSlide(
                             LessonAttachmentItem(
-                                title = "লেকচার স্লাইড ও নোটস",
+                                title = AppLang.tr("Lecture Slides & Notes", "লেকচার স্লাইড ও নোটস"),
                                 url = slideUrl,
                                 file_type = "pdf"
                             )
@@ -241,7 +243,7 @@ fun LessonStreamPlaceholder(
                 ) {
                     Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("লেকচার স্লাইড ও ক্লাস নোটস পড়ুন", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(tr("Read Lecture Slides & Notes", "লেকচার স্লাইড ও নোটস পড়ুন"), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -258,7 +260,7 @@ fun LessonStreamPlaceholder(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "ফিরে যান",
+                contentDescription = tr("Back", "ফিরে যান"),
                 tint = Color.White
             )
         }
@@ -280,7 +282,7 @@ fun LessonDetailHeader(
         ?: lesson?.live_class?.instructor
     val subjectName = lesson?.subject_name
         ?: lesson?.live_class?.subject_name
-        ?: "বিষয়"
+        ?: tr("Subject", "বিষয়")
 
     Column(
         modifier = modifier
@@ -374,7 +376,7 @@ fun LessonDetailHeader(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = lesson?.title ?: "ক্লাস লেকচার",
+                text = lesson?.title ?: tr("Class Lecture", "ক্লাস লেকচার"),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -389,7 +391,7 @@ fun LessonDetailHeader(
                 ) {
                     Icon(
                         imageVector = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = if (isSaved) "সংরক্ষণ থেকে সরান" else "ক্লাসটি সংরক্ষণ করুন",
+                        contentDescription = if (isSaved) tr("Remove bookmark", "সংরক্ষণ থেকে সরান") else tr("Save class", "ক্লাস সংরক্ষণ করুন"),
                         tint = if (isSaved) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(24.dp)
                     )

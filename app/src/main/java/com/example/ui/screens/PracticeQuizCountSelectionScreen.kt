@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.quiz.PracticeQuizViewModel
+import com.example.utils.tr
 
 private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
@@ -94,13 +95,13 @@ fun PracticeQuizCountSelectionScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "প্র্যাকটিস কুইজ",
+                                text = tr("Practice Quiz", "প্র্যাকটিস কুইজ"),
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "ধাপ ২/৩ • প্রশ্নের সংখ্যা নির্বাচন",
+                                text = tr("Step 2/3 • Question Count", "ধাপ ২/৩ • প্রশ্নের সংখ্যা"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -145,7 +146,7 @@ fun PracticeQuizCountSelectionScreen(
                             .testTag("view_summary_button")
                     ) {
                         Text(
-                            text = "কুইজের সামারি দেখুন",
+                            text = tr("View Summary", "সামারি দেখুন"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -167,13 +168,16 @@ fun PracticeQuizCountSelectionScreen(
         ) {
             // Title Header
             Text(
-                text = "প্রশ্নের সংখ্যা সিলেক্ট করো",
+                text = tr("Choose Question Count", "প্রশ্নের সংখ্যা বাছাই করুন"),
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "প্রতিটি প্রশ্নের জন্য ১ মিনিট সময় বরাদ্দ থাকবে। নিজের সুবিধাজনক প্রশ্নের সংখ্যা বেছে নাও।",
+                text = tr(
+                    "Each question allows 1 minute. Pick your preferred set size.",
+                    "প্রতিটি প্রশ্নের জন্য ১ মিনিট সময় থাকবে। সুবিধামতো সংখ্যা বেছে নিন।"
+                ),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
@@ -185,8 +189,8 @@ fun PracticeQuizCountSelectionScreen(
             QuestionCountOptionCard(
                 count = 10,
                 durationMinutes = 10,
-                title = "১০ টি — ১০ মি.",
-                subtitle = "দ্রুত রিভিশন ও প্র্যাকটিসের জন্য সেরা অপশন",
+                title = tr("10 Questions • 10 min", "১০টি প্রশ্ন • ১০ মি."),
+                subtitle = tr("Great for quick revision and warm-up", "দ্রুত রিভিশন ও প্র্যাকটিসের জন্য সেরা"),
                 isSelected = uiState.selectedQuestionCount == 10,
                 subjectColor = subjectColor,
                 onClick = { viewModel.selectQuestionCount(10) }
@@ -196,8 +200,8 @@ fun PracticeQuizCountSelectionScreen(
             QuestionCountOptionCard(
                 count = 20,
                 durationMinutes = 20,
-                title = "২০ টি — ২০ মি.",
-                subtitle = "গভীর প্রস্তুতি ও পূর্ণাঙ্গ আত্মমূল্যায়নের জন্য",
+                title = tr("20 Questions • 20 min", "২০টি প্রশ্ন • ২০ মি."),
+                subtitle = tr("Best for deep practice and self-assessment", "গভীর প্রস্তুতি ও আত্মমূল্যায়নের জন্য"),
                 isSelected = uiState.selectedQuestionCount == 20,
                 subjectColor = subjectColor,
                 onClick = { viewModel.selectQuestionCount(20) }
@@ -364,7 +368,7 @@ private fun QuizSummaryBottomSheetContent(
             Spacer(modifier = Modifier.width(12.dp))
 
             Text(
-                text = "কুইজের সামারি",
+                text = tr("Quiz Summary", "কুইজ সামারি"),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -377,7 +381,7 @@ private fun QuizSummaryBottomSheetContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = tr("Close", "বন্ধ করুন"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -407,13 +411,13 @@ private fun QuizSummaryBottomSheetContent(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "${toBengaliDigits(uiState.selectedQuestionCount)} টি প্রশ্ন",
+                        text = tr("${toBengaliDigits(uiState.selectedQuestionCount)} Questions", "${toBengaliDigits(uiState.selectedQuestionCount)} টি প্রশ্ন"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "মোট প্রশ্ন",
+                        text = tr("Total Questions", "মোট প্রশ্ন"),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -439,13 +443,13 @@ private fun QuizSummaryBottomSheetContent(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "${toBengaliDigits(uiState.selectedQuestionCount)} মিনিট",
+                        text = tr("${toBengaliDigits(uiState.selectedQuestionCount)} min", "${toBengaliDigits(uiState.selectedQuestionCount)} মিনিট"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "বরাদ্দকৃত সময়",
+                        text = tr("Time Limit", "বরাদ্দ সময়"),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -491,13 +495,16 @@ private fun QuizSummaryBottomSheetContent(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = uiState.subjectTitle.ifBlank { "নির্বাচিত বিষয়" },
+                            text = uiState.subjectTitle.ifBlank { tr("Selected Subject", "নির্বাচিত বিষয়") },
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "অধ্যায়: ${toBengaliDigits(uiState.selectedChaptersCount)}টি সিলেক্টেড",
+                            text = tr(
+                                "Chapters: ${toBengaliDigits(uiState.selectedChaptersCount)} selected",
+                                "অধ্যায়: ${toBengaliDigits(uiState.selectedChaptersCount)}টি নির্বাচিত"
+                            ),
                             fontSize = 12.sp,
                             color = subjectColor,
                             fontWeight = FontWeight.Medium
@@ -514,7 +521,12 @@ private fun QuizSummaryBottomSheetContent(
 
                 if (selectedChapterNames.isNotEmpty()) {
                     Text(
-                        text = selectedChapterNames.take(4).joinToString(", ") + if (selectedChapterNames.size > 4) " এবং আরও ${toBengaliDigits(selectedChapterNames.size - 4)}টি" else "",
+                        text = selectedChapterNames.take(4).joinToString(", ") + if (selectedChapterNames.size > 4) {
+                            tr(
+                                " and ${toBengaliDigits(selectedChapterNames.size - 4)} more",
+                                " এবং আরও ${toBengaliDigits(selectedChapterNames.size - 4)}টি"
+                            )
+                        } else "",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp,
@@ -530,7 +542,10 @@ private fun QuizSummaryBottomSheetContent(
             val used = uiState.practiceLimits?.used_today ?: 0
             val limit = uiState.practiceLimits?.limit_per_day ?: 3
             Text(
-                text = "আজকের প্র্যাকটিস সম্পন্ন: ${toBengaliDigits(used)}/${toBengaliDigits(limit)} বার",
+                text = tr(
+                    "Today's quizzes: ${toBengaliDigits(used)}/${toBengaliDigits(limit)}",
+                    "আজকের প্র্যাকটিস: ${toBengaliDigits(used)}/${toBengaliDigits(limit)} বার"
+                ),
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -556,7 +571,7 @@ private fun QuizSummaryBottomSheetContent(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "কুইজ প্রস্তুত হচ্ছে...",
+                    text = tr("Preparing quiz...", "কুইজ প্রস্তুত হচ্ছে..."),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -570,7 +585,7 @@ private fun QuizSummaryBottomSheetContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "কুইজ শুরু করো",
+                    text = tr("Start Quiz", "কুইজ শুরু করুন"),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

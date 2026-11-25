@@ -80,6 +80,8 @@ import com.example.security.ActivationSupportLink
 import com.example.security.ActivationSupportRepository
 import com.example.security.DeviceActivationRepository
 import com.example.security.StudentVerificationStatus
+import com.example.utils.AppLang
+import com.example.utils.tr
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -149,10 +151,16 @@ fun DeviceActivationScreen(
                 if (showFeedbackToast) {
                     when (result) {
                         is StudentVerificationStatus.Approved -> {
-                            statusBannerMessage = "অভিনন্দন! আপনার স্টুডেন্ট ভেরিফিকেশন সম্পন্ন হয়েছে।"
+                            statusBannerMessage = AppLang.tr(
+                                "Congratulations! Your student verification is complete.",
+                                "অভিনন্দন! আপনার স্টুডেন্ট ভেরিফিকেশন সম্পন্ন হয়েছে।"
+                            )
                         }
                         is StudentVerificationStatus.Pending -> {
-                            statusBannerMessage = "আপনার ভেরিফিকেশন এখনো প্রক্রিয়াধীন রয়েছে। অনুগ্রহ করে অপেক্ষা করুন।"
+                            statusBannerMessage = AppLang.tr(
+                                "Your verification is still in progress. Please wait.",
+                                "আপনার ভেরিফিকেশন এখনো প্রক্রিয়াধীন রয়েছে। অনুগ্রহ করে অপেক্ষা করুন।"
+                            )
                         }
                         is StudentVerificationStatus.Blocked -> {
                             statusBannerMessage = null
@@ -182,7 +190,9 @@ fun DeviceActivationScreen(
         } catch (_: Throwable) {}
 
         if (!isSupabaseConfigured) {
-            verificationStatus = StudentVerificationStatus.Error("সার্ভার সংযোগ কনফিগার করা হয়নি।")
+            verificationStatus = StudentVerificationStatus.Error(
+                AppLang.tr("Server connection is not configured.", "সার্ভার সংযোগ কনফিগার করা হয়নি।")
+            )
             return
         }
 
@@ -198,14 +208,19 @@ fun DeviceActivationScreen(
                 isSubmittingOrRefreshing = false
                 verificationStatus = result
                 if (result is StudentVerificationStatus.Pending) {
-                    statusBannerMessage = "স্বাগতম! আপনার ভেরিফিকেশন আবেদন সফলভাবে গৃহীত হয়েছে।"
+                    statusBannerMessage = AppLang.tr(
+                        "Welcome! Your verification request has been received.",
+                        "স্বাগতম! আপনার ভেরিফিকেশন আবেদন সফলভাবে গৃহীত হয়েছে।"
+                    )
                 }
             } catch (e: CancellationException) {
                 isSubmittingOrRefreshing = false
                 throw e
             } catch (t: Throwable) {
                 isSubmittingOrRefreshing = false
-                verificationStatus = StudentVerificationStatus.Error("সংযোগ সমস্যা হয়েছে, অনুগ্রহ করে আবার চেষ্টা করুন।")
+                verificationStatus = StudentVerificationStatus.Error(
+                    AppLang.tr("Connection issue. Please try again.", "সংযোগ সমস্যা হয়েছে, অনুগ্রহ করে আবার চেষ্টা করুন।")
+                )
             }
         }
     }
@@ -226,7 +241,11 @@ fun DeviceActivationScreen(
             context.startActivity(intent)
         } catch (e: Exception) {
             Log.e("StudentVerification", "Cannot open link: ${link.url}", e)
-            Toast.makeText(context, "লিংক ওপেন করা যায়নি।", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                AppLang.tr("Unable to open link.", "লিংক ওপেন করা যায়নি।"),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -477,10 +496,10 @@ fun DeviceActivationScreen(
                     Spacer(modifier = Modifier.width(7.dp))
                     Text(
                         text = when {
-                            isBlocked -> "প্রবেশাধিকার স্থগিত"
-                            isApproved -> "ভেরিফাইড স্টুডেন্ট পোর্টাল"
-                            isPending -> "ভেরিফিকেশন প্রক্রিয়াধীন"
-                            else -> "শান্ত ও আনন্দময় শিক্ষার ভুবন"
+                            isBlocked -> tr("Access Suspended", "প্রবেশাধিকার স্থগিত")
+                            isApproved -> tr("Verified Student Portal", "ভেরিফাইড স্টুডেন্ট পোর্টাল")
+                            isPending -> tr("Verification Pending", "ভেরিফিকেশন প্রক্রিয়াধীন")
+                            else -> tr("Smart Learning World", "শান্ত ও আনন্দময় শিক্ষার ভুবন")
                         },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -495,10 +514,10 @@ fun DeviceActivationScreen(
             // Main Welcoming Title & Subtitle
             Text(
                 text = when {
-                    isBlocked -> "প্রবেশাধিকার সাময়িকভাবে বন্ধ"
-                    isApproved -> "স্বাগতম! ভেরিফিকেশন সম্পন্ন"
-                    isPending -> "স্বাগতম! একটু অপেক্ষা করুন"
-                    else -> "স্বাগতম! শিক্ষার সবুজ ভুবনে"
+                    isBlocked -> tr("Access Restricted", "প্রবেশাধিকার বন্ধ")
+                    isApproved -> tr("Verified & Ready", "ভেরিফিকেশন সম্পন্ন")
+                    isPending -> tr("Request Pending", "একটু অপেক্ষা করুন")
+                    else -> tr("Welcome to MaxBird", "MaxBird-এ স্বাগতম")
                 },
                 fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -511,10 +530,22 @@ fun DeviceActivationScreen(
 
             Text(
                 text = when {
-                    isBlocked -> "এই ডিভাইস থেকে বর্তমানে অ্যাপে প্রবেশের অনুমতি স্থগিত রয়েছে।"
-                    isApproved -> "আপনার ডিভাইসটি ইতিমধ্যে স্টুডেন্ট হিসেবে ভেরিফাইড রয়েছে। নিচের বাটনে ট্যাপ করে সরাসরি প্রবেশ করুন।"
-                    isPending -> "আপনার স্টুডেন্ট ভেরিফিকেশন আবেদন গ্রহণ করা হয়েছে। ভেরিফিকেশন সম্পন্ন হলেই আপনি অ্যাপে প্রবেশ করতে পারবেন।"
-                    else -> "আমাদের বিশেষ লার্নিং প্ল্যাটফর্মে যুক্ত হতে নিচে এক ক্লিকে আপনার স্টুডেন্ট ভেরিফিকেশন সম্পন্ন করুন।"
+                    isBlocked -> tr(
+                        "App access from this device is currently suspended.",
+                        "এই ডিভাইস থেকে বর্তমানে অ্যাপে প্রবেশের অনুমতি স্থগিত রয়েছে।"
+                    )
+                    isApproved -> tr(
+                        "Your device is verified. Tap below to enter your learning dashboard.",
+                        "আপনার ডিভাইসটি ভেরিফাইড রয়েছে। নিচের বাটনে ট্যাপ করে প্রবেশ করুন।"
+                    )
+                    isPending -> tr(
+                        "Your verification request has been received. You can enter once approved.",
+                        "আপনার ভেরিফিকেশন আবেদন গ্রহণ করা হয়েছে। অনুমোদন হলেই প্রবেশ করতে পারবেন।"
+                    )
+                    else -> tr(
+                        "Complete one-tap student verification below to access the learning platform.",
+                        "লার্নিং প্ল্যাটফর্মে যুক্ত হতে নিচে এক ক্লিকে স্টুডেন্ট ভেরিফিকেশন সম্পন্ন করুন।"
+                    )
                 },
                 fontSize = 13.5.sp,
                 color = Color(0xFFD1FAE5).copy(alpha = 0.85f),
@@ -579,7 +610,7 @@ fun DeviceActivationScreen(
                                     )
                                     Spacer(modifier = Modifier.height(14.dp))
                                     Text(
-                                        text = "স্টুডেন্ট ভেরিফিকেশন যাচাই করা হচ্ছে...",
+                                        text = tr("Checking verification...", "স্টুডেন্ট ভেরিফিকেশন যাচাই করা হচ্ছে..."),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFFA7F3D0),
@@ -589,7 +620,7 @@ fun DeviceActivationScreen(
                             }
 
                             status is StudentVerificationStatus.Approved -> {
-                                // Already Verified / Reinstalled Device -> Immediate "প্রবেশ করুন" Button!
+                                // Already Verified / Reinstalled Device -> Immediate Enter Button!
                                 Column(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
@@ -613,7 +644,7 @@ fun DeviceActivationScreen(
                                     Spacer(modifier = Modifier.height(14.dp))
 
                                     Text(
-                                        text = "স্টুডেন্ট ভেরিফিকেশন সক্রিয় আছে!",
+                                        text = tr("Verification Active!", "ভেরিফিকেশন সক্রিয় আছে!"),
                                         fontSize = 19.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFFECFDF5),
@@ -623,7 +654,10 @@ fun DeviceActivationScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
 
                                     Text(
-                                        text = "আপনার এই ডিভাইসটি ভেরিফাইড রয়েছে। নিচের বাটনে ট্যাপ করে সরাসরি আপনার লার্নিং ড্যাশবোর্ডে প্রবেশ করুন।",
+                                        text = tr(
+                                            "This device is verified. Tap below to open your dashboard.",
+                                            "আপনার ডিভাইসটি ভেরিফাইড রয়েছে। নিচের বাটনে ট্যাপ করে ড্যাশবোর্ডে প্রবেশ করুন।"
+                                        ),
                                         fontSize = 13.5.sp,
                                         color = Color(0xFFA7F3D0),
                                         textAlign = TextAlign.Center,
@@ -672,7 +706,7 @@ fun DeviceActivationScreen(
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Text(
-                                                text = "প্রবেশ করুন",
+                                                text = tr("Enter", "প্রবেশ করুন"),
                                                 fontSize = 16.5.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color.White
@@ -707,7 +741,7 @@ fun DeviceActivationScreen(
                                     Spacer(modifier = Modifier.height(14.dp))
 
                                     Text(
-                                        text = "স্বাগতম! আপনার আবেদন গৃহীত হয়েছে 🌿",
+                                        text = tr("Request Received", "আবেদন গৃহীত হয়েছে"),
                                         fontSize = 18.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color.White,
@@ -739,7 +773,7 @@ fun DeviceActivationScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = "১–৫ মিনিট অপেক্ষা করুন",
+                                                    text = tr("Wait 1–5 minutes", "১–৫ মিনিট অপেক্ষা করুন"),
                                                     fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.ExtraBold,
                                                     color = Color(0xFFFDE047)
@@ -749,7 +783,10 @@ fun DeviceActivationScreen(
                                             Spacer(modifier = Modifier.height(6.dp))
 
                                             Text(
-                                                text = "সাধারণত ১ থেকে ৫ মিনিটের মধ্যেই স্টুডেন্ট ভেরিফিকেশন সম্পন্ন হয়ে যায়। তবে কখনো কখনো সর্বোচ্চ ২৪ ঘণ্টা সময় লাগতে পারে।",
+                                                text = tr(
+                                                    "Verification usually completes within 1 to 5 minutes, though occasionally it may take up to 24 hours.",
+                                                    "সাধারণত ১ থেকে ৫ মিনিটের মধ্যেই ভেরিফিকেশন সম্পন্ন হয়। তবে কখনো সর্বোচ্চ ২৪ ঘণ্টা সময় লাগতে পারে।"
+                                                ),
                                                 fontSize = 13.sp,
                                                 color = Color(0xFFD1FAE5),
                                                 textAlign = TextAlign.Center,
@@ -761,7 +798,10 @@ fun DeviceActivationScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
 
                                     Text(
-                                        text = "ভেরিফিকেশন সম্পন্ন হলে নিচের বাটনে ট্যাপ করুন অথবা অ্যাপটি পুনরায় ওপেন করলেই সরাসরি প্রবেশ করতে পারবেন।",
+                                        text = tr(
+                                            "Tap below to refresh status or reopen the app once verified.",
+                                            "ভেরিফিকেশন সম্পন্ন হলে নিচের বাটনে ট্যাপ করুন বা অ্যাপটি পুনরায় খুলুন।"
+                                        ),
                                         fontSize = 12.sp,
                                         color = Color(0xFFA7F3D0).copy(alpha = 0.85f),
                                         textAlign = TextAlign.Center,
@@ -829,7 +869,7 @@ fun DeviceActivationScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
-                                                    text = "যাচাই করা হচ্ছে...",
+                                                    text = tr("Checking...", "যাচাই করা হচ্ছে..."),
                                                     fontSize = 15.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color.White
@@ -843,7 +883,7 @@ fun DeviceActivationScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = "স্ট্যাটাস রিফ্রেশ করুন",
+                                                    text = tr("Refresh Status", "স্ট্যাটাস রিফ্রেশ"),
                                                     fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color.White
@@ -879,7 +919,7 @@ fun DeviceActivationScreen(
                                     Spacer(modifier = Modifier.height(14.dp))
 
                                     Text(
-                                        text = "ডিভাইসটির প্রবেশাধিকার বন্ধ রয়েছে",
+                                        text = tr("Device Access Blocked", "ডিভাইসের প্রবেশাধিকার বন্ধ"),
                                         fontSize = 18.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = Color(0xFFFCA5A5),
@@ -890,7 +930,10 @@ fun DeviceActivationScreen(
 
                                     Text(
                                         text = status.reason.ifBlank {
-                                            "নিরাপত্তা বা শর্তাবলী ভঙ্গের কারণে এই ডিভাইসে অ্যাপ ব্যবহারের অনুমতি স্থগিত করা হয়েছে।"
+                                            tr(
+                                                "App access on this device has been suspended due to policy or security reasons.",
+                                                "নিরাপত্তা বা শর্তাবলী ভঙ্গের কারণে এই ডিভাইসে অ্যাপ ব্যবহারের অনুমতি স্থগিত করা হয়েছে।"
+                                            )
                                         },
                                         fontSize = 13.sp,
                                         color = Color(0xFFFECACA),
@@ -917,7 +960,7 @@ fun DeviceActivationScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "পুনরায় যাচাই করুন",
+                                            text = tr("Recheck", "পুনরায় যাচাই"),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFFCA5A5)
@@ -927,7 +970,7 @@ fun DeviceActivationScreen(
                             }
 
                             else -> {
-                                // Default New User State -> One-Click "স্টুডেন্ট ভেরিফিকেশন করুন"
+                                // Default New User State -> One-Click Student Verification
                                 Column(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalAlignment = Alignment.CenterHorizontally
@@ -944,7 +987,7 @@ fun DeviceActivationScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "এক ক্লিকেই স্টুডেন্ট ভেরিফিকেশন",
+                                            text = tr("One-Tap Verification", "এক ক্লিকে ভেরিফিকেশন"),
                                             fontSize = 16.5.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = Color(0xFFECFDF5)
@@ -954,7 +997,10 @@ fun DeviceActivationScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
 
                                     Text(
-                                        text = "কোনো কোড বা ঝামেলার প্রয়োজন নেই! নিচে আপনার নাম লিখে বা সরাসরি বাটনে ক্লিক করে স্টুডেন্ট ভেরিফিকেশন সম্পন্ন করুন।",
+                                        text = tr(
+                                            "No activation code needed! Enter your name (optional) and tap below to verify.",
+                                            "কোনো কোডের প্রয়োজন নেই! নাম লিখে বা সরাসরি বাটনে ক্লিক করে ভেরিফিকেশন সম্পন্ন করুন।"
+                                        ),
                                         fontSize = 12.8.sp,
                                         color = Color(0xFFA7F3D0),
                                         textAlign = TextAlign.Center,
@@ -972,7 +1018,7 @@ fun DeviceActivationScreen(
                                             .testTag("student_name_input"),
                                         placeholder = {
                                             Text(
-                                                text = "আপনার নাম লিখুন (ঐচ্ছিক)",
+                                                text = tr("Your name (optional)", "আপনার নাম (ঐচ্ছিক)"),
                                                 color = Color(0xFF6EE7B7).copy(alpha = 0.55f),
                                                 fontSize = 13.5.sp
                                             )
@@ -1077,7 +1123,7 @@ fun DeviceActivationScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
-                                                    text = "ভেরিফিকেশন পাঠানো হচ্ছে...",
+                                                    text = tr("Submitting...", "ভেরিফিকেশন পাঠানো হচ্ছে..."),
                                                     fontSize = 15.5.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color.White
@@ -1091,7 +1137,7 @@ fun DeviceActivationScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
-                                                    text = "স্টুডেন্ট ভেরিফিকেশন করুন",
+                                                    text = tr("Verify Student", "স্টুডেন্ট ভেরিফিকেশন"),
                                                     fontSize = 16.sp,
                                                     fontWeight = FontWeight.ExtraBold,
                                                     color = Color.White
@@ -1148,14 +1194,14 @@ fun DeviceActivationScreen(
 
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "সহযোগিতা ও স্টুডেন্ট সাপোর্ট",
+                                        text = tr("Student Support", "স্টুডেন্ট সাপোর্ট"),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFECFDF5)
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = "যেকোনো প্রয়োজনে আমাদের হেল্পডেস্কে বার্তা পাঠাতে পারেন",
+                                        text = tr("Need help? Reach out to our helpdesk", "যেকোনো প্রয়োজনে হেল্পডেস্কে যোগাযোগ করুন"),
                                         fontSize = 11.5.sp,
                                         color = Color(0xFFA7F3D0).copy(alpha = 0.8f)
                                     )

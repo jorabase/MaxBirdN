@@ -173,7 +173,10 @@ class ChangeSyllabusViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingClasses = false,
-                    errorMessage = "ক্লাসের তালিকা লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                    errorMessage = com.example.utils.AppLang.tr(
+                        "Could not load class list: ${e.localizedMessage ?: "Network error"}",
+                        "ক্লাসের তালিকা লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                    )
                 )
             }
         }
@@ -269,12 +272,12 @@ class ChangeSyllabusViewModel(
     fun showConfirmationDialog() {
         val state = _uiState.value
         if (!state.isFormValid) {
-            _uiState.value = state.copy(errorMessage = "অনুগ্রহ করে সকল তথ্য সঠিকভাবে নির্বাচন করো")
+            _uiState.value = state.copy(errorMessage = com.example.utils.AppLang.tr("Please select all fields properly", "অনুগ্রহ করে সকল তথ্য সঠিকভাবে নির্বাচন করো"))
             return
         }
         if (state.isSameAsCurrent) {
             _uiState.value = state.copy(
-                errorMessage = "তুমি ইতিমধ্যে এই সিলেবাসেই আছো। ভিন্ন কিছু নির্বাচন করো।"
+                errorMessage = com.example.utils.AppLang.tr("You are already on this syllabus. Please choose a different one.", "তুমি ইতিমধ্যে এই সিলেবাসেই আছো। ভিন্ন কিছু নির্বাচন করো।")
             )
             return
         }
@@ -438,7 +441,10 @@ class ChangeSyllabusViewModel(
                 }
                 _uiState.value = _uiState.value.copy(
                     isSubmitting = false,
-                    errorMessage = "সিলেবাস পরিবর্তন ব্যর্থ হয়েছে: ${errorDetails ?: "সার্ভার এরর"}"
+                    errorMessage = com.example.utils.AppLang.tr(
+                        "Failed to change syllabus: ${errorDetails ?: "Server error"}",
+                        "সিলেবাস পরিবর্তন ব্যর্থ হয়েছে: ${errorDetails ?: "সার্ভার এরর"}"
+                    )
                 )
             }
         }
@@ -450,7 +456,11 @@ class ChangeSyllabusViewModel(
      */
     private fun restartApp(context: Context) {
         try {
-            android.widget.Toast.makeText(context.applicationContext, "সিলেবাস সফলভাবে পরিবর্তন করা হয়েছে! ✨", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(
+                context.applicationContext,
+                com.example.utils.AppLang.tr("Syllabus updated successfully! ✨", "সিলেবাস সফলভাবে পরিবর্তন করা হয়েছে! ✨"),
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

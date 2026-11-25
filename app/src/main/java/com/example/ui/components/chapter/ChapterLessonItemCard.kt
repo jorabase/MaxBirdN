@@ -24,24 +24,27 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.StudentLessonItem
+import com.example.utils.AppLang
 import com.example.utils.ClassTypeUtils
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Formats ISO date string to Bengali readable date & time.
+ * Formats ISO date string to localized readable date & time.
  */
 fun formatChapterLessonDate(rawDate: String?): String {
     if (rawDate.isNullOrBlank()) return ""
     return try {
-        val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).apply {
+        val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
         val date = parser.parse(rawDate)
         if (date != null) {
-            val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).apply {
+            val formatter = SimpleDateFormat("dd MMM yyyy, hh:mm a", AppLang.locale()).apply {
                 timeZone = TimeZone.getTimeZone("Asia/Dhaka")
             }
             toBengaliDigits(formatter.format(date))
@@ -87,93 +90,95 @@ fun ChapterLessonItemCard(
         label = "pulseAlpha"
     )
 
-    // Distinct Theme Colors based on Type & Position (লাইভ ক্লাস, আপকামিং ক্লাস, রেকর্ড ক্লাস, লাইভ এক্সাম, ইত্যাদি)
+    val isBn = isBangla()
+
+    // Distinct Theme Colors based on Type & Position
     val (typeTitle, typeTagBg, typeTagColor, cardBorderColor, cardIcon, actionButtonText, actionButtonColor) = when {
         isLiveExam || isExam || isModelTest -> when {
             lesson.isExamLive -> Tuple7(
-                "লাইভ এক্সাম",
+                tr("Live Exam", "লাইভ এক্সাম"),
                 Color(0xFFEA580C).copy(alpha = 0.18f),
                 Color(0xFFEA580C),
                 Color(0xFFEA580C).copy(alpha = 0.6f),
                 Icons.Default.Quiz,
-                "পরীক্ষা দিন",
+                tr("Take Exam", "পরীক্ষা দিন"),
                 Color(0xFFEA580C)
             )
             lesson.isExamUpcoming -> Tuple7(
-                "আপকামিং এক্সাম",
+                tr("Upcoming Exam", "আপকামিং এক্সাম"),
                 Color(0xFF7C3AED).copy(alpha = 0.15f),
                 Color(0xFF7C3AED),
                 Color(0xFF7C3AED).copy(alpha = 0.45f),
                 Icons.Default.AccessTime,
-                "আপকামিং এক্সাম",
+                tr("Upcoming", "আপকামিং"),
                 Color(0xFF7C3AED)
             )
             isCompletedEffective -> Tuple7(
-                "রেকর্ড এক্সাম • সম্পন্ন",
+                tr("Exam • Done", "রেকর্ড এক্সাম • সম্পন্ন"),
                 Color(0xFF10B981).copy(alpha = 0.15f),
                 Color(0xFF059669),
                 Color(0xFF10B981).copy(alpha = 0.35f),
                 Icons.Default.CheckCircle,
-                "রিভিউ ও প্র্যাকটিস",
+                tr("Review", "রিভিউ ও প্র্যাকটিস"),
                 Color(0xFF059669)
             )
             else -> Tuple7(
-                "রেকর্ড এক্সাম",
+                tr("Practice Exam", "রেকর্ড এক্সাম"),
                 Color(0xFFF59E0B).copy(alpha = 0.15f),
                 Color(0xFFD97706),
                 Color(0xFFF59E0B).copy(alpha = 0.45f),
                 Icons.Default.Assignment,
-                "অনুশীলন করুন",
+                tr("Practice", "অনুশীলন করুন"),
                 Color(0xFFD97706)
             )
         }
         isLiveNow -> Tuple7(
-            "লাইভ ক্লাস",
+            tr("Live Class", "লাইভ ক্লাস"),
             Color(0xFFEF4444).copy(alpha = 0.18f),
             Color(0xFFDC2626),
             Color(0xFFEF4444).copy(alpha = 0.6f),
             Icons.Default.LiveTv,
-            "লাইভে যোগ দিন",
+            tr("Join Live", "লাইভে যোগ দিন"),
             Color(0xFFDC2626)
         )
         isUpcoming -> Tuple7(
-            "আপকামিং ক্লাস",
+            tr("Upcoming", "আপকামিং ক্লাস"),
             Color(0xFF0284C7).copy(alpha = 0.15f),
             Color(0xFF0284C7),
             Color(0xFF0284C7).copy(alpha = 0.35f),
             Icons.Default.AccessTime,
-            "আপকামিং ক্লাস",
+            tr("Upcoming", "আপকামিং ক্লাস"),
             Color(0xFF0284C7)
         )
         isCompletedEffective -> Tuple7(
-            "রেকর্ড ক্লাস • সম্পন্ন",
+            tr("Recorded • Done", "রেকর্ড ক্লাস • সম্পন্ন"),
             Color(0xFF10B981).copy(alpha = 0.15f),
             Color(0xFF059669),
             Color(0xFF10B981).copy(alpha = 0.35f),
             Icons.Default.CheckCircle,
-            "রেকর্ড ক্লাস • দেখুন",
+            tr("Watch", "রেকর্ড • দেখুন"),
             Color(0xFF059669)
         )
         else -> Tuple7(
-            "রেকর্ড ক্লাস",
+            tr("Recorded", "রেকর্ড ক্লাস"),
             Color(0xFF3B82F6).copy(alpha = 0.15f),
             Color(0xFF2563EB),
             Color(0xFF3B82F6).copy(alpha = 0.3f),
             Icons.Default.PlayCircleFilled,
-            "রেকর্ড ক্লাস • দেখুন",
+            tr("Watch", "রেকর্ড • দেখুন"),
             Color(0xFF2563EB)
         )
     }
 
-    val startTimeFormatted = remember(lesson.live_class?.start_time ?: lesson.start_time) {
+    val startTimeFormatted = remember(lesson.live_class?.start_time ?: lesson.start_time, isBn) {
         formatChapterLessonDate(lesson.live_class?.start_time ?: lesson.start_time)
     }
 
-    val formattedTitle = remember(lesson.title) {
+    val formattedTitle = remember(lesson.title, isBn) {
         ClassTypeUtils.formatLessonTitle(lesson.title)
     }
 
-    val classTypeBadge = remember(lesson) {
+    val classTypeBadge = remember(lesson, isBn) {
         ClassTypeUtils.getClassTypeBadgeStyle(lesson)
     }
 
@@ -341,13 +346,13 @@ fun ChapterLessonItemCard(
             ) {
                 Text(
                     text = when {
-                        isModelTest -> if (!lesson.model_test?.type.isNullOrBlank()) "${lesson.model_test?.type} মডেল টেস্ট • পূর্ণাঙ্গ মূল্যায়ন" else "পূর্ণাঙ্গ মডেল টেস্ট ও জাতীয় র‍্যাংকিং"
-                        isLiveExam || isExam -> "অধ্যায় পরীক্ষা এবং মূল্যায়ন"
-                        isLiveNow -> "সরাসরি শিক্ষক ও সহপাঠীদের সাথে"
-                        lesson.isRecordingProcessing -> "লাইভ শেষ • রেকর্ড প্রস্তুত হচ্ছে"
-                        isUpcoming -> "নির্ধারিত সময়ে ক্লাস শুরু হবে"
-                        isRecorded -> "রেকর্ড ভিডিও ও লেকচার শিট"
-                        else -> "ক্লাস ও স্টাডি মেটেরিয়াল"
+                        isModelTest -> if (!lesson.model_test?.type.isNullOrBlank()) tr("${lesson.model_test?.type} Model Test • Full Evaluation", "${lesson.model_test?.type} মডেল টেস্ট • পূর্ণাঙ্গ মূল্যায়ন") else tr("Full Model Test & Ranking", "পূর্ণাঙ্গ মডেল টেস্ট ও র‍্যাংকিং")
+                        isLiveExam || isExam -> tr("Chapter exam & evaluation", "অধ্যায় পরীক্ষা ও মূল্যায়ন")
+                        isLiveNow -> tr("Live with teacher & classmates", "সরাসরি শিক্ষক ও সহপাঠীদের সাথে")
+                        lesson.isRecordingProcessing -> tr("Live ended • Preparing recording", "লাইভ শেষ • রেকর্ড প্রস্তুত হচ্ছে")
+                        isUpcoming -> tr("Starts at scheduled time", "নির্ধারিত সময়ে ক্লাস শুরু হবে")
+                        isRecorded -> tr("Recorded video & lecture sheet", "রেকর্ড ভিডিও ও লেকচার শিট")
+                        else -> tr("Class & study materials", "ক্লাস ও স্টাডি মেটেরিয়াল")
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

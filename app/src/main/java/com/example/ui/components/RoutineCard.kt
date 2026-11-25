@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import com.example.api.StudentLessonItem
 import com.example.utils.ClassTypeUtils
 import com.example.utils.SubjectColorUtils
+import com.example.utils.isBangla
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -102,8 +104,9 @@ fun WeeklyRoutineSection(
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = dhakaZone }.format(todayCal.time)
     }
 
-    // ===== LOGIC: daysList calculation (হুবহু সেম) =====
-    val daysList = remember(lessons, todayDateKey) {
+    val isBn = isBangla()
+
+    val daysList = remember(lessons, todayDateKey, isBn) {
         val satCal = todayCal.clone() as Calendar
         satCal.set(Calendar.HOUR_OF_DAY, 0)
         satCal.set(Calendar.MINUTE, 0)
@@ -126,15 +129,28 @@ fun WeeklyRoutineSection(
             val dateNum = dayNumFormatter.format(dayCal.time).toBengaliDigits()
 
             val dayOfWeek = dayCal.get(Calendar.DAY_OF_WEEK)
-            val (shortName, fullName) = when (dayOfWeek) {
-                Calendar.SATURDAY -> "শনি" to "শনিবার"
-                Calendar.SUNDAY -> "রবি" to "রবিবার"
-                Calendar.MONDAY -> "সোম" to "সোমবার"
-                Calendar.TUESDAY -> "মঙ্গল" to "মঙ্গলবার"
-                Calendar.WEDNESDAY -> "বুধ" to "বুধবার"
-                Calendar.THURSDAY -> "বৃহ" to "বৃহস্পতিবার"
-                Calendar.FRIDAY -> "শুক্র" to "শুক্রবার"
-                else -> "শনি" to "শনিবার"
+            val (shortName, fullName) = if (isBn) {
+                when (dayOfWeek) {
+                    Calendar.SATURDAY -> "শনি" to "শনিবার"
+                    Calendar.SUNDAY -> "রবি" to "রবিবার"
+                    Calendar.MONDAY -> "সোম" to "সোমবার"
+                    Calendar.TUESDAY -> "মঙ্গল" to "মঙ্গলবার"
+                    Calendar.WEDNESDAY -> "বুধ" to "বুধবার"
+                    Calendar.THURSDAY -> "বৃহ" to "বৃহস্পতিবার"
+                    Calendar.FRIDAY -> "শুক্র" to "শুক্রবার"
+                    else -> "শনি" to "শনিবার"
+                }
+            } else {
+                when (dayOfWeek) {
+                    Calendar.SATURDAY -> "Sat" to "Saturday"
+                    Calendar.SUNDAY -> "Sun" to "Sunday"
+                    Calendar.MONDAY -> "Mon" to "Monday"
+                    Calendar.TUESDAY -> "Tue" to "Tuesday"
+                    Calendar.WEDNESDAY -> "Wed" to "Wednesday"
+                    Calendar.THURSDAY -> "Thu" to "Thursday"
+                    Calendar.FRIDAY -> "Fri" to "Friday"
+                    else -> "Sat" to "Saturday"
+                }
             }
 
             val fullDateBn = "$fullName, ${fullDateFormatter.format(dayCal.time).toBengaliDigits()}"
@@ -201,20 +217,20 @@ fun WeeklyRoutineSection(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "সাপ্তাহিক রুটিন",
+                        text = tr("Weekly Routine", "সাপ্তাহিক রুটিন"),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "আজকের ক্লাস ও পরীক্ষার সময়সূচি",
+                        text = tr("Today's classes & exams", "আজকের ক্লাস ও পরীক্ষার সময়সূচি"),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Gradient "সব দেখুন" pill
+            // Gradient "See All" pill
             Surface(
                 onClick = onSeeAllClick,
                 shape = RoundedCornerShape(50),
@@ -231,7 +247,7 @@ fun WeeklyRoutineSection(
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(Icons.Default.CalendarToday, null, tint = Color.White, modifier = Modifier.size(12.dp))
-                        Text("সব দেখুন", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text(tr("See All", "সব দেখুন"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.White, modifier = Modifier.size(13.dp))
                     }
                 }
@@ -387,7 +403,10 @@ fun WeeklyRoutineSection(
                         Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF0284C7)))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "ক্লাস ${selectedDay.classCount.toString().toBengaliDigits()}",
+                            text = tr(
+                                "Class ${selectedDay.classCount.toString().toBengaliDigits()}",
+                                "ক্লাস ${selectedDay.classCount.toString().toBengaliDigits()}"
+                            ),
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -398,7 +417,10 @@ fun WeeklyRoutineSection(
                         Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFFF59E0B)))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "এক্সাম ${selectedDay.examCount.toString().toBengaliDigits()}",
+                            text = tr(
+                                "Exam ${selectedDay.examCount.toString().toBengaliDigits()}",
+                                "এক্সাম ${selectedDay.examCount.toString().toBengaliDigits()}"
+                            ),
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -436,7 +458,7 @@ fun WeeklyRoutineSection(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "রুটিন লোড হচ্ছে...",
+                                    text = tr("Loading routine...", "রুটিন লোড হচ্ছে..."),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -467,7 +489,7 @@ fun WeeklyRoutineSection(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "আজকে কোন ক্লাস বা পরীক্ষা নেই ✨",
+                                    text = tr("No classes or exams scheduled ✨", "আজকে কোন ক্লাস বা পরীক্ষা নেই ✨"),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -561,7 +583,7 @@ fun WeeklyRoutineSection(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "সাবজেক্ট সাজাও",
+                                    text = tr("Customize Subjects", "সাবজেক্ট সাজাও"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
@@ -578,11 +600,17 @@ fun WeeklyRoutineSection(
 
                             Text(
                                 text = if (selectedSubjectsCount > 0 && totalSubjectsCount > 0)
-                                    "${selectedSubjectsCount.toString().toBengaliDigits()}/${totalSubjectsCount.toString().toBengaliDigits()} টি বিষয় নির্বাচন করা আছে"
+                                    tr(
+                                        "${selectedSubjectsCount.toString().toBengaliDigits()}/${totalSubjectsCount.toString().toBengaliDigits()} subjects selected",
+                                        "${selectedSubjectsCount.toString().toBengaliDigits()}/${totalSubjectsCount.toString().toBengaliDigits()} টি বিষয় নির্বাচন করা আছে"
+                                    )
                                 else if (selectedSubjectsCount > 0)
-                                    "${selectedSubjectsCount.toString().toBengaliDigits()} টি বিষয় নির্বাচন করা আছে"
+                                    tr(
+                                        "${selectedSubjectsCount.toString().toBengaliDigits()} subjects selected",
+                                        "${selectedSubjectsCount.toString().toBengaliDigits()} টি বিষয় নির্বাচন করা আছে"
+                                    )
                                 else
-                                    "তোমার প্রয়োজনীয় সাবজেক্টগুলো বেছে নাও",
+                                    tr("Choose your preferred subjects", "তোমার প্রয়োজনীয় সাবজেক্টগুলো বেছে নাও"),
                                 fontSize = 11.5.sp,
                                 color = Color(0xFF94A3B8),
                                 maxLines = 1,
@@ -605,7 +633,7 @@ fun WeeklyRoutineSection(
                         ) {
                             Icon(Icons.Default.FilterList, null, tint = Color.White, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(5.dp))
-                            Text("ফিল্টার", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(tr("Filter", "ফিল্টার"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -658,10 +686,11 @@ fun ShikhoRoutineCard(
     val isDark = com.example.ui.theme.isAppInDarkTheme()
     val startTime = lesson.start_time ?: lesson.live_class?.start_time
     val endTime = lesson.end_time ?: lesson.live_class?.end_time
+    val isBn = isBangla()
     val startCal = remember(startTime) { parseIsoToDhakaCalendar(startTime, isEndOfDay = false) }
     val endCal = remember(endTime) { parseIsoToDhakaCalendar(endTime, isEndOfDay = true) }
-    val timeString = remember(startCal, endCal) { formatTimeRange(startCal, endCal) }
-    val durationString = remember(startCal, endCal) { calculateDurationText(startCal, endCal) }
+    val timeString = remember(startCal, endCal, isBn) { formatTimeRange(startCal, endCal) }
+    val durationString = remember(startCal, endCal, isBn) { calculateDurationText(startCal, endCal) }
 
     val isModelTest = lesson.isModelTest
     val isLiveExam = lesson.isLiveExam
@@ -677,8 +706,8 @@ fun ShikhoRoutineCard(
 
     val classTypeBadge = ClassTypeUtils.getClassTypeBadgeStyle(lesson)
 
-    val subjectName = lesson.subject_name ?: "বিষয়"
-    val titleText = ClassTypeUtils.formatLessonTitle(lesson.title ?: lesson.live_class?.chapter_name ?: "অনলাইন ক্লাস")
+    val subjectName = lesson.subject_name ?: tr("Subject", "বিষয়")
+    val titleText = ClassTypeUtils.formatLessonTitle(lesson.title ?: lesson.live_class?.chapter_name ?: tr("Online Class", "অনলাইন ক্লাস"))
     val subjectColors = SubjectColorUtils.getColorScheme(subjectName)
 
     val handleCardClick = { onClick() }
@@ -836,7 +865,7 @@ fun ShikhoRoutineCard(
                                             .background(Color(0xFFEF4444))
                                     )
                                     Text(
-                                        "লাইভ ক্লাস",
+                                        tr("Live Class", "লাইভ ক্লাস"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFDC2626)
@@ -857,7 +886,7 @@ fun ShikhoRoutineCard(
                                             .background(Color(0xFFEA580C))
                                     )
                                     Text(
-                                        "লাইভ এক্সাম",
+                                        tr("Live Exam", "লাইভ এক্সাম"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFC2410C)
@@ -867,7 +896,7 @@ fun ShikhoRoutineCard(
                             isModelTest || isExam || isLiveExam -> {
                                 if (lesson.isExamUpcoming) {
                                     Text(
-                                        text = "আপকামিং এক্সাম",
+                                        text = tr("Upcoming Exam", "আপকামিং এক্সাম"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF7C3AED),
@@ -875,7 +904,7 @@ fun ShikhoRoutineCard(
                                     )
                                 } else {
                                     Text(
-                                        text = "রেকর্ড এক্সাম",
+                                        text = tr("Recorded Exam", "রেকর্ড এক্সাম"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFB45309),
@@ -885,7 +914,7 @@ fun ShikhoRoutineCard(
                             }
                             lesson.isUpcoming -> {
                                 Text(
-                                    text = "আপকামিং ক্লাস",
+                                    text = tr("Upcoming Class", "আপকামিং ক্লাস"),
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0284C7),
@@ -894,7 +923,7 @@ fun ShikhoRoutineCard(
                             }
                             else -> {
                                 Text(
-                                    text = "রেকর্ড ক্লাস",
+                                    text = tr("Recorded", "রেকর্ড ক্লাস"),
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF2563EB),

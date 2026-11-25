@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 
 /**
@@ -199,7 +200,7 @@ fun HomeNoticeCarousel(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = notice.actionButtonText.ifBlank { "দেখুন" },
+                                                    text = notice.actionButtonText.ifBlank { tr("View", "দেখুন") },
                                                     fontSize = 8.5.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = Color.White.copy(alpha = 0.9f)
@@ -299,7 +300,7 @@ private fun NoticeFallbackBanner(notice: AppNotice) {
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = notice.title.ifBlank { "গুরুত্বপূর্ণ নোটিশ" },
+                        text = notice.title.ifBlank { tr("Important Notice", "গুরুত্বপূর্ণ নোটিশ") },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -331,7 +332,7 @@ private fun NoticeFallbackBanner(notice: AppNotice) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = notice.actionButtonText.ifBlank { "দেখুন" },
+                            text = notice.actionButtonText.ifBlank { tr("View", "দেখুন") },
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.9f)

@@ -91,11 +91,11 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(
         HomeUiState(
             isLoading = true,
-            userName = sessionManager.getUserFullName() ?: "শিক্ষার্থী",
-            userFirstName = sessionManager.getUserFirstName() ?: (sessionManager.getUserFullName()?.split(" ")?.firstOrNull() ?: "শিক্ষার্থী"),
+            userName = sessionManager.getUserFullName() ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী"),
+            userFirstName = sessionManager.getUserFirstName() ?: (sessionManager.getUserFullName()?.split(" ")?.firstOrNull() ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")),
             userAvatar = sessionManager.getUserAvatar(),
-            userClass = sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: "একাদশ শ্রেণি",
-            userGroup = sessionManager.getUserGroup() ?: "মানবিক",
+            userClass = sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি"),
+            userGroup = sessionManager.getUserGroup() ?: com.example.utils.AppLang.tr("Humanities", "মানবিক"),
             userSchool = sessionManager.getUserSchoolName() ?: ""
         )
     )
@@ -418,7 +418,7 @@ class HomeViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
-                    errorMessage = e.localizedMessage ?: "কোর্স লোড করতে সমস্যা হয়েছে"
+                    errorMessage = e.localizedMessage ?: com.example.utils.AppLang.tr("Failed to load courses", "কোর্স লোড করতে সমস্যা হয়েছে")
                 )
             }
         }
@@ -451,15 +451,15 @@ class HomeViewModel(
 
     private fun classCodeToBengaliName(code: String?): String {
         return when (code?.trim()?.uppercase()) {
-            "C5", "C05" -> "পঞ্চম শ্রেণি"
-            "C6", "C06" -> "ষষ্ঠ শ্রেণি"
-            "C7", "C07" -> "সপ্তম শ্রেণি"
-            "C8", "C08" -> "অষ্টম শ্রেণি"
-            "C9", "C09" -> "নবম শ্রেণি"
-            "C10" -> "দশম শ্রেণি"
-            "C11" -> "একাদশ শ্রেণি"
-            "C12" -> "দ্বাদশ শ্রেণি"
-            else -> code ?: "একাদশ শ্রেণি"
+            "C5", "C05" -> com.example.utils.AppLang.tr("Class 5", "পঞ্চম শ্রেণি")
+            "C6", "C06" -> com.example.utils.AppLang.tr("Class 6", "ষষ্ঠ শ্রেণি")
+            "C7", "C07" -> com.example.utils.AppLang.tr("Class 7", "সপ্তম শ্রেণি")
+            "C8", "C08" -> com.example.utils.AppLang.tr("Class 8", "অষ্টম শ্রেণি")
+            "C9", "C09" -> com.example.utils.AppLang.tr("Class 9", "নবম শ্রেণি")
+            "C10" -> com.example.utils.AppLang.tr("Class 10", "দশম শ্রেণি")
+            "C11" -> com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি")
+            "C12" -> com.example.utils.AppLang.tr("Class 12", "দ্বাদশ শ্রেণি")
+            else -> code ?: com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি")
         }
     }
 
@@ -488,7 +488,7 @@ class HomeViewModel(
                 val first = when {
                     firstName.isNotBlank() -> firstName
                     fullName.isNotBlank() -> fullName.split(" ").firstOrNull() ?: fullName
-                    else -> "শিক্ষার্থী"
+                    else -> com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")
                 }
 
                 val currentBatchId = sessionManager.getUserBatchId() ?: "HSC 2027"

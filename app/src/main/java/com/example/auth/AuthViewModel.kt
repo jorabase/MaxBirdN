@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.api.*
+import com.example.utils.AppLang
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,7 +92,7 @@ class AuthViewModel(
     fun checkUser(phoneInput: String) {
         val phone = formatPhone(phoneInput)
         if (phone.length != 13 || !phone.startsWith("8801")) {
-            _authState.value = AuthState.Error("সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017...)")
+            _authState.value = AuthState.Error(AppLang.tr("Enter a valid 11-digit mobile number (e.g. 017...)", "সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017...)"))
             return
         }
 
@@ -125,7 +126,7 @@ class AuthViewModel(
                     _authState.value = AuthState.Error(serverMsg ?: "API Error: ${e.code()}")
                 }
             } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "নেটওয়ার্ক সমস্যা হয়েছে, আবার চেষ্টা করুন।")
+                _authState.value = AuthState.Error(e.localizedMessage ?: AppLang.tr("Network error. Please try again.", "নেটওয়ার্ক সমস্যা হয়েছে, আবার চেষ্টা করুন।"))
             }
         }
     }
@@ -164,14 +165,14 @@ class AuthViewModel(
                     _authState.value = AuthState.Idle
                 } else {
                     updateOtpTimer(response.next_otp_in_seconds)
-                    _authState.value = AuthState.Error(response.error ?: response.message ?: "ওটিপি পাঠানো যায়নি। একটু পর আবার চেষ্টা করুন।")
+                    _authState.value = AuthState.Error(response.error ?: response.message ?: AppLang.tr("Could not send OTP. Please try again shortly.", "ওটিপি পাঠানো যায়নি। একটু পর আবার চেষ্টা করুন।"))
                 }
             } catch (e: HttpException) {
                 val (serverMsg, nextSec) = extractServerError(e)
                 updateOtpTimer(nextSec)
-                _authState.value = AuthState.Error(serverMsg ?: "ওটিপি পাঠানো যায়নি (HTTP ${e.code()})")
+                _authState.value = AuthState.Error(serverMsg ?: AppLang.tr("Could not send OTP (HTTP ${e.code()})", "ওটিপি পাঠানো যায়নি (HTTP ${e.code()})"))
             } catch (e: Exception) {
-                _authState.value = AuthState.Error("ওটিপি পাঠানো যায়নি: ${e.localizedMessage}")
+                _authState.value = AuthState.Error(AppLang.tr("Could not send OTP: ${e.localizedMessage}", "ওটিপি পাঠানো যায়নি: ${e.localizedMessage}"))
             }
         }
     }
@@ -199,7 +200,7 @@ class AuthViewModel(
                 if (response.code == 429 || (response.next_otp_in_seconds ?: 0) > 0) {
                     _hasRateLimitPendingOtp.value = true
                 }
-                _authState.value = AuthState.Error(response.error ?: response.message ?: "ওটিপি পাঠানো যায়নি। একটু পর আবার চেষ্টা করুন।")
+                _authState.value = AuthState.Error(response.error ?: response.message ?: AppLang.tr("Could not send OTP. Please try again shortly.", "ওটিপি পাঠানো যায়নি। একটু পর আবার চেষ্টা করুন।"))
             }
         } catch (e: HttpException) {
             val (serverMsg, nextSec) = extractServerError(e)
@@ -207,16 +208,16 @@ class AuthViewModel(
             if (e.code() == 429 || (nextSec ?: 0) > 0) {
                 _hasRateLimitPendingOtp.value = true
             }
-            _authState.value = AuthState.Error(serverMsg ?: "ওটিপি পাঠানো যায়নি (HTTP ${e.code()})")
+            _authState.value = AuthState.Error(serverMsg ?: AppLang.tr("Could not send OTP (HTTP ${e.code()})", "ওটিপি পাঠানো যায়নি (HTTP ${e.code()})"))
         } catch (e: Exception) {
-            _authState.value = AuthState.Error("ওটিপি পাঠানো যায়নি: ${e.localizedMessage}")
+            _authState.value = AuthState.Error(AppLang.tr("Could not send OTP: ${e.localizedMessage}", "ওটিপি পাঠানো যায়নি: ${e.localizedMessage}"))
         }
     }
 
     fun submitOtp(phone: String, otpInput: String, authType: String) {
         val otp = normalizeDigits(otpInput).filter { it.isDigit() }
         if (otp.length != 4) {
-            _authState.value = AuthState.Error("৪ সংখ্যার সঠিক OTP দিন")
+            _authState.value = AuthState.Error(AppLang.tr("Enter a valid 4-digit OTP", "৪ সংখ্যার সঠিক OTP দিন"))
             return
         }
 
@@ -325,13 +326,13 @@ class AuthViewModel(
                     // Route to SetPinScreen for both Signup & Forgot Password Reset
                     _authState.value = AuthState.NavigateToSetPin(phone, isSignup = isSignup)
                 } else {
-                    _authState.value = AuthState.Error(verifyRes.error ?: verifyRes.message ?: "সঠিক OTP প্রদান করুন")
+                    _authState.value = AuthState.Error(verifyRes.error ?: verifyRes.message ?: AppLang.tr("Please enter a valid OTP", "সঠিক OTP প্রদান করুন"))
                 }
             } catch (e: HttpException) {
                 val (serverMsg, _) = extractServerError(e)
-                _authState.value = AuthState.Error(serverMsg ?: "OTP ভেরিফিকেশন ব্যর্থ হয়েছে। সঠিক OTP দিন।")
+                _authState.value = AuthState.Error(serverMsg ?: AppLang.tr("OTP verification failed. Please enter a valid OTP.", "OTP ভেরিফিকেশন ব্যর্থ হয়েছে। সঠিক OTP দিন।"))
             } catch (e: Exception) {
-                _authState.value = AuthState.Error("OTP ভেরিফিকেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।")
+                _authState.value = AuthState.Error(AppLang.tr("OTP verification failed. Please try again.", "OTP ভেরিফিকেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।"))
             }
         }
     }
@@ -352,7 +353,7 @@ class AuthViewModel(
                                 otp = lastVerifiedOtp,
                                 source = "website",
                                 profile = SignupProfilePayload(
-                                    first_name = "শিক্ষার্থী",
+                                    first_name = AppLang.tr("Student", "শিক্ষার্থী"),
                                     `class` = SignupClassCode("C11"),
                                     gender = "M",
                                     avatar = "",
@@ -396,13 +397,13 @@ class AuthViewModel(
 
                     _authState.value = AuthState.PinSetSuccess(phone, isSignup = wasJustSignedUp)
                 } else {
-                    _authState.value = AuthState.Error(msg ?: "পিন সেট করা যায়নি। আবার চেষ্টা করুন।")
+                    _authState.value = AuthState.Error(msg ?: AppLang.tr("Could not set PIN. Please try again.", "পিন সেট করা যায়নি। আবার চেষ্টা করুন।"))
                 }
             } catch (e: HttpException) {
                 val (serverMsg, _) = extractServerError(e)
-                _authState.value = AuthState.Error(serverMsg ?: "পিন সেট করা যায়নি (HTTP ${e.code()})")
+                _authState.value = AuthState.Error(serverMsg ?: AppLang.tr("Could not set PIN (HTTP ${e.code()})", "পিন সেট করা যায়নি (HTTP ${e.code()})"))
             } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "পিন সেট করা যায়নি")
+                _authState.value = AuthState.Error(e.localizedMessage ?: AppLang.tr("Could not set PIN", "পিন সেট করা যায়নি"))
             }
         }
     }
@@ -442,13 +443,13 @@ class AuthViewModel(
                     } catch (_: Throwable) {}
                     fetchProfile()
                 } else {
-                    _authState.value = AuthState.Error(response.error ?: response.message ?: "ভুল পিন দিয়েছেন, আবার চেষ্টা করুন।")
+                    _authState.value = AuthState.Error(response.error ?: response.message ?: AppLang.tr("Incorrect PIN. Please try again.", "ভুল পিন দিয়েছেন, আবার চেষ্টা করুন।"))
                 }
             } catch (e: HttpException) {
                 val (serverMsg, _) = extractServerError(e)
-                _authState.value = AuthState.Error(serverMsg ?: "ভুল পিন দিয়েছেন, আবার চেষ্টা করুন।")
+                _authState.value = AuthState.Error(serverMsg ?: AppLang.tr("Incorrect PIN. Please try again.", "ভুল পিন দিয়েছেন, আবার চেষ্টা করুন।"))
             } catch (e: Exception) {
-                _authState.value = AuthState.Error(e.localizedMessage ?: "লগইন ব্যর্থ হয়েছে")
+                _authState.value = AuthState.Error(e.localizedMessage ?: AppLang.tr("Login failed", "লগইন ব্যর্থ হয়েছে"))
             }
         }
     }
@@ -487,7 +488,7 @@ class AuthViewModel(
                     val first = when {
                         firstName.isNotBlank() -> firstName
                         fullName.isNotBlank() -> fullName.split(" ").firstOrNull() ?: fullName
-                        else -> "শিক্ষার্থী"
+                        else -> AppLang.tr("Student", "শিক্ষার্থী")
                     }
 
                     sessionManager.saveUserProfile(

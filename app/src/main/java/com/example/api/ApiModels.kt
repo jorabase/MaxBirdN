@@ -1,5 +1,6 @@
 package com.example.api
 
+import com.example.utils.AppLang
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -853,13 +854,13 @@ data class StudentLessonItem(
     val classPositionLabel: String
         get() = when {
             isLiveExam || isExam || isModelTest -> when {
-                isExamLive -> "লাইভ এক্সাম"
-                isExamUpcoming -> "আপকামিং এক্সাম"
-                else -> "রেকর্ড এক্সাম"
+                isExamLive -> AppLang.tr("Live Exam", "লাইভ এক্সাম")
+                isExamUpcoming -> AppLang.tr("Upcoming Exam", "আপকামিং এক্সাম")
+                else -> AppLang.tr("Recorded Exam", "রেকর্ড এক্সাম")
             }
-            isLiveNow -> "লাইভ ক্লাস"
-            isUpcoming -> "আপকামিং ক্লাস"
-            else -> "রেকর্ড ক্লাস"
+            isLiveNow -> AppLang.tr("Live Class", "লাইভ ক্লাস")
+            isUpcoming -> AppLang.tr("Upcoming Class", "আপকামিং ক্লাস")
+            else -> AppLang.tr("Recorded Class", "রেকর্ড ক্লাস")
         }
     val candidateStreamUrls: List<String>
         get() {
@@ -902,7 +903,7 @@ data class StudentLessonItem(
             attachments?.let { list.addAll(it) }
             val directSlide = live_class?.slide_url ?: slide_url
             if (!directSlide.isNullOrBlank() && list.none { it.downloadUrl == directSlide }) {
-                list.add(0, LessonAttachmentItem(title = "লেকচার স্লাইড (PDF)", url = directSlide, file_type = "pdf"))
+                list.add(0, LessonAttachmentItem(title = AppLang.tr("Lecture Slide (PDF)", "লেকচার স্লাইড (PDF)"), url = directSlide, file_type = "pdf"))
             }
             return list.distinctBy { it.downloadUrl }
         }
@@ -935,7 +936,7 @@ data class TeacherItem(
     val university_degree: List<String>? = emptyList()
 ) {
     val displayName: String
-        get() = name ?: listOfNotNull(first_name, last_name).joinToString(" ").ifBlank { "শিক্ষক" }
+        get() = name ?: listOfNotNull(first_name, last_name).joinToString(" ").ifBlank { AppLang.tr("Teacher", "শিক্ষক") }
 
     val displayAvatar: String?
         get() = marketing_avatar ?: avatar ?: image
@@ -957,7 +958,7 @@ data class LessonAttachmentItem(
         get() = url ?: link ?: file_url ?: path
 
     val displayTitle: String
-        get() = title ?: name ?: if (is_solution_sheet == true) "সমাধান শিট" else "লেকচার স্লাইড"
+        get() = title ?: name ?: if (is_solution_sheet == true) AppLang.tr("Solution Sheet", "সমাধান শিট") else AppLang.tr("Lecture Slide", "লেকচার স্লাইড")
 }
 
 @JsonClass(generateAdapter = true)
@@ -1131,7 +1132,7 @@ data class AcademicChapterItem(
     val topics: TopicsMetaWrapper? = null
 ) {
     val effectiveName: String
-        get() = chapter_name ?: name ?: "অধ্যায়"
+        get() = chapter_name ?: name ?: AppLang.tr("Chapter", "অধ্যায়")
 
     val effectiveNo: Any?
         get() = chapter_no ?: no
@@ -1338,15 +1339,15 @@ data class ClassItem(
 ) {
     val displayNameBn: String
         get() = when (code.uppercase()) {
-            "C5", "C05" -> "ক্লাস ৫"
-            "C6", "C06" -> "ক্লাস ৬"
-            "C7", "C07" -> "ক্লাস ৭"
-            "C8", "C08" -> "ক্লাস ৮"
-            "C9", "C09" -> "ক্লাস ৯"
-            "C10" -> "ক্লাস ১০"
-            "C11" -> "এইচএসসি"
-            "C12" -> "এডমিশন"
-            else -> name_bn ?: title_bn ?: code
+            "C5", "C05" -> AppLang.tr("Class 5", "ক্লাস ৫")
+            "C6", "C06" -> AppLang.tr("Class 6", "ক্লাস ৬")
+            "C7", "C07" -> AppLang.tr("Class 7", "ক্লাস ৭")
+            "C8", "C08" -> AppLang.tr("Class 8", "ক্লাস ৮")
+            "C9", "C09" -> AppLang.tr("Class 9", "ক্লাস ৯")
+            "C10" -> AppLang.tr("Class 10", "ক্লাস ১০")
+            "C11" -> AppLang.tr("HSC", "এইচএসসি")
+            "C12" -> AppLang.tr("Admission", "এডমিশন")
+            else -> if (AppLang.isBn()) (name_bn ?: title_bn ?: name_en ?: title_en ?: code) else (name_en ?: title_en ?: name_bn ?: title_bn ?: code)
         }
 
     val displaySubtitle: String
@@ -1376,10 +1377,10 @@ data class StudyGroupItem(
 ) {
     val displayNameBn: String
         get() = when (code.lowercase()) {
-            "science" -> "বিজ্ঞান"
-            "humanities", "hum" -> "মানবিক"
-            "business_studies", "business", "business studies", "commerce" -> "ব্যবসায় শিক্ষা"
-            else -> name_bn ?: title_bn ?: code
+            "science" -> AppLang.tr("Science", "বিজ্ঞান")
+            "humanities", "hum" -> AppLang.tr("Humanities", "মানবিক")
+            "business_studies", "business", "business studies", "commerce" -> AppLang.tr("Business Studies", "ব্যবসায় শিক্ষা")
+            else -> if (AppLang.isBn()) (name_bn ?: title_bn ?: name_en ?: title_en ?: code) else (name_en ?: title_en ?: name_bn ?: title_bn ?: code)
         }
 }
 

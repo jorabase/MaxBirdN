@@ -381,7 +381,7 @@ object OneSignalPushManager {
                 val studentName = (studentNameOverride?.trim()?.takeIf { it.isNotBlank() }
                     ?: session.getUserFullName()?.trim()?.takeIf { it.isNotBlank() }
                     ?: DeviceActivationRepository.getSavedStudentName(context).trim())
-                    .ifBlank { "শিক্ষার্থী" }
+                    .ifBlank { com.example.utils.AppLang.tr("Student", "শিক্ষার্থী") }
 
                 // Primary external_user_id is the student's 11-digit phone if logged in, otherwise deviceHardwareHash
                 val externalUserId = normPhone.ifBlank { deviceHardwareHash }
@@ -619,11 +619,14 @@ object OneSignalPushManager {
         displayDeviceId: String,
         deviceModel: String
     ) {
-        val cleanName = studentName.trim().ifBlank { "নতুন শিক্ষার্থী" }
+        val cleanName = studentName.trim().ifBlank { com.example.utils.AppLang.tr("New Student", "নতুন শিক্ষার্থী") }
         val deviceHash = runCatching { DeviceSecurityManager.getDeviceHardwareHash(context) }.getOrDefault(displayDeviceId)
         val studentPhone = runCatching { SessionManager(context).getNormalizedUserPhone() }.getOrDefault("")
-        val title = "🔔 নতুন ডিভাইস এক্সেস রিকোয়েস্ট!"
-        val message = "$cleanName ($deviceModel • ID: $displayDeviceId) অ্যাপে প্রবেশের জন্য এক্সেস আবেদন করেছেন।"
+        val title = com.example.utils.AppLang.tr("🔔 New Device Access Request!", "🔔 নতুন ডিভাইস এক্সেস রিকোয়েস্ট!")
+        val message = com.example.utils.AppLang.tr(
+            "$cleanName ($deviceModel • ID: $displayDeviceId) requested app access.",
+            "$cleanName ($deviceModel • ID: $displayDeviceId) অ্যাপে প্রবেশের জন্য এক্সেস আবেদন করেছেন।"
+        )
         val data = JSONObject().apply {
             put("notification_type", "ADMIN_DEVICE_ACCESS_REQUEST")
             put("event_type", "DEVICE_ACCESS_REQUEST")
@@ -648,9 +651,12 @@ object OneSignalPushManager {
         programTitle: String,
         programId: String
     ) {
-        val cleanName = studentName.trim().ifBlank { "শিক্ষার্থী" }
-        val title = "📚 নতুন কোর্স এক্সেস রিকোয়েস্ট!"
-        val message = "$cleanName ($studentPhone) '$programTitle' কোর্সের দাম, কিস্তি ও ফ্রি ট্রায়াল এক্সেস চেয়েছেন।"
+        val cleanName = studentName.trim().ifBlank { com.example.utils.AppLang.tr("Student", "শিক্ষার্থী") }
+        val title = com.example.utils.AppLang.tr("📚 New Course Access Request!", "📚 নতুন কোর্স এক্সেস রিকোয়েস্ট!")
+        val message = com.example.utils.AppLang.tr(
+            "$cleanName ($studentPhone) requested pricing, installment, or free trial access for '$programTitle'.",
+            "$cleanName ($studentPhone) '$programTitle' কোর্সের দাম, কিস্তি ও ফ্রি ট্রায়াল এক্সেস চেয়েছেন।"
+        )
         val data = JSONObject().apply {
             put("notification_type", "ADMIN_COURSE_ACCESS_REQUEST")
             put("event_type", "COURSE_ACCESS_REQUEST")
@@ -677,9 +683,12 @@ object OneSignalPushManager {
         transactionId: String,
         planTitle: String
     ) {
-        val cleanName = studentName.trim().ifBlank { "শিক্ষার্থী" }
-        val title = "💳 নতুন কোর্স পেমেন্ট জমা হয়েছে (৳$amount)!"
-        val message = "$cleanName ($studentPhone) '$programTitle' এর জন্য $paymentMethod এ ৳$amount পাঠিয়েছেন (TrxID: $transactionId)।"
+        val cleanName = studentName.trim().ifBlank { com.example.utils.AppLang.tr("Student", "শিক্ষার্থী") }
+        val title = com.example.utils.AppLang.tr("💳 New Course Payment Submitted (৳$amount)!", "💳 নতুন কোর্স পেমেন্ট জমা হয়েছে (৳$amount)!")
+        val message = com.example.utils.AppLang.tr(
+            "$cleanName ($studentPhone) sent ৳$amount via $paymentMethod for '$programTitle' (TrxID: $transactionId).",
+            "$cleanName ($studentPhone) '$programTitle' এর জন্য $paymentMethod এ ৳$amount পাঠিয়েছেন (TrxID: $transactionId)।"
+        )
         val data = JSONObject().apply {
             put("notification_type", "ADMIN_COURSE_PAYMENT_SUBMITTED")
             put("event_type", "COURSE_PAYMENT_SUBMITTED")
@@ -706,9 +715,12 @@ object OneSignalPushManager {
         programTitle: String,
         durationLabelBn: String
     ) {
-        val cleanName = studentName.trim().ifBlank { "শিক্ষার্থী" }
-        val title = "🎁 স্টুডেন্ট ফ্রি ট্রায়াল শুরু করেছে!"
-        val message = "$cleanName ($studentPhone) '$programTitle' কোর্সে $durationLabelBn ফ্রি ট্রায়াল চালু করেছেন।"
+        val cleanName = studentName.trim().ifBlank { com.example.utils.AppLang.tr("Student", "শিক্ষার্থী") }
+        val title = com.example.utils.AppLang.tr("🎁 Student Started Free Trial!", "🎁 স্টুডেন্ট ফ্রি ট্রায়াল শুরু করেছে!")
+        val message = com.example.utils.AppLang.tr(
+            "$cleanName ($studentPhone) activated a $durationLabelBn free trial for '$programTitle'.",
+            "$cleanName ($studentPhone) '$programTitle' কোর্সে $durationLabelBn ফ্রি ট্রায়াল চালু করেছেন।"
+        )
         val data = JSONObject().apply {
             put("notification_type", "ADMIN_FREE_TRIAL_STARTED")
             put("event_type", "FREE_TRIAL_STARTED")

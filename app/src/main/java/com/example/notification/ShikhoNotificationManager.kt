@@ -282,10 +282,13 @@ object ShikhoNotificationManager {
             // 1. General, Routine, Campaign & Account Notifications Channel
             val pushChannel = NotificationChannel(
                 CHANNEL_PUSH_NOTIFICATIONS,
-                "শিখো নোটিফিকেশন ও ঘোষণা",
+                com.example.utils.AppLang.tr("Notifications & Announcements", "শিখো নোটিফিকেশন ও ঘোষণা"),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "লাইভ ক্লাস, পরীক্ষা, রুটিন এবং গুরুত্বপূর্ণ ঘোষণা সংক্রান্ত নোটিফিকেশন"
+                description = com.example.utils.AppLang.tr(
+                    "Notifications for live classes, exams, routine, and announcements",
+                    "লাইভ ক্লাস, পরীক্ষা, রুটিন এবং গুরুত্বপূর্ণ ঘোষণা সংক্রান্ত নোটিফিকেশন"
+                )
                 enableLights(true)
                 enableVibration(true)
                 setSound(defaultSoundUri, audioAttributes)
@@ -295,10 +298,13 @@ object ShikhoNotificationManager {
             // 2. Real-time Live Class & Exam Alerts Channel
             val liveClassChannel = NotificationChannel(
                 CHANNEL_LIVE_CLASSES,
-                "লাইভ ক্লাস ও পরীক্ষা অ্যালার্ট",
+                com.example.utils.AppLang.tr("Live Class & Exam Alerts", "লাইভ ক্লাস ও পরীক্ষা অ্যালার্ট"),
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "লাইভ ক্লাস ও মডেল টেস্ট শুরুর তাৎক্ষণিক অ্যালার্ট ও রিমাইন্ডার"
+                description = com.example.utils.AppLang.tr(
+                    "Instant alerts and reminders for upcoming live classes and model tests",
+                    "লাইভ ক্লাস ও মডেল টেস্ট শুরুর তাৎক্ষণিক অ্যালার্ট ও রিমাইন্ডার"
+                )
                 enableLights(true)
                 enableVibration(true)
                 setSound(defaultSoundUri, audioAttributes)
@@ -748,7 +754,10 @@ object ShikhoNotificationManager {
             "🚀 $syncModeTag | activeCourses=${activeCourses.size}, expired=${expiredCourses.size}, toSub=$needsSubscribeCount, toUnsub=${staleTopics.size}"
         )
         if (expiredNamesList.isNotEmpty() && staleTopics.isNotEmpty()) {
-            logTerminal("WARN", "⏳ মেয়াদ শেষ / নিষ্ক্রিয় কোর্স শনাক্ত (${expiredNamesList.size}): ${expiredNamesList.joinToString(", ")}")
+            logTerminal("WARN", com.example.utils.AppLang.tr(
+            "⏳ Expired / inactive courses detected (${expiredNamesList.size}): ${expiredNamesList.joinToString(", ")}",
+            "⏳ মেয়াদ শেষ / নিষ্ক্রিয় কোর্স শনাক্ত (${expiredNamesList.size}): ${expiredNamesList.joinToString(", ")}"
+        ))
         }
 
         var unsubscribedNow = 0
@@ -965,7 +974,7 @@ object ShikhoNotificationManager {
                     label = "User Direct",
                     topicName = "{userId}",
                     status = TopicConnectionStatus.SKIPPED,
-                    errorMessage = "Shikho User ID পাওয়া যায়নি (লগইন করা নেই)"
+                    errorMessage = com.example.utils.AppLang.tr("User ID not found (not signed in)", "Shikho User ID পাওয়া যায়নি (লগইন করা নেই)")
                 )
             )
         }
@@ -992,7 +1001,7 @@ object ShikhoNotificationManager {
                     label = "Active Courses",
                     topicName = "LIVE_ShikhoNotification_UserID_{user}_Program_{prog}",
                     status = TopicConnectionStatus.SKIPPED,
-                    errorMessage = "কোনো অ্যাক্টিভ এনরোল করা কোর্স পাওয়া যায়নি"
+                    errorMessage = com.example.utils.AppLang.tr("No active enrolled courses found", "কোনো অ্যাক্টিভ এনরোল করা কোর্স পাওয়া যায়নি")
                 )
             )
             return list
@@ -1021,7 +1030,7 @@ object ShikhoNotificationManager {
                         label = "Course Live • ${shortTitle.take(22)}",
                         topicName = "LIVE_ShikhoNotification_UserID_{user}_Program_${course.programId}",
                         status = TopicConnectionStatus.SKIPPED,
-                        errorMessage = "লগইন করা নেই",
+                        errorMessage = com.example.utils.AppLang.tr("Not signed in", "লগইন করা নেই"),
                         courseTitle = shortTitle
                     )
                 )
@@ -1045,7 +1054,7 @@ object ShikhoNotificationManager {
                         label = "Phase Live • ${shortTitle.take(22)}",
                         topicName = "LIVE_ShikhoNotification_Program_${course.programId}_Phase_{phase}",
                         status = TopicConnectionStatus.SKIPPED,
-                        errorMessage = "এই কোর্সের অ্যাক্টিভ ফেজ ব্যাকগ্রাউন্ডে লোড হচ্ছে...",
+                        errorMessage = com.example.utils.AppLang.tr("Loading active phases for this course in background...", "এই কোর্সের অ্যাক্টিভ ফেজ ব্যাকগ্রাউন্ডে লোড হচ্ছে..."),
                         courseTitle = shortTitle
                     )
                 )
@@ -1349,7 +1358,10 @@ object ShikhoNotificationManager {
         scope.launch {
             syncMutex.withLock {
                 val gmsAvailable = isGooglePlayServicesAvailable(appContext)
-                logTerminal("INFO", "🚪 লগআউট: ${topicsToRemove.size} টি ব্যক্তিগত ও কোর্স টপিক আনসাবস্ক্রাইব করা হচ্ছে...")
+                logTerminal("INFO", com.example.utils.AppLang.tr(
+            "🚪 Sign out: unsubscribing from ${topicsToRemove.size} personal & course topics...",
+            "🚪 লগআউট: ${topicsToRemove.size} টি ব্যক্তিগত ও কোর্স টপিক আনসাবস্ক্রাইব করা হচ্ছে..."
+        ))
                 val creds = resolveFirebaseCredentials(appContext, sessionManager, gmsAvailable, false)
                 for (topic in topicsToRemove) {
                     unsubscribeTopicReal(
@@ -1380,7 +1392,10 @@ object ShikhoNotificationManager {
                         lastSyncedAt = nowTimeString()
                     )
                 }
-                logTerminal("SUCCESS", "✅ লগআউট ক্লিনআপ সম্পন্ন: সব ব্যক্তিগত ও কোর্স টপিক আনসাবস্ক্রাইব হয়েছে")
+                logTerminal("SUCCESS", com.example.utils.AppLang.tr(
+            "✅ Sign out cleanup complete: unsubscribed from all topics",
+            "✅ লগআউট ক্লিনআপ সম্পন্ন: সব ব্যক্তিগত ও কোর্স টপিক আনসাবস্ক্রাইব হয়েছে"
+        ))
             }
         }
     }

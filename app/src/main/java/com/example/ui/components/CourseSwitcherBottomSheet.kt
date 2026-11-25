@@ -34,6 +34,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.EnrolledProgram
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,11 +65,11 @@ fun getProgramBadge(program: EnrolledProgram): ProgramBadgeInfo {
     }
 
     return when {
-        isFree -> ProgramBadgeInfo("সম্পূর্ণ ফ্রি", Color(0xFFDCFCE7), Color(0xFF15803D))
-        isTrial && (isTrialExpired || !isActive) -> ProgramBadgeInfo("ফ্রিতে শেখা শেষ", Color(0xFFFFF3E0), Color(0xFFE65100))
-        isActive && !isTrial -> ProgramBadgeInfo("ভর্তি হয়েছো", Color(0xFFE8F5E9), Color(0xFF2E7D32))
-        isActive && isTrial -> ProgramBadgeInfo("ফ্রি ট্রায়াল", Color(0xFFE3F2FD), Color(0xFF1565C0))
-        else -> ProgramBadgeInfo("প্রোগ্রাম", Color(0xFFF5F5F5), Color(0xFF616161))
+        isFree -> ProgramBadgeInfo(AppLang.tr("Free", "সম্পূর্ণ ফ্রি"), Color(0xFFDCFCE7), Color(0xFF15803D))
+        isTrial && (isTrialExpired || !isActive) -> ProgramBadgeInfo(AppLang.tr("Trial Ended", "ফ্রি ট্রায়াল শেষ"), Color(0xFFFFF3E0), Color(0xFFE65100))
+        isActive && !isTrial -> ProgramBadgeInfo(AppLang.tr("Enrolled", "ভর্তি হয়েছো"), Color(0xFFE8F5E9), Color(0xFF2E7D32))
+        isActive && isTrial -> ProgramBadgeInfo(AppLang.tr("Free Trial", "ফ্রি ট্রায়াল"), Color(0xFFE3F2FD), Color(0xFF1565C0))
+        else -> ProgramBadgeInfo(AppLang.tr("Program", "প্রোগ্রাম"), Color(0xFFF5F5F5), Color(0xFF616161))
     }
 }
 
@@ -121,9 +124,9 @@ fun CourseSwitcherBottomSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("কোর্স সুইচ করো", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(tr("Switch Course", "কোর্স সুইচ করো"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text(
-                        "তোমার আনলককৃত ও সক্রিয় কোর্সসমূহ:",
+                        tr("Your unlocked & active courses:", "তোমার সক্রিয় কোর্সসমূহ:"),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 2.dp)
@@ -169,10 +172,13 @@ fun CourseSwitcherBottomSheet(
                         Icon(Icons.Default.School, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
                     }
 
-                    Text("কোনো সক্রিয় কোর্স আনলক করা নেই", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(tr("No Active Course Unlocked", "কোনো সক্রিয় কোর্স আনলক করা নেই"), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 
                     Text(
-                        text = "যেকোনো কোর্সে প্রবেশ করতে নিচের 'কোর্স' অপশনে গিয়ে 'কোর্সে এক্সেস পান' বাটনে ট্যাপ করে সম্পূর্ণ পেমেন্ট অথবা কিস্তিতে কোর্সটি আনলক করো।",
+                        text = tr(
+                            "Browse Courses to unlock a program with full payment or installments.",
+                            "যেকোনো কোর্স আনলক করতে 'কোর্স' অপশনে গিয়ে সম্পূর্ণ পেমেন্ট অথবা কিস্তিতে ভর্তি হও।"
+                        ),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -191,7 +197,7 @@ fun CourseSwitcherBottomSheet(
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("কোর্স আনলক / কিস্তিতে ভর্তি হোন", fontWeight = FontWeight.Bold)
+                            Text(tr("Unlock / Enroll Course", "কোর্স আনলক / ভর্তি হোন"), fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -204,18 +210,19 @@ fun CourseSwitcherBottomSheet(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("সিলেবাস বা শ্রেণি পরিবর্তন করো")
+                            Text(tr("Change Syllabus / Class", "সিলেবাস পরিবর্তন করো"))
                         }
                     }
                 }
             } else {
+                val isBn = isBangla()
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(enrolledPrograms, key = { it.id }) { program ->
                         val isSelected = activeProgram?.id == program.id
-                        val badge = getProgramBadge(program)
+                        val badge = remember(program, isBn) { getProgramBadge(program) }
 
                         // LOGIC: animated colors সেম
                         val animatedCardBg by animateColorAsState(
@@ -306,7 +313,7 @@ fun CourseSwitcherBottomSheet(
                                     Spacer(modifier = Modifier.height(6.dp))
 
                                     Text(
-                                        text = program.title_bn ?: "একাডেমিক প্রোগ্রাম",
+                                        text = program.title_bn ?: tr("Academic Program", "একাডেমিক প্রোগ্রাম"),
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface,

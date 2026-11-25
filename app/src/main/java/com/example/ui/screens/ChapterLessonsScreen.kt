@@ -28,8 +28,10 @@ import com.example.api.StudentLessonItem
 import com.example.auth.SessionManager
 import com.example.course.CourseViewModel
 import com.example.ui.components.chapter.*
+import com.example.utils.AppLang
 import com.example.utils.ClassTypeUtils
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,7 +147,7 @@ fun ChapterLessonsScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = chapterName.ifBlank { "ক্লাস ও পরীক্ষা তালিকা" },
+                            text = chapterName.ifBlank { tr("Lessons", "ক্লাস ও পরীক্ষা") },
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -188,7 +190,7 @@ fun ChapterLessonsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "ক্লাস ও লেকচার লোড হচ্ছে...",
+                            text = tr("Loading lessons...", "ক্লাস ও লেকচার লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -221,7 +223,7 @@ fun ChapterLessonsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         val errorMsg = uiState.lessonsErrorMessage
                         val displayMsg = if (errorMsg.isNullOrBlank() || errorMsg.contains("আইডি") || errorMsg.contains("http") || errorMsg.contains("HTTP") || errorMsg.contains("এরর") || errorMsg.contains("Error")) {
-                            "এই অধ্যায়ে কোনো ক্লাস বা লেকচার পাওয়া যায়নি"
+                            tr("No classes or lectures found in this chapter", "এই অধ্যায়ে কোনো ক্লাস বা লেকচার পাওয়া যায়নি")
                         } else {
                             errorMsg
                         }
@@ -249,7 +251,7 @@ fun ChapterLessonsScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -316,11 +318,11 @@ fun ChapterLessonsScreen(
                             ) {
                                 Text(
                                     text = when (selectedFilter) {
-                                        ChapterContentFilter.ALL -> "সকল ক্লাস ও পরীক্ষা (${toBengaliDigits(displayedLessons.size)}টি)"
-                                        ChapterContentFilter.LIVE -> "চলছে — লাইভ ক্লাস (${toBengaliDigits(displayedLessons.size)}টি)"
-                                        ChapterContentFilter.UPCOMING -> "আপকামিং ক্লাসসমূহ (${toBengaliDigits(displayedLessons.size)}টি)"
-                                        ChapterContentFilter.RECORDED -> "রেকর্ড ভিডিও লেকচার (${toBengaliDigits(displayedLessons.size)}টি)"
-                                        ChapterContentFilter.EXAM -> "পরীক্ষা ও মডেল টেস্ট (${toBengaliDigits(displayedLessons.size)}টি)"
+                                        ChapterContentFilter.ALL -> tr("All (${displayedLessons.size})", "সকল ক্লাস ও পরীক্ষা (${toBengaliDigits(displayedLessons.size)}টি)")
+                                        ChapterContentFilter.LIVE -> tr("Live (${displayedLessons.size})", "লাইভ ক্লাস (${toBengaliDigits(displayedLessons.size)}টি)")
+                                        ChapterContentFilter.UPCOMING -> tr("Upcoming (${displayedLessons.size})", "আপকামিং ক্লাস (${toBengaliDigits(displayedLessons.size)}টি)")
+                                        ChapterContentFilter.RECORDED -> tr("Recorded (${displayedLessons.size})", "রেকর্ড লেকচার (${toBengaliDigits(displayedLessons.size)}টি)")
+                                        ChapterContentFilter.EXAM -> tr("Exams (${displayedLessons.size})", "পরীক্ষা ও টেস্ট (${toBengaliDigits(displayedLessons.size)}টি)")
                                     },
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
@@ -345,11 +347,11 @@ fun ChapterLessonsScreen(
                                     ) {
                                         Text(
                                             text = when (selectedFilter) {
-                                                ChapterContentFilter.LIVE -> "বর্তমানে কোনো লাইভ ক্লাস চলছে না"
-                                                ChapterContentFilter.UPCOMING -> "এই অধ্যায়ে কোনো আপকামিং ক্লাস নেই"
-                                                ChapterContentFilter.RECORDED -> "এই অধ্যায়ে কোনো রেকর্ড ক্লাস নেই"
-                                                ChapterContentFilter.EXAM -> "এই অধ্যায়ে কোনো পরীক্ষা নেই"
-                                                ChapterContentFilter.ALL -> "কোনো ক্লাস বা পরীক্ষা পাওয়া যায়নি"
+                                                ChapterContentFilter.LIVE -> tr("No live classes right now", "বর্তমানে কোনো লাইভ ক্লাস চলছে না")
+                                                ChapterContentFilter.UPCOMING -> tr("No upcoming classes in this chapter", "এই অধ্যায়ে কোনো আপকামিং ক্লাস নেই")
+                                                ChapterContentFilter.RECORDED -> tr("No recorded classes in this chapter", "এই অধ্যায়ে কোনো রেকর্ড ক্লাস নেই")
+                                                ChapterContentFilter.EXAM -> tr("No exams in this chapter", "এই অধ্যায়ে কোনো পরীক্ষা নেই")
+                                                ChapterContentFilter.ALL -> tr("No classes or exams found", "কোনো ক্লাস বা পরীক্ষা পাওয়া যায়নি")
                                             },
                                             fontSize = 13.5.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -404,7 +406,7 @@ fun ChapterLessonsScreen(
                                                 ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                                                 ?: lesson.id
-                                            val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
+                                            val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: AppLang.tr("Chapter Exam", "অধ্যায় পরীক্ষা"))
                                             onNavigateToExam(sessionId, lesson.id, formattedTitle, chapterName)
                                         } else if (onOpenLessonDetail != null) {
                                             onOpenLessonDetail(lesson)

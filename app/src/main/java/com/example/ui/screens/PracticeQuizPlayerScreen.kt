@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import com.example.api.McqOptionItem
 import com.example.quiz.PracticeQuizViewModel
 import com.example.ui.components.QuizRichContent
+import com.example.utils.tr
 
 private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
 
@@ -181,7 +182,7 @@ fun PracticeQuizPlayerScreen(
                                 .testTag("top_submit_button")
                         ) {
                             Text(
-                                text = "সাবমিট",
+                                text = tr("Submit", "সাবমিট"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -245,7 +246,10 @@ fun PracticeQuizPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "উত্তর সিলেক্ট করেছো: ${toBengaliDigits(answeredCount)}/${toBengaliDigits(totalCount)}",
+                            text = tr(
+                                "Answered: ${toBengaliDigits(answeredCount)}/${toBengaliDigits(totalCount)}",
+                                "উত্তর দেওয়া হয়েছে: ${toBengaliDigits(answeredCount)}/${toBengaliDigits(totalCount)}"
+                            ),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = subjectColor
@@ -256,9 +260,9 @@ fun PracticeQuizPlayerScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            LegendItem(color = Color(0xFF10B981), label = "পূরণ")
-                            LegendItem(color = subjectColor, label = "বর্তমান")
-                            LegendItem(color = MaterialTheme.colorScheme.outlineVariant, label = "পূরণ না")
+                            LegendItem(color = Color(0xFF10B981), label = tr("Done", "পূরণ"))
+                            LegendItem(color = subjectColor, label = tr("Current", "বর্তমান"))
+                            LegendItem(color = MaterialTheme.colorScheme.outlineVariant, label = tr("Left", "বাকি"))
                         }
                     }
 
@@ -299,7 +303,7 @@ fun PracticeQuizPlayerScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "পূর্ববর্তী",
+                            text = tr("Previous", "পূর্ববর্তী"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -324,7 +328,7 @@ fun PracticeQuizPlayerScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "জমা দিন",
+                                text = tr("Submit", "জমা দিন"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -341,7 +345,7 @@ fun PracticeQuizPlayerScreen(
                                 .testTag("next_question_button")
                         ) {
                             Text(
-                                text = "পরবর্তী",
+                                text = tr("Next", "পরবর্তী"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -394,7 +398,10 @@ fun PracticeQuizPlayerScreen(
                                     color = subjectColor.copy(alpha = 0.12f)
                                 ) {
                                     Text(
-                                        text = "প্রশ্ন ${toBengaliDigits(uiState.currentQuestionIndex + 1)}/${toBengaliDigits(totalCount)}",
+                                        text = tr(
+                                            "Question ${toBengaliDigits(uiState.currentQuestionIndex + 1)}/${toBengaliDigits(totalCount)}",
+                                            "প্রশ্ন ${toBengaliDigits(uiState.currentQuestionIndex + 1)}/${toBengaliDigits(totalCount)}"
+                                        ),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = subjectColor,
@@ -410,7 +417,7 @@ fun PracticeQuizPlayerScreen(
                                         ?: currentQuestion.allocated_marks?.toIntOrNull()
                                     if (marks != null) {
                                         Text(
-                                            text = "মান: ${toBengaliDigits(marks)}",
+                                            text = tr("Marks: ${toBengaliDigits(marks)}", "মান: ${toBengaliDigits(marks)}"),
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -425,7 +432,7 @@ fun PracticeQuizPlayerScreen(
                                     ) {
                                         Icon(
                                             imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                            contentDescription = if (isBookmarked) "বুকমার্ক সরান" else "বুকমার্ক করুন",
+                                            contentDescription = if (isBookmarked) tr("Remove Bookmark", "বুকমার্ক সরান") else tr("Bookmark", "বুকমার্ক করুন"),
                                             tint = if (isBookmarked) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(20.dp)
                                         )
@@ -448,7 +455,7 @@ fun PracticeQuizPlayerScreen(
 
                     // Section Title
                     Text(
-                        text = "সঠিক উত্তরটি নির্বাচন করো:",
+                        text = tr("Select the correct answer:", "সঠিক উত্তরটি নির্বাচন করুন:"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -491,13 +498,16 @@ fun PracticeQuizPlayerScreen(
             onDismissRequest = { showExitDialog = false },
             title = {
                 Text(
-                    text = "কুইজ ছেড়ে যেতে চান?",
+                    text = tr("Leave Quiz?", "কুইজ ছেড়ে যাবেন?"),
                     fontWeight = FontWeight.Bold
                 )
             },
             text = {
                 Text(
-                    text = "আপনি কুইজ ছেড়ে গেলে আপনার বর্তমান অগ্রগতি সংরক্ষিত থাকবে, তবে কুইজটির ফলাফল হিসাব করা হবে না। আপনি কি নিশ্চিত?",
+                    text = tr(
+                        "Your progress will be saved, but results won't be calculated until submitted. Are you sure?",
+                        "আপনি কুইজ ছেড়ে গেলে অগ্রগতি সংরক্ষিত থাকবে, তবে ফলাফল হিসাব করা হবে না। আপনি কি নিশ্চিত?"
+                    ),
                     fontSize = 14.sp,
                     lineHeight = 20.sp
                 )
@@ -510,12 +520,12 @@ fun PracticeQuizPlayerScreen(
                         onBack()
                     }
                 ) {
-                    Text("বেরিয়ে যান", color = MaterialTheme.colorScheme.error)
+                    Text(tr("Leave", "বেরিয়ে যান"), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showExitDialog = false }) {
-                    Text("কুইজে থাকুন")
+                    Text(tr("Stay", "কুইজে থাকুন"))
                 }
             }
         )
@@ -535,7 +545,7 @@ fun PracticeQuizPlayerScreen(
             },
             title = {
                 Text(
-                    text = "কুইজ সাবমিট করবেন?",
+                    text = tr("Submit Quiz?", "কুইজ সাবমিট করবেন?"),
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
@@ -546,13 +556,19 @@ fun PracticeQuizPlayerScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "আপনার মোট ${toBengaliDigits(totalCount)}টি প্রশ্নের মধ্যে ${toBengaliDigits(answeredCount)}টি প্রশ্নের উত্তর দেওয়া হয়েছে।",
+                        text = tr(
+                            "You answered ${toBengaliDigits(answeredCount)} out of ${toBengaliDigits(totalCount)} questions.",
+                            "মোট ${toBengaliDigits(totalCount)}টি প্রশ্নের মধ্যে ${toBengaliDigits(answeredCount)}টির উত্তর দেওয়া হয়েছে।"
+                        ),
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center
                     )
                     if (answeredCount < totalCount) {
                         Text(
-                            text = "বাকি ${toBengaliDigits(totalCount - answeredCount)}টি প্রশ্ন এখনও উত্তরহীন আছে!",
+                            text = tr(
+                                "${toBengaliDigits(totalCount - answeredCount)} questions are still unanswered!",
+                                "বাকি ${toBengaliDigits(totalCount - answeredCount)}টি প্রশ্ন এখনও উত্তরহীন!"
+                            ),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFEF4444),
@@ -587,7 +603,7 @@ fun PracticeQuizPlayerScreen(
                                     },
                                     colors = ButtonDefaults.textButtonColors(contentColor = subjectColor)
                                 ) {
-                                    Text("সরাসরি ফলাফল দেখুন", fontWeight = FontWeight.Bold)
+                                    Text(tr("View Result Directly", "সরাসরি ফলাফল দেখুন"), fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -616,16 +632,16 @@ fun PracticeQuizPlayerScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("সাবমিট হচ্ছে...")
+                        Text(tr("Submitting...", "সাবমিট হচ্ছে..."))
                     } else {
-                        Text(if (!uiState.submitError.isNullOrBlank()) "পুনরায় চেষ্টা করুন" else "হ্যাঁ, সাবমিট করুন")
+                        Text(if (!uiState.submitError.isNullOrBlank()) tr("Try Again", "পুনরায় চেষ্টা করুন") else tr("Yes, Submit", "হ্যাঁ, সাবমিট করুন"))
                     }
                 }
             },
             dismissButton = {
                 if (!uiState.isSubmitting) {
                     TextButton(onClick = { showSubmitDialog = false }) {
-                        Text("আরও দেখুন")
+                        Text(tr("Review", "আরও দেখুন"))
                     }
                 }
             }

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.api.AttachmentDataItem
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +108,7 @@ fun AttachmentListDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "কোনো পিডিএফ ফাইল পাওয়া যায়নি",
+                                text = tr("No PDF files found", "কোনো পিডিএফ ফাইল পাওয়া যায়নি"),
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -160,7 +161,7 @@ fun AttachmentListDialog(
 
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = attachment.title ?: "পিডিএফ ডকুমেন্ট",
+                                                text = attachment.title ?: tr("PDF Document", "পিডিএফ ডকুমেন্ট"),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface,

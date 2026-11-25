@@ -94,7 +94,11 @@ fun MainContainerScreen(
                 (context as? Activity)?.finish()
             } else {
                 lastBackPressedTime = currentTime
-                Toast.makeText(context, "অ্যাপ থেকে বের হতে আবার ব্যাক চাপুন", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    com.example.utils.AppLang.tr("Press back again to exit", "অ্যাপ থেকে বের হতে আবার ব্যাক চাপুন"),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
@@ -169,9 +173,11 @@ fun MainContainerScreen(
                         onNavigateToChangeSyllabus = onNavigateToChangeSyllabus,
                         onNavigateToCourseTab = { selectedIndex = 1 },
                         onCourseSelected = { program ->
+                            val fallbackCourse = com.example.utils.AppLang.tr("Course", "কোর্স")
+                            val name = program.title_bn ?: fallbackCourse
                             Toast.makeText(
                                 context,
-                                "${program.title_bn ?: "কোর্স"} নির্বাচিত হয়েছে ✨",
+                                com.example.utils.AppLang.tr("$name selected ✨", "$name নির্বাচিত হয়েছে ✨"),
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -300,6 +306,7 @@ fun ElementalFloatingBottomBar(
     activeDownloadsCount: Int = 0
 ) {
     val isDark = com.example.ui.theme.isAppInDarkTheme()
+    val isBn = com.example.utils.isBangla()
     val themes = remember {
         listOf(
             TabTheme(Color(0xFF281A07), Color(0xFFFEF3C7), Color(0xFFF59E0B), Color(0xFFFBBF24), Color(0xFFB45309)), // Amber (Home)
@@ -462,7 +469,7 @@ fun ElementalFloatingBottomBar(
                                         }
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = item.title,
+                                            text = if (isBn) item.titleBn else item.titleEn,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = selectedTextColor,
@@ -511,7 +518,7 @@ fun ElementalFloatingBottomBar(
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = item.title,
+                                        text = if (isBn) item.titleBn else item.titleEn,
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = iconTint,

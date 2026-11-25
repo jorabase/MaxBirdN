@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -119,7 +120,7 @@ fun SubjectChaptersScreen(
                         Spacer(modifier = Modifier.width(8.dp))
 
                         Text(
-                            text = subjectTitle.ifBlank { "বিষয় অধ্যায়সমূহ" },
+                            text = subjectTitle.ifBlank { tr("Chapters", "অধ্যায়সমূহ") },
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -207,7 +208,7 @@ fun SubjectChaptersScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "অধ্যায়সমূহ লোড হচ্ছে...",
+                            text = tr("Loading chapters...", "অধ্যায়সমূহ লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -239,7 +240,7 @@ fun SubjectChaptersScreen(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = uiState.chaptersErrorMessage ?: "অধ্যায় পাওয়া যায়নি",
+                            text = uiState.chaptersErrorMessage ?: tr("No chapters found", "অধ্যায় পাওয়া যায়নি"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -260,7 +261,7 @@ fun SubjectChaptersScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -313,7 +314,10 @@ fun SubjectChaptersScreen(
                                         )
                                     }
                                     Text(
-                                        text = "অধ্যায় মিশন ম্যাপ (${toBengaliDigits(uiState.chapters.size)}টি)",
+                                        text = tr(
+                                            "Chapters (${uiState.chapters.size})",
+                                            "অধ্যায়সমূহ (${toBengaliDigits(uiState.chapters.size)}টি)"
+                                        ),
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -360,7 +364,7 @@ fun SubjectChaptersScreen(
                                         )
                                         Spacer(modifier = Modifier.height(10.dp))
                                         Text(
-                                            text = "এই কোয়ার্টারে কোনো অধ্যায় অন্তর্ভুক্ত নেই",
+                                            text = tr("No chapters in this phase", "এই কোয়ার্টারে কোনো অধ্যায় নেই"),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -422,7 +426,7 @@ fun CourseFeatureShortcuts(
             onClick = { onSelectMode(2) }
         )
         ShortcutButton(
-            title = "ই-বুক",
+            title = tr("E-Book", "ই-বুক"),
             icon = Icons.AutoMirrored.Filled.MenuBook,
             color = Color(0xFFF59E0B),
             isSelected = selectedMode == 3,
@@ -430,7 +434,7 @@ fun CourseFeatureShortcuts(
             onClick = { onSelectMode(3) }
         )
         ShortcutButton(
-            title = "অ্যানিমেটেড লেসনস",
+            title = tr("Animated", "অ্যানিমেটেড"),
             icon = Icons.Default.SmartDisplay,
             color = Color(0xFF8B5CF6),
             isSelected = selectedMode == 4,
@@ -581,7 +585,7 @@ fun ChapterCard(
                                         modifier = Modifier.size(11.dp)
                                     )
                                      Text(
-                                        text = "পড়ানো শেষ",
+                                        text = tr("Completed", "সম্পন্ন"),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF059669)
@@ -606,7 +610,7 @@ fun ChapterCard(
                                             .background(subjectColor)
                                     )
                                     Text(
-                                        text = "পড়ানো হচ্ছে",
+                                        text = tr("Ongoing", "চলমান"),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = subjectColor
@@ -620,7 +624,7 @@ fun ChapterCard(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                             ) {
                                 Text(
-                                    text = "পড়ানো হবে",
+                                    text = tr("Upcoming", "আসন্ন"),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -674,7 +678,7 @@ fun ChapterCard(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "ক্লাস: ${toBengaliDigits(classCount)}টি",
+                                text = tr("Classes: $classCount", "ক্লাস: ${toBengaliDigits(classCount)}টি"),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -693,7 +697,7 @@ fun ChapterCard(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "এক্সাম: ${toBengaliDigits(examCount)}টি",
+                                text = tr("Exams: $examCount", "এক্সাম: ${toBengaliDigits(examCount)}টি"),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

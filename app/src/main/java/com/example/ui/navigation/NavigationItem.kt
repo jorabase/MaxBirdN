@@ -12,52 +12,68 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.utils.AppLang
 
 sealed class NavigationItem(
     val route: String,
-    val title: String,
+    val titleEn: String,
+    val titleBn: String,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
-    val description: String
+    val descriptionEn: String,
+    val descriptionBn: String
 ) {
+    val title: String get() = AppLang.tr(titleEn, titleBn)
+    val description: String get() = AppLang.tr(descriptionEn, descriptionBn)
+
     object Home : NavigationItem(
         route = "tab_home",
-        title = "হোম",
+        titleEn = "Home",
+        titleBn = "হোম",
         selectedIcon = Icons.Filled.Home,
         unselectedIcon = Icons.Outlined.Home,
-        description = "হোম ড্যাশবোর্ড ও ক্লাসরুম"
+        descriptionEn = "Home dashboard & classroom",
+        descriptionBn = "হোম ড্যাশবোর্ড ও ক্লাসরুম"
     )
 
     object Courses : NavigationItem(
         route = "tab_courses",
-        title = "পাঠক্রম",
+        titleEn = "Courses",
+        titleBn = "পাঠক্রম",
         selectedIcon = Icons.Filled.AutoStories,
         unselectedIcon = Icons.Outlined.AutoStories,
-        description = "সকল এনরোল্ড ও অফার করা পাঠক্রম"
+        descriptionEn = "Enrolled courses & subjects",
+        descriptionBn = "সকল এনরোল্ড ও অফার করা পাঠক্রম"
     )
 
     object Library : NavigationItem(
         route = "tab_library",
-        title = "লাইব্রেরি",
+        titleEn = "Library",
+        titleBn = "লাইব্রেরি",
         selectedIcon = Icons.Filled.MenuBook,
         unselectedIcon = Icons.Outlined.MenuBook,
-        description = "ডিজিটাল বই, অধ্যায় ও অফলাইন অডিও রিডার"
+        descriptionEn = "Digital books & offline audio reader",
+        descriptionBn = "ডিজিটাল বই, অধ্যায় ও অফলাইন অডিও রিডার"
     )
 
     object Downloads : NavigationItem(
         route = "tab_downloads",
-        title = "ডাউনলোড",
+        titleEn = "Downloads",
+        titleBn = "ডাউনলোড",
         selectedIcon = Icons.Filled.Download,
         unselectedIcon = Icons.Outlined.Download,
-        description = "অফলাইন ভিডিও, বই ও স্টাডি মেটেরিয়াল"
+        descriptionEn = "Offline videos, books & study materials",
+        descriptionBn = "অফলাইন ভিডিও, বই ও স্টাডি মেটেরিয়াল"
     )
 
     object Settings : NavigationItem(
         route = "tab_settings",
-        title = "সেটিংস",
+        titleEn = "Settings",
+        titleBn = "সেটিংস",
         selectedIcon = Icons.Filled.Settings,
         unselectedIcon = Icons.Outlined.Settings,
-        description = "প্রোফাইল, নোটিফিকেশন ও অ্যাপ সেটিংস"
+        descriptionEn = "Profile, preferences & app settings",
+        descriptionBn = "প্রোফাইল, নোটিফিকেশন ও অ্যাপ সেটিংস"
     )
 
     companion object {

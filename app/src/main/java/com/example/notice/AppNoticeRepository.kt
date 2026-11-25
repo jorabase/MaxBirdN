@@ -78,7 +78,7 @@ object AppNoticeRepository {
                 val description = cleanStr("description").takeIf { it.isNotBlank() }
                 val imageUrl = cleanStr("image_url")
                 val actionUrl = cleanStr("action_url").takeIf { it.isNotBlank() }
-                val buttonText = cleanStr("action_button_text", "বিস্তারিত দেখুন")
+                val buttonText = cleanStr("action_button_text", com.example.utils.AppLang.tr("View Details", "বিস্তারিত দেখুন"))
                 val priority = obj.optInt("priority", 0)
                 val isActive = obj.optBoolean("is_active", true)
                 val showAsPopup = obj.optBoolean("show_as_popup", true)

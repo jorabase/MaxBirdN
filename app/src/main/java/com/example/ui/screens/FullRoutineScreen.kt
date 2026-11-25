@@ -37,23 +37,31 @@ import com.example.home.HomeViewModel
 import com.example.ui.components.SubjectFilterDialog
 import com.example.ui.components.routine.MonthYearPickerDialog
 import com.example.ui.components.routine.TimelineRoutineCard
+import com.example.utils.AppLang
 import com.example.utils.ClassTypeUtils
 import com.example.utils.RoutineDateUtils
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.launch
 
 private val bengaliDayNames = arrayOf("রবি", "সোম", "মঙ্গল", "বুধ", "বৃহ", "শুক্র", "শনি")
+private val englishDayNames = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
 private val bengaliMonthNames = arrayOf(
     "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
     "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
 )
+private val englishMonthNames = arrayOf(
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+)
 
-enum class RoutineTabFilter(val label: String) {
-    ALL("সব"),
-    LIVE("লাইভ ক্লাস"),
-    EXAM("লাইভ এক্সাম")
+enum class RoutineTabFilter {
+    ALL,
+    LIVE,
+    EXAM
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -117,23 +125,37 @@ fun FullRoutineScreen(
         viewModel.fetchMonthlyRoutine(displayedYear, displayedMonth)
     }
 
-    val monthYearText = remember(selectedDate) {
-        val monthStr = bengaliMonthNames[selectedDate.get(Calendar.MONTH)]
+    val isBn = isBangla()
+    val monthYearText = remember(selectedDate, isBn) {
+        val monthStr = if (isBn) bengaliMonthNames[selectedDate.get(Calendar.MONTH)] else englishMonthNames[selectedDate.get(Calendar.MONTH)]
         val yearStr = selectedDate.get(Calendar.YEAR).toString().toBengaliDigits()
         "$monthStr $yearStr"
     }
 
-    val fullDateText = remember(selectedDate) {
+    val fullDateText = remember(selectedDate, isBn) {
         val dayOfWeek = selectedDate.get(Calendar.DAY_OF_WEEK)
-        val dayName = when (dayOfWeek) {
-            Calendar.SATURDAY -> "শনিবার"
-            Calendar.SUNDAY -> "রবিবার"
-            Calendar.MONDAY -> "সোমবার"
-            Calendar.TUESDAY -> "মঙ্গলবার"
-            Calendar.WEDNESDAY -> "বুধবার"
-            Calendar.THURSDAY -> "বৃহস্পতিবার"
-            Calendar.FRIDAY -> "শুক্রবার"
-            else -> ""
+        val dayName = if (isBn) {
+            when (dayOfWeek) {
+                Calendar.SATURDAY -> "শনিবার"
+                Calendar.SUNDAY -> "রবিবার"
+                Calendar.MONDAY -> "সোমবার"
+                Calendar.TUESDAY -> "মঙ্গলবার"
+                Calendar.WEDNESDAY -> "বুধবার"
+                Calendar.THURSDAY -> "বৃহস্পতিবার"
+                Calendar.FRIDAY -> "শুক্রবার"
+                else -> ""
+            }
+        } else {
+            when (dayOfWeek) {
+                Calendar.SATURDAY -> "Saturday"
+                Calendar.SUNDAY -> "Sunday"
+                Calendar.MONDAY -> "Monday"
+                Calendar.TUESDAY -> "Tuesday"
+                Calendar.WEDNESDAY -> "Wednesday"
+                Calendar.THURSDAY -> "Thursday"
+                Calendar.FRIDAY -> "Friday"
+                else -> ""
+            }
         }
         val dayNum = String.format(Locale.US, "%02d", selectedDate.get(Calendar.DAY_OF_MONTH)).toBengaliDigits()
         val monthNum = String.format(Locale.US, "%02d", selectedDate.get(Calendar.MONTH) + 1).toBengaliDigits()
@@ -192,11 +214,11 @@ fun FullRoutineScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("ক্লাস ও পরীক্ষার রুটিন", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Text(tr("Routine", "রুটিন"), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "ফিরে যান", tint = MaterialTheme.colorScheme.onBackground)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Back", "ফিরে যান"), tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 actions = {
@@ -223,9 +245,9 @@ fun FullRoutineScreen(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Tune, "কাস্টমাইজ", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Tune, tr("Filter", "ফিল্টার"), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(5.dp))
-                            Text("ফিল্টার", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(tr("Filter", "ফিল্টার"), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -271,14 +293,14 @@ fun FullRoutineScreen(
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) } },
                         modifier = Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "পূর্ববর্তী সপ্তাহ", modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, tr("Previous week", "পূর্ববর্তী সপ্তাহ"), modifier = Modifier.size(18.dp))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     IconButton(
                         onClick = { coroutineScope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) } },
                         modifier = Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "পরবর্তী সপ্তাহ", modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, tr("Next week", "পরবর্তী সপ্তাহ"), modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -366,10 +388,10 @@ fun FullRoutineScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 val dayOfWeek = day.get(Calendar.DAY_OF_WEEK)
-                                val dayNameBn = bengaliDayNames[dayOfWeek - 1]
+                                val dayName = if (isBn) bengaliDayNames[dayOfWeek - 1] else englishDayNames[dayOfWeek - 1]
 
                                 Text(
-                                    text = dayNameBn,
+                                    text = dayName,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isSelected) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -440,7 +462,7 @@ fun FullRoutineScreen(
                             color = Color(0xFF0284C7).copy(alpha = 0.12f)
                         ) {
                             Text(
-                                "ক্লাস ${classCount.toString().toBengaliDigits()}",
+                                tr("Class $classCount", "ক্লাস ${classCount.toString().toBengaliDigits()}"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0284C7),
@@ -453,7 +475,7 @@ fun FullRoutineScreen(
                             color = Color(0xFFF59E0B).copy(alpha = 0.12f)
                         ) {
                             Text(
-                                "এক্সাম ${examCount.toString().toBengaliDigits()}",
+                                tr("Exam $examCount", "এক্সাম ${examCount.toString().toBengaliDigits()}"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFD97706),
@@ -465,13 +487,13 @@ fun FullRoutineScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Separate Filter Tabs: সব, লাইভ ক্লাস, লাইভ এক্সাম
+                // Separate Filter Tabs
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     RoutineFilterChip(
-                        text = "সব (${toBengaliDigits(selectedDayLessons.size)})",
+                        text = tr("All (${selectedDayLessons.size})", "সব (${toBengaliDigits(selectedDayLessons.size)})"),
                         isSelected = selectedTabFilter == RoutineTabFilter.ALL,
                         activeColor = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f),
@@ -479,7 +501,7 @@ fun FullRoutineScreen(
                     )
 
                     RoutineFilterChip(
-                        text = "🔴 লাইভ ক্লাস (${toBengaliDigits(classCount)})",
+                        text = tr("🔴 Live ($classCount)", "🔴 লাইভ (${toBengaliDigits(classCount)})"),
                         isSelected = selectedTabFilter == RoutineTabFilter.LIVE,
                         activeColor = Color(0xFFEF4444),
                         modifier = Modifier.weight(1.1f),
@@ -487,7 +509,7 @@ fun FullRoutineScreen(
                     )
 
                     RoutineFilterChip(
-                        text = "✍️ পরীক্ষা (${toBengaliDigits(examCount)})",
+                        text = tr("✍️ Exam ($examCount)", "✍️ পরীক্ষা (${toBengaliDigits(examCount)})"),
                         isSelected = selectedTabFilter == RoutineTabFilter.EXAM,
                         activeColor = Color(0xFFF59E0B),
                         modifier = Modifier.weight(1f),
@@ -528,9 +550,9 @@ fun FullRoutineScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = when (selectedTabFilter) {
-                                    RoutineTabFilter.LIVE -> "এই দিনে কোনো লাইভ ক্লাস নেই"
-                                    RoutineTabFilter.EXAM -> "এই দিনে কোনো পরীক্ষা নেই"
-                                    RoutineTabFilter.ALL -> "এই দিনের জন্য কোনো ক্লাস বা পরীক্ষার রুটিন পাওয়া যায়নি"
+                                    RoutineTabFilter.LIVE -> tr("No live classes on this day", "এই দিনে কোনো লাইভ ক্লাস নেই")
+                                    RoutineTabFilter.EXAM -> tr("No exams on this day", "এই দিনে কোনো পরীক্ষা নেই")
+                                    RoutineTabFilter.ALL -> tr("No classes or exams scheduled for this day", "এই দিনের জন্য কোনো রুটিন পাওয়া যায়নি")
                                 },
                                 fontSize = 13.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -561,7 +583,7 @@ fun FullRoutineScreen(
                                             ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                                             ?: lesson.content_id?.takeIf { it.isNotBlank() }
                                             ?: lesson.id
-                                        val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
+                                        val formattedTitle = ClassTypeUtils.formatLessonTitle(lesson.title ?: AppLang.tr("Chapter Exam", "অধ্যায় পরীক্ষা"))
                                         val chapterName = lesson.subject_name ?: ""
                                         onNavigateToExam(sessionId, lesson.id, formattedTitle, chapterName)
                                     } else {

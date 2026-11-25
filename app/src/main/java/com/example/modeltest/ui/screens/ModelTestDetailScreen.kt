@@ -34,7 +34,9 @@ import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.modeltest.ui.components.parseIsoDateToMillis
 import com.example.ui.components.SlideViewerDialog
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,7 +135,7 @@ fun ModelTestDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = info?.title ?: lessonTitle ?: "মডেল টেস্টের বিবরণ",
+                        text = info?.title ?: lessonTitle ?: tr("Exam Details", "পরীক্ষার বিবরণ"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -142,7 +144,7 @@ fun ModelTestDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = tr("Back", "পেছনে"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -171,7 +173,7 @@ fun ModelTestDetailScreen(
                     ) {
                         Icon(Icons.Default.Home, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("হোম এ ফিরে যাও", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text(tr("Back to Home", "হোমে ফিরে যান"), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
             }
@@ -233,7 +235,7 @@ fun ModelTestDetailScreen(
                                         modifier = Modifier.size(10.dp)
                                     ) {}
                                     Text(
-                                        text = "🔴 লাইভ পরীক্ষা চলছে!",
+                                        text = tr("🔴 Live Exam Active!", "🔴 লাইভ পরীক্ষা চলছে!"),
                                         fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
@@ -241,7 +243,10 @@ fun ModelTestDetailScreen(
                                 }
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "নির্ধারিত সময়ে লাইভ টেস্টটি সম্পন্ন করো। সময় শেষ হলে CQ উত্তরপত্র স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।",
+                                    text = tr(
+                                        "Complete the live test within time. CQ sheets auto-submit when time ends.",
+                                        "নির্ধারিত সময়ে লাইভ টেস্টটি সম্পন্ন করুন। সময় শেষ হলে CQ উত্তরপত্র স্বয়ংক্রিয়ভাবে জমা হবে।"
+                                    ),
                                     fontSize = 13.5.sp,
                                     color = if (isDark) Color(0xFFFECACA) else Color(0xFF7F1D1D),
                                     textAlign = TextAlign.Center
@@ -250,7 +255,7 @@ fun ModelTestDetailScreen(
                                 if (endTimeMillis != null && endTimeMillis > now) {
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Text(
-                                        text = "লাইভ পরীক্ষা শেষ হতে বাকি সময়",
+                                        text = tr("Time left before exam ends", "লাইভ পরীক্ষা শেষ হতে বাকি"),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
@@ -287,24 +292,27 @@ fun ModelTestDetailScreen(
                                             modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("লাইভ সেশন প্রস্তুত হচ্ছে...")
+                                        Text(tr("Preparing live session...", "লাইভ সেশন প্রস্তুত হচ্ছে..."))
                                     } else {
                                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("🔴 লাইভ টেস্ট শুরু করো", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                        Text(tr("🔴 Start Live Test", "🔴 লাইভ টেস্ট শুরু করুন"), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                     }
                                 }
                             }
                             isCompleted -> {
                                 Text(
-                                    text = "✅ পরীক্ষা সম্পন্ন হয়েছে",
+                                    text = tr("✅ Exam Completed", "✅ পরীক্ষা সম্পন্ন হয়েছে"),
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color(0xFF4ADE80) else Color(0xFF16A34A)
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "তুমি ইতিমধ্যে এই লাইভ পরীক্ষায় অংশগ্রহণ করেছো। নিচের বাটনগুলো থেকে তোমার ফলাফল ও MCQ উত্তরপত্র দেখে নাও অথবা যেকোনো সময় প্র্যাকটিস টেস্ট দিতে পারো।",
+                                    text = tr(
+                                        "You already attended this live exam. View your result & MCQ answers below, or take a practice test anytime.",
+                                        "আপনি ইতিমধ্যে এই লাইভ পরীক্ষায় অংশ নিয়েছেন। নিচে ফলাফল ও MCQ সমাধান দেখুন বা প্র্যাকটিস টেস্ট দিন।"
+                                    ),
                                     fontSize = 13.5.sp,
                                     color = if (isDark) Color(0xFFBBF7D0) else Color(0xFF14532D),
                                     textAlign = TextAlign.Center
@@ -323,7 +331,7 @@ fun ModelTestDetailScreen(
                                 ) {
                                     Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("📊 সার্বিক ফলাফল দেখো", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Text(tr("View Overall Result", "সার্বিক ফলাফল দেখুন"), fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 }
 
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -345,19 +353,22 @@ fun ModelTestDetailScreen(
                                 ) {
                                     Icon(Icons.Default.FactCheck, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("📝 MCQ উত্তর ও ব্যাখ্যা দেখো", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(tr("MCQ Answers & Solutions", "MCQ উত্তর ও ব্যাখ্যা"), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                             }
                             isMissed -> {
                                 Text(
-                                    text = "লাইভ পরীক্ষার সময় সমাপ্ত হয়েছে",
+                                    text = tr("Live Exam Ended", "লাইভ পরীক্ষার সময় শেষ"),
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "লাইভ টেস্টটি মিস করলেও চিন্তা নেই! নিচে থেকে তুমি আনলিমিটেড প্র্যাকটিস টেস্ট দিয়ে নিজেকে ঝালাই করে নিতে পারো।",
+                                    text = tr(
+                                        "Missed the live test? No worries — practice unlimited times below.",
+                                        "লাইভ টেস্ট মিস করলেও চিন্তা নেই! নিচে আনলিমিটেড প্র্যাকটিস টেস্ট দিন।"
+                                    ),
                                     fontSize = 13.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -365,7 +376,7 @@ fun ModelTestDetailScreen(
                             }
                             else -> {
                                 Text(
-                                    text = "MCQ এক্সাম শুরু হতে বাকি সময়",
+                                    text = tr("Starts In", "পরীক্ষা শুরু হতে বাকি"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
@@ -378,7 +389,7 @@ fun ModelTestDetailScreen(
                                     )
                                 } else {
                                     Text(
-                                        text = "পরীক্ষার সময়সূচি শীঘ্রই জানানো হবে",
+                                        text = tr("Schedule will be announced soon", "পরীক্ষার সময়সূচি শীঘ্রই জানানো হবে"),
                                         fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -407,7 +418,7 @@ fun ModelTestDetailScreen(
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            "পরীক্ষা শুরুর জন্য অপেক্ষা করো",
+                                            tr("Waiting for exam to start", "পরীক্ষা শুরুর অপেক্ষায়"),
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -428,8 +439,8 @@ fun ModelTestDetailScreen(
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             val defaultRules = listOf(
-                                "পরীক্ষা শুধুমাত্র একবারই দেওয়া যাবে।",
-                                "CQ পরীক্ষার উত্তরের ছবি আপলোড করার জন্য নির্ধারিত অতিরিক্ত সময় পাওয়া যাবে।"
+                                tr("The live exam can only be taken once.", "পরীক্ষা শুধুমাত্র একবারই দেওয়া যাবে।"),
+                                tr("Extra time is provided to upload CQ answer sheet photos.", "CQ পরীক্ষার উত্তরের ছবি আপলোডের জন্য অতিরিক্ত সময় পাওয়া যাবে।")
                             )
                             val rulesToDisplay = info?.instructions?.ifEmpty { defaultRules } ?: defaultRules
 
@@ -465,17 +476,17 @@ fun ModelTestDetailScreen(
                 val cqDurationFormatted = if (cqMinutes >= 60) {
                     val hours = cqMinutes / 60
                     val mins = cqMinutes % 60
-                    if (mins > 0) "${toBengaliDigits(hours.toString())} ঘণ্টা ${toBengaliDigits(mins.toString())} মিনিট"
-                    else "${toBengaliDigits(hours.toString())} ঘণ্টা"
+                    if (mins > 0) tr("${hours}h ${mins}m", "${toBengaliDigits(hours.toString())} ঘণ্টা ${toBengaliDigits(mins.toString())} মিনিট")
+                    else tr("${hours}h", "${toBengaliDigits(hours.toString())} ঘণ্টা")
                 } else {
-                    "${toBengaliDigits(cqMinutes.toString())} মিনিট"
+                    tr("${cqMinutes} min", "${toBengaliDigits(cqMinutes.toString())} মিনিট")
                 }
 
                 // MCQ Card
                 ExamPartBlockCard(
                     title = "MCQ",
-                    count = "${toBengaliDigits((info?.mcq_count ?: 30).toString())}টি প্রশ্ন",
-                    duration = "সময় ${toBengaliDigits(mcqMinutes.toString())} মিনিট",
+                    count = tr("${info?.mcq_count ?: 30} Questions", "${toBengaliDigits((info?.mcq_count ?: 30).toString())}টি প্রশ্ন"),
+                    duration = tr("${mcqMinutes} min", "সময় ${toBengaliDigits(mcqMinutes.toString())} মিনিট"),
                     icon = Icons.Default.FactCheck,
                     iconBg = Color(0xFFE0F2FE),
                     iconTint = Color(0xFF0284C7),
@@ -483,7 +494,7 @@ fun ModelTestDetailScreen(
                     onMasterSolutionClick = {
                         uiState.mcqMasterSolutionUrl?.let { url ->
                             activePdfUrl = url
-                            activePdfTitle = "${info?.title ?: "মডেল টেস্ট"} - বহুনির্বাচনি সমাধান"
+                            activePdfTitle = "${info?.title ?: AppLang.tr("Model Test", "মডেল টেস্ট")} - ${AppLang.tr("MCQ Solution", "বহুনির্বাচনি সমাধান")}"
                         }
                     }
                 )
@@ -491,8 +502,8 @@ fun ModelTestDetailScreen(
                 // CQ Card
                 ExamPartBlockCard(
                     title = "CQ",
-                    count = "${toBengaliDigits((info?.cq_count ?: 2).toString())}টি প্রশ্ন",
-                    duration = "সময় $cqDurationFormatted",
+                    count = tr("${info?.cq_count ?: 2} Questions", "${toBengaliDigits((info?.cq_count ?: 2).toString())}টি প্রশ্ন"),
+                    duration = tr(cqDurationFormatted, "সময় $cqDurationFormatted"),
                     icon = Icons.Default.EditNote,
                     iconBg = Color(0xFFFEF3C7),
                     iconTint = Color(0xFFD97706),
@@ -500,15 +511,15 @@ fun ModelTestDetailScreen(
                     onMasterSolutionClick = {
                         uiState.cqMasterSolutionUrl?.let { url ->
                             activePdfUrl = url
-                            activePdfTitle = "${info?.title ?: "মডেল টেস্ট"} - সৃজনশীল সমাধান"
+                            activePdfTitle = "${info?.title ?: AppLang.tr("Model Test", "মডেল টেস্ট")} - ${AppLang.tr("CQ Solution", "সৃজনশীল সমাধান")}"
                         }
                     }
                 )
 
-                // 4. Subject & Chapter (বিষয় ও অধ্যায়) Expandable Card
+                // 4. Subject & Chapter Expandable Card
                 val subjectName = info?.subject_name 
                     ?: info?.subjects?.firstOrNull()?.display_bn 
-                    ?: (info?.title?.split(" ")?.firstOrNull() ?: "বিষয়")
+                    ?: (info?.title?.split(" ")?.firstOrNull() ?: tr("Subject", "বিষয়"))
                 
                 val chapterItems = info?.hierarchy?.firstOrNull()?.chapters ?: emptyList()
                 val chapterCount = if (chapterItems.isNotEmpty()) chapterItems.size else 1
@@ -548,12 +559,12 @@ fun ModelTestDetailScreen(
                             // Subject Count
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "বিষয়",
+                                    text = tr("Subjects", "বিষয়"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "${toBengaliDigits(subjectCount.toString())}টি",
+                                    text = tr("${toBengaliDigits(subjectCount.toString())}", "${toBengaliDigits(subjectCount.toString())}টি"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -573,12 +584,12 @@ fun ModelTestDetailScreen(
                             // Chapter Count
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "অধ্যায়",
+                                    text = tr("Chapters", "অধ্যায়"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "${toBengaliDigits(chapterCount.toString())}টি",
+                                    text = tr("${toBengaliDigits(chapterCount.toString())}", "${toBengaliDigits(chapterCount.toString())}টি"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -613,7 +624,7 @@ fun ModelTestDetailScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 Text(
-                                    text = "অন্তর্ভুক্ত সিলেবাস ও বিষয়:",
+                                    text = tr("Included Syllabus:", "অন্তর্ভুক্ত সিলেবাস:"),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary
@@ -638,7 +649,7 @@ fun ModelTestDetailScreen(
                                             Spacer(modifier = Modifier.height(6.dp))
                                             chapterItems.forEach { chap ->
                                                 Text(
-                                                    text = "• ${chap.name ?: "অধ্যায় ${chap.no}"}",
+                                                    text = "• ${chap.name ?: tr("Chapter ${chap.no}", "অধ্যায় ${chap.no}")}",
                                                     fontSize = 12.5.sp,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.padding(vertical = 2.dp)
@@ -647,7 +658,7 @@ fun ModelTestDetailScreen(
                                         } else {
                                             Spacer(modifier = Modifier.height(4.dp))
                                             Text(
-                                                text = "• অধ্যায়ভিত্তিক পূর্ণাঙ্গ মডেল টেস্ট",
+                                                text = tr("• Chapter-wise full model test", "• অধ্যায়ভিত্তিক পূর্ণাঙ্গ মডেল টেস্ট"),
                                                 fontSize = 12.5.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -673,7 +684,7 @@ fun ModelTestDetailScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "প্র্যাকটিস টেস্ট দিয়ে নিজেকে যাচাই করে নাও",
+                                text = tr("Practice Test", "প্র্যাকটিস টেস্ট"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A),
@@ -684,7 +695,7 @@ fun ModelTestDetailScreen(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "তুমি যতবার খুশি প্র্যাকটিস টেস্ট দিতে পারবে (আনলিমিটেড)",
+                            text = tr("Take unlimited practice attempts anytime", "যতবার খুশি প্র্যাকটিস টেস্ট দিতে পারবেন (আনলিমিটেড)"),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF16A34A)
@@ -712,11 +723,11 @@ fun ModelTestDetailScreen(
                             if (uiState.isCreatingSession && uiState.isPracticeSession) {
                                 CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("প্র্যাকটিস সেশন তৈরি হচ্ছে...")
+                                Text(tr("Starting practice...", "প্র্যাকটিস সেশন তৈরি হচ্ছে..."))
                             } else {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("প্র্যাকটিস টেস্ট শুরু করো", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(tr("Start Practice Test", "প্র্যাকটিস টেস্ট শুরু করুন"), fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
 
@@ -749,7 +760,10 @@ fun ModelTestDetailScreen(
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "প্র্যাকটিস টেস্টের ক্ষেত্রে শুধু MCQ টেস্ট দিতে পারবে এবং ফিডব্যাক পাবে। CQ উত্তরপত্র সাবমিট ও রিভিঊয়ের জন্য তোমাকে নির্ধারিত সময়ে মডেল টেস্ট দিতে হবে।",
+                                    text = tr(
+                                        "Practice tests include MCQ with instant feedback. Join the scheduled live test for CQ submission and review.",
+                                        "প্র্যাকটিস টেস্টে শুধু MCQ ও ফিডব্যাক পাবেন। CQ উত্তরপত্র জমা ও রিভিউয়ের জন্য নির্ধারিত সময়ে লাইভ টেস্ট দিন।"
+                                    ),
                                     fontSize = 12.5.sp,
                                     color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
                                     lineHeight = 18.sp
@@ -757,7 +771,7 @@ fun ModelTestDetailScreen(
                             }
                         }
 
-                        // Practice Test History & "ফিডব্যাক দেখো" action buttons (Screenshot 4)
+                        // Practice Test History & feedback buttons
                         val practiceSessions = uiState.retakeContainer?.sessions ?: emptyList()
                         val effectiveSessions = if (practiceSessions.isNotEmpty()) {
                             practiceSessions
@@ -786,14 +800,13 @@ fun ModelTestDetailScreen(
                                         .padding(vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}",
+                                        text = tr("Practice Test ${toBengaliDigits(attemptNum.toString())}", "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}"),
                                         fontSize = 14.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A)
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
 
-                                    // Full-width "ফিডব্যাক দেখো" button matching Screenshot 4
                                     Button(
                                         onClick = { onViewFeedback(sid) },
                                         shape = RoundedCornerShape(12.dp),
@@ -807,7 +820,7 @@ fun ModelTestDetailScreen(
                                             .height(44.dp)
                                     ) {
                                         Text(
-                                            text = "ফিডব্যাক দেখো",
+                                            text = tr("View Feedback", "ফিডব্যাক দেখুন"),
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 14.sp
                                         )
@@ -898,7 +911,7 @@ private fun ExamPartBlockCard(
                         .fillMaxWidth()
                         .height(40.dp)
                 ) {
-                    Text("মাস্টার সল্যুশন", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(tr("Master Solution", "মাস্টার সল্যুশন"), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

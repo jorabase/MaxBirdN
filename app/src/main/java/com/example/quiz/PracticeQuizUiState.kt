@@ -2,11 +2,14 @@ package com.example.quiz
 
 import com.example.api.*
 
-enum class FeedbackFilter(val labelBn: String) {
-    ALL("সব উত্তর"),
-    CORRECT("সঠিক"),
-    INCORRECT("ভুল"),
-    UNANSWERED("উত্তরহীন")
+enum class FeedbackFilter(private val labelEn: String, private val labelBnRaw: String) {
+    ALL("All Answers", "সব উত্তর"),
+    CORRECT("Correct", "সঠিক"),
+    INCORRECT("Incorrect", "ভুল"),
+    UNANSWERED("Unanswered", "উত্তরহীন");
+
+    val labelBn: String
+        get() = com.example.utils.AppLang.tr(labelEn, labelBnRaw)
 }
 
 data class PracticeQuizUiState(

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.database.SavedItemDao
 import com.example.database.SavedItemEntity
 import com.example.database.SavedItemRepository
+import com.example.utils.AppLang
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,12 +15,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class SavedItemFilter(val label: String, val typeKey: String?) {
-    ALL("সব (All)", null),
-    QUESTIONS("প্রশ্ন (Questions)", SavedItemEntity.TYPE_QUESTION),
-    NOTES("নোট (Notes)", SavedItemEntity.TYPE_NOTE),
-    CLASSES("ক্লাস (Classes)", SavedItemEntity.TYPE_CLASS),
-    OTHERS("অন্যান্য (Others)", "OTHERS")
+enum class SavedItemFilter(private val labelEn: String, private val labelBn: String, val typeKey: String?) {
+    ALL("All", "সব", null),
+    QUESTIONS("Questions", "প্রশ্ন", SavedItemEntity.TYPE_QUESTION),
+    NOTES("Notes", "নোট", SavedItemEntity.TYPE_NOTE),
+    CLASSES("Classes", "ক্লাস", SavedItemEntity.TYPE_CLASS),
+    OTHERS("Others", "অন্যান্য", "OTHERS");
+
+    val label: String
+        get() = AppLang.tr(labelEn, labelBn)
 }
 
 data class SavedUiState(
@@ -70,9 +74,9 @@ class SavedViewModel(
         viewModelScope.launch {
             try {
                 repository.saveItem(item)
-                _message.value = "আইটেমটি সংরক্ষিত হয়েছে"
+                _message.value = AppLang.tr("Item saved", "আইটেমটি সংরক্ষিত হয়েছে")
             } catch (e: Exception) {
-                _message.value = "সংরক্ষণ করতে সমস্যা হয়েছে: ${e.message}"
+                _message.value = AppLang.tr("Failed to save: ${e.message}", "সংরক্ষণ করতে সমস্যা হয়েছে: ${e.message}")
             }
         }
     }
@@ -81,9 +85,9 @@ class SavedViewModel(
         viewModelScope.launch {
             try {
                 repository.deleteSavedItemById(id)
-                _message.value = "আইটেমটি সংরক্ষণ থেকে মুছে ফেলা হয়েছে"
+                _message.value = AppLang.tr("Removed from saved items", "আইটেমটি সংরক্ষণ থেকে মুছে ফেলা হয়েছে")
             } catch (e: Exception) {
-                _message.value = "মুছতে সমস্যা হয়েছে: ${e.message}"
+                _message.value = AppLang.tr("Failed to delete: ${e.message}", "মুছতে সমস্যা হয়েছে: ${e.message}")
             }
         }
     }

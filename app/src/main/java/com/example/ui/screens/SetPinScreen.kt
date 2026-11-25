@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.sp
 import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
 import com.example.ui.components.ResponsiveDigitInputField
+import com.example.utils.AppLang
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,7 +118,7 @@ fun SetPinScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "নতুন পিন সেট করুন",
+                    text = tr("Set New PIN", "নতুন পিন সেট করুন"),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -126,7 +128,7 @@ fun SetPinScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "আপনার একাউন্টের নিরাপত্তার জন্য ৬ ডিজিটের নতুন পিন দিন",
+                    text = tr("Create a 6-digit PIN to secure your account", "অ্যাকাউন্টের নিরাপত্তায় ৬ ডিজিটের নতুন পিন দিন"),
                     fontSize = 14.sp,
                     color = Color(0xFF94A3B8),
                     textAlign = TextAlign.Center
@@ -147,7 +149,7 @@ fun SetPinScreen(
                             .padding(20.dp)
                     ) {
                         Text(
-                            text = "নতুন পিন দিন",
+                            text = tr("New PIN", "নতুন পিন"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -168,7 +170,7 @@ fun SetPinScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "পিন নিশ্চিত করুন",
+                            text = tr("Confirm PIN", "পিন নিশ্চিত করুন"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -202,9 +204,9 @@ fun SetPinScreen(
                         Button(
                             onClick = {
                                 if (pinValue.length != 6) {
-                                    localError = "পিন অবশ্যই ৬ ডিজিটের হতে হবে"
+                                    localError = AppLang.tr("PIN must be 6 digits", "পিন অবশ্যই ৬ ডিজিটের হতে হবে")
                                 } else if (pinValue != confirmPinValue) {
-                                    localError = "উভয় পিন একই হতে হবে"
+                                    localError = AppLang.tr("PINs do not match", "উভয় পিন একই হতে হবে")
                                 } else {
                                     viewModel.setPin(phone, pinValue)
                                 }
@@ -225,7 +227,7 @@ fun SetPinScreen(
                                 )
                             } else {
                                 Text(
-                                    text = "পিন সেট করুন",
+                                    text = tr("Save PIN", "পিন সেভ করুন"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White

@@ -44,6 +44,9 @@ import coil.compose.AsyncImage
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.library.*
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import com.example.utils.toBengaliDigits
 import java.io.File
 
@@ -116,14 +119,17 @@ fun LibraryScreen(
             shape = RoundedCornerShape(22.dp),
             title = {
                 Text(
-                    text = "অফলাইন বই মুছে ফেলবেন?",
+                    text = tr("Delete Offline Book?", "অফলাইন বই মুছবেন?"),
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp
                 )
             },
             text = {
                 Text(
-                    text = "\"${targetFile.title}\" আপনার অফলাইন মেমোরি ও ডাউনলোড তালিকা থেকে মুছে ফেলা হবে। পরে আবার ডাউনলোড বা অনলাইনে পড়তে পারবেন।",
+                    text = tr(
+                        "\"${targetFile.title}\" will be removed from offline storage. You can re-download or read online anytime.",
+                        "\"${targetFile.title}\" অফলাইন স্টোরেজ থেকে মুছে ফেলা হবে। পরে আবার ডাউনলোড বা অনলাইনে পড়তে পারবেন।"
+                    ),
                     fontSize = 13.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -133,17 +139,21 @@ fun LibraryScreen(
                     onClick = {
                         viewModel.deleteDownloadedFile(targetFile)
                         fileToDelete = null
-                        Toast.makeText(context, "বইটি অফলাইন মেমোরি থেকে মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            AppLang.tr("Removed from offline storage", "অফলাইন স্টোরেজ থেকে মুছে ফেলা হয়েছে"),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("মুছে ফেলুন", fontWeight = FontWeight.Bold)
+                    Text(tr("Delete", "মুছে ফেলুন"), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { fileToDelete = null }) {
-                    Text("বাতিল")
+                    Text(tr("Cancel", "বাতিল"))
                 }
             }
         )
@@ -228,9 +238,9 @@ fun LibraryScreen(
                     ) {
                         LibraryEmptyStateView(
                             icon = Icons.Default.SearchOff,
-                            title = "কোনো বই খুঁজে পাওয়া যায়নি",
-                            subtitle = "\"$query\" নামে কোনো শ্রেণী, সাবজেক্ট, অধ্যায় বা পাঠ নেই।",
-                            actionLabel = "সার্চ মুছুন",
+                            title = tr("No Books Found", "কোনো বই পাওয়া যায়নি"),
+                            subtitle = tr("No matches for \"$query\".", "\"$query\" নামে কোনো পাঠ পাওয়া যায়নি।"),
+                            actionLabel = tr("Clear Search", "সার্চ মুছুন"),
                             onAction = { viewModel.updateSearchQuery("") }
                         )
                     }
@@ -242,7 +252,7 @@ fun LibraryScreen(
                     ) {
                         item {
                             Text(
-                                text = "খুঁজে পাওয়া পাঠসমূহ (${matchedFiles.size.toBengaliDigits()})",
+                                text = tr("Results (${matchedFiles.size})", "ফলাফল (${matchedFiles.size.toBengaliDigits()})"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -268,7 +278,11 @@ fun LibraryScreen(
                                 },
                                 onDownloadClick = { forceRedownload ->
                                     viewModel.downloadFile(file, forceRedownload = forceRedownload)
-                                    Toast.makeText(context, "\"${file.title}\" ডাউনলোড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        AppLang.tr("Downloading \"${file.title}\"...", "\"${file.title}\" ডাউনলোড শুরু হয়েছে..."),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 },
                                 onDeleteClick = { fileToDelete = file }
                             )
@@ -283,12 +297,15 @@ fun LibraryScreen(
                 ) {
                     LibraryEmptyStateView(
                         icon = Icons.Default.MenuBook,
-                        title = "লাইব্রেরি এখনো খালি রয়েছে",
+                        title = tr("Library is Empty", "লাইব্রেরি এখনো খালি"),
                         subtitle = state.errorMessage
-                            ?: "অ্যাডমিন অ্যাপ থেকে শ্রেণী, সাবজেক্ট, অধ্যায় ও HTML বই আপলোড করলে এখানে স্বয়ংক্রিয়ভাবে দেখাবে। নিচে টেনে রিফ্রেশ করুন।",
-                        actionLabel = "আবার চেষ্টা করুন",
+                            ?: tr(
+                                "Uploaded books and chapters will appear here. Pull down to refresh.",
+                                "নতুন বই ও অধ্যায় যুক্ত হলে এখানে দেখাবে। নিচে টেনে রিফ্রেশ করুন।"
+                            ),
+                        actionLabel = tr("Try Again", "আবার চেষ্টা করুন"),
                         onAction = { viewModel.loadLibrary(forceRefresh = true) },
-                        secondaryActionLabel = if (totalOfflineSavedCount > 0) "ডাউনলোড করা বই দেখুন (${totalOfflineSavedCount.toBengaliDigits()})" else null,
+                        secondaryActionLabel = if (totalOfflineSavedCount > 0) tr("Saved Books ($totalOfflineSavedCount)", "সেভড বই (${totalOfflineSavedCount.toBengaliDigits()})") else null,
                         onSecondaryAction = onNavigateToDownloads
                     )
                 }
@@ -318,7 +335,7 @@ fun LibraryScreen(
                                 }
                                 item {
                                     Text(
-                                        text = "শ্রেণী নির্বাচন করুন",
+                                        text = tr("Classes", "শ্রেণীসমূহ"),
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = MaterialTheme.colorScheme.onBackground,
@@ -350,9 +367,9 @@ fun LibraryScreen(
                             if (subjects.isEmpty()) {
                                 LibraryEmptyStateView(
                                     icon = Icons.Default.LibraryBooks,
-                                    title = "এই শ্রেণীতে এখনো কোনো সাবজেক্ট নেই",
-                                    subtitle = "অ্যাডমিন অ্যাপ থেকে সাবজেক্ট যোগ করলে এখানে দেখাবে।",
-                                    actionLabel = "পেছনে যান",
+                                    title = tr("No Subjects Yet", "কোনো বিষয় নেই"),
+                                    subtitle = tr("Subjects will appear here once added.", "নতুন বিষয় যুক্ত হলে এখানে দেখাবে।"),
+                                    actionLabel = tr("Go Back", "পেছনে যান"),
                                     onAction = { viewModel.navigateBack() }
                                 )
                             } else {
@@ -363,7 +380,7 @@ fun LibraryScreen(
                                 ) {
                                     item {
                                         Text(
-                                            text = "সাবজেক্ট তালিকা (${subjects.size.toBengaliDigits()} টি)",
+                                            text = tr("Subjects (${subjects.size})", "বিষয়সমূহ (${subjects.size.toBengaliDigits()})"),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.onBackground,
@@ -394,9 +411,9 @@ fun LibraryScreen(
                             if (chapters.isEmpty()) {
                                 LibraryEmptyStateView(
                                     icon = Icons.Default.AutoStories,
-                                    title = "এই সাবজেক্টে এখনো কোনো অধ্যায় নেই",
-                                    subtitle = "নতুন অধ্যায় যুক্ত হলে এখানে দেখতে পাবেন।",
-                                    actionLabel = "পেছনে যান",
+                                    title = tr("No Chapters Yet", "কোনো অধ্যায় নেই"),
+                                    subtitle = tr("Chapters will appear here once added.", "নতুন অধ্যায় যুক্ত হলে এখানে দেখাবে।"),
+                                    actionLabel = tr("Go Back", "পেছনে যান"),
                                     onAction = { viewModel.navigateBack() }
                                 )
                             } else {
@@ -407,7 +424,7 @@ fun LibraryScreen(
                                 ) {
                                     item {
                                         Text(
-                                            text = "অধ্যায়সমূহ (${chapters.size.toBengaliDigits()} টি)",
+                                            text = tr("Chapters (${chapters.size})", "অধ্যায় (${chapters.size.toBengaliDigits()})"),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.onBackground,
@@ -427,9 +444,9 @@ fun LibraryScreen(
                                             onDownloadAllChapter = {
                                                 val queued = viewModel.downloadEntireChapter(chapter)
                                                 val msg = if (queued > 0) {
-                                                    "${queued.toBengaliDigits()} টি ফাইল ডাউনলোড শুরু হয়েছে"
+                                                    AppLang.tr("Downloading $queued files...", "${queued.toBengaliDigits()} টি ফাইল ডাউনলোড হচ্ছে...")
                                                 } else {
-                                                    "এই অধ্যায়ের সব ফাইল আগেই ডাউনলোড করা আছে"
+                                                    AppLang.tr("All files are already saved offline", "সব ফাইল আগেই অফলাইনে সেভ করা আছে")
                                                 }
                                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                             }
@@ -444,9 +461,9 @@ fun LibraryScreen(
                             if (files.isEmpty()) {
                                 LibraryEmptyStateView(
                                     icon = Icons.Default.Description,
-                                    title = "এই অধ্যায়ে এখনো কোনো HTML ফাইল নেই",
-                                    subtitle = "অ্যাডমিন অ্যাপ থেকে HTML পাঠ আপলোড করলে এখানে দেখতে পাবেন।",
-                                    actionLabel = "পেছনে যান",
+                                    title = tr("No Lessons Yet", "কোনো পাঠ নেই"),
+                                    subtitle = tr("Interactive lessons will appear here once uploaded.", "নতুন পাঠ যুক্ত হলে এখানে দেখতে পাবেন।"),
+                                    actionLabel = tr("Go Back", "পেছনে যান"),
                                     onAction = { viewModel.navigateBack() }
                                 )
                             } else {
@@ -462,7 +479,7 @@ fun LibraryScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
-                                                text = "পাঠ ও HTML ফাইল (${files.size.toBengaliDigits()} টি)",
+                                                text = tr("Lessons (${files.size})", "পাঠসমূহ (${files.size.toBengaliDigits()})"),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = MaterialTheme.colorScheme.onBackground
@@ -472,9 +489,9 @@ fun LibraryScreen(
                                                     onClick = {
                                                         val queued = viewModel.downloadEntireChapter(level.chapter)
                                                         val msg = if (queued > 0) {
-                                                            "${queued.toBengaliDigits()} টি ফাইল ডাউনলোড হচ্ছে..."
+                                                            AppLang.tr("Downloading $queued files...", "${queued.toBengaliDigits()} টি ফাইল ডাউনলোড হচ্ছে...")
                                                         } else {
-                                                            "সবগুলো ফাইল আগেই অফলাইনে সেভ করা আছে"
+                                                            AppLang.tr("All files already saved offline", "সব ফাইল আগেই অফলাইনে সেভ করা আছে")
                                                         }
                                                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                                     },
@@ -490,7 +507,7 @@ fun LibraryScreen(
                                                         modifier = Modifier.size(16.dp)
                                                     )
                                                     Spacer(modifier = Modifier.width(5.dp))
-                                                    Text("সব ডাউনলোড", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                                    Text(tr("Save All", "সব ডাউনলোড"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                         }
@@ -515,7 +532,11 @@ fun LibraryScreen(
                                             },
                                             onDownloadClick = { forceRedownload ->
                                                 viewModel.downloadFile(file, forceRedownload = forceRedownload)
-                                                Toast.makeText(context, "\"${file.title}\" ডাউনলোড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(
+                                                    context,
+                                                    AppLang.tr("Downloading \"${file.title}\"...", "\"${file.title}\" ডাউনলোড শুরু হয়েছে..."),
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             },
                                             onDeleteClick = { fileToDelete = file }
                                         )
@@ -539,16 +560,16 @@ private fun LibraryTopHeader(
     onOpenVoiceSettings: () -> Unit
 ) {
     val headerTitle = when (navLevel) {
-        is LibraryNavLevel.Classes -> "ডিজিটাল লাইব্রেরি"
+        is LibraryNavLevel.Classes -> tr("Library", "লাইব্রেরি")
         is LibraryNavLevel.Subjects -> navLevel.classGroup.title
         is LibraryNavLevel.Chapters -> navLevel.subject.title
         is LibraryNavLevel.Files -> navLevel.chapter.title
     }
     val headerSub = when (navLevel) {
-        is LibraryNavLevel.Classes -> if (isOfflineSnapshot) "অফলাইন ক্যাশ • নিচে টেনে রিফ্রেশ করুন" else "ইন্টারেক্টিভ বই ও অফলাইন রিডার"
-        is LibraryNavLevel.Subjects -> "সাবজেক্ট নির্বাচন করুন"
-        is LibraryNavLevel.Chapters -> "${navLevel.classGroup.title} • অধ্যায়সমূহ"
-        is LibraryNavLevel.Files -> "${navLevel.subject.title} • পাঠসমূহ"
+        is LibraryNavLevel.Classes -> if (isOfflineSnapshot) tr("Offline • Pull to refresh", "অফলাইন • নিচে টেনে রিফ্রেশ করুন") else tr("Interactive Books", "ইন্টারেক্টিভ বই")
+        is LibraryNavLevel.Subjects -> tr("Select Subject", "বিষয় নির্বাচন করুন")
+        is LibraryNavLevel.Chapters -> "${navLevel.classGroup.title} • ${tr("Chapters", "অধ্যায়")}"
+        is LibraryNavLevel.Files -> "${navLevel.subject.title} • ${tr("Lessons", "পাঠ")}"
     }
 
     Row(
@@ -570,7 +591,7 @@ private fun LibraryTopHeader(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = tr("Back", "পেছনে"),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -628,12 +649,12 @@ private fun LibraryTopHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.RecordVoiceOver,
-                    contentDescription = "অফলাইন ভয়েস সেটিংস",
+                    contentDescription = tr("Voice Settings", "ভয়েস সেটিংস"),
                     tint = LibraryEmerald,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
-                    text = "ভয়েস",
+                    text = tr("Voice", "ভয়েস"),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
@@ -659,7 +680,7 @@ private fun LibraryBreadcrumbRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        BreadcrumbChip("লাইব্রেরি", active = false, isDark = isDark, onClick = onJumpRoot)
+        BreadcrumbChip(tr("Library", "লাইব্রেরি"), active = false, isDark = isDark, onClick = onJumpRoot)
         when (navLevel) {
             is LibraryNavLevel.Subjects -> {
                 BreadcrumbChevron()
@@ -736,7 +757,7 @@ private fun LibrarySearchBar(
         singleLine = true,
         placeholder = {
             Text(
-                text = "বই, অধ্যায় বা পাঠ খুঁজুন...",
+                text = tr("Search books, chapters...", "বই, অধ্যায় বা পাঠ খুঁজুন..."),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -818,13 +839,16 @@ private fun LibraryHeroBanner(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "অফলাইন HTML বই ও অডিও রিডার",
+                            text = tr("Offline Books & Audio", "অফলাইন বই ও অডিও"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (isDark) Color.White else Color(0xFF064E3B)
                         )
                         Text(
-                            text = "${totalClasses.toBengaliDigits()} টি শ্রেণী • ${totalFiles.toBengaliDigits()} টি পাঠ • ${offlineSavedCount.toBengaliDigits()} টি অফলাইনে সেভড",
+                            text = tr(
+                                "$totalClasses classes • $totalFiles lessons • $offlineSavedCount offline",
+                                "${totalClasses.toBengaliDigits()} শ্রেণী • ${totalFiles.toBengaliDigits()} পাঠ • ${offlineSavedCount.toBengaliDigits()} অফলাইন"
+                            ),
                             fontSize = 11.5.sp,
                             color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF047857)
                         )
@@ -849,7 +873,7 @@ private fun LibraryHeroBanner(
                     ) {
                         Icon(Icons.Default.RecordVoiceOver, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("বাংলা/ইংরেজি TTS", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(tr("Voice TTS", "বাংলা/ইংরেজি TTS"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
 
                     FilledTonalButton(
@@ -866,7 +890,7 @@ private fun LibraryHeroBanner(
                     ) {
                         Icon(Icons.Default.DownloadDone, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("ডাউনলোড বই (${offlineSavedCount.toBengaliDigits()})", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text(tr("Saved ($offlineSavedCount)", "সেভড (${offlineSavedCount.toBengaliDigits()})"), fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
             }
@@ -961,10 +985,10 @@ private fun LibraryClassCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    InfoMiniPill("${classGroup.subjects.size.toBengaliDigits()} সাবজেক্ট", accentColor)
-                    InfoMiniPill("${classGroup.totalFilesCount.toBengaliDigits()} পাঠ", MaterialTheme.colorScheme.onSurfaceVariant)
+                    InfoMiniPill(tr("${classGroup.subjects.size} Subjects", "${classGroup.subjects.size.toBengaliDigits()} বিষয়"), accentColor)
+                    InfoMiniPill(tr("${classGroup.totalFilesCount} Lessons", "${classGroup.totalFilesCount.toBengaliDigits()} পাঠ"), MaterialTheme.colorScheme.onSurfaceVariant)
                     if (offlineCount > 0) {
-                        InfoMiniPill("${offlineCount.toBengaliDigits()} অফলাইন", LibraryEmerald)
+                        InfoMiniPill(tr("$offlineCount Offline", "${offlineCount.toBengaliDigits()} অফলাইন"), LibraryEmerald)
                     }
                 }
             }
@@ -1048,10 +1072,10 @@ private fun LibrarySubjectCard(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    InfoMiniPill("${subject.chapters.size.toBengaliDigits()} অধ্যায়", accentColor)
-                    InfoMiniPill("${subject.totalFilesCount.toBengaliDigits()} ফাইল", MaterialTheme.colorScheme.onSurfaceVariant)
+                    InfoMiniPill(tr("${subject.chapters.size} Chapters", "${subject.chapters.size.toBengaliDigits()} অধ্যায়"), accentColor)
+                    InfoMiniPill(tr("${subject.totalFilesCount} Files", "${subject.totalFilesCount.toBengaliDigits()} ফাইল"), MaterialTheme.colorScheme.onSurfaceVariant)
                     if (offlineCount > 0) {
-                        InfoMiniPill("${offlineCount.toBengaliDigits()} অফলাইন", LibraryEmerald)
+                        InfoMiniPill(tr("$offlineCount Offline", "${offlineCount.toBengaliDigits()} অফলাইন"), LibraryEmerald)
                     }
                 }
             }
@@ -1126,10 +1150,10 @@ private fun LibraryChapterCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    InfoMiniPill("${chapter.files.size.toBengaliDigits()} টি HTML পাঠ", LibrarySky)
+                    InfoMiniPill(tr("${chapter.files.size} Lessons", "${chapter.files.size.toBengaliDigits()} টি পাঠ"), LibrarySky)
                     if (offlineCount > 0) {
                         InfoMiniPill(
-                            if (allOffline) "সম্পূর্ণ অফলাইন ✓" else "${offlineCount.toBengaliDigits()} সেভড",
+                            if (allOffline) tr("Offline ✓", "অফলাইন ✓") else tr("$offlineCount Saved", "${offlineCount.toBengaliDigits()} সেভড"),
                             LibraryEmerald
                         )
                     }
@@ -1147,7 +1171,7 @@ private fun LibraryChapterCard(
                 ) {
                     Icon(
                         imageVector = if (allOffline) Icons.Default.DownloadDone else Icons.Default.Download,
-                        contentDescription = "অধ্যায় ডাউনলোড",
+                        contentDescription = tr("Download chapter", "অধ্যায় ডাউনলোড"),
                         tint = if (allOffline) LibraryEmerald else LibrarySky,
                         modifier = Modifier.size(20.dp)
                     )
@@ -1178,13 +1202,14 @@ private fun LibraryFileCard(
     val isDownloading = downloadedItem?.isDownloading == true
     val hasUpdate = localFileExists && file.version > downloadedVersion
 
-    val sizeText = remember(file.fileSizeBytes, downloadedItem?.totalBytes) {
+    val isBn = isBangla()
+    val sizeText = remember(file.fileSizeBytes, downloadedItem?.totalBytes, isBn) {
         val bytes = when {
             (downloadedItem?.totalBytes ?: 0L) > 0L -> downloadedItem!!.totalBytes
             file.fileSizeBytes > 0L -> file.fileSizeBytes
             else -> 0L
         }
-        if (bytes > 0L) downloadManager.formatFileSize(bytes, inBengali = true) else "HTML বই"
+        if (bytes > 0L) downloadManager.formatFileSize(bytes, inBengali = isBn) else if (isBn) "HTML বই" else "Book"
     }
 
     val accent = if (localFileExists) LibraryEmerald else LibrarySky
@@ -1232,11 +1257,11 @@ private fun LibraryFileCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         InfoMiniPill(
-                            text = if (localFileExists) "অফলাইন সেভড" else "অনলাইন",
+                            text = if (localFileExists) tr("Offline", "অফলাইন") else tr("Online", "অনলাইন"),
                             color = if (localFileExists) LibraryEmerald else LibrarySky
                         )
                         if (hasUpdate) {
-                            InfoMiniPill(text = "আপডেট আছে", color = LibraryAmber)
+                            InfoMiniPill(text = tr("Update", "আপডেট"), color = LibraryAmber)
                         }
                         Text(
                             text = "• $sizeText",
@@ -1284,7 +1309,7 @@ private fun LibraryFileCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.SystemUpdateAlt,
-                            contentDescription = "আপডেট ডাউনলোড",
+                            contentDescription = tr("Download update", "আপডেট ডাউনলোড"),
                             tint = LibraryAmber,
                             modifier = Modifier.size(20.dp)
                         )
@@ -1296,7 +1321,7 @@ private fun LibraryFileCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "অফলাইন ফাইল মুছুন",
+                            contentDescription = tr("Delete offline file", "অফলাইন ফাইল মুছুন"),
                             tint = Color(0xFFEF4444).copy(alpha = 0.8f),
                             modifier = Modifier.size(21.dp)
                         )
@@ -1311,7 +1336,7 @@ private fun LibraryFileCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Download,
-                            contentDescription = "ডাউনলোড করুন",
+                            contentDescription = tr("Download", "ডাউনলোড"),
                             tint = LibrarySky,
                             modifier = Modifier.size(20.dp)
                         )
@@ -1365,7 +1390,7 @@ private fun LibraryLoadingView() {
         ) {
             CircularProgressIndicator(color = LibraryEmerald)
             Text(
-                text = "লাইব্রেরি লোড হচ্ছে...",
+                text = tr("Loading library...", "লাইব্রেরি লোড হচ্ছে..."),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

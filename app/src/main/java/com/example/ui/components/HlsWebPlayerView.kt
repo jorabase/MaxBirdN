@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.utils.tr
 
 /**
  * HTML5 Web Player embedded inside WebView for directly streaming HLS .m3u8 URLs
@@ -210,7 +211,7 @@ fun HlsWebPlayerView(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "🌐 ব্রাউজার প্লেয়ার",
+                        text = tr("🌐 Web Player", "🌐 ব্রাউজার প্লেয়ার"),
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
@@ -228,7 +229,7 @@ fun HlsWebPlayerView(
                         isLoading = true
                         webViewInstance?.reload() 
                     }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "রিফ্রেশ", tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Refresh, contentDescription = tr("Refresh", "রিফ্রেশ"), tint = Color.White, modifier = Modifier.size(16.dp))
                     }
                 }
                 if (canOpenExternal) {
@@ -238,7 +239,7 @@ fun HlsWebPlayerView(
                         modifier = Modifier.size(34.dp)
                     ) {
                         IconButton(onClick = onOpenExternal) {
-                            Icon(Icons.Default.OpenInBrowser, contentDescription = "ব্রাউজার", tint = Color.White, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.OpenInBrowser, contentDescription = tr("Browser", "ব্রাউজার"), tint = Color.White, modifier = Modifier.size(16.dp))
                         }
                     }
                 }

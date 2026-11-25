@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.utils.tr
 
 @Composable
 fun AmbientAudioVisualizerOverlay(
@@ -96,7 +97,7 @@ fun AmbientAudioVisualizerOverlay(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.Headphones,
-                        contentDescription = "অডিও মোড",
+                        contentDescription = tr("Audio mode", "অডিও মোড"),
                         tint = Color(0xFF38BDF8),
                         modifier = Modifier.size(40.dp)
                     )
@@ -148,7 +149,7 @@ fun AmbientAudioVisualizerOverlay(
             }
 
             Text(
-                text = title.ifBlank { "ক্লাস লেকচার" },
+                text = title.ifBlank { tr("Class Lecture", "ক্লাস লেকচার") },
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
@@ -166,7 +167,10 @@ fun AmbientAudioVisualizerOverlay(
                 border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.15f))
             ) {
                 Text(
-                    text = "🎧 স্ক্রিন অফ লিসেনিং অন রয়েছে\nফোনের পাওয়ার বাটন চেপে স্ক্রিন বন্ধ করে হেডফোনে শুনতে পারেন (ব্যাটারি সাশ্রয়ী)।",
+                    text = tr(
+                        "🎧 Screen-Off Listening Active\nYou can lock your screen and listen with headphones to save battery.",
+                        "🎧 স্ক্রিন অফ লিসেনিং অন রয়েছে\nফোনের পাওয়ার বাটন চেপে স্ক্রিন বন্ধ করে হেডফোনে শুনতে পারেন (ব্যাটারি সাশ্রয়ী)।"
+                    ),
                     color = Color(0xFF94A3B8),
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
@@ -195,7 +199,7 @@ fun AmbientAudioVisualizerOverlay(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            contentDescription = "সাউন্ড অফ/অন",
+                            contentDescription = tr("Mute/Unmute", "সাউন্ড অফ/অন"),
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
@@ -215,7 +219,7 @@ fun AmbientAudioVisualizerOverlay(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "পজ" else "প্লে",
+                            contentDescription = if (isPlaying) tr("Pause", "পজ") else tr("Play", "প্লে"),
                             tint = Color(0xFF0F172A),
                             modifier = Modifier.size(34.dp)
                         )
@@ -244,7 +248,7 @@ fun AmbientAudioVisualizerOverlay(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "ভিডিওতে ফিরুন",
+                            text = tr("Back to Video", "ভিডিওতে ফিরুন"),
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold

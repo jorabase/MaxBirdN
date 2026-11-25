@@ -27,18 +27,23 @@ import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
+import com.example.utils.AppLang
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 enum class PlayerClassType(
-    val labelBangla: String,
+    private val labelEn: String,
+    private val labelBn: String,
     val iconEmoji: String,
     val isLive: Boolean
 ) {
-    ANIMATED("অ্যানিমেটেড ক্লাস", "🎬", false),
-    RECORDED_LECTURE("রেকর্ডেড লেকচার", "📖", false),
-    LIVE("লাইভ ক্লাস", "🔴", true);
+    ANIMATED("Animated Class", "অ্যানিমেটেড ক্লাস", "🎬", false),
+    RECORDED_LECTURE("Recorded Lecture", "রেকর্ডেড লেকচার", "📖", false),
+    LIVE("Live Class", "লাইভ ক্লাস", "🔴", true);
+
+    val labelBangla: String
+        get() = AppLang.tr(labelEn, labelBn)
 
     companion object {
         fun resolve(
@@ -460,7 +465,7 @@ object ShikhoPlayerManager {
     /**
      * Formats milliseconds into human-readable MM:SS or HH:MM:SS format with Bengali or English digits.
      */
-    fun formatTime(timeMs: Long, inBengali: Boolean = false): String {
+    fun formatTime(timeMs: Long, inBengali: Boolean = AppLang.isBn()): String {
         if (timeMs <= 0) return if (inBengali) "০০:০০" else "00:00"
         val totalSeconds = (timeMs / 1000).toInt()
         val seconds = totalSeconds % 60
@@ -509,11 +514,11 @@ object ShikhoPlayerManager {
             else -> "Low"
         }
         val qualityDesc = when {
-            cleanHeight >= 1080 -> "সর্বোচ্চ ক্লিয়ারিটি"
-            cleanHeight >= 720 -> "পরিষ্কার এইচডি ভিডিও"
-            cleanHeight >= 480 -> "মাঝারি মান"
-            cleanHeight >= 360 -> "কম ডেটা খরচ"
-            else -> "ডেটা সেভার"
+            cleanHeight >= 1080 -> AppLang.tr("Highest clarity", "সর্বোচ্চ ক্লিয়ারিটি")
+            cleanHeight >= 720 -> AppLang.tr("Crisp HD video", "পরিষ্কার এইচডি ভিডিও")
+            cleanHeight >= 480 -> AppLang.tr("Standard quality", "মাঝারি মান")
+            cleanHeight >= 360 -> AppLang.tr("Low data usage", "কম ডেটা খরচ")
+            else -> AppLang.tr("Data saver", "ডেটা সেভার")
         }
         val bitrateStr = when {
             bitrate >= 1_000_000 -> String.format(Locale.US, "%.1f Mbps", bitrate / 1_000_000.0)
@@ -573,10 +578,10 @@ object ShikhoPlayerManager {
         val result = mutableListOf(
             VideoTrackQuality(
                 id = "auto",
-                label = "অটো (Auto)",
+                label = AppLang.tr("Auto", "অটো (Auto)"),
                 height = 0,
                 bitrate = 0,
-                subtitle = "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন",
+                subtitle = AppLang.tr("Best resolution for your network", "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন"),
                 badgeText = "AUTO"
             )
         )
@@ -674,11 +679,11 @@ object ShikhoPlayerManager {
                                     return@withContext listOf(
                                         VideoTrackQuality(
                                             id = "auto",
-                                            label = "অটো (Auto)",
+                                            label = AppLang.tr("Auto", "অটো (Auto)"),
                                             height = 0,
                                             bitrate = 0,
                                             targetStreamUrl = bestUrl,
-                                            subtitle = "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন",
+                                            subtitle = AppLang.tr("Best resolution for your network", "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন"),
                                             badgeText = "AUTO"
                                         )
                                     ) + sorted
@@ -723,11 +728,11 @@ object ShikhoPlayerManager {
                     return@withContext listOf(
                         VideoTrackQuality(
                             id = "auto",
-                            label = "অটো (Auto)",
+                            label = AppLang.tr("Auto", "অটো (Auto)"),
                             height = 0,
                             bitrate = 0,
                             targetStreamUrl = bestUrl,
-                            subtitle = "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন",
+                            subtitle = AppLang.tr("Best resolution for your network", "ইন্টারনেট স্পিড অনুযায়ী সেরা রেজুলেশন"),
                             badgeText = "AUTO"
                         )
                     ) + sorted

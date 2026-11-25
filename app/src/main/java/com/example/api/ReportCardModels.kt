@@ -1,5 +1,6 @@
 package com.example.api
 
+import com.example.utils.AppLang
 import com.squareup.moshi.JsonClass
 
 // =======================================================
@@ -175,7 +176,7 @@ data class LeaderboardUserItem(
         get() = user?.effectiveName
             ?: name?.takeIf { it.isNotBlank() }
             ?: full_name?.takeIf { it.isNotBlank() }
-            ?: "শিক্ষার্থী"
+            ?: AppLang.tr("Student", "শিক্ষার্থী")
 
     val effectiveAvatar: String?
         get() = user?.effectiveAvatar
@@ -243,7 +244,7 @@ data class LeaderboardUserInfo(
                 val l = last_name?.trim() ?: ""
                 "$f $l".trim()
             }.takeIf { it.isNotBlank() }
-            ?: "শিক্ষার্থী"
+            ?: AppLang.tr("Student", "শিক্ষার্থী")
 
     val effectiveAvatar: String?
         get() = avatar?.takeIf { it.isNotBlank() }

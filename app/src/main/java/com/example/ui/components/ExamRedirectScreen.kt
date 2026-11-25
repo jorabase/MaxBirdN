@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.utils.tr
 
 @Composable
 fun ExamRedirectScreen(
@@ -41,13 +42,13 @@ fun ExamRedirectScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = tr("Back", "পেছনে"),
                             tint = Color(0xFF1E293B)
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "পরীক্ষা (Exam)",
+                        text = tr("Exam", "পরীক্ষা"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         color = Color(0xFF1E293B)
@@ -82,7 +83,7 @@ fun ExamRedirectScreen(
                 color = Color(0xFFFFEDD5)
             ) {
                 Text(
-                    text = "লাইভ পরীক্ষা / এক্সাম",
+                    text = tr("Live Exam", "লাইভ পরীক্ষা"),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFEA580C),
@@ -103,7 +104,7 @@ fun ExamRedirectScreen(
             if (subjectName.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "বিষয়: $subjectName",
+                    text = tr("Subject: $subjectName", "বিষয়: $subjectName"),
                     fontSize = 14.sp,
                     color = Color(0xFF64748B),
                     textAlign = TextAlign.Center
@@ -113,7 +114,10 @@ fun ExamRedirectScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "এটি একটি লাইভ পরীক্ষা (Exam), কোনো রেকর্ডেড ক্লাস বা ভিডিও লেকচার নয়। সরাসরি পরীক্ষায় অংশ নিতে নিচের বাটনে চাপ দিন।",
+                text = tr(
+                    "This is a live exam, not a recorded video lecture. Tap the button below to start the exam.",
+                    "এটি একটি লাইভ পরীক্ষা, কোনো রেকর্ডেড ভিডিও লেকচার নয়। পরীক্ষায় অংশ নিতে নিচের বাটনে চাপ দিন।"
+                ),
                 fontSize = 14.sp,
                 color = Color(0xFF475569),
                 textAlign = TextAlign.Center,
@@ -130,7 +134,7 @@ fun ExamRedirectScreen(
                     .fillMaxWidth()
                     .height(52.dp)
             ) {
-                Text("✍️ পরীক্ষায় অংশ নিন", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text(tr("Start Exam", "পরীক্ষায় অংশ নিন"), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
     }

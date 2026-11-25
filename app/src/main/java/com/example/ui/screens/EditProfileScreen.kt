@@ -41,7 +41,9 @@ import coil.request.ImageRequest
 import com.example.api.AddressItem
 import com.example.api.SchoolItem
 import com.example.profile.EditProfileViewModel
+import com.example.utils.AppLang
 import com.example.utils.AvatarUtils
+import com.example.utils.tr
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,7 +107,7 @@ fun EditProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("প্রোফাইল এডিট", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                title = { Text(tr("Edit Profile", "প্রোফাইল এডিট"), fontSize = 18.sp, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = handleBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -143,12 +145,12 @@ fun EditProfileScreen(
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(Modifier.width(10.dp))
-                            Text("সংরক্ষণ হচ্ছে...", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("Saving...", "সংরক্ষণ হচ্ছে..."), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         } else {
                             Icon(Icons.Default.Save, null, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = if (uiState.hasUnsavedChanges) "পরিবর্তন সংরক্ষণ করো" else "সংরক্ষণ করো",
+                                text = if (uiState.hasUnsavedChanges) tr("Save Changes", "পরিবর্তন সংরক্ষণ করো") else tr("Save", "সংরক্ষণ করো"),
                                 fontSize = 16.sp, fontWeight = FontWeight.Bold
                             )
                         }
@@ -210,7 +212,7 @@ fun EditProfileScreen(
                             )
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "নাম পরিবর্তন হয়নি",
+                                    tr("Name not changed", "নাম পরিবর্তন হয়নি"),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
                                     color = Color(0xFF92400E)
@@ -325,7 +327,7 @@ fun EditProfileScreen(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                "প্রোফাইল ছবি পরিবর্তন করো",
+                                tr("Change Photo", "প্রোফাইল ছবি পরিবর্তন করো"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -334,17 +336,17 @@ fun EditProfileScreen(
                     }
                 }
 
-                // ===== 1. ব্যক্তিগত তথ্য =====
+                // ===== 1. Personal Info =====
                 FormSectionCard(
-                    title = "ব্যক্তিগত তথ্য",
+                    title = tr("Personal Info", "ব্যক্তিগত তথ্য"),
                     icon = Icons.Default.Person,
                     iconTint = MaterialTheme.colorScheme.primary
                 ) {
                     OutlinedTextField(
                         value = uiState.firstName,
                         onValueChange = { viewModel.onFirstNameChange(it) },
-                        label = { Text("পূর্ণ নাম") },
-                        placeholder = { Text("তোমার নাম লিখো") },
+                        label = { Text(tr("Full Name", "পূর্ণ নাম")) },
+                        placeholder = { Text(tr("Enter your name", "তোমার নাম লিখো")) },
                         leadingIcon = { Icon(Icons.Default.Badge, null) },
                         isError = uiState.fieldErrors.containsKey("firstName"),
                         supportingText = uiState.fieldErrors["firstName"]?.let {
@@ -366,7 +368,7 @@ fun EditProfileScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                "নাম পরিবর্তন ৬০ দিনে একবার করা যায়",
+                                tr("Name can be changed once every 60 days", "নাম পরিবর্তন ৬০ দিনে একবার করা যায়"),
                                 fontSize = 11.sp,
                                 color = Color(0xFFD97706)
                             )
@@ -379,7 +381,7 @@ fun EditProfileScreen(
                         value = uiState.phone,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("ফোন নম্বর (অ্যাকাউন্ট)") },
+                        label = { Text(tr("Phone Number", "ফোন নম্বর (অ্যাকাউন্ট)")) },
                         leadingIcon = { Icon(Icons.Default.Phone, null) },
                         trailingIcon = {
                             Icon(
@@ -393,13 +395,13 @@ fun EditProfileScreen(
                     )
 
                     Spacer(Modifier.height(14.dp))
-                    FieldLabel("লিঙ্গ")
+                    FieldLabel(tr("Gender", "লিঙ্গ"))
                     Spacer(Modifier.height(6.dp))
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        listOf("Male" to "পুরুষ", "Female" to "মহিলা").forEach { (k, l) ->
+                        listOf("Male" to tr("Male", "পুরুষ"), "Female" to tr("Female", "মহিলা")).forEach { (k, l) ->
                             ChoiceChipButton(
                                 text = l,
                                 isSelected = uiState.gender.equals(k, true),
@@ -410,7 +412,7 @@ fun EditProfileScreen(
                     }
 
                     Spacer(Modifier.height(14.dp))
-                    FieldLabel("জন্মতারিখ")
+                    FieldLabel(tr("Date of Birth", "জন্মতারিখ"))
                     Spacer(Modifier.height(6.dp))
                     Surface(
                         modifier = Modifier.fillMaxWidth()
@@ -435,7 +437,7 @@ fun EditProfileScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Text(
-                                    text = uiState.dobDisplay.ifBlank { "জন্মতারিখ নির্বাচন করো" },
+                                    text = uiState.dobDisplay.ifBlank { tr("Select Date of Birth", "জন্মতারিখ নির্বাচন করো") },
                                     fontSize = 14.sp,
                                     color = if (uiState.dobDisplay.isNotBlank())
                                         MaterialTheme.colorScheme.onSurface
@@ -451,17 +453,17 @@ fun EditProfileScreen(
                     }
                 }
 
-                // ===== 2. অভিভাবকের তথ্য =====
+                // ===== 2. Guardian Info =====
                 FormSectionCard(
-                    title = "অভিভাবকের তথ্য",
+                    title = tr("Guardian Info", "অভিভাবকের তথ্য"),
                     icon = Icons.Default.FamilyRestroom,
                     iconTint = Color(0xFF0284C7)
                 ) {
                     OutlinedTextField(
                         value = uiState.guardianName,
                         onValueChange = { viewModel.onGuardianNameChange(it) },
-                        label = { Text("অভিভাবকের নাম") },
-                        placeholder = { Text("মাতা / পিতার নাম") },
+                        label = { Text(tr("Guardian Name", "অভিভাবকের নাম")) },
+                        placeholder = { Text(tr("Father's / Mother's name", "মাতা / পিতার নাম")) },
                         leadingIcon = { Icon(Icons.Default.PersonOutline, null) },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
@@ -471,7 +473,7 @@ fun EditProfileScreen(
                     OutlinedTextField(
                         value = uiState.guardianMobile,
                         onValueChange = { viewModel.onGuardianMobileChange(it.filter { c -> c.isDigit() }.take(11)) },
-                        label = { Text("অভিভাবকের মোবাইল নম্বর") },
+                        label = { Text(tr("Guardian Mobile", "অভিভাবকের মোবাইল নম্বর")) },
                         placeholder = { Text("01XXXXXXXXX") },
                         leadingIcon = { Icon(Icons.Default.PhoneAndroid, null) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -485,9 +487,9 @@ fun EditProfileScreen(
                     )
                 }
 
-                // ===== 3. শিক্ষাপ্রতিষ্ঠান =====
+                // ===== 3. Institution =====
                 FormSectionCard(
-                    title = "শিক্ষাপ্রতিষ্ঠান",
+                    title = tr("Institution", "শিক্ষাপ্রতিষ্ঠান"),
                     icon = Icons.Default.School,
                     iconTint = Color(0xFF059669)
                 ) {
@@ -508,11 +510,10 @@ fun EditProfileScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "শ্রেণি: ${
-                                    uiState.userClassDisplay.ifBlank { uiState.userClassCode }
-                                }  |  বিভাগ: ${
-                                    bengaliGroupName(uiState.userGroup)
-                                }",
+                                text = tr(
+                                    "Class: ${uiState.userClassDisplay.ifBlank { uiState.userClassCode }}  |  Group: ${localizedGroupName(uiState.userGroup)}",
+                                    "শ্রেণি: ${uiState.userClassDisplay.ifBlank { uiState.userClassCode }}  |  বিভাগ: ${localizedGroupName(uiState.userGroup)}"
+                                ),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -521,22 +522,25 @@ fun EditProfileScreen(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "শ্রেণি/বিভাগ পরিবর্তন করতে 'সিলেবাস পরিবর্তন' অপশন ব্যবহার করো।",
+                        tr(
+                            "Use 'Syllabus' in Settings to change class or group.",
+                            "শ্রেণি/বিভাগ পরিবর্তন করতে 'সিলেবাস' অপশন ব্যবহার করো।"
+                        ),
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
                     Spacer(Modifier.height(14.dp))
-                    FieldLabel("শিফট")
+                    FieldLabel(tr("Shift", "শিফট"))
                     Spacer(Modifier.height(6.dp))
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         listOf(
-                            "Morning" to "মর্নিং",
-                            "Day" to "ডে",
-                            "NA" to "প্রযোজ্য নয়"
+                            "Morning" to tr("Morning", "মর্নিং"),
+                            "Day" to tr("Day", "ডে"),
+                            "NA" to tr("N/A", "প্রযোজ্য নয়")
                         ).forEach { (k, l) ->
                             ChoiceChipButton(
                                 text = l,
@@ -549,8 +553,8 @@ fun EditProfileScreen(
 
                     Spacer(Modifier.height(14.dp))
                     DropdownSelectorField(
-                        label = "বিভাগ (Division)",
-                        selectedValue = uiState.selectedDivisionName.ifBlank { "বিভাগ নির্বাচন করো" },
+                        label = tr("Division", "বিভাগ (Division)"),
+                        selectedValue = uiState.selectedDivisionName.ifBlank { tr("Select Division", "বিভাগ নির্বাচন করো") },
                         items = uiState.divisions.map { it.display ?: "" },
                         onItemSelected = { name ->
                             uiState.divisions.find { it.display == name }
@@ -560,11 +564,11 @@ fun EditProfileScreen(
 
                     Spacer(Modifier.height(12.dp))
                     DropdownSelectorField(
-                        label = "জেলা (District)",
+                        label = tr("District", "জেলা (District)"),
                         selectedValue = when {
-                            uiState.isDistrictsLoading -> "লোড হচ্ছে..."
+                            uiState.isDistrictsLoading -> tr("Loading...", "লোড হচ্ছে...")
                             uiState.selectedDistrictName.isNotBlank() -> uiState.selectedDistrictName
-                            else -> "জেলা নির্বাচন করো"
+                            else -> tr("Select District", "জেলা নির্বাচন করো")
                         },
                         items = uiState.districts.map { it.display ?: "" },
                         enabled = uiState.districts.isNotEmpty() && !uiState.isDistrictsLoading,
@@ -575,7 +579,7 @@ fun EditProfileScreen(
                     )
 
                     Spacer(Modifier.height(12.dp))
-                    FieldLabel("স্কুল / কলেজ")
+                    FieldLabel(tr("School / College", "স্কুল / কলেজ"))
                     Spacer(Modifier.height(6.dp))
                     Surface(
                         modifier = Modifier.fillMaxWidth()
@@ -592,7 +596,7 @@ fun EditProfileScreen(
                         ) {
                             Text(
                                 text = uiState.selectedSchoolName.ifBlank {
-                                    "স্কুল / কলেজ খুঁজে বেছে নাও"
+                                    tr("Search & select institution", "স্কুল / কলেজ খুঁজে বেছে নাও")
                                 },
                                 fontSize = 14.sp,
                                 fontWeight = if (uiState.selectedSchoolName.isNotBlank())
@@ -613,15 +617,15 @@ fun EditProfileScreen(
                     }
                 }
 
-                // ===== 4. বোর্ড পরীক্ষার তথ্য =====
+                // ===== 4. Board Exam Info =====
                 FormSectionCard(
-                    title = "বোর্ড পরীক্ষার তথ্য",
+                    title = tr("Board Exam Info", "বোর্ড পরীক্ষার তথ্য"),
                     icon = Icons.Default.Assignment,
                     iconTint = Color(0xFFD97706)
                 ) {
                     DropdownSelectorField(
-                        label = "এসএসসি বোর্ড (SSC Board)",
-                        selectedValue = uiState.sscBoardName.ifBlank { "নির্বাচন করো" },
+                        label = tr("SSC Board", "এসএসসি বোর্ড (SSC Board)"),
+                        selectedValue = uiState.sscBoardName.ifBlank { tr("Select", "নির্বাচন করো") },
                         items = viewModel.educationBoards,
                         onItemSelected = { viewModel.onSscBoardChange(it) }
                     )
@@ -629,8 +633,8 @@ fun EditProfileScreen(
                     OutlinedTextField(
                         value = uiState.sscRollNumber,
                         onValueChange = { viewModel.onSscRollChange(it.filter { c -> c.isDigit() }.take(10)) },
-                        label = { Text("এসএসসি রোল নম্বর") },
-                        placeholder = { Text("যেমন: 762180") },
+                        label = { Text(tr("SSC Roll Number", "এসএসসি রোল নম্বর")) },
+                        placeholder = { Text(tr("e.g. 762180", "যেমন: 762180")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = uiState.fieldErrors.containsKey("sscRoll"),
                         supportingText = uiState.fieldErrors["sscRoll"]?.let {
@@ -644,8 +648,8 @@ fun EditProfileScreen(
                     OutlinedTextField(
                         value = uiState.boardRegNumber,
                         onValueChange = { viewModel.onBoardRegChange(it.filter { c -> c.isDigit() }.take(12)) },
-                        label = { Text("বোর্ড রেজিস্ট্রেশন নম্বর") },
-                        placeholder = { Text("যেমন: 2213531789") },
+                        label = { Text(tr("Board Registration No.", "বোর্ড রেজিস্ট্রেশন নম্বর")) },
+                        placeholder = { Text(tr("e.g. 2213531789", "যেমন: 2213531789")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = uiState.fieldErrors.containsKey("regNo"),
                         supportingText = uiState.fieldErrors["regNo"]?.let {
@@ -664,8 +668,8 @@ fun EditProfileScreen(
                         Spacer(Modifier.height(14.dp))
 
                         DropdownSelectorField(
-                            label = "এইচএসসি বোর্ড",
-                            selectedValue = uiState.hscBoardName.ifBlank { "নির্বাচন করো" },
+                            label = tr("HSC Board", "এইচএসসি বোর্ড"),
+                            selectedValue = uiState.hscBoardName.ifBlank { tr("Select", "নির্বাচন করো") },
                             items = viewModel.educationBoards,
                             onItemSelected = { viewModel.onHscBoardChange(it) }
                         )
@@ -673,8 +677,8 @@ fun EditProfileScreen(
                         OutlinedTextField(
                             value = uiState.hscRollNumber,
                             onValueChange = { viewModel.onHscRollChange(it.filter { c -> c.isDigit() }.take(10)) },
-                            label = { Text("এইচএসসি রোল নম্বর (যদি থাকে)") },
-                            placeholder = { Text("যেমন: 880000") },
+                            label = { Text(tr("HSC Roll Number (Optional)", "এইচএসসি রোল নম্বর (যদি থাকে)")) },
+                            placeholder = { Text(tr("e.g. 880000", "যেমন: 880000")) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             isError = uiState.fieldErrors.containsKey("hscRoll"),
                             supportingText = uiState.fieldErrors["hscRoll"]?.let {
@@ -718,7 +722,7 @@ fun EditProfileScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    "প্রোফাইল ছবি পরিবর্তন",
+                    tr("Change Photo", "প্রোফাইল ছবি পরিবর্তন"),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -753,12 +757,12 @@ fun EditProfileScreen(
                         }
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "গ্যালারি থেকে ছবি বেছে নাও",
+                                tr("Choose from Gallery", "গ্যালারি থেকে ছবি বেছে নাও"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "তোমার ডিভাইস থেকে নতুন ছবি",
+                                tr("Pick a photo from your device", "তোমার ডিভাইস থেকে নতুন ছবি"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -768,19 +772,19 @@ fun EditProfileScreen(
                 }
 
                 Text(
-                    "অথবা একটি অবতার বেছে নাও",
+                    tr("Or choose an avatar", "অথবা একটি অবতার বেছে নাও"),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 val presetAvatars = listOf(
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Felix" to "এডভেঞ্চারার ১",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Aneka" to "এডভেঞ্চারার ২",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Sam" to "এডভেঞ্চারার ৩",
-                    "https://api.dicebear.com/7.x/adventurer/png?seed=Milo" to "এডভেঞ্চারার ৪",
-                    "https://api.dicebear.com/7.x/bottts/png?seed=Robot1" to "রোবট ১",
-                    "https://api.dicebear.com/7.x/bottts/png?seed=Robot2" to "রোবট ২"
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Felix" to "Avatar 1",
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Aneka" to "Avatar 2",
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Sam" to "Avatar 3",
+                    "https://api.dicebear.com/7.x/adventurer/png?seed=Milo" to "Avatar 4",
+                    "https://api.dicebear.com/7.x/bottts/png?seed=Robot1" to "Robot 1",
+                    "https://api.dicebear.com/7.x/bottts/png?seed=Robot2" to "Robot 2"
                 )
 
                 // 3-column grid, 2 rows
@@ -834,7 +838,7 @@ fun EditProfileScreen(
                     ) {
                         Icon(Icons.Default.DeleteOutline, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("বর্তমান ছবি মুছে ফেলো", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text(tr("Remove Current Photo", "বর্তমান ছবি মুছে ফেলো"), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
                 }
 
@@ -848,19 +852,19 @@ fun EditProfileScreen(
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
             icon = { Icon(Icons.Default.WarningAmber, null, tint = Color(0xFFD97706)) },
-            title = { Text("পরিবর্তন বাতিল করবে?", fontWeight = FontWeight.Bold) },
-            text = { Text("তুমি কিছু তথ্য পরিবর্তন করেছ কিন্তু সংরক্ষণ করনি। বের হলে পরিবর্তন হারিয়ে যাবে।") },
+            title = { Text(tr("Discard Changes?", "পরিবর্তন বাতিল করবে?"), fontWeight = FontWeight.Bold) },
+            text = { Text(tr("You have unsaved changes. Leaving now will discard them.", "তুমি কিছু তথ্য পরিবর্তন করেছ কিন্তু সংরক্ষণ করনি। বের হলে পরিবর্তন হারিয়ে যাবে।")) },
             confirmButton = {
                 TextButton(onClick = {
                     showDiscardDialog = false
                     onBack()
                 }) {
-                    Text("হ্যাঁ, বাতিল করো", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    Text(tr("Discard", "হ্যাঁ, বাতিল করো"), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
-                    Text("না, থাক")
+                    Text(tr("Stay", "না, থাক"))
                 }
             }
         )
@@ -871,12 +875,12 @@ fun EditProfileScreen(
 //  Small helper composables
 // ============================================================
 
-private fun bengaliGroupName(raw: String?): String {
+private fun localizedGroupName(raw: String?): String {
     return when (raw?.trim()?.lowercase()) {
-        "hum", "humanities", "humanities_group" -> "মানবিক"
-        "sci", "science", "science_group" -> "বিজ্ঞান"
-        "bs", "bsc", "business", "business_studies", "commerce" -> "ব্যবসায় শিক্ষা"
-        else -> raw?.ifBlank { "সাধারণ" } ?: "সাধারণ"
+        "hum", "humanities", "humanities_group" -> AppLang.tr("Humanities", "মানবিক")
+        "sci", "science", "science_group" -> AppLang.tr("Science", "বিজ্ঞান")
+        "bs", "bsc", "business", "business_studies", "commerce" -> AppLang.tr("Business Studies", "ব্যবসায় শিক্ষা")
+        else -> raw?.ifBlank { AppLang.tr("General", "সাধারণ") } ?: AppLang.tr("General", "সাধারণ")
     }
 }
 
@@ -1064,7 +1068,7 @@ private fun SchoolSearchDialog(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "স্কুল / কলেজ খুঁজুন",
+                            tr("Search Institution", "স্কুল / কলেজ খুঁজুন"),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1089,7 +1093,7 @@ private fun SchoolSearchDialog(
                         query = it
                         onSearchQuery(it)
                     },
-                    placeholder = { Text("প্রতিষ্ঠানের নাম লিখো...") },
+                    placeholder = { Text(tr("Type institution name...", "প্রতিষ্ঠানের নাম লিখো...")) },
                     leadingIcon = { Icon(Icons.Default.Search, null) },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
@@ -1110,8 +1114,8 @@ private fun SchoolSearchDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            if (query.isBlank()) "স্কুল খুঁজতে নাম লিখো"
-                            else "কোনো প্রতিষ্ঠান পাওয়া যায়নি",
+                            if (query.isBlank()) tr("Type a name to search", "স্কুল খুঁজতে নাম লিখো")
+                            else tr("No institutions found", "কোনো প্রতিষ্ঠান পাওয়া যায়নি"),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp
                         )

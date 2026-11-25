@@ -41,6 +41,7 @@ import com.example.quiz.PracticeQuizViewModel
 import com.example.ui.components.QuizImageCard
 import com.example.ui.components.QuizRichContent
 import com.example.utils.McqAnswerUtils
+import com.example.utils.tr
 import kotlinx.coroutines.launch
 
 private fun toBengaliDigits(number: Any): String = com.example.utils.toBengaliDigits(number)
@@ -233,7 +234,7 @@ fun PracticeQuizFeedbackScreen(
                     Spacer(modifier = Modifier.width(4.dp))
 
                     Text(
-                        text = "কুইজের ফিডব্যাক ও সলিউশন",
+                        text = tr("Solutions", "সলিউশন"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -248,7 +249,7 @@ fun PracticeQuizFeedbackScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh",
+                            contentDescription = tr("Refresh", "রিফ্রেশ"),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -276,7 +277,7 @@ fun PracticeQuizFeedbackScreen(
                             .testTag("feedback_done_button")
                     ) {
                         Text(
-                            text = "হোমে ফিরে যান",
+                            text = tr("Back to Home", "হোমে ফিরে যান"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -309,7 +310,7 @@ fun PracticeQuizFeedbackScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "ফিডব্যাক ও সমাধান লোড হচ্ছে...",
+                            text = tr("Loading solutions...", "সমাধান লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -326,13 +327,13 @@ fun PracticeQuizFeedbackScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = uiState.feedbackError ?: "লোড করা যায়নি",
+                            text = uiState.feedbackError ?: tr("Failed to load", "লোড করা যায়নি"),
                             fontSize = 15.sp,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Button(onClick = { viewModel.loadQuizFeedback(sessionId) }) {
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Try Again", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -360,7 +361,7 @@ fun PracticeQuizFeedbackScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "সারসংক্ষেপ (${toBengaliDigits(totalCount)}টি প্রশ্ন)",
+                                            text = tr("Summary (${toBengaliDigits(totalCount)})", "সারসংক্ষেপ (${toBengaliDigits(totalCount)}টি)"),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -373,7 +374,7 @@ fun PracticeQuizFeedbackScreen(
                                                 color = Color(0xFF0072EC).copy(alpha = 0.1f)
                                             ) {
                                                 Text(
-                                                    text = "সঠিকতা: ${toBengaliDigits(accuracyPct)}%",
+                                                    text = tr("Accuracy: ${toBengaliDigits(accuracyPct)}%", "সঠিকতা: ${toBengaliDigits(accuracyPct)}%"),
                                                     fontSize = 11.5.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color(0xFF0072EC),
@@ -392,21 +393,21 @@ fun PracticeQuizFeedbackScreen(
                                     ) {
                                         StatusCounterPill(
                                             icon = Icons.Default.CheckCircle,
-                                            label = "${toBengaliDigits(correctCount)}টি সঠিক",
+                                            label = tr("${toBengaliDigits(correctCount)} Right", "${toBengaliDigits(correctCount)}টি সঠিক"),
                                             bgColor = Color(0xFF10B981).copy(alpha = 0.12f),
                                             contentColor = Color(0xFF059669),
                                             modifier = Modifier.weight(1f)
                                         )
                                         StatusCounterPill(
                                             icon = Icons.Default.Cancel,
-                                            label = "${toBengaliDigits(incorrectCount)}টি ভুল",
+                                            label = tr("${toBengaliDigits(incorrectCount)} Wrong", "${toBengaliDigits(incorrectCount)}টি ভুল"),
                                             bgColor = Color(0xFFEF4444).copy(alpha = 0.12f),
                                             contentColor = Color(0xFFDC2626),
                                             modifier = Modifier.weight(1f)
                                         )
                                         StatusCounterPill(
                                             icon = Icons.Default.HelpOutline,
-                                            label = "${toBengaliDigits(unansweredCount)}টি উত্তরহীন",
+                                            label = tr("${toBengaliDigits(unansweredCount)} Skipped", "${toBengaliDigits(unansweredCount)}টি বাকি"),
                                             bgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.weight(1f)
@@ -423,22 +424,22 @@ fun PracticeQuizFeedbackScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         FeedbackFilterChip(
-                                            title = "সব উত্তর (${toBengaliDigits(totalCount)})",
+                                            title = tr("All (${toBengaliDigits(totalCount)})", "সব (${toBengaliDigits(totalCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.ALL,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.ALL) }
                                         )
                                         FeedbackFilterChip(
-                                            title = "সঠিক (${toBengaliDigits(correctCount)})",
+                                            title = tr("Correct (${toBengaliDigits(correctCount)})", "সঠিক (${toBengaliDigits(correctCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.CORRECT,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.CORRECT) }
                                         )
                                         FeedbackFilterChip(
-                                            title = "ভুল (${toBengaliDigits(incorrectCount)})",
+                                            title = tr("Wrong (${toBengaliDigits(incorrectCount)})", "ভুল (${toBengaliDigits(incorrectCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.INCORRECT,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.INCORRECT) }
                                         )
                                         FeedbackFilterChip(
-                                            title = "উত্তরহীন (${toBengaliDigits(unansweredCount)})",
+                                            title = tr("Skipped (${toBengaliDigits(unansweredCount)})", "উত্তরহীন (${toBengaliDigits(unansweredCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.UNANSWERED,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.UNANSWERED) }
                                         )
@@ -523,7 +524,7 @@ fun PracticeQuizFeedbackScreen(
                                         )
                                         Spacer(modifier = Modifier.height(10.dp))
                                         Text(
-                                            text = "এই ক্যাটাগরিতে কোনো প্রশ্ন নেই",
+                                            text = tr("No questions in this category", "এই ক্যাটাগরিতে কোনো প্রশ্ন নেই"),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -629,9 +630,9 @@ private fun QuestionFeedbackCard(
         else -> Color(0xFFFEE2E2)
     }
     val statusLabel = when {
-        !evaluated.isAnswered -> "উত্তরহীন"
-        evaluated.isCorrect -> "সঠিক উত্তর"
-        else -> "ভুল উত্তর"
+        !evaluated.isAnswered -> tr("Skipped", "উত্তরহীন")
+        evaluated.isCorrect -> tr("Correct", "সঠিক উত্তর")
+        else -> tr("Wrong", "ভুল উত্তর")
     }
 
     Surface(
@@ -665,7 +666,7 @@ private fun QuestionFeedbackCard(
                         color = Color(0xFF0072EC).copy(alpha = 0.12f)
                     ) {
                         Text(
-                            text = "প্রশ্ন ${toBengaliDigits(evaluated.originalNumber)}",
+                            text = tr("Q${toBengaliDigits(evaluated.originalNumber)}", "প্রশ্ন ${toBengaliDigits(evaluated.originalNumber)}"),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0072EC),
@@ -783,7 +784,7 @@ private fun QuestionFeedbackCard(
                             }
                         }
                         Text(
-                            text = "প্রশ্ন:",
+                            text = tr("Question:", "প্রশ্ন:"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0072EC)
@@ -805,7 +806,10 @@ private fun QuestionFeedbackCard(
                         )
                     } else {
                         Text(
-                            text = "প্রশ্ন নং ${toBengaliDigits(evaluated.originalNumber)} (নিচের অপশন ও সমাধান দেখুন)",
+                            text = tr(
+                                "Question #${toBengaliDigits(evaluated.originalNumber)} (See options & solution below)",
+                                "প্রশ্ন নং ${toBengaliDigits(evaluated.originalNumber)} (নিচের অপশন ও সমাধান দেখুন)"
+                            ),
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -816,7 +820,7 @@ private fun QuestionFeedbackCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. Answer Status Summary Banner (তোমার উত্তর বনাম সঠিক উত্তর)
+            // 3. Answer Status Summary Banner
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = statusBgColor,
@@ -837,9 +841,18 @@ private fun QuestionFeedbackCard(
                 ) {
                     Text(
                         text = when {
-                            !evaluated.isAnswered -> "তুমি কোনো উত্তর দেওনি • সঠিক উত্তর: (${evaluated.correctBengaliLetter})"
-                            evaluated.isCorrect -> "তোমার উত্তর সঠিক: (${evaluated.userBengaliLetter})"
-                            else -> "তোমার উত্তর: (${evaluated.userBengaliLetter}) • সঠিক উত্তর: (${evaluated.correctBengaliLetter})"
+                            !evaluated.isAnswered -> tr(
+                                "Skipped • Correct Answer: (${evaluated.correctBengaliLetter})",
+                                "উত্তর দেওয়া হয়নি • সঠিক উত্তর: (${evaluated.correctBengaliLetter})"
+                            )
+                            evaluated.isCorrect -> tr(
+                                "Your answer is correct: (${evaluated.userBengaliLetter})",
+                                "তোমার উত্তর সঠিক: (${evaluated.userBengaliLetter})"
+                            )
+                            else -> tr(
+                                "Your Answer: (${evaluated.userBengaliLetter}) • Correct: (${evaluated.correctBengaliLetter})",
+                                "তোমার উত্তর: (${evaluated.userBengaliLetter}) • সঠিক উত্তর: (${evaluated.correctBengaliLetter})"
+                            )
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -892,7 +905,7 @@ private fun QuestionFeedbackCard(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "ব্যাখ্যা ও সমাধান",
+                            text = tr("Explanation", "ব্যাখ্যা ও সমাধান"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFD97706)
@@ -901,8 +914,9 @@ private fun QuestionFeedbackCard(
 
                     Spacer(modifier = Modifier.height(6.dp))
 
+                    val correctPrefix = tr("Correct Answer", "সঠিক উত্তর")
                     val fallbackExplanation = buildString {
-                        append("সঠিক উত্তর: (${evaluated.correctBengaliLetter})")
+                        append("$correctPrefix: (${evaluated.correctBengaliLetter})")
                         if (!evaluated.correctOptionText.isNullOrBlank()) {
                             append(" — ")
                             append(evaluated.correctOptionText)
@@ -923,7 +937,7 @@ private fun QuestionFeedbackCard(
                         Spacer(modifier = Modifier.height(8.dp))
                         QuizImageCard(
                             imageUrl = evaluated.solutionImageUrl,
-                            altText = "সমাধান চিত্র",
+                            altText = tr("Solution Image", "সমাধান চিত্র"),
                             maxHeight = 220.dp
                         )
                     }
@@ -1011,7 +1025,7 @@ private fun FeedbackOptionRow(
                         color = Color(0xFF10B981)
                     ) {
                         Text(
-                            text = "তোমার সঠিক উত্তর",
+                            text = tr("Your Correct", "তোমার সঠিক"),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -1025,7 +1039,7 @@ private fun FeedbackOptionRow(
                         color = Color(0xFF10B981)
                     ) {
                         Text(
-                            text = "সঠিক উত্তর",
+                            text = tr("Correct", "সঠিক উত্তর"),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -1039,7 +1053,7 @@ private fun FeedbackOptionRow(
                         color = Color(0xFFEF4444)
                     ) {
                         Text(
-                            text = "তোমার ভুল উত্তর",
+                            text = tr("Your Wrong", "তোমার ভুল"),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,

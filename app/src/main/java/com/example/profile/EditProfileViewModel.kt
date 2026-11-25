@@ -254,7 +254,10 @@ class EditProfileViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = "প্রোফাইল তথ্য লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        errorMessage = com.example.utils.AppLang.tr(
+                        "Could not load profile info: ${e.localizedMessage ?: "Network error"}",
+                        "প্রোফাইল তথ্য লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                    )
                     )
                 }
             }
@@ -397,7 +400,7 @@ class EditProfileViewModel(
         val validationErrors = validate(state)
         if (validationErrors.isNotEmpty()) {
             _uiState.update {
-                it.copy(fieldErrors = validationErrors, errorMessage = "কিছু তথ্য সঠিক নয়, চেক করুন")
+                it.copy(fieldErrors = validationErrors, errorMessage = com.example.utils.AppLang.tr("Some fields are invalid, please check", "কিছু তথ্য সঠিক নয়, চেক করুন"))
             }
             return
         }
@@ -508,7 +511,7 @@ class EditProfileViewModel(
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            errorMessage = otherRes.errors.first().message ?: "প্রোফাইল আপডেট করা যায়নি"
+                            errorMessage = otherRes.errors.first().message ?: com.example.utils.AppLang.tr("Could not update profile", "প্রোফাইল আপডেট করা যায়নি")
                         )
                     }
                     return@launch
@@ -551,9 +554,9 @@ class EditProfileViewModel(
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            successMessage = "অন্যান্য তথ্য সফলভাবে সংরক্ষিত হয়েছে",
+                            successMessage = com.example.utils.AppLang.tr("Other details saved successfully", "অন্যান্য তথ্য সফলভাবে সংরক্ষিত হয়েছে"),
                             nameChangeWarning = nameErrorMsg
-                                ?: "নাম পরিবর্তন করা যায়নি — অনুগ্রহ করে পরে চেষ্টা করুন"
+                                ?: com.example.utils.AppLang.tr("Could not change name — please try again later", "নাম পরিবর্তন করা যায়নি — অনুগ্রহ করে পরে চেষ্টা করুন")
                         )
                     }
                     delay(1800)
@@ -561,7 +564,7 @@ class EditProfileViewModel(
                     _uiState.update {
                         it.copy(
                             isSaving = false,
-                            successMessage = "প্রোফাইল সফলভাবে আপডেট হয়েছে"
+                            successMessage = com.example.utils.AppLang.tr("Profile updated successfully", "প্রোফাইল সফলভাবে আপডেট হয়েছে")
                         )
                     }
                     delay(600)
@@ -572,9 +575,10 @@ class EditProfileViewModel(
                 _uiState.update {
                     it.copy(
                         isSaving = false,
-                        errorMessage = "সংরক্ষণ ব্যর্থ: ${
-                            extractServerMessage(e) ?: e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"
-                        }"
+                        errorMessage = com.example.utils.AppLang.tr(
+                            "Save failed: ${extractServerMessage(e) ?: e.localizedMessage ?: "Network error"}",
+                            "সংরক্ষণ ব্যর্থ: ${extractServerMessage(e) ?: e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        )
                     )
                 }
             }
@@ -585,25 +589,25 @@ class EditProfileViewModel(
         val errors = mutableMapOf<String, String>()
         val name = state.firstName.trim()
         when {
-            name.isBlank() -> errors["firstName"] = "নাম খালি রাখা যাবে না"
-            name.length < 2 -> errors["firstName"] = "নাম অন্তত ২ অক্ষরের হতে হবে"
-            name.length > 50 -> errors["firstName"] = "নাম অনেক বড় (সর্বোচ্চ ৫০ অক্ষর)"
+            name.isBlank() -> errors["firstName"] = com.example.utils.AppLang.tr("Name cannot be empty", "নাম খালি রাখা যাবে না")
+            name.length < 2 -> errors["firstName"] = com.example.utils.AppLang.tr("Name must be at least 2 characters", "নাম অন্তত ২ অক্ষরের হতে হবে")
+            name.length > 50 -> errors["firstName"] = com.example.utils.AppLang.tr("Name is too long (max 50 characters)", "নাম অনেক বড় (সর্বোচ্চ ৫০ অক্ষর)")
         }
         val gMobile = state.guardianMobile.trim()
         if (gMobile.isNotBlank() && !gMobile.matches(Regex("^01\\d{9}$"))) {
-            errors["guardianMobile"] = "সঠিক বাংলাদেশি নম্বর দিন (01XXXXXXXXX)"
+            errors["guardianMobile"] = com.example.utils.AppLang.tr("Enter a valid Bangladeshi number (01XXXXXXXXX)", "সঠিক বাংলাদেশি নম্বর দিন (01XXXXXXXXX)")
         }
         val roll = state.sscRollNumber.trim()
         if (roll.isNotBlank() && !roll.matches(Regex("^\\d{1,10}$"))) {
-            errors["sscRoll"] = "রোল শুধু সংখ্যা, সর্বোচ্চ ১০ ডিজিট"
+            errors["sscRoll"] = com.example.utils.AppLang.tr("Roll must be digits only, max 10 digits", "রোল শুধু সংখ্যা, সর্বোচ্চ ১০ ডিজিট")
         }
         val reg = state.boardRegNumber.trim()
         if (reg.isNotBlank() && !reg.matches(Regex("^\\d{1,12}$"))) {
-            errors["regNo"] = "রেজিস্ট্রেশন শুধু সংখ্যা, সর্বোচ্চ ১২ ডিজিট"
+            errors["regNo"] = com.example.utils.AppLang.tr("Registration must be digits only, max 12 digits", "রেজিস্ট্রেশন শুধু সংখ্যা, সর্বোচ্চ ১২ ডিজিট")
         }
         val hRoll = state.hscRollNumber.trim()
         if (hRoll.isNotBlank() && !hRoll.matches(Regex("^\\d{1,10}$"))) {
-            errors["hscRoll"] = "এইচএসসি রোল শুধু সংখ্যা"
+            errors["hscRoll"] = com.example.utils.AppLang.tr("HSC roll must be digits only", "এইচএসসি রোল শুধু সংখ্যা")
         }
         return errors
     }
@@ -616,7 +620,7 @@ class EditProfileViewModel(
                     val msg = JSONObject(body ?: "").optString("message", "")
                     when {
                         msg.contains("60 days", true) || msg.contains("wait 60", true) ->
-                            "৬০ দিনের মধ্যে নাম পরিবর্তন করা যাবে না। অনুগ্রহ করে পরে চেষ্টা করো।"
+                            com.example.utils.AppLang.tr("Name cannot be changed within 60 days. Please try again later.", "৬০ দিনের মধ্যে নাম পরিবর্তন করা যাবে না। অনুগ্রহ করে পরে চেষ্টা করো।")
                         msg.isNotBlank() -> msg
                         else -> "HTTP ${e.code()}"
                     }

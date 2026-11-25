@@ -219,7 +219,7 @@ object QrSessionUtils {
             val refreshToken = json.optString("refresh_token", "")
             val userId = json.optString("user_id", "user_${System.currentTimeMillis()}")
             val phone = json.optString("phone", "")
-            val firstName = json.optString("first_name", "শিক্ষার্থী")
+            val firstName = json.optString("first_name", AppLang.tr("Student", "শিক্ষার্থী"))
             val className = json.optString("class_name", "HSC")
             val avatar = json.optString("avatar", "")
 

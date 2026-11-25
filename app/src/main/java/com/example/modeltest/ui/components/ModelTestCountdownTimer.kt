@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -63,7 +64,7 @@ fun ModelTestCountdownTimer(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "সময় শেষ",
+                text = tr("Time Up", "সময় শেষ"),
                 color = Color(0xFFDC2626),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
@@ -76,11 +77,11 @@ fun ModelTestCountdownTimer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (days > 0) {
-                TimeUnitBox(value = toBengaliDigits(days.toString()), label = "দিন")
+                TimeUnitBox(value = toBengaliDigits(days.toString()), label = tr("Days", "দিন"))
             }
-            TimeUnitBox(value = toBengaliDigits("%02d".format(hours)), label = "ঘণ্টা")
-            TimeUnitBox(value = toBengaliDigits("%02d".format(minutes)), label = "মিনিট")
-            TimeUnitBox(value = toBengaliDigits("%02d".format(seconds)), label = "সেকেন্ড")
+            TimeUnitBox(value = toBengaliDigits("%02d".format(hours)), label = tr("Hrs", "ঘণ্টা"))
+            TimeUnitBox(value = toBengaliDigits("%02d".format(minutes)), label = tr("Min", "মিনিট"))
+            TimeUnitBox(value = toBengaliDigits("%02d".format(seconds)), label = tr("Sec", "সেকেন্ড"))
         }
     }
 }

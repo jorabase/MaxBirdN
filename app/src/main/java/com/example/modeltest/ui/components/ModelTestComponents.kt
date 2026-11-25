@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.utils.tr
 
 @Composable
 fun Modifier.modelTestShimmer(): Modifier {
@@ -146,7 +147,7 @@ fun RetryErrorView(
             }
             Spacer(modifier = Modifier.height(14.dp))
             Text(
-                text = "তথ্য লোড করা যায়নি",
+                text = tr("Could not load data", "তথ্য লোড করা যায়নি"),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -165,7 +166,7 @@ fun RetryErrorView(
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("আবার চেষ্টা করো")
+                Text(tr("Try Again", "আবার চেষ্টা করো"))
             }
         }
     }

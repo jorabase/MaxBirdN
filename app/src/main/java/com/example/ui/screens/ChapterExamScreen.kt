@@ -39,7 +39,9 @@ import com.example.course.ChapterExamViewModel
 import com.example.course.ExamStage
 import com.example.ui.components.QuizRichContent
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,7 +79,7 @@ fun ChapterExamScreen(
     if (!currentSolutionPdfUrl.isNullOrBlank()) {
         com.example.ui.components.SlideViewerDialog(
             slideUrl = currentSolutionPdfUrl,
-            title = "${uiState.examInfo?.title ?: examTitle} - সমাধান শিট",
+            title = "${uiState.examInfo?.title ?: examTitle} - ${tr("Solution Sheet", "সমাধান শিট")}",
             onDismiss = { activeSolutionPdfUrl = null }
         )
     }
@@ -95,10 +97,10 @@ fun ChapterExamScreen(
         AlertDialog(
             onDismissRequest = { showExitConfirmDialog = false },
             title = {
-                Text("পরীক্ষা ত্যাগ করতে চান?", fontWeight = FontWeight.Bold)
+                Text(tr("Exit Exam?", "পরীক্ষা ত্যাগ করবেন?"), fontWeight = FontWeight.Bold)
             },
             text = {
-                Text("আপনি কি নিশ্চিত যে পরীক্ষা শেষ না করেই বেরিয়ে যেতে চান?")
+                Text(tr("Are you sure you want to leave before finishing the exam?", "আপনি কি নিশ্চিত যে পরীক্ষা শেষ না করেই বেরিয়ে যেতে চান?"))
             },
             confirmButton = {
                 Button(
@@ -108,12 +110,12 @@ fun ChapterExamScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("হ্যাঁ, বের হব", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(tr("Exit", "হ্যাঁ, বের হব"), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showExitConfirmDialog = false }) {
-                    Text("পরীক্ষা চালিয়ে যান")
+                    Text(tr("Continue", "পরীক্ষা চালিয়ে যান"))
                 }
             }
         )
@@ -165,7 +167,7 @@ fun ChapterExamScreen(
                         CircularProgressIndicator(color = Color(0xFF0072EC))
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "পরীক্ষা জমা দেওয়া হচ্ছে...",
+                            text = tr("Submitting exam...", "পরীক্ষা জমা দেওয়া হচ্ছে..."),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onBackground
@@ -226,7 +228,7 @@ fun ExamIntroBottomSheet(
     val info = uiState.examInfo
     val displayTitle = info?.title ?: defaultTitle
     val displaySubject = info?.subject?.display?.takeIf { it.isNotBlank() }
-        ?: uiState.subjectTitle.ifBlank { "বিষয়" }
+        ?: uiState.subjectTitle.ifBlank { tr("Subject", "বিষয়") }
     val chapterText = info?.chapters?.firstOrNull()?.name?.takeIf { it.isNotBlank() }
         ?: defaultChapter.ifBlank { displayTitle }
     val totalQ = info?.total_number_of_question ?: 25
@@ -327,9 +329,9 @@ fun ExamIntroBottomSheet(
                 ) {
                     Text(
                         text = when {
-                            isOngoing -> "🔴 পরীক্ষা চলছে! দ্রুত অংশ নিন"
-                            isUpcoming -> "⏳ পরীক্ষা শুরু হতে বাকি"
-                            else -> "টেস্ট শেষ হয়ে গেছে (অনুশীলন করুন)"
+                            isOngoing -> tr("🔴 Exam is live! Join now", "🔴 পরীক্ষা চলছে! দ্রুত অংশ নিন")
+                            isUpcoming -> tr("⏳ Exam starts in", "⏳ পরীক্ষা শুরু হতে বাকি")
+                            else -> tr("Exam ended (Practice mode)", "টেস্ট শেষ হয়ে গেছে (অনুশীলন করুন)")
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -350,10 +352,10 @@ fun ExamIntroBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    ExamCountdownBox(daysStr, "দিন")
-                    ExamCountdownBox(hoursStr, "ঘণ্টা")
-                    ExamCountdownBox(minutesStr, "মিনিট")
-                    ExamCountdownBox(secondsStr, "সেকেন্ড")
+                    ExamCountdownBox(daysStr, tr("Days", "দিন"))
+                    ExamCountdownBox(hoursStr, tr("Hours", "ঘণ্টা"))
+                    ExamCountdownBox(minutesStr, tr("Min", "মিনিট"))
+                    ExamCountdownBox(secondsStr, tr("Sec", "সেকেন্ড"))
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -375,15 +377,15 @@ fun ExamIntroBottomSheet(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "অধ্যায়: $chapterText",
+                            text = tr("Chapter: $chapterText", "অধ্যায়: $chapterText"),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         val examDurationMinutes = (uiState.examInfo?.total_number_of_question ?: totalQ).coerceAtLeast(1)
-                        val examDurationText = "${toBengaliDigits(examDurationMinutes.coerceAtLeast(1).toString())} মিনিট"
+                        val examDurationText = tr("$examDurationMinutes min", "${toBengaliDigits(examDurationMinutes.toString())} মিনিট")
                         Text(
-                            text = "মোট প্রশ্ন: ${toBengaliDigits(totalQ.toString())} টি | সময়: $examDurationText",
+                            text = tr("Questions: $totalQ | Time: $examDurationText", "মোট প্রশ্ন: ${toBengaliDigits(totalQ.toString())} টি | সময়: $examDurationText"),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -402,7 +404,7 @@ fun ExamIntroBottomSheet(
                         .height(50.dp)
                 ) {
                     Text(
-                        text = if (isOngoing) "টেস্ট শুরু করো" else if (isEnded) "অনুশীলন শুরু করো" else "টেস্ট শুরু করো",
+                        text = if (isEnded) tr("Start Practice", "অনুশীলন শুরু করো") else tr("Start Test", "টেস্ট শুরু করো"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -504,9 +506,9 @@ fun ExamRulesContent(
                             Icon(Icons.Default.HelpOutline, contentDescription = null, tint = Color(0xFF0072EC))
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text("প্রশ্ন", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(tr("Questions", "প্রশ্ন"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
-                                    "${toBengaliDigits(totalQ.toString())} টি",
+                                    tr("$totalQ", "${toBengaliDigits(totalQ.toString())} টি"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -530,8 +532,8 @@ fun ExamRulesContent(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 val examDurationMinutes = (uiState.examInfo?.total_number_of_question ?: totalQ).coerceAtLeast(1)
-                                val examDurationText = "${toBengaliDigits(examDurationMinutes.coerceAtLeast(1).toString())} মিনিট"
-                                Text("সময়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                val examDurationText = tr("$examDurationMinutes min", "${toBengaliDigits(examDurationMinutes.toString())} মিনিট")
+                                Text(tr("Time", "সময়"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(examDurationText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                             }
                         }
@@ -549,7 +551,7 @@ fun ExamRulesContent(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "টেস্টের নিয়মাবলী",
+                            text = tr("Test Rules", "টেস্টের নিয়মাবলী"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -561,7 +563,7 @@ fun ExamRulesContent(
                             iconBg = if (isDark) Color(0xFFD97706).copy(alpha = 0.2f) else Color(0xFFFEF3C7),
                             icon = Icons.Default.AccessTime,
                             iconTint = Color(0xFFD97706),
-                            text = "প্রতিটি প্রশ্নের জন্য ৪টি করে বিকল্প অপশন থাকবে।"
+                            text = tr("Each question has 4 multiple-choice options.", "প্রতিটি প্রশ্নের জন্য ৪টি করে বিকল্প অপশন থাকবে।")
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -570,7 +572,7 @@ fun ExamRulesContent(
                             iconBg = if (isDark) Color(0xFF059669).copy(alpha = 0.2f) else Color(0xDCD1FADF),
                             icon = Icons.Default.Check,
                             iconTint = Color(0xFF059669),
-                            text = "নির্দিষ্ট সময়ের মধ্যে সকল প্রশ্নের উত্তর সাবমিট করতে হবে।"
+                            text = tr("Submit all answers within the given time limit.", "নির্দিষ্ট সময়ের মধ্যে সকল প্রশ্নের উত্তর সাবমিট করতে হবে।")
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -579,7 +581,7 @@ fun ExamRulesContent(
                             iconBg = if (isDark) Color(0xFFEA580C).copy(alpha = 0.2f) else Color(0xFFFFEDD5),
                             icon = Icons.Default.BarChart,
                             iconTint = Color(0xFFEA580C),
-                            text = "টেস্ট শেষে তোমার পারফরম্যান্স এবং সঠিক সমাধান দেখতে পারবে।"
+                            text = tr("View your performance and detailed solutions after submitting.", "টেস্ট শেষে তোমার পারফরম্যান্স এবং সঠিক সমাধান দেখতে পারবে।")
                         )
                     }
                 }
@@ -633,14 +635,14 @@ fun ExamRulesContent(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "প্রশ্ন লোড হচ্ছে...",
+                        text = tr("Loading questions...", "প্রশ্ন লোড হচ্ছে..."),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 } else {
                     Text(
-                        text = "টেস্ট শুরু করো",
+                        text = tr("Start Test", "টেস্ট শুরু করো"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -783,7 +785,7 @@ fun ExamQuestionsContent(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("রিফ্রেশ দাও", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tr("Refresh", "রিফ্রেশ"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -856,7 +858,7 @@ fun ExamQuestionsContent(
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("পেছনে", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(tr("Previous", "পেছনে"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } else {
                             Spacer(modifier = Modifier.width(1.dp))
@@ -868,7 +870,7 @@ fun ExamQuestionsContent(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = if (index == questions.size - 1) "সাবমিট করো" else "এগিয়ে যাও",
+                                text = if (index == questions.size - 1) tr("Submit", "সাবমিট করো") else tr("Next", "এগিয়ে যাও"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -976,8 +978,8 @@ fun ExamPerformanceContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = "চ্যাপ্টার এক্সামের পারফরমেন্স",
-                        fontSize = 16.sp,
+                        text = tr("Exam Result", "পরীক্ষার ফলাফল"),
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1012,7 +1014,7 @@ fun ExamPerformanceContent(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            "📄 পিডিএফ দেখতে এখানে ট্যাপ করো ⬇",
+                            tr("📄 Tap to view Solution PDF ⬇", "📄 সমাধান পিডিএফ দেখতে ট্যাপ করুন ⬇"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
@@ -1030,7 +1032,7 @@ fun ExamPerformanceContent(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "নিচের ড্যাশবোর্ড দেখে তোমার পারফরম্যান্সের ধারণা নাও, আর তোমার দেওয়া উত্তরগুলো মিলিয়ে নাও",
+                    text = tr("Review your performance and verify your answers below", "নিচে আপনার পারফরম্যান্স দেখুন এবং উত্তরগুলো মিলিয়ে নিন"),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1091,11 +1093,11 @@ fun ExamPerformanceContent(
 
                             // Breakdown list
                             Column {
-                                PerformanceLine(dotColor = Color(0xFF10B981), label = "সঠিক উত্তর: ${toBengaliDigits(correctCount.toString())}")
+                                PerformanceLine(dotColor = Color(0xFF10B981), label = tr("Correct: $correctCount", "সঠিক উত্তর: ${toBengaliDigits(correctCount.toString())}"))
                                 Spacer(modifier = Modifier.height(6.dp))
-                                PerformanceLine(dotColor = Color(0xFFEF4444), label = "ভুল উত্তর: ${toBengaliDigits(incorrectCount.toString())}")
+                                PerformanceLine(dotColor = Color(0xFFEF4444), label = tr("Wrong: $incorrectCount", "ভুল উত্তর: ${toBengaliDigits(incorrectCount.toString())}"))
                                 Spacer(modifier = Modifier.height(6.dp))
-                                PerformanceLine(dotColor = Color(0xFF94A3B8), label = "উত্তর দাওনি: ${toBengaliDigits(unansweredCount.toString())}")
+                                PerformanceLine(dotColor = Color(0xFF94A3B8), label = tr("Skipped: $unansweredCount", "উত্তর দাওনি: ${toBengaliDigits(unansweredCount.toString())}"))
                             }
                         }
 
@@ -1109,7 +1111,7 @@ fun ExamPerformanceContent(
                             shape = RoundedCornerShape(10.dp),
                             border = BorderStroke(1.dp, accentBlue)
                         ) {
-                            Text("সমাধান", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = accentBlue)
+                            Text(tr("Solutions", "সমাধান"), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = accentBlue)
                         }
                     }
                 }
@@ -1121,12 +1123,13 @@ fun ExamPerformanceContent(
                 val totalMinutes = (totalSec / 60).toInt()
                 val remSeconds = (totalSec % 60).toInt()
                 val totalTimeSpentText = when {
-                    totalMinutes > 0 && remSeconds > 0 -> "${toBengaliDigits(totalMinutes.toString())} মিনিট ${toBengaliDigits(remSeconds.toString())} সে."
-                    totalMinutes > 0 -> "${toBengaliDigits(totalMinutes.toString())} মিনিট"
-                    else -> "${toBengaliDigits(totalSec.toInt().coerceAtLeast(1).toString())} সেকেন্ড"
+                    totalMinutes > 0 && remSeconds > 0 -> tr("${totalMinutes}m ${remSeconds}s", "${toBengaliDigits(totalMinutes.toString())} মিনিট ${toBengaliDigits(remSeconds.toString())} সে.")
+                    totalMinutes > 0 -> tr("${totalMinutes} min", "${toBengaliDigits(totalMinutes.toString())} মিনিট")
+                    else -> tr("${totalSec.toInt().coerceAtLeast(1)} sec", "${toBengaliDigits(totalSec.toInt().coerceAtLeast(1).toString())} সেকেন্ড")
                 }
                 val avgSecPerQ = if (totalCount > 0) totalSec / totalCount else 0.0
-                val avgTimeText = "${toBengaliDigits(String.format(java.util.Locale.US, "%.1f", avgSecPerQ))} সেকেন্ড"
+                val avgSecFormatted = String.format(java.util.Locale.US, "%.1f", avgSecPerQ)
+                val avgTimeText = tr("$avgSecFormatted sec", "${toBengaliDigits(avgSecFormatted)} সেকেন্ড")
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1142,7 +1145,7 @@ fun ExamPerformanceContent(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("মোট সময় ব্যয়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(tr("Total Time", "মোট সময়"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(totalTimeSpentText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -1159,7 +1162,7 @@ fun ExamPerformanceContent(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.AccessTime, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("প্রতি প্রশ্নে সময়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(tr("Avg / Question", "প্রতি প্রশ্নে সময়"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(avgTimeText, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -1177,7 +1180,7 @@ fun ExamPerformanceContent(
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Text("ফিরে যাও", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(tr("Go Back", "ফিরে যাও"), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
@@ -1219,7 +1222,7 @@ fun ExamSolutionsContent(
         AlertDialog(
             onDismissRequest = { showGridDialog = false },
             title = {
-                Text("প্রশ্ন নির্বাচন করুন", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text(tr("Select Question", "প্রশ্ন নির্বাচন করুন"), fontWeight = FontWeight.Bold, fontSize = 17.sp)
             },
             text = {
                 Column(
@@ -1267,7 +1270,7 @@ fun ExamSolutionsContent(
             },
             confirmButton = {
                 TextButton(onClick = { showGridDialog = false }) {
-                    Text("বন্ধ করুন", fontWeight = FontWeight.Bold)
+                    Text(tr("Close", "বন্ধ করুন"), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -1278,8 +1281,8 @@ fun ExamSolutionsContent(
             TopAppBar(
                 title = {
                     Text(
-                        text = "সমাধান",
-                        fontSize = 16.sp,
+                        text = tr("Solutions", "সমাধান"),
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -1338,7 +1341,7 @@ fun ExamSolutionsContent(
                             color = Color(0xFF0072EC).copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "প্রশ্ন ${toBengaliDigits((index + 1).toString())}/${toBengaliDigits(solutions.size.toString())}",
+                                text = tr("Question ${index + 1}/${solutions.size}", "প্রশ্ন ${toBengaliDigits((index + 1).toString())}/${toBengaliDigits(solutions.size.toString())}"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0072EC),
@@ -1357,9 +1360,9 @@ fun ExamSolutionsContent(
                         ) {
                             Text(
                                 text = when {
-                                    isUserUnanswered -> "উত্তরহীন"
-                                    isUserCorrect -> "সঠিক উত্তর"
-                                    else -> "ভুল উত্তর"
+                                    isUserUnanswered -> tr("Skipped", "উত্তরহীন")
+                                    isUserCorrect -> tr("Correct", "সঠিক উত্তর")
+                                    else -> tr("Wrong", "ভুল উত্তর")
                                 },
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1386,14 +1389,14 @@ fun ExamSolutionsContent(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = "প্রশ্ন:",
+                                text = tr("Question:", "প্রশ্ন:"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isDark) Color(0xFF60A5FA) else Color(0xFF0072EC)
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             QuizRichContent(
-                                text = q?.title?.takeIf { it.isNotBlank() } ?: "প্রশ্ন নং ${toBengaliDigits((index + 1).toString())}",
+                                text = q?.title?.takeIf { it.isNotBlank() } ?: tr("Question #${index + 1}", "প্রশ্ন নং ${toBengaliDigits((index + 1).toString())}"),
                                 textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp, lineHeight = 24.sp),
                                 textColor = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold,
@@ -1428,9 +1431,9 @@ fun ExamSolutionsContent(
                         ) {
                             Text(
                                 text = when {
-                                    isUserUnanswered -> "তুমি কোনো উত্তর দেওনি • সঠিক উত্তর: ($resolvedCorrectBengali)"
-                                    isUserCorrect -> "তোমার উত্তর সঠিক: ($givenAnsBengali)"
-                                    else -> "তোমার উত্তর: ($givenAnsBengali) • সঠিক উত্তর: ($resolvedCorrectBengali)"
+                                    isUserUnanswered -> tr("Skipped • Correct: ($resolvedCorrectBengali)", "তুমি কোনো উত্তর দেওনি • সঠিক উত্তর: ($resolvedCorrectBengali)")
+                                    isUserCorrect -> tr("Your answer is correct: ($givenAnsBengali)", "তোমার উত্তর সঠিক: ($givenAnsBengali)")
+                                    else -> tr("Your answer: ($givenAnsBengali) • Correct: ($resolvedCorrectBengali)", "তোমার উত্তর: ($givenAnsBengali) • সঠিক উত্তর: ($resolvedCorrectBengali)")
                                 },
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
@@ -1546,9 +1549,9 @@ fun ExamSolutionsContent(
                     val correctIdx = com.example.utils.McqAnswerUtils.normalizeToOptionIndex(resolvedCorrectBengali) ?: 0
                     val correctOptText = com.example.utils.McqAnswerUtils.cleanOptionText(options.getOrNull(correctIdx)?.description)
                     val fallbackSolText = if (correctOptText.isNotBlank()) {
-                        "সঠিক উত্তর: ($resolvedCorrectBengali) — $correctOptText"
+                        tr("Correct Answer: ($resolvedCorrectBengali) — $correctOptText", "সঠিক উত্তর: ($resolvedCorrectBengali) — $correctOptText")
                     } else {
-                        "সঠিক উত্তর: ($resolvedCorrectBengali)"
+                        tr("Correct Answer: ($resolvedCorrectBengali)", "সঠিক উত্তর: ($resolvedCorrectBengali)")
                     }
 
                     Card(
@@ -1569,7 +1572,7 @@ fun ExamSolutionsContent(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
-                                    text = "ব্যাখ্যা ও সমাধান",
+                                    text = tr("Explanation", "ব্যাখ্যা ও সমাধান"),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
@@ -1588,7 +1591,7 @@ fun ExamSolutionsContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "প্রশ্নটি রিপোর্ট করো",
+                        text = tr("Report Question", "প্রশ্নটি রিপোর্ট করো"),
                         fontSize = 13.sp,
                         color = if (isDark) Color(0xFF60A5FA) else Color(0xFF0072EC),
                         modifier = Modifier
@@ -1597,7 +1600,7 @@ fun ExamSolutionsContent(
                             .clickable {
                                 android.widget.Toast.makeText(
                                     context,
-                                    "প্রশ্নটির রিপোর্ট সফলভাবে পাঠানো হয়েছে। ধন্যবাদ!",
+                                    AppLang.tr("Question report submitted. Thank you!", "প্রশ্নটির রিপোর্ট সফলভাবে পাঠানো হয়েছে। ধন্যবাদ!"),
                                     android.widget.Toast.LENGTH_SHORT
                                 ).show()
                             }
@@ -1620,7 +1623,7 @@ fun ExamSolutionsContent(
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পেছনে")
+                            Text(tr("Previous", "পেছনে"))
                         }
                     } else {
                         Spacer(modifier = Modifier.width(1.dp))
@@ -1632,7 +1635,7 @@ fun ExamSolutionsContent(
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0072EC)),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("এগিয়ে যাও")
+                            Text(tr("Next", "এগিয়ে যাও"))
                             Spacer(modifier = Modifier.width(6.dp))
                             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                         }

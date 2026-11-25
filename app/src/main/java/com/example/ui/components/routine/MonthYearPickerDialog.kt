@@ -22,12 +22,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 private val MONTH_NAMES_BN = listOf(
     "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল",
     "মে", "জুন", "জুলাই", "আগস্ট",
     "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
+)
+
+private val MONTH_NAMES_EN = listOf(
+    "January", "February", "March", "April",
+    "May", "June", "July", "August",
+    "September", "October", "November", "December"
 )
 
 @Composable
@@ -40,6 +48,7 @@ fun MonthYearPickerDialog(
     var selectedYear by remember { mutableIntStateOf(initialYear) }
     var selectedMonth by remember { mutableIntStateOf(initialMonth) }
     val primary = MaterialTheme.colorScheme.primary
+    val monthNames = if (isBangla()) MONTH_NAMES_BN else MONTH_NAMES_EN
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -50,7 +59,7 @@ fun MonthYearPickerDialog(
         ) {
             Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "মাস ও বছর নির্বাচন করুন",
+                    text = tr("Select Month & Year", "মাস ও বছর নির্বাচন"),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -92,7 +101,7 @@ fun MonthYearPickerDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    itemsIndexed(MONTH_NAMES_BN) { index, name ->
+                    itemsIndexed(monthNames) { index, name ->
                         val isSelected = index == selectedMonth
                         Box(
                             modifier = Modifier
@@ -120,7 +129,7 @@ fun MonthYearPickerDialog(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("বাতিল", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(tr("Cancel", "বাতিল"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -128,7 +137,7 @@ fun MonthYearPickerDialog(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = primary)
                     ) {
-                        Text("ঠিক আছে", fontWeight = FontWeight.Bold)
+                        Text(tr("OK", "ঠিক আছে"), fontWeight = FontWeight.Bold)
                     }
                 }
             }

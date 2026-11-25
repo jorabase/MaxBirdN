@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.example.database.DownloadedItemEntity
 import com.example.player.PlayerClassType
 import com.example.player.ShikhoPlayerManager
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -87,6 +90,7 @@ fun PlayerControlsOverlay(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val isBn = isBangla()
 
     // Screen Touch Lock State
     var isScreenLocked by remember { mutableStateOf(false) }
@@ -187,7 +191,7 @@ fun PlayerControlsOverlay(
                         .clickable {
                             isScreenLocked = false
                             showUnlockPill = false
-                            Toast.makeText(context, "স্ক্রিন আনলক হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Screen unlocked", "স্ক্রিন আনলক হয়েছে"), Toast.LENGTH_SHORT).show()
                         }
                 ) {
                     Row(
@@ -197,12 +201,12 @@ fun PlayerControlsOverlay(
                     ) {
                         Icon(
                             imageVector = Icons.Default.LockOpen,
-                            contentDescription = "আনলক করুন",
+                            contentDescription = tr("Unlock", "আনলক করুন"),
                             tint = Color(0xFFF59E0B),
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "আনলক করতে ট্যাপ করুন",
+                            text = tr("Tap to unlock", "আনলক করতে ট্যাপ করুন"),
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
@@ -243,7 +247,7 @@ fun PlayerControlsOverlay(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "2X স্পিড",
+                        text = tr("2X Speed", "2X স্পিড"),
                         color = Color.White,
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold
@@ -275,13 +279,13 @@ fun PlayerControlsOverlay(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Replay10,
-                        contentDescription = "১০ সেকেন্ড পেছনে",
+                        contentDescription = tr("Rewind 10 seconds", "১০ সেকেন্ড পেছনে"),
                         tint = Color.White,
                         modifier = Modifier.size(34.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "-১০ সেকেন্ড",
+                        text = tr("-10s", "-১০ সেকেন্ড"),
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -310,13 +314,13 @@ fun PlayerControlsOverlay(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Forward10,
-                        contentDescription = "১০ সেকেন্ড সামনে",
+                        contentDescription = tr("Forward 10 seconds", "১০ সেকেন্ড সামনে"),
                         tint = Color.White,
                         modifier = Modifier.size(34.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "+১০ সেকেন্ড",
+                        text = tr("+10s", "+১০ সেকেন্ড"),
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -380,7 +384,7 @@ fun PlayerControlsOverlay(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "ফিরে যান",
+                                    contentDescription = tr("Back", "ফিরে যান"),
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -390,7 +394,7 @@ fun PlayerControlsOverlay(
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Text(
-                            text = title.ifBlank { "ক্লাস লেকচার" },
+                            text = title.ifBlank { tr("Class Lecture", "ক্লাস লেকচার") },
                             color = Color.White,
                             fontSize = if (isFullscreen) 14.5.sp else 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -427,13 +431,13 @@ fun PlayerControlsOverlay(
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Lock,
-                                        contentDescription = "স্ক্রিন লক",
+                                        contentDescription = tr("Lock screen", "স্ক্রিন লক"),
                                         tint = Color.White,
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
-                                        text = "লক",
+                                        text = tr("Lock", "লক"),
                                         color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
@@ -446,10 +450,10 @@ fun PlayerControlsOverlay(
 
                         // 2. Aspect Ratio Resize Toggle (Fit, Zoom, Fill)
                         val resizeModeLabel = when (resizeMode) {
-                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ফিট"
-                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "জুম"
-                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ফুল"
-                            else -> "ফিট"
+                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT -> tr("Fit", "ফিট")
+                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> tr("Zoom", "জুম")
+                            androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL -> tr("Fill", "ফুল")
+                            else -> tr("Fit", "ফিট")
                         }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
@@ -463,7 +467,7 @@ fun PlayerControlsOverlay(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AspectRatio,
-                                    contentDescription = "ভিডিও সাইজ / ফিট",
+                                    contentDescription = tr("Aspect ratio", "ভিডিও সাইজ"),
                                     tint = Color.White,
                                     modifier = Modifier.size(13.dp)
                                 )
@@ -480,6 +484,11 @@ fun PlayerControlsOverlay(
                         }
 
                         // 3. Quality Selection Tag
+                        val displayQualityLabel = if (selectedQualityLabel.isBlank() || selectedQualityLabel == "অটো" || selectedQualityLabel.equals("Auto", ignoreCase = true)) {
+                            tr("Auto", "অটো")
+                        } else {
+                            selectedQualityLabel
+                        }
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color.White.copy(alpha = 0.18f),
@@ -492,13 +501,13 @@ fun PlayerControlsOverlay(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.HighQuality,
-                                    contentDescription = "কোয়ালিটি",
+                                    contentDescription = tr("Quality", "কোয়ালিটি"),
                                     tint = Color.White,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = selectedQualityLabel,
+                                    text = displayQualityLabel,
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -542,13 +551,13 @@ fun PlayerControlsOverlay(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Tune,
-                                    contentDescription = "ইকুলাইজার",
+                                    contentDescription = tr("Equalizer", "ইকুলাইজার"),
                                     tint = Color.White,
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "ইকুলাইজার",
+                                    text = tr("EQ", "ইকুলাইজার"),
                                     color = Color.White,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -603,13 +612,13 @@ fun PlayerControlsOverlay(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.DownloadDone,
-                                            contentDescription = "ডাউনলোড সম্পন্ন",
+                                            contentDescription = tr("Downloaded", "ডাউনলোড সম্পন্ন"),
                                             tint = Color(0xFF34D399),
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
                                         Text(
-                                            text = "সেভড",
+                                            text = tr("Saved", "সেভড"),
                                             color = Color(0xFF34D399),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
@@ -632,13 +641,13 @@ fun PlayerControlsOverlay(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Download,
-                                            contentDescription = "ডাউনলোড",
+                                            contentDescription = tr("Download", "ডাউনলোড"),
                                             tint = Color.White,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Spacer(modifier = Modifier.width(3.dp))
                                         Text(
-                                            text = "ডাউনলোড",
+                                            text = tr("Download", "ডাউনলোড"),
                                             color = Color.White,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
@@ -701,7 +710,7 @@ fun PlayerControlsOverlay(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Replay10,
-                                    contentDescription = "১০ সেকেন্ড পেছনে",
+                                    contentDescription = tr("Rewind 10 seconds", "১০ সেকেন্ড পেছনে"),
                                     tint = Color.White,
                                     modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
                                 )
@@ -738,7 +747,7 @@ fun PlayerControlsOverlay(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlaying) "পজ" else "প্লে",
+                                    contentDescription = if (isPlaying) tr("Pause", "পজ") else tr("Play", "প্লে"),
                                     tint = Color(0xFF0F172A),
                                     modifier = Modifier.size(if (isFullscreen) 38.dp else 32.dp)
                                 )
@@ -760,7 +769,7 @@ fun PlayerControlsOverlay(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Forward10,
-                                    contentDescription = "১০ সেকেন্ড সামনে",
+                                    contentDescription = tr("Forward 10 seconds", "১০ সেকেন্ড সামনে"),
                                     tint = Color.White,
                                     modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
                                 )
@@ -770,7 +779,7 @@ fun PlayerControlsOverlay(
                 }
 
                 // ---------------------------------------------------------
-                // BOTTOM BAR (Resume Banner + Seekbar + Bengali time + Quick Actions)
+                // BOTTOM BAR (Resume Banner + Seekbar + Localized time + Quick Actions)
                 // ---------------------------------------------------------
                 Column(
                     modifier = Modifier
@@ -823,7 +832,7 @@ fun PlayerControlsOverlay(
                                         modifier = Modifier.clickable { onRestartFromBeginning() }
                                     ) {
                                         Text(
-                                            text = "↺ শুরু থেকে দেখুন",
+                                            text = tr("↺ Restart", "↺ শুরু থেকে"),
                                             color = Color.White,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
@@ -857,8 +866,8 @@ fun PlayerControlsOverlay(
 
                         // Floating Seek Preview Tooltip when dragging
                         if (isDraggingSlider) {
-                            val currentFormatted = ShikhoPlayerManager.formatTime(displayPosition, true)
-                            val totalFormatted = ShikhoPlayerManager.formatTime(totalDuration, true)
+                            val currentFormatted = ShikhoPlayerManager.formatTime(displayPosition, isBn)
+                            val totalFormatted = ShikhoPlayerManager.formatTime(totalDuration, isBn)
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = Color(0xFF0F172A).copy(alpha = 0.95f),
@@ -954,8 +963,8 @@ fun PlayerControlsOverlay(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Time string in Bengali digits
-                            val timeString = "${ShikhoPlayerManager.formatTime(displayPosition, true)} / ${ShikhoPlayerManager.formatTime(totalDuration, true)}"
+                            // Localized time string
+                            val timeString = "${ShikhoPlayerManager.formatTime(displayPosition, isBn)} / ${ShikhoPlayerManager.formatTime(totalDuration, isBn)}"
                             Text(
                                 text = timeString,
                                 color = Color.White,
@@ -977,7 +986,7 @@ fun PlayerControlsOverlay(
                                         modifier = Modifier.clickable { onResetManualZoom() }
                                     ) {
                                         Text(
-                                            text = "জুম ${(manualZoomScale * 100).toInt()}% (রিসেট)",
+                                            text = tr("Zoom ${(manualZoomScale * 100).toInt()}% (Reset)", "জুম ${(manualZoomScale * 100).toInt()}% (রিসেট)"),
                                             color = Color(0xFF38BDF8),
                                             fontSize = 10.5.sp,
                                             fontWeight = FontWeight.Bold,
@@ -1000,13 +1009,13 @@ fun PlayerControlsOverlay(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.RestartAlt,
-                                                contentDescription = "শুরু থেকে দেখুন",
+                                                contentDescription = tr("Restart from beginning", "শুরু থেকে দেখুন"),
                                                 tint = Color.White,
                                                 modifier = Modifier.size(13.dp)
                                             )
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
-                                                text = "শুরু থেকে",
+                                                text = tr("Restart", "শুরু থেকে"),
                                                 color = Color.White,
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold
@@ -1028,7 +1037,7 @@ fun PlayerControlsOverlay(
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                            contentDescription = if (isMuted) "সাউন্ড অন করুন" else "সাউন্ড অফ করুন",
+                                            contentDescription = if (isMuted) tr("Unmute", "সাউন্ড অন করুন") else tr("Mute", "সাউন্ড অফ করুন"),
                                             tint = Color.White,
                                             modifier = Modifier.size(17.dp)
                                         )
@@ -1048,7 +1057,7 @@ fun PlayerControlsOverlay(
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = Icons.Default.Headphones,
-                                            contentDescription = if (isAudioOnlyMode) "ভিডিও মোডে ফিরুন" else "শুধুমাত্র অডিও শুনুন",
+                                            contentDescription = if (isAudioOnlyMode) tr("Back to video mode", "ভিডিও মোডে ফিরুন") else tr("Audio-only mode", "শুধুমাত্র অডিও শুনুন"),
                                             tint = if (isAudioOnlyMode) Color(0xFF38BDF8) else Color.White,
                                             modifier = Modifier.size(17.dp)
                                         )
@@ -1068,7 +1077,7 @@ fun PlayerControlsOverlay(
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
                                             imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                            contentDescription = if (isFullscreen) "ছোট স্ক্রিন" else "বড় স্ক্রিন",
+                                            contentDescription = if (isFullscreen) tr("Exit fullscreen", "ছোট স্ক্রিন") else tr("Fullscreen", "বড় স্ক্রিন"),
                                             tint = Color.White,
                                             modifier = Modifier.size(20.dp)
                                         )

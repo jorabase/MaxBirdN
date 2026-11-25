@@ -35,7 +35,9 @@ import com.example.modeltest.ui.components.QuestionPaletteBottomSheet
 import com.example.modeltest.ui.components.ScorePopupDialog
 import com.example.ui.components.QuizRichContent
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,7 +182,7 @@ fun MCQExamScreen(
                     TextButton(onClick = { showPaletteSheet = true }) {
                         Icon(Icons.Default.GridView, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("সবগুলো দেখো", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                        Text(tr("View All", "সবগুলো"), fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -211,7 +213,7 @@ fun MCQExamScreen(
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("পূর্ববর্তী")
+                            Text(tr("Previous", "পূর্ববর্তী"))
                         }
 
                         if (isLast) {
@@ -224,11 +226,11 @@ fun MCQExamScreen(
                                 if (uiState.isSubmittingMcq) {
                                     CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("জমা হচ্ছে...")
+                                    Text(tr("Submitting...", "জমা হচ্ছে..."))
                                 } else {
                                     Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("সাবমিট করো", fontWeight = FontWeight.Bold)
+                                    Text(tr("Submit", "সাবমিট করুন"), fontWeight = FontWeight.Bold)
                                 }
                             }
                         } else {
@@ -236,7 +238,7 @@ fun MCQExamScreen(
                                 onClick = { viewModel.nextQuestion() },
                                 shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("এগিয়ে যাও")
+                                Text(tr("Next", "পরবর্তী"))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
                             }
@@ -258,7 +260,7 @@ fun MCQExamScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("কোনো প্রশ্ন পাওয়া যায়নি")
+                Text(tr("No questions found", "কোনো প্রশ্ন পাওয়া যায়নি"))
             }
         } else {
             val question = uiState.mcqQuestions.getOrNull(uiState.currentQuestionIndex)
@@ -304,7 +306,10 @@ fun MCQExamScreen(
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             Text(
-                                text = "প্রশ্ন ${toBengaliDigits((uiState.currentQuestionIndex + 1).toString())}:",
+                                text = tr(
+                                    "Question ${toBengaliDigits((uiState.currentQuestionIndex + 1).toString())}:",
+                                    "প্রশ্ন ${toBengaliDigits((uiState.currentQuestionIndex + 1).toString())}:"
+                                ),
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -335,13 +340,13 @@ fun MCQExamScreen(
 
                     // Options List
                     val options = question.options ?: emptyList()
-                    val bengaliLetters = listOf("ক", "খ", "গ", "ঘ")
+                    val optionLetters = if (isBangla()) listOf("ক", "খ", "গ", "ঘ") else listOf("A", "B", "C", "D")
                     val isDark = isAppInDarkTheme()
 
                     options.forEachIndexed { optIdx, opt ->
                         val optIndex = opt.index ?: optIdx
                         val isSelected = selectedOption == optIndex
-                        val optionPrefix = bengaliLetters.getOrElse(optIdx) { "${optIdx + 1}" }
+                        val optionPrefix = optionLetters.getOrElse(optIdx) { "${optIdx + 1}" }
 
                         Card(
                             shape = RoundedCornerShape(14.dp),

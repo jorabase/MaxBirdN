@@ -51,6 +51,7 @@ import com.example.update.ApkUpdateDownloadState
 import com.example.update.AppUpdateInfo
 import com.example.update.AppUpdateRepository
 import com.example.update.InAppApkUpdater
+import com.example.utils.tr
 
 /**
  * Full-Screen Global Kill Switch / Maintenance Mode Shield.
@@ -139,7 +140,7 @@ fun KillSwitchMaintenanceScreen(
                     border = BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.45f))
                 ) {
                     Text(
-                        text = "সার্ভার ও সিস্টেম মেইনটেন্যান্স চলছে",
+                        text = tr("System Maintenance", "সিস্টেম মেইনটেন্যান্স চলছে"),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFBBF24),
@@ -150,7 +151,7 @@ fun KillSwitchMaintenanceScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = updateInfo.killSwitchTitleBn.ifBlank { "অ্যাপ আপডেটের কাজ চলছে" },
+                    text = updateInfo.killSwitchTitleBn.ifBlank { tr("Maintenance in Progress", "অ্যাপ আপডেটের কাজ চলছে") },
                     fontSize = 21.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -188,7 +189,10 @@ fun KillSwitchMaintenanceScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "সম্ভাব্য চালুর সময়: ${updateInfo.estimatedBackTimeBn}",
+                                text = tr(
+                                    "Estimated return: ${updateInfo.estimatedBackTimeBn}",
+                                    "সম্ভাব্য চালুর সময়: ${updateInfo.estimatedBackTimeBn}"
+                                ),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF38BDF8)
@@ -216,11 +220,11 @@ fun KillSwitchMaintenanceScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text("সার্ভার চেক করা হচ্ছে...", fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Checking server...", "সার্ভার চেক করা হচ্ছে..."), fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
                     } else {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(19.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("পুনরায় চেষ্টা করুন", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(tr("Try Again", "পুনরায় চেষ্টা"), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
                     }
                 }
 
@@ -238,7 +242,7 @@ fun KillSwitchMaintenanceScreen(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("অ্যাপ বন্ধ করুন", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(tr("Exit App", "অ্যাপ বন্ধ করুন"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -346,9 +350,9 @@ fun UpdateDialog(
                 // Title
                 Text(
                     text = if (isDowngrade) {
-                        "নির্ধারিত ভার্সন ব্যবহার করুন"
+                        tr("Required Version", "নির্ধারিত ভার্সন")
                     } else {
-                        updateInfo.titleBn.ifBlank { "অ্যাপ সংস্করণ হালনাগাদ করুন" }
+                        updateInfo.titleBn.ifBlank { tr("App Update", "অ্যাপ আপডেট") }
                     },
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 19.sp,
@@ -359,7 +363,10 @@ fun UpdateDialog(
                 Spacer(modifier = Modifier.height(5.dp))
 
                 Text(
-                    text = "অ্যাপের ভেতরেই সরাসরি নতুন সংস্করণ ডাউনলোড হয়ে স্বয়ংক্রিয়ভাবে আপডেট হয়ে যাবে এবং আপডেট শেষে APK ক্যাশ নিজে থেকেই ক্লিয়ার হয়ে যাবে।",
+                    text = tr(
+                        "The new version downloads directly inside the app and cleans up the APK cache automatically.",
+                        "নতুন সংস্করণ অ্যাপের ভেতরেই ডাউনলোড হয়ে আপডেট হবে এবং শেষে APK ক্যাশ নিজে থেকেই ক্লিয়ার হবে।"
+                    ),
                     fontSize = 12.sp,
                     color = secondaryText,
                     textAlign = TextAlign.Center,
@@ -384,7 +391,7 @@ fun UpdateDialog(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "আপনার বর্তমান ভার্সন",
+                                text = tr("Current", "বর্তমান"),
                                 fontSize = 10.5.sp,
                                 color = secondaryText
                             )
@@ -414,7 +421,7 @@ fun UpdateDialog(
 
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "ডাটাবেজ নির্ধারিত ভার্সন",
+                                text = tr("Required", "নির্ধারিত"),
                                 fontSize = 10.5.sp,
                                 color = secondaryText
                             )
@@ -451,7 +458,7 @@ fun UpdateDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "সংস্করণ নোট ও পরিবর্তনসমূহ:",
+                                text = tr("What's New:", "নতুন পরিবর্তনসমূহ:"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color(0xFF0284C7)
@@ -491,7 +498,10 @@ fun UpdateDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = updateInfo.buttonText.ifBlank {
-                                    "এখনই ইন-অ্যাপ আপডেট করুন (v${updateInfo.versionName})"
+                                    tr(
+                                        "Update Now (v${updateInfo.versionName})",
+                                        "আপডেট করুন (v${updateInfo.versionName})"
+                                    )
                                 },
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
@@ -518,7 +528,7 @@ fun UpdateDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "অ্যাপের ভেতরেই ডাউনলোড হচ্ছে...",
+                                        text = tr("Downloading update...", "আপডেট ডাউনলোড হচ্ছে..."),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = primaryText
@@ -604,7 +614,7 @@ fun UpdateDialog(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "APK ফাইল যাচাই ও ইনস্টলার প্রস্তুত করা হচ্ছে...",
+                                    text = tr("Verifying APK & preparing installer...", "APK যাচাই ও ইনস্টলার প্রস্তুত হচ্ছে..."),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = primaryText
@@ -619,7 +629,10 @@ fun UpdateDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "স্বয়ংক্রিয়ভাবে আপডেট ইনস্টল করার জন্য একবার 'Install Unknown Apps' পারমিশন অন করুন:",
+                                text = tr(
+                                    "Please enable 'Install Unknown Apps' permission once to install the update:",
+                                    "আপডেট ইনস্টল করতে একবার 'Install Unknown Apps' পারমিশন অন করুন:"
+                                ),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFFF59E0B),
@@ -639,7 +652,7 @@ fun UpdateDialog(
                                 Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(19.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "পারমিশন অন করে ইনস্টল করুন",
+                                    text = tr("Allow & Install", "পারমিশন দিয়ে ইনস্টল করুন"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
@@ -671,7 +684,7 @@ fun UpdateDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "ডাউনলোড সম্পন্ন! ইনস্টল বাটনে ট্যাপ করুন:",
+                                    text = tr("Download complete! Tap to install:", "ডাউনলোড সম্পন্ন! ইনস্টল করতে ট্যাপ করুন:"),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF10B981)
@@ -695,7 +708,7 @@ fun UpdateDialog(
                                 Icon(Icons.Default.InstallMobile, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "এখনই ইনস্টল সম্পন্ন করুন",
+                                    text = tr("Install Now", "এখনই ইনস্টল করুন"),
                                     fontSize = 14.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
@@ -720,7 +733,7 @@ fun UpdateDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "নতুন করে আবার ডাউনলোড করুন",
+                                    text = tr("Download Again", "পুনরায় ডাউনলোড"),
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0284C7)
@@ -767,7 +780,7 @@ fun UpdateDialog(
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "আবার ইন-অ্যাপ ডাউনলোড চেষ্টা করুন",
+                                    text = tr("Retry Download", "পুনরায় চেষ্টা করুন"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -783,7 +796,7 @@ fun UpdateDialog(
                                     Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "বিকল্প ডাউনলোড লিংক খুলুন",
+                                        text = tr("Open Mirror Link", "বিকল্প লিংক খুলুন"),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFF38BDF8)
@@ -796,7 +809,10 @@ fun UpdateDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "অ্যাপ ব্যবহার চালিয়ে যেতে ডাটাবেজে নির্ধারিত ভার্সন v${updateInfo.versionName} (Code: ${updateInfo.versionCode}) ইনস্টল করতে হবে।",
+                    text = tr(
+                        "Version v${updateInfo.versionName} (${updateInfo.versionCode}) is required to continue.",
+                        "অ্যাপ ব্যবহার চালিয়ে যেতে v${updateInfo.versionName} (${updateInfo.versionCode}) ইনস্টল করতে হবে।"
+                    ),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFFEF4444),

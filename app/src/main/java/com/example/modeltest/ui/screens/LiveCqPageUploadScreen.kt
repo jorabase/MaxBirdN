@@ -34,6 +34,8 @@ import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.LocalCqPageUploadItem
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,7 +55,7 @@ fun LiveCqPageUploadScreen(
 
     val question = uiState.liveCqQuestions.firstOrNull { it.id == questionId }
         ?: uiState.liveCqQuestions.firstOrNull()
-        ?: com.example.modeltest.data.ShikhoCqQuestionRaw(id = questionId, title = "প্রশ্ন")
+        ?: com.example.modeltest.data.ShikhoCqQuestionRaw(id = questionId, title = tr("Question", "প্রশ্ন"))
 
     val qIndex = uiState.liveCqQuestions.indexOfFirst { it.id == questionId }.let { if (it >= 0) it + 1 else 1 }
 
@@ -70,7 +72,7 @@ fun LiveCqPageUploadScreen(
                     if (bytes.size > 10 * 1024 * 1024) {
                         android.widget.Toast.makeText(
                             context,
-                            "ছবির সাইজ ১০ MB-এর কম হতে হবে",
+                            AppLang.tr("Image size must be under 10 MB", "ছবির সাইজ ১০ MB-এর কম হতে হবে"),
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
                     } else {
@@ -154,7 +156,10 @@ fun LiveCqPageUploadScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${formatToBengaliNumber(qIndex)} নম্বরের উত্তর সাবমিট করো",
+                            text = tr(
+                                "Submit answer for Question ${formatToBengaliNumber(qIndex)}",
+                                "${formatToBengaliNumber(qIndex)} নম্বরের উত্তর সাবমিট করো"
+                            ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -186,10 +191,10 @@ fun LiveCqPageUploadScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("আপলোড হচ্ছে...", color = Color.White)
+                            Text(tr("Uploading...", "আপলোড হচ্ছে..."), color = Color.White)
                         } else {
                             Text(
-                                text = "সাবমিট করো",
+                                text = tr("Submit", "সাবমিট করো"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -221,7 +226,7 @@ fun LiveCqPageUploadScreen(
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Text(
-                            text = "${formatToBengaliNumber(qIndex)} নম্বর প্রশ্ন",
+                            text = tr("Question ${formatToBengaliNumber(qIndex)}", "${formatToBengaliNumber(qIndex)} নম্বর প্রশ্ন"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -235,7 +240,7 @@ fun LiveCqPageUploadScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "সম্পূর্ণ প্রশ্ন দেখো",
+                            text = tr("View Full Question", "সম্পূর্ণ প্রশ্ন দেখো"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB),
@@ -249,14 +254,14 @@ fun LiveCqPageUploadScreen(
                         Spacer(modifier = Modifier.height(14.dp))
 
                         Text(
-                            text = "সিরিয়াল অনুযায়ী উত্তরপত্র আপলোড করো",
+                            text = tr("Upload pages in order", "সিরিয়াল অনুযায়ী উত্তরপত্র আপলোড করো"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "সর্বোচ্চ ইমেজ সাইজ ১০ MB",
+                            text = tr("Max image size 10 MB", "সর্বোচ্চ ইমেজ সাইজ ১০ MB"),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -280,7 +285,7 @@ fun LiveCqPageUploadScreen(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "${formatToBengaliNumber(pageItem.pageNo)} নম্বর পৃষ্ঠা",
+                                    text = tr("Page ${formatToBengaliNumber(pageItem.pageNo)}", "${formatToBengaliNumber(pageItem.pageNo)} নম্বর পৃষ্ঠা"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -295,7 +300,7 @@ fun LiveCqPageUploadScreen(
                             }
 
                             Text(
-                                text = "রিমুভ করো",
+                                text = tr("Remove", "রিমুভ করো"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFEF4444),
@@ -353,7 +358,7 @@ fun LiveCqPageUploadScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
 
                                     Text(
-                                        text = "প্রিভিউ দেখো",
+                                        text = tr("Preview", "প্রিভিউ দেখো"),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
@@ -383,7 +388,7 @@ fun LiveCqPageUploadScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "${formatToBengaliNumber(nextPageNum)} নম্বর পৃষ্ঠা",
+                            text = tr("Page ${formatToBengaliNumber(nextPageNum)}", "${formatToBengaliNumber(nextPageNum)} নম্বর পৃষ্ঠা"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -412,7 +417,7 @@ fun LiveCqPageUploadScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "ছবি আপলোড করো",
+                                    text = tr("Upload Photo", "ছবি আপলোড করো"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
@@ -430,7 +435,7 @@ fun LiveCqPageUploadScreen(
                 }
             }
 
-            // 4. "আরো ছবি যুক্ত করো" Button (Screenshot 6)
+            // 4. Add More Photo Button
             item {
                 OutlinedButton(
                     onClick = {
@@ -448,7 +453,7 @@ fun LiveCqPageUploadScreen(
                         .height(44.dp)
                 ) {
                     Text(
-                        text = "আরো ছবি যুক্ত করো",
+                        text = tr("Add More Photos", "আরো ছবি যুক্ত করো"),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )

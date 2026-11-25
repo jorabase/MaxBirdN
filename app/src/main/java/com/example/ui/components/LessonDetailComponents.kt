@@ -27,7 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.LessonAttachmentItem
 import com.example.api.StudentLessonItem
+import com.example.utils.AppLang
 import com.example.utils.downloadFile
+import com.example.utils.isBangla
+import com.example.utils.tr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -79,7 +82,7 @@ fun LessonTopicsAccordion(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "ক্লাসের বিষয়বস্তু",
+                    text = tr("Class Topics", "ক্লাসের বিষয়বস্তু"),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF2563EB) // Blue from screenshot
@@ -87,7 +90,7 @@ fun LessonTopicsAccordion(
 
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (isExpanded) "সংকোচন করুন" else "প্রসারিত করুন",
+                    contentDescription = if (isExpanded) tr("Collapse", "সংকোচন করুন") else tr("Expand", "প্রসারিত করুন"),
                     tint = Color(0xFF2563EB),
                     modifier = Modifier.rotate(rotationState)
                 )
@@ -147,7 +150,7 @@ fun LessonTopicsAccordion(
                                 color = Color(0xFFE11D48)
                             )
                             Text(
-                                text = lesson?.title ?: "এই ক্লাসের সকল মূল আলোচ্য বিষয় অন্তর্ভুক্ত রয়েছে",
+                                text = lesson?.title ?: tr("All key topics of this class are included", "এই ক্লাসের সকল মূল আলোচ্য বিষয় অন্তর্ভুক্ত রয়েছে"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF1E293B),
@@ -177,6 +180,7 @@ fun LessonDocumentsSection(
     modifier: Modifier = Modifier
 ) {
     var isRefreshingSlide by remember { mutableStateOf(false) }
+    val isBn = isBangla()
 
     Column(
         modifier = modifier
@@ -184,7 +188,7 @@ fun LessonDocumentsSection(
             .padding(horizontal = 16.dp)
     ) {
         Text(
-            text = "ক্লাস রিসোর্সেস",
+            text = tr("Class Resources", "ক্লাস রিসোর্সেস"),
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -194,12 +198,12 @@ fun LessonDocumentsSection(
 
         val allAttachments = lesson?.allAttachments ?: emptyList()
         val fallbackSlideUrl = lesson?.resolvedSlideUrl ?: lesson?.live_class?.lectureSlideUrl
-        val primarySlideAttachment = remember(allAttachments, fallbackSlideUrl) {
+        val primarySlideAttachment = remember(allAttachments, fallbackSlideUrl, isBn) {
             allAttachments.firstOrNull { it.file_type.equals("pdf", ignoreCase = true) || it.downloadUrl?.contains(".pdf", ignoreCase = true) == true }
                 ?: allAttachments.firstOrNull()
                 ?: fallbackSlideUrl?.takeIf { it.isNotBlank() }?.let {
                     LessonAttachmentItem(
-                        title = "লেকচার স্লাইড (PDF)",
+                        title = AppLang.tr("Lecture Slide (PDF)", "লেকচার স্লাইড (PDF)"),
                         url = it,
                         file_type = "pdf"
                     )
@@ -237,14 +241,14 @@ fun LessonDocumentsSection(
                         )
                         Column {
                             Text(
-                                text = "লেকচার স্লাইড খোঁজা হচ্ছে...",
+                                text = tr("Finding lecture slides...", "লেকচার স্লাইড খোঁজা হচ্ছে..."),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "সার্ভার থেকে ডেটা লোড করা হচ্ছে",
+                                text = tr("Loading from server", "সার্ভার থেকে ডেটা লোড হচ্ছে"),
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -280,7 +284,7 @@ fun LessonDocumentsSection(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CoPresent,
-                                    contentDescription = "লেকচার স্লাইড",
+                                    contentDescription = tr("Lecture Slide", "লেকচার স্লাইড"),
                                     tint = Color(0xFF2563EB),
                                     modifier = Modifier.size(24.dp)
                                 )
@@ -288,7 +292,7 @@ fun LessonDocumentsSection(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "লেকচার স্লাইড",
+                                    text = tr("Lecture Slide", "লেকচার স্লাইড"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -298,9 +302,9 @@ fun LessonDocumentsSection(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = when (downloadedPdf?.status) {
-                                        com.example.database.DownloadedItemEntity.STATUS_COMPLETED -> "ইন-অ্যাপ সংরক্ষিত • অফলাইনে দেখতে ট্যাপ করুন"
-                                        com.example.database.DownloadedItemEntity.STATUS_DOWNLOADING -> "ডাউনলোড হচ্ছে... (${downloadedPdf?.progressPercent}%)"
-                                        else -> primarySlideAttachment.displayTitle.takeIf { it.isNotBlank() && it != "লেকচার স্লাইড" } ?: "পিডিএফ স্লাইড ও নোটস পড়ুন"
+                                        com.example.database.DownloadedItemEntity.STATUS_COMPLETED -> tr("Saved offline • Tap to view", "অফলাইনে সংরক্ষিত • দেখতে ট্যাপ করুন")
+                                        com.example.database.DownloadedItemEntity.STATUS_DOWNLOADING -> tr("Downloading... (${downloadedPdf?.progressPercent}%)", "ডাউনলোড হচ্ছে... (${downloadedPdf?.progressPercent}%)")
+                                        else -> primarySlideAttachment.displayTitle.takeIf { it.isNotBlank() && it != "লেকচার স্লাইড" && it != "Lecture Slide" } ?: tr("View PDF slides & notes", "পিডিএফ স্লাইড ও নোটস পড়ুন")
                                     },
                                     fontSize = 12.sp,
                                     color = if (downloadedPdf?.status == com.example.database.DownloadedItemEntity.STATUS_COMPLETED) Color(0xFF10B981) else Color(0xFF2563EB),
@@ -327,12 +331,12 @@ fun LessonDocumentsSection(
                                     com.example.database.DownloadedItemEntity.STATUS_COMPLETED -> {
                                         IconButton(
                                             onClick = {
-                                                Toast.makeText(context, "এই ফাইলটি ইতোমধ্যে ডাউনলোড করা রয়েছে", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, AppLang.tr("File is already downloaded", "এই ফাইলটি ইতোমধ্যে ডাউনলোড করা রয়েছে"), Toast.LENGTH_SHORT).show()
                                             }
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.DownloadDone,
-                                                contentDescription = "ডাউনলোড সম্পন্ন",
+                                                contentDescription = tr("Downloaded", "ডাউনলোড সম্পন্ন"),
                                                 tint = Color(0xFF10B981),
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -346,7 +350,7 @@ fun LessonDocumentsSection(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Download,
-                                                contentDescription = "ডাউনলোড",
+                                                contentDescription = tr("Download", "ডাউনলোড"),
                                                 tint = Color(0xFF2563EB),
                                                 modifier = Modifier.size(20.dp)
                                             )
@@ -357,7 +361,7 @@ fun LessonDocumentsSection(
 
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                contentDescription = "দেখুন",
+                                contentDescription = tr("View", "দেখুন"),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 modifier = Modifier.size(15.dp)
                             )
@@ -433,7 +437,7 @@ fun LessonDocumentsSection(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.CoPresent,
-                                    contentDescription = "লেকচার স্লাইড",
+                                    contentDescription = tr("Lecture Slide", "লেকচার স্লাইড"),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(24.dp)
                                 )
@@ -441,7 +445,7 @@ fun LessonDocumentsSection(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "লেকচার স্লাইড",
+                                    text = tr("Lecture Slide", "লেকচার স্লাইড"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -450,7 +454,7 @@ fun LessonDocumentsSection(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "এই ক্লাসের স্লাইড শীঘ্রই আপলোড করা হবে",
+                                    text = tr("Slides for this class will be uploaded soon", "এই ক্লাসের স্লাইড শীঘ্রই আপলোড করা হবে"),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2,
@@ -465,7 +469,7 @@ fun LessonDocumentsSection(
                                     if (!isRefreshingSlide) {
                                         isRefreshingSlide = true
                                         onRefreshLesson.invoke()
-                                        Toast.makeText(context, "স্লাইড আপডেট চেক করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, AppLang.tr("Checking for slide updates...", "স্লাইড আপডেট চেক করা হচ্ছে..."), Toast.LENGTH_SHORT).show()
                                         coroutineScope.launch {
                                             delay(1500)
                                             isRefreshingSlide = false
@@ -478,7 +482,7 @@ fun LessonDocumentsSection(
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Refresh,
-                                        contentDescription = "রিফ্রেশ",
+                                        contentDescription = tr("Refresh", "রিফ্রেশ"),
                                         tint = Color(0xFF2563EB),
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -492,12 +496,12 @@ fun LessonDocumentsSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Side-by-side resources cards (চ্যাপ্টার রিসোর্সেস & সাবজেক্ট রিসোর্সেস)
+        // Side-by-side resources cards
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 1. চ্যাপ্টার রিসোর্সেস
+            // 1. Chapter Resources
             Card(
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
@@ -515,7 +519,7 @@ fun LessonDocumentsSection(
                         if (onOpenChapterResources != null) {
                             onOpenChapterResources.invoke()
                         } else {
-                            Toast.makeText(context, "চ্যাপ্টার রিসোর্সেস লোড করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Loading chapter resources...", "চ্যাপ্টার রিসোর্সেস লোড হচ্ছে..."), Toast.LENGTH_SHORT).show()
                         }
                     }
             ) {
@@ -533,7 +537,7 @@ fun LessonDocumentsSection(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "চ্যাপ্টার রিসোর্সেস",
+                        text = tr("Chapter Notes", "চ্যাপ্টার রিসোর্স"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -543,7 +547,7 @@ fun LessonDocumentsSection(
                 }
             }
 
-            // 2. সাবজেক্ট রিসোর্সেস
+            // 2. Subject Resources
             Card(
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(
@@ -561,7 +565,7 @@ fun LessonDocumentsSection(
                         if (onOpenSubjectResources != null) {
                             onOpenSubjectResources.invoke()
                         } else {
-                            Toast.makeText(context, "সাবজেক্ট রিসোর্সেস লোড করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Loading subject resources...", "সাবজেক্ট রিসোর্সেস লোড হচ্ছে..."), Toast.LENGTH_SHORT).show()
                         }
                     }
             ) {
@@ -579,7 +583,7 @@ fun LessonDocumentsSection(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "সাবজেক্ট রিসোর্সেস",
+                        text = tr("Subject Notes", "সাবজেক্ট রিসোর্স"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,

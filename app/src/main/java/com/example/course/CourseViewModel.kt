@@ -215,7 +215,7 @@ class CourseViewModel(
         programId: String,
         isFreeCourse: Boolean
     ): Result<String> {
-        if (programId.isBlank()) return Result.failure(Exception("কোর্স আইডি পাওয়া যায়নি"))
+        if (programId.isBlank()) return Result.failure(Exception(com.example.utils.AppLang.tr("Course ID not found", "কোর্স আইডি পাওয়া যায়নি")))
         val userId = sessionManager.getUserId().orEmpty()
         return if (isFreeCourse) {
             val freeRes = repository.enrollInFreeProgram(programId)
@@ -251,7 +251,7 @@ class CourseViewModel(
         context: android.content.Context? = null
     ) {
         val programId = program.id
-        val programTitle = program.title_bn ?: "কোর্স"
+        val programTitle = program.title_bn ?: com.example.utils.AppLang.tr("Course", "কোর্স")
         val isFree = program.is_free == true
 
         viewModelScope.launch {
@@ -270,9 +270,15 @@ class CourseViewModel(
                 if (res.isSuccess) {
                     val updatedJoined = _uiState.value.shikhoServerJoinedIds + programId
                     val msg = if (isFree) {
-                        "✅ '$programTitle' মূল সার্ভারে যুক্ত হয়েছে! এবার কোর্সটি আমাদের অ্যাপে চালু করতে 'কোর্সে এক্সেস পান' বাটনে ক্লিক করে অ্যাডমিন থেকে এক্সেস নিন।"
+                        com.example.utils.AppLang.tr(
+                            "✅ '$programTitle' added on main server! Tap 'Get Course Access' to activate it in the app via admin.",
+                            "✅ '$programTitle' মূল সার্ভারে যুক্ত হয়েছে! এবার কোর্সটি আমাদের অ্যাপে চালু করতে 'কোর্সে এক্সেস পান' বাটনে ক্লিক করে অ্যাডমিন থেকে এক্সেস নিন।"
+                        )
                     } else {
-                        "✅ '$programTitle' কোর্সে মূল সার্ভারের ৩ দিনের ফ্রি ট্রায়াল যুক্ত হয়েছে! এবার কোর্সটি চালু করতে 'কোর্সে এক্সেস পান' বাটনে ক্লিক করে অ্যাডমিন থেকে কিনুন।"
+                        com.example.utils.AppLang.tr(
+                            "✅ 3-day free trial for '$programTitle' added! Tap 'Get Course Access' to purchase via admin.",
+                            "✅ '$programTitle' কোর্সে মূল সার্ভারের ৩ দিনের ফ্রি ট্রায়াল যুক্ত হয়েছে! এবার কোর্সটি চালু করতে 'কোর্সে এক্সেস পান' বাটনে ক্লিক করে অ্যাডমিন থেকে কিনুন।"
+                        )
                     }
                     if (context != null) {
                         android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
@@ -287,7 +293,7 @@ class CourseViewModel(
                     fetchEnrolledPrograms()
                 } else {
                     val errMsg = res.exceptionOrNull()?.localizedMessage
-                        ?: "মূল সার্ভারে ইতিমধ্যে যুক্ত আছে অথবা যুক্ত করা যায়নি"
+                        ?: com.example.utils.AppLang.tr("Already added or could not enroll on main server", "মূল সার্ভারে ইতিমধ্যে যুক্ত আছে অথবা যুক্ত করা যায়নি")
                     if (context != null) {
                         android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
                     }
@@ -300,7 +306,7 @@ class CourseViewModel(
                     fetchEnrolledPrograms()
                 }
             } catch (e: Exception) {
-                val errMsg = e.localizedMessage ?: "মূল সার্ভারে যুক্ত করতে সমস্যা হয়েছে"
+                val errMsg = e.localizedMessage ?: com.example.utils.AppLang.tr("Failed to enroll on main server", "মূল সার্ভারে যুক্ত করতে সমস্যা হয়েছে")
                 if (context != null) {
                     android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
                 }
@@ -354,7 +360,7 @@ class CourseViewModel(
                 itemState.effectiveState == CourseAccessState.APPROVED_TO_BUY ||
                 itemState.effectiveState == CourseAccessState.PAYMENT_REJECTED
             ) {
-                openPaymentSheetForCourse(program.id, program.title_bn ?: "কোর্স")
+                openPaymentSheetForCourse(program.id, program.title_bn ?: com.example.utils.AppLang.tr("Course", "কোর্স"))
             }
             return
         }
@@ -375,7 +381,7 @@ class CourseViewModel(
             }
         }
 
-        val title = program.title_bn ?: "প্রোগ্রাম"
+        val title = program.title_bn ?: com.example.utils.AppLang.tr("Program", "প্রোগ্রাম")
         _uiState.update { 
             it.copy(
                 selectedCourseProgram = program,
@@ -457,7 +463,7 @@ class CourseViewModel(
                 }
                 fetchEnrolledPrograms()
             }.onFailure { err ->
-                val errMsg = err.localizedMessage ?: "রিকোয়েস্ট পাঠাতে সমস্যা হয়েছে"
+                val errMsg = err.localizedMessage ?: com.example.utils.AppLang.tr("Failed to send request", "রিকোয়েস্ট পাঠাতে সমস্যা হয়েছে")
                 if (context != null) {
                     android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
                 }
@@ -518,7 +524,7 @@ class CourseViewModel(
                 }
                 fetchEnrolledPrograms()
             }.onFailure { err ->
-                val errMsg = err.localizedMessage ?: "ফ্রি ট্রায়াল চালু করতে সমস্যা হয়েছে"
+                val errMsg = err.localizedMessage ?: com.example.utils.AppLang.tr("Failed to start free trial", "ফ্রি ট্রায়াল চালু করতে সমস্যা হয়েছে")
                 if (context != null) {
                     android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
                 }
@@ -580,7 +586,7 @@ class CourseViewModel(
                 fetchEnrolledPrograms()
                 onPaymentSubmitted?.invoke()
             }.onFailure { err ->
-                val errMsg = err.localizedMessage ?: "পেমেন্ট জমা দিতে সমস্যা হয়েছে"
+                val errMsg = err.localizedMessage ?: com.example.utils.AppLang.tr("Failed to submit payment", "পেমেন্ট জমা দিতে সমস্যা হয়েছে")
                 if (context != null) {
                     android.widget.Toast.makeText(context, errMsg, android.widget.Toast.LENGTH_LONG).show()
                 }
@@ -711,7 +717,10 @@ class CourseViewModel(
                         shikhoServerJoinedIds = joinedOnShikhoServer,
                         isProgramsLoading = false,
                         enrollmentErrorMessage = if (current.enrolledPrograms.isEmpty() && current.otherPrograms.isEmpty()) {
-                            "কোর্স তালিকা লোড করা যায়নি। ইন্টারনেট সংযোগ যাচাই করে আবার চেষ্টা করুন।"
+                            com.example.utils.AppLang.tr(
+                                "Could not load course list. Please check your internet connection and try again.",
+                                "কোর্স তালিকা লোড করা যায়নি। ইন্টারনেট সংযোগ যাচাই করে আবার চেষ্টা করুন।"
+                            )
                         } else null
                     )
                 }
@@ -731,7 +740,7 @@ class CourseViewModel(
             CourseAccessState.LOCKED_BLURRED -> {
                 requestCoursePurchaseAccess(
                     programId = program.id,
-                    programTitle = program.title_bn ?: "কোর্স",
+                    programTitle = program.title_bn ?: com.example.utils.AppLang.tr("Course", "কোর্স"),
                     bannerUrl = program.banner_url,
                     context = context
                 )
@@ -740,7 +749,10 @@ class CourseViewModel(
                 if (context != null) {
                     android.widget.Toast.makeText(
                         context,
-                        "আপনার রিকোয়েস্ট অ্যাডমিন প্যানেলে পেন্ডিং আছে। অ্যাডমিন দাম ও কিস্তি নির্ধারণ করলে এখানে কেনার অপশন চালু হবে।",
+                        com.example.utils.AppLang.tr(
+                            "Your request is pending admin review. Once pricing is set, payment options will appear here.",
+                            "আপনার রিকোয়েস্ট অ্যাডমিন প্যানেলে পেন্ডিং আছে। অ্যাডমিন দাম ও কিস্তি নির্ধারণ করলে এখানে কেনার অপশন চালু হবে।"
+                        ),
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 }
@@ -749,13 +761,16 @@ class CourseViewModel(
             CourseAccessState.APPROVED_TO_BUY,
             CourseAccessState.PAYMENT_REJECTED,
             CourseAccessState.INSTALLMENT_OVERDUE -> {
-                openPaymentSheetForCourse(program.id, program.title_bn ?: "কোর্স")
+                openPaymentSheetForCourse(program.id, program.title_bn ?: com.example.utils.AppLang.tr("Course", "কোর্স"))
             }
             CourseAccessState.PAYMENT_PENDING -> {
                 if (context != null) {
                     android.widget.Toast.makeText(
                         context,
-                        "আপনার পেমেন্ট যাচাই চলছে। অ্যাডমিন এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।",
+                        com.example.utils.AppLang.tr(
+                            "Your payment is being verified. The course will unlock once approved by admin.",
+                            "আপনার পেমেন্ট যাচাই চলছে। অ্যাডমিন এপ্রুভ করলেই কোর্সটি আনলক হয়ে যাবে।"
+                        ),
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 }
@@ -833,7 +848,7 @@ class CourseViewModel(
                                 newAttachments.add(
                                     LessonAttachmentItem(
                                         id = mat.id,
-                                        title = mat.name ?: "লেকচার স্লাইড (PDF)",
+                                        title = mat.name ?: com.example.utils.AppLang.tr("Lecture Slide (PDF)", "লেকচার স্লাইড (PDF)"),
                                         url = mat.file_url,
                                         file_type = "pdf"
                                     )
@@ -971,7 +986,7 @@ class CourseViewModel(
      */
     fun selectLessonById(lessonId: String) {
         val existing = _uiState.value.lessons.find { it.id == lessonId }
-            ?: StudentLessonItem(id = lessonId, title = "ক্লাস লেকচার")
+            ?: StudentLessonItem(id = lessonId, title = com.example.utils.AppLang.tr("Class Lecture", "ক্লাস লেকচার"))
         selectLesson(existing)
     }
 
@@ -987,7 +1002,7 @@ class CourseViewModel(
     ) {
         chaptersCache.clear()
         lessonsCache.clear()
-        val title = if (!newProgramTitle.isNullOrBlank()) newProgramTitle else "এইচএসসি কোর্স"
+        val title = if (!newProgramTitle.isNullOrBlank()) newProgramTitle else com.example.utils.AppLang.tr("HSC Course", "এইচএসসি কোর্স")
         // NOTE: Do NOT call sessionManager.saveActiveProgram(...) here!
         // sessionManager.saveActiveProgram is strictly reserved for the Home screen's Course Switcher.
         _uiState.update {
@@ -1021,7 +1036,7 @@ class CourseViewModel(
             val currentProgId = _uiState.value.programId
             val programId = if (currentProgId.isNotBlank()) currentProgId else (sessionManager.getActiveProgramId() ?: "")
             val currentProgTitle = _uiState.value.programTitle
-            val programTitle = if (currentProgTitle.isNotBlank()) currentProgTitle else (sessionManager.getActiveProgramTitleBn() ?: "এইচএসসি কোর্স")
+            val programTitle = if (currentProgTitle.isNotBlank()) currentProgTitle else (sessionManager.getActiveProgramTitleBn() ?: com.example.utils.AppLang.tr("HSC Course", "এইচএসসি কোর্স"))
 
             val oldProgramId = _uiState.value.programId
             val isProgramChanged = oldProgramId.isNotBlank() && oldProgramId != programId
@@ -1054,7 +1069,7 @@ class CourseViewModel(
                 _uiState.update { 
                     it.copy(
                         isSubjectsLoading = false,
-                        subjectsErrorMessage = "কোনো সক্রিয় কোর্স পাওয়া যায়নি। অনুগ্রহ করে হোম পেজ থেকে একটি কোর্স নির্বাচন করুন।"
+                        subjectsErrorMessage = com.example.utils.AppLang.tr("No active course found. Please select a course from Home.", "কোনো সক্রিয় কোর্স পাওয়া যায়নি। অনুগ্রহ করে হোম পেজ থেকে একটি কোর্স নির্বাচন করুন।")
                     )
                 }
                 return@launch
@@ -1141,7 +1156,7 @@ class CourseViewModel(
                     it.copy(
                         subjects = subjectWithProgressList,
                         isSubjectsLoading = false,
-                        subjectsErrorMessage = if (subjectWithProgressList.isEmpty()) "কোনো বিষয় পাওয়া যায়নি" else null
+                        subjectsErrorMessage = if (subjectWithProgressList.isEmpty()) com.example.utils.AppLang.tr("No subjects found", "কোনো বিষয় পাওয়া যায়নি") else null
                     )
                 }
             } catch (e: Exception) {
@@ -1149,7 +1164,10 @@ class CourseViewModel(
                 _uiState.update {
                     it.copy(
                         isSubjectsLoading = false,
-                        subjectsErrorMessage = "বিষয় লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        subjectsErrorMessage = com.example.utils.AppLang.tr(
+                            "Failed to load subjects: ${e.localizedMessage ?: "Network error"}",
+                            "বিষয় লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        )
                     )
                 }
             }
@@ -1270,7 +1288,10 @@ class CourseViewModel(
                 }
 
                 val finalError = if (chaptersList.isEmpty()) {
-                    if (queryError != null) "অধ্যায় লোড করতে সমস্যা হয়েছে: ${queryError.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                    if (queryError != null) com.example.utils.AppLang.tr(
+                        "Failed to load chapters: ${queryError.localizedMessage ?: "Network error"}",
+                        "অধ্যায় লোড করতে সমস্যা হয়েছে: ${queryError.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                    )
                     else null
                 } else null
 
@@ -1298,7 +1319,10 @@ class CourseViewModel(
                 _uiState.update {
                     it.copy(
                         isChaptersLoading = false,
-                        chaptersErrorMessage = "অধ্যায় লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        chaptersErrorMessage = com.example.utils.AppLang.tr(
+                            "Could not load chapters: ${e.localizedMessage ?: "Network error"}",
+                            "অধ্যায় লোড করা যায়নি: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        )
                     )
                 }
             }
@@ -1502,7 +1526,7 @@ class CourseViewModel(
                     it.copy(
                         lessons = enrichedMatched,
                         isLessonsLoading = false,
-                        lessonsErrorMessage = if (enrichedMatched.isEmpty()) "এই অধ্যায়ে কোনো ক্লাস পাওয়া যায়নি" else null,
+                        lessonsErrorMessage = if (enrichedMatched.isEmpty()) com.example.utils.AppLang.tr("No classes found in this chapter", "এই অধ্যায়ে কোনো ক্লাস পাওয়া যায়নি") else null,
                         lessonsDiagnosticInfo = null
                     )
                 }
@@ -1513,7 +1537,10 @@ class CourseViewModel(
                     it.copy(
                         lessons = enrichedInitial,
                         isLessonsLoading = false,
-                        lessonsErrorMessage = if (enrichedInitial.isEmpty()) "ক্লাস লোড করতে সমস্যা হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}" else null
+                        lessonsErrorMessage = if (enrichedInitial.isEmpty()) com.example.utils.AppLang.tr(
+                            "Failed to load classes: ${e.localizedMessage ?: "Network error"}",
+                            "ক্লাস লোড করতে সমস্যা হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক সমস্যা"}"
+                        ) else null
                     )
                 }
             }

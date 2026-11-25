@@ -31,6 +31,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.download.DownloadQualityOption
+import com.example.utils.tr
 
 @Composable
 fun VideoDownloadQualityDialog(
@@ -129,13 +130,13 @@ fun VideoDownloadQualityDialog(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "অফলাইন ভিডিও ডাউনলোড",
+                                text = tr("Download Video", "ভিডিও ডাউনলোড"),
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = title.ifBlank { "পছন্দের রেজুলেশন সিলেক্ট করে সেভ করুন" },
+                                text = title.ifBlank { tr("Choose quality to save offline", "পছন্দের রেজুলেশন সিলেক্ট করুন") },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -168,7 +169,7 @@ fun VideoDownloadQualityDialog(
                                 )
                                 Spacer(modifier = Modifier.height(14.dp))
                                 Text(
-                                    text = "ভিডিও রেজুলেশন ও সম্ভাব্য সাইজ যাচাই করা হচ্ছে...",
+                                    text = tr("Checking available resolutions & sizes...", "ভিডিও রেজুলেশন ও সাইজ যাচাই হচ্ছে..."),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -244,7 +245,7 @@ fun VideoDownloadQualityDialog(
                                                             color = Color(0xFF10B981).copy(alpha = 0.15f)
                                                         ) {
                                                             Text(
-                                                                text = "সেরা পছন্দ",
+                                                                text = tr("Best", "সেরা পছন্দ"),
                                                                 fontSize = 10.sp,
                                                                 fontWeight = FontWeight.Bold,
                                                                 color = Color(0xFF059669),
@@ -270,7 +271,7 @@ fun VideoDownloadQualityDialog(
                                                                 )
                                                                 Spacer(modifier = Modifier.width(2.dp))
                                                                 Text(
-                                                                    text = "সংরক্ষিত",
+                                                                    text = tr("Saved", "সংরক্ষিত"),
                                                                     fontSize = 9.sp,
                                                                     fontWeight = FontWeight.Bold,
                                                                     color = Color(0xFF0284C7)
@@ -319,7 +320,7 @@ fun VideoDownloadQualityDialog(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = "বাতিল",
+                                text = tr("Cancel", "বাতিল"),
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp
                             )
@@ -347,7 +348,7 @@ fun VideoDownloadQualityDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isAlreadyDownloaded) "ইতিমধ্যে সেভ করা" else "ডাউনলোড শুরু",
+                                text = if (isAlreadyDownloaded) tr("Already Saved", "ইতিমধ্যে সেভ করা") else tr("Download", "ডাউনলোড করুন"),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )

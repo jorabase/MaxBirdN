@@ -64,6 +64,7 @@ import com.example.smartnotes.SmartNotesViewModelFactory
 import com.example.syllabus.ChangeSyllabusViewModel
 import com.example.syllabus.ChangeSyllabusViewModelFactory
 import com.example.ui.screens.*
+import com.example.utils.AppLang
 import com.example.utils.ClassTypeUtils
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -488,7 +489,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     modelTestId = mTestId,
                     lessonId = lesson.id,
                     userActivityState = lesson.user_activity_state ?: "",
-                    title = lesson.title ?: "মডেল টেস্ট",
+                    title = lesson.title ?: AppLang.tr("Model Test", "মডেল টেস্ট"),
                     startTime = lesson.start_time ?: "",
                     endTime = lesson.end_time ?: ""
                 )
@@ -501,7 +502,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 ?: lesson.live_class?.session_id?.takeIf { it.isNotBlank() }
                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                 ?: lesson.id
-            val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: "অধ্যায় পরীক্ষা")
+            val title = ClassTypeUtils.formatLessonTitle(lesson.title ?: AppLang.tr("Chapter Exam", "অধ্যায় পরীক্ষা"))
             val chapter = lesson.live_class?.chapter_name?.takeIf { it.isNotBlank() }
                 ?: lesson.chapter_name?.takeIf { it.isNotBlank() }
                 ?: courseViewModel.uiState.value.selectedLesson?.chapter_name?.takeIf { it.isNotBlank() }
@@ -534,8 +535,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 ?: lesson.content_id?.takeIf { it.isNotBlank() }
                 ?: lesson.id ?: ""
             val lessonId = lesson.id ?: classId
-            val title = lesson.title ?: "লাইভ ক্লাস"
-            val subject = lesson.subject_name ?: "বিষয়"
+            val title = lesson.title ?: AppLang.tr("Live Class", "লাইভ ক্লাস")
+            val subject = lesson.subject_name ?: AppLang.tr("Subject", "বিষয়")
             courseViewModel.selectLesson(lesson)
             navController.navigate(
                 Routes.liveClassRoute(
@@ -986,7 +987,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                             modelTestId = mTestId,
                             lessonId = lesson.id ?: "",
                             userActivityState = lesson.user_activity_state ?: "",
-                            title = lesson.title ?: "মডেল টেস্ট",
+                            title = lesson.title ?: AppLang.tr("Model Test", "মডেল টেস্ট"),
                             startTime = lesson.start_time ?: "",
                             endTime = lesson.end_time ?: ""
                         )
@@ -1406,7 +1407,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                         ?: ""
                     val sCode = lesson?.subject_code?.takeIf { it.isNotBlank() }
                         ?: courseUiState.selectedSubjectCode
-                    val encodedTitle = safeUrlEncode(courseUiState.selectedSubjectTitle.ifBlank { "রিসোর্স" })
+                    val encodedTitle = safeUrlEncode(courseUiState.selectedSubjectTitle.ifBlank { AppLang.tr("Resources", "রিসোর্স") })
                     val encodedColor = safeUrlEncode(courseUiState.selectedSubjectColor.ifBlank { "#0072EC" })
                     val encodedPhase = safeUrlEncode(lesson?.phase_id)
 
@@ -1423,7 +1424,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     val lesson = courseUiState.selectedLesson
                     val sCode = lesson?.subject_code?.takeIf { it.isNotBlank() }
                         ?: courseUiState.selectedSubjectCode
-                    val encodedTitle = safeUrlEncode(courseUiState.selectedSubjectTitle.ifBlank { "রিসোর্স" })
+                    val encodedTitle = safeUrlEncode(courseUiState.selectedSubjectTitle.ifBlank { AppLang.tr("Resources", "রিসোর্স") })
                     val encodedColor = safeUrlEncode(courseUiState.selectedSubjectColor.ifBlank { "#0072EC" })
                     val encodedPhase = safeUrlEncode(lesson?.phase_id)
                     if (sCode.isNotBlank()) {
@@ -1983,8 +1984,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             com.example.liveclass.LiveClassPage(
                 classId = classId,
                 lessonId = lessonId,
-                lessonTitle = lessonTitle.ifBlank { selectedLesson?.title ?: "লাইভ ক্লাস" },
-                subjectName = subjectName.ifBlank { fallbackSubject.ifBlank { "বিষয়" } },
+                lessonTitle = lessonTitle.ifBlank { selectedLesson?.title ?: AppLang.tr("Live Class", "লাইভ ক্লাস") },
+                subjectName = subjectName.ifBlank { fallbackSubject.ifBlank { AppLang.tr("Subject", "বিষয়") } },
                 initialCandidateUrls = candidateUrls,
                 sessionManager = sessionManager,
                 onBack = {

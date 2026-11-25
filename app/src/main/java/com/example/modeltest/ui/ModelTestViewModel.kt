@@ -92,7 +92,7 @@ data class ModelTestUiState(
 
     // Live CQ Exam & Upload State (Screenshots 3-13)
     val liveCqExamId: String = "",
-    val liveCqUCode: String = "৪২৮৭",
+    val liveCqUCode: String = com.example.utils.AppLang.digits("4287"),
     val liveCqQuestions: List<ShikhoCqQuestionRaw> = emptyList(),
     val liveCqUploadInfo: CqUploadRelatedInfo? = null,
     val liveCqRemainingSeconds: Long = 0L,
@@ -105,7 +105,7 @@ data class ModelTestUiState(
     val showFinalSubmitDialog: Boolean = false,
     val showViewQuestionDialog: Boolean = false,
     val dialogViewingQuestion: ShikhoCqQuestionRaw? = null,
-    val liveExamPublishTime: String = "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়",
+    val liveExamPublishTime: String = com.example.utils.AppLang.tr("30 Sep, 2026 | 11:00 AM", "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়"),
     val liveExamFinalResult: ModelTestPreResultDetails? = null,
 
     // CQ Exam Upload Screen State (Main Exam)
@@ -219,7 +219,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isModelTestsLoading = false,
-                        modelTestsError = err.message ?: "মডেল টেস্ট লোড করতে সমস্যা হয়েছে"
+                        modelTestsError = err.message ?: com.example.utils.AppLang.tr("Failed to load model tests", "মডেল টেস্ট লোড করতে সমস্যা হয়েছে")
                     )
                 }
             }
@@ -251,7 +251,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isClassesLoading = false,
-                        classesError = err.message ?: "ক্লাস লোড করতে সমস্যা হয়েছে"
+                        classesError = err.message ?: com.example.utils.AppLang.tr("Failed to load classes", "ক্লাস লোড করতে সমস্যা হয়েছে")
                     )
                 }
             }
@@ -337,7 +337,7 @@ class ModelTestViewModel(
                         // If GraphQL fails, provide a fallback details item from lesson times
                         modelTestInfo = it.modelTestInfo ?: ModelTestInfoDetails(
                             id = modelTestId,
-                            title = "মডেল টেস্ট",
+                            title = com.example.utils.AppLang.tr("Model Test", "মডেল টেস্ট"),
                             start_time = lessonStartTime,
                             end_time = lessonEndTime,
                             is_completed = isEffectivelyCompleted,
@@ -445,7 +445,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isMcqLoading = false,
-                        mcqError = err.message ?: "MCQ প্রশ্ন লোড করা যায়নি"
+                        mcqError = err.message ?: com.example.utils.AppLang.tr("Could not load MCQ questions", "MCQ প্রশ্ন লোড করা যায়নি")
                     )
                 }
             }
@@ -607,7 +607,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isCqLoading = false,
-                        cqError = err.message ?: "CQ প্রশ্ন লোড করা যায়নি"
+                        cqError = err.message ?: com.example.utils.AppLang.tr("Could not load CQ questions", "CQ প্রশ্ন লোড করা যায়নি")
                     )
                 }
             }
@@ -649,7 +649,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isPreResultLoading = false,
-                        preResultError = err.message ?: "সার্বিক ফলাফল লোড করা যায়নি"
+                        preResultError = err.message ?: com.example.utils.AppLang.tr("Could not load overall result", "সার্বিক ফলাফল লোড করা যায়নি")
                     )
                 }
             }
@@ -675,7 +675,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isFeedbackLoading = false,
-                        feedbackError = err.message ?: "ফিডব্যাক লোড করা যায়নি। আবার চেষ্টা করুন।"
+                        feedbackError = err.message ?: com.example.utils.AppLang.tr("Could not load feedback. Please try again.", "ফিডব্যাক লোড করা যায়নি। আবার চেষ্টা করুন।")
                     )
                 }
             }
@@ -713,7 +713,7 @@ class ModelTestViewModel(
                     mcqMasterSolutionUrl = if (solutionType == "mcq") url else it.mcqMasterSolutionUrl,
                     cqMasterSolutionUrl = if (solutionType == "cq") url else it.cqMasterSolutionUrl,
                     isMasterSolutionLoading = false,
-                    masterSolutionError = if (url.isNullOrBlank()) "সল্যুশন পাওয়া যায়নি" else null
+                    masterSolutionError = if (url.isNullOrBlank()) com.example.utils.AppLang.tr("Solution not found", "সল্যুশন পাওয়া যায়নি") else null
                 )
             }
             if (!url.isNullOrBlank()) {
@@ -760,7 +760,7 @@ class ModelTestViewModel(
 
             val rawUCode = sessionDetails?.getFormattedUCode()?.ifBlank { null }
                 ?: sessionDetails?.questions?.firstOrNull { !it.u_code?.toString().isNullOrBlank() }?.u_code?.toString()
-                ?: effectiveCqId.filter { it.isDigit() }.takeLast(4).let { if (it.length == 4) it else "৮২৯৪" }
+                ?: effectiveCqId.filter { it.isDigit() }.takeLast(4).let { if (it.length == 4) it else com.example.utils.AppLang.digits("8294") }
             val uCode = if (rawUCode.any { it in '0'..'9' }) toBengaliDigits(rawUCode) else rawUCode
 
             val questions = sessionDetails?.questions?.takeIf { it.isNotEmpty() } ?: emptyList()
@@ -903,7 +903,7 @@ class ModelTestViewModel(
                 _uiState.update {
                     it.copy(
                         isLiveCqUploading = false,
-                        liveCqUploadError = e.message ?: "আপলোড সম্পন্ন করা যায়নি"
+                        liveCqUploadError = e.message ?: com.example.utils.AppLang.tr("Upload could not be completed", "আপলোড সম্পন্ন করা যায়নি")
                     )
                 }
             }
@@ -955,7 +955,7 @@ class ModelTestViewModel(
                 LessonCacheManager.markLessonCompletedInCache(modelTestId)
             }
             val publishTime = repository.getModelTestResultPublishTime(modelTestId).getOrNull()
-                ?: "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়"
+                ?: com.example.utils.AppLang.tr("30 Sep, 2026 | 11:00 AM", "৩০ সেপ্টেম্বর, ২০২৬ | সকাল ১১ টায়")
             val preResult = repository.getModelTestPreResult(modelTestId).getOrNull()
 
             _uiState.update {

@@ -531,7 +531,7 @@ class ModelTestRepository(
 
                     ModelTestMcqQuestion(
                         id = rawQ.id,
-                        question = rawQ.title ?: "প্রশ্ন ${qIdx + 1}",
+                        question = rawQ.title ?: com.example.utils.AppLang.tr("Question ${qIdx + 1}", "প্রশ্ন ${qIdx + 1}"),
                         question_image = null,
                         options = options,
                         marks = 1.0,
@@ -813,7 +813,7 @@ class ModelTestRepository(
                 val accuracy = if (totalMax > 0) (totalObtained / totalMax) * 100.0 else 0.0
 
                 raw.copy(
-                    model_test_title = raw.title ?: raw.model_test_title ?: "মডেল টেস্ট ফলাফল",
+                    model_test_title = raw.title ?: raw.model_test_title ?: com.example.utils.AppLang.tr("Model Test Result", "মডেল টেস্ট ফলাফল"),
                     total_score = totalObtained,
                     total_marks = totalMax,
                     mcq_score = mcqMarks,
@@ -825,7 +825,7 @@ class ModelTestRepository(
                 )
             } else {
                 ModelTestPreResultDetails(
-                    model_test_title = "মডেল টেস্ট ফলাফল",
+                    model_test_title = com.example.utils.AppLang.tr("Model Test Result", "মডেল টেস্ট ফলাফল"),
                     total_score = 0.0,
                     total_marks = 100.0,
                     mcq_score = 0.0,
@@ -966,13 +966,19 @@ class ModelTestRepository(
 
                     val resolvedTitle = rawQ.title?.takeIf { it.isNotBlank() }
                         ?: baseQuestionsById[rawQ.id]?.question?.takeIf { it.isNotBlank() }
-                        ?: "প্রশ্ন ${qIdx + 1}"
+                        ?: com.example.utils.AppLang.tr("Question ${qIdx + 1}", "প্রশ্ন ${qIdx + 1}")
 
                     val correctOptDesc = options.getOrNull(correctIdx)?.text?.takeIf { it.isNotBlank() }
                     val fallbackSol = if (!correctOptDesc.isNullOrBlank()) {
-                        "সঠিক উত্তর: ($correctLetterBengali) — $correctOptDesc"
+                        com.example.utils.AppLang.tr(
+                            "Correct Answer: ($correctLetterBengali) — $correctOptDesc",
+                            "সঠিক উত্তর: ($correctLetterBengali) — $correctOptDesc"
+                        )
                     } else {
-                        "সঠিক উত্তর: ($correctLetterBengali)"
+                        com.example.utils.AppLang.tr(
+                            "Correct Answer: ($correctLetterBengali)",
+                            "সঠিক উত্তর: ($correctLetterBengali)"
+                        )
                     }
 
                     FeedbackQuestionItem(
@@ -1022,13 +1028,16 @@ class ModelTestRepository(
                     val correctLetterBengali = com.example.utils.McqAnswerUtils.indexToBengaliLetter(correctIdx)
                     FeedbackQuestionItem(
                         id = q.id,
-                        question_text = q.question ?: "প্রশ্ন ${qIdx + 1}",
+                        question_text = q.question ?: com.example.utils.AppLang.tr("Question ${qIdx + 1}", "প্রশ্ন ${qIdx + 1}"),
                         question_image = q.question_image,
                         options = q.options ?: emptyList(),
                         user_selected_option = userIdx,
                         correct_option = correctIdx,
                         is_correct = isCorrect,
-                        solution = "সঠিক উত্তর: ($correctLetterBengali)",
+                        solution = com.example.utils.AppLang.tr(
+                            "Correct Answer: ($correctLetterBengali)",
+                            "সঠিক উত্তর: ($correctLetterBengali)"
+                        ),
                         solution_image = null
                     )
                 }
@@ -1036,7 +1045,7 @@ class ModelTestRepository(
                 val wrongCnt = items.count { it.user_selected_option != null && it.is_correct == false }
                 val unattemptedCnt = items.count { it.user_selected_option == null }
                 McqFeedbackDetails(
-                    message = "সফলভাবে ফিডব্যাক লোড হয়েছে",
+                    message = com.example.utils.AppLang.tr("Feedback loaded successfully", "সফলভাবে ফিডব্যাক লোড হয়েছে"),
                     total_questions = items.size,
                     correct_count = correctCnt,
                     wrong_count = wrongCnt,
@@ -1044,7 +1053,7 @@ class ModelTestRepository(
                     questions = items
                 )
             } else {
-                throw Exception("ফিডব্যাক লোড করা সম্ভব হয়নি।")
+                throw Exception(com.example.utils.AppLang.tr("Could not load feedback.", "ফিডব্যাক লোড করা সম্ভব হয়নি।"))
             }
         }
     }

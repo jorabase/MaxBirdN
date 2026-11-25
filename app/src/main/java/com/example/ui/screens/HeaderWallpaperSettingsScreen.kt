@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.auth.SessionManager
@@ -50,7 +51,9 @@ import com.example.ui.theme.ImportedWallpaperTheme
 import com.example.ui.theme.LiveHeaderBackground
 import com.example.ui.theme.WallpaperPresetItem
 import com.example.ui.theme.isAppInDarkTheme
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.utils.AppLang
+import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,17 +68,17 @@ fun HeaderWallpaperSettingsScreen(
     val importedThemes by sessionManager.importedCustomThemesFlow.collectAsStateWithLifecycle()
     val isDark = isAppInDarkTheme()
 
-    var selectedCategory by remember { mutableStateOf("সব থিম") }
+    var selectedCategoryKey by remember { mutableStateOf(HeaderWallpaperPresets.CAT_ALL) }
     var showImportCodeDialog by remember { mutableStateOf(false) }
 
     val userName = remember {
-        sessionManager.getUserFullName()?.takeIf { it.isNotBlank() } ?: "শিক্ষার্থী"
+        sessionManager.getUserFullName()?.takeIf { it.isNotBlank() } ?: AppLang.tr("Student", "শিক্ষার্থী")
     }
     val classDisplay = remember {
-        sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: "HSC '26"
+        sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: "HSC"
     }
     val activeCourseTitle = remember {
-        sessionManager.getActiveProgramTitleBn() ?: "অ্যাকাডেমিক প্রোগ্রাম"
+        sessionManager.getActiveProgramTitleBn() ?: AppLang.tr("Academic Program", "একাডেমিক প্রোগ্রাম")
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -90,10 +93,14 @@ fun HeaderWallpaperSettingsScreen(
             val updated = currentConfig.copy(
                 type = HeaderWallpaperConfig.CUSTOM_IMAGE,
                 customUri = uri.toString(),
-                customTitle = "কাস্টম গ্যালারি ওয়ালপেপার"
+                customTitle = AppLang.tr("Custom Photo", "গ্যালারি ছবি")
             )
             sessionManager.setHeaderWallpaperConfig(updated)
-            Toast.makeText(context, "নিজস্ব ওয়ালপেপার সেট করা হয়েছে!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                AppLang.tr("Custom wallpaper applied", "নিজস্ব ওয়ালপেপার সেট হয়েছে"),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -103,13 +110,13 @@ fun HeaderWallpaperSettingsScreen(
     val primaryText = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
     val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
-    val filteredPresets = remember(selectedCategory) {
-        if (selectedCategory == "সব থিম") {
-            HeaderWallpaperPresets.presets
-        } else {
-            HeaderWallpaperPresets.presets.filter { it.categoryBn == selectedCategory }
-        }
+    val filteredPresets = remember(selectedCategoryKey) {
+        HeaderWallpaperPresets.presets.filter { HeaderWallpaperPresets.matchesCategory(it, selectedCategoryKey) }
     }
+
+    val isAutoDailyActive = currentConfig.type == HeaderWallpaperConfig.PRESET_AUTO_DAILY
+    val todayDayIndex = remember { HeaderWallpaperPresets.getTodayDayIndex() }
+    val todayPreset = remember(todayDayIndex) { HeaderWallpaperPresets.getPresetForDayIndex(todayDayIndex) }
 
     Scaffold(
         topBar = {
@@ -117,15 +124,18 @@ fun HeaderWallpaperSettingsScreen(
                 title = {
                     Column {
                         Text(
-                            text = "হেডার থিম স্টুডিও",
-                            fontSize = 17.sp,
+                            text = tr("Banner Themes", "ব্যানার থিম"),
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = primaryText,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${com.example.utils.toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি প্রিমিয়াম লাইভ থিম ও কাস্টম কোড",
+                            text = tr(
+                                "${HeaderWallpaperPresets.presets.size} interactive themes • 7-day auto",
+                                "${toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি ইন্টারঅ্যাক্টিভ থিম • ৭ দিনের অটো"
+                            ),
                             fontSize = 11.5.sp,
                             color = secondaryText,
                             maxLines = 1,
@@ -140,7 +150,7 @@ fun HeaderWallpaperSettingsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = tr("Back", "পেছনে"),
                             tint = primaryText
                         )
                     }
@@ -157,7 +167,7 @@ fun HeaderWallpaperSettingsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Code,
-                            contentDescription = "Import Theme Code",
+                            contentDescription = tr("Theme Code", "থিম কোড"),
                             tint = Color(0xFF8B5CF6)
                         )
                     }
@@ -175,13 +185,13 @@ fun HeaderWallpaperSettingsScreen(
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. Live Interactive Header Preview Card
+            // 1. Live Interactive Preview Card
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = cardBg),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                 border = BorderStroke(1.dp, cardBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -198,15 +208,15 @@ fun HeaderWallpaperSettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
+                                imageVector = Icons.Default.TouchApp,
                                 contentDescription = null,
                                 tint = Color(0xFF38BDF8),
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "লাইভ হেডার প্রিভিউ",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold,
+                                text = tr("Tap or drag to interact", "টাচ বা ড্র্যাগ করে দেখুন"),
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = primaryText
                             )
                         }
@@ -214,26 +224,15 @@ fun HeaderWallpaperSettingsScreen(
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = Color(0xFF10B981).copy(alpha = 0.14f),
-                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f))
+                            border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.28f))
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                            Text(
+                                text = if (currentConfig.isAnimationEnabled) tr("Live", "লাইভ") else tr("Static", "স্থির"),
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10B981),
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AllInclusive,
-                                    contentDescription = null,
-                                    tint = Color(0xFF10B981),
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (currentConfig.isAnimationEnabled) "অবিরাম ৬০ FPS লুপ" else "স্থির মোড",
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF10B981)
-                                )
-                            }
+                            )
                         }
                     }
 
@@ -251,7 +250,7 @@ fun HeaderWallpaperSettingsScreen(
                     ) {
                         HomeHeader(
                             userName = userName,
-                            subtitle = "$classDisplay • বিজ্ঞান",
+                            subtitle = classDisplay,
                             avatarUrl = sessionManager.getUserAvatar() ?: "",
                             isPremium = true,
                             onAvatarClick = {},
@@ -265,18 +264,156 @@ fun HeaderWallpaperSettingsScreen(
                 }
             }
 
-            // 2. Action Row: Import/Build Theme Code + Pick Custom Gallery Image
+            // 2. Auto-Daily 7-Day Rotation Card
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isAutoDailyActive) {
+                        if (isDark) Color(0xFF0E213A) else Color(0xFFF0F9FF)
+                    } else {
+                        cardBg
+                    }
+                ),
+                border = BorderStroke(
+                    width = if (isAutoDailyActive) 2.dp else 1.dp,
+                    color = if (isAutoDailyActive) Color(0xFF38BDF8) else cardBorder
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .clickable {
+                        val nextType = if (isAutoDailyActive) todayPreset.id else HeaderWallpaperConfig.PRESET_AUTO_DAILY
+                        sessionManager.setHeaderWallpaperConfig(
+                            currentConfig.copy(type = nextType, customThemeCode = null)
+                        )
+                    }
+                    .testTag("auto_daily_theme_card")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(13.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(Color(0xFF0284C7), Color(0xFF6366F1), Color(0xFFEC4899))
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(21.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = tr("Daily Auto Theme", "প্রতিদিন অটো থিম"),
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = primaryText
+                                )
+                                Text(
+                                    text = tr(
+                                        "Today: ${todayPreset.nameEn} (7-day cycle)",
+                                        "আজ: ${todayPreset.nameBn} (৭ দিনের চক্র)"
+                                    ),
+                                    fontSize = 11.5.sp,
+                                    color = if (isAutoDailyActive) Color(0xFF0284C7) else secondaryText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isAutoDailyActive,
+                            onCheckedChange = { enabled ->
+                                sessionManager.setHeaderWallpaperConfig(
+                                    currentConfig.copy(
+                                        type = if (enabled) HeaderWallpaperConfig.PRESET_AUTO_DAILY else todayPreset.id,
+                                        customThemeCode = null
+                                    )
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF0284C7)
+                            )
+                        )
+                    }
+
+                    // 7-Day Schedule Strip
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        for (dayIdx in 0..6) {
+                            val dayPreset = HeaderWallpaperPresets.getPresetForDayIndex(dayIdx)
+                            val isToday = dayIdx == todayDayIndex
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isToday) dayPreset.accentColor.copy(alpha = 0.20f)
+                                else if (isDark) Color(0xFF162235) else Color(0xFFF1F5F9),
+                                border = BorderStroke(
+                                    width = if (isToday) 1.2.dp else 0.6.dp,
+                                    color = if (isToday) dayPreset.accentColor else cardBorder
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.padding(vertical = 6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(dayPreset.accentColor)
+                                    )
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Text(
+                                        text = HeaderWallpaperPresets.getDayShortLabel(dayIdx),
+                                        fontSize = 9.5.sp,
+                                        fontWeight = if (isToday) FontWeight.ExtraBold else FontWeight.Medium,
+                                        color = if (isToday) primaryText else secondaryText,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Action Row: Theme Code + Gallery Wallpaper
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Theme Code Import & Studio Card
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = Color.Transparent,
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .background(
                             Brush.linearGradient(
                                 listOf(Color(0xFF6D28D9), Color(0xFF4F46E5), Color(0xFF0284C7))
@@ -285,61 +422,45 @@ fun HeaderWallpaperSettingsScreen(
                         .clickable { showImportCodeDialog = true }
                         .testTag("import_theme_code_card")
                 ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color.White.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Code,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = Color.White.copy(alpha = 0.22f)
-                            ) {
-                                Text(
-                                    text = "নতুন",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                        Text(
-                            text = "থিম কোড ইমপোর্ট",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "কোড পেস্ট বা নতুন থিম তৈরি করুন",
-                            fontSize = 11.sp,
-                            color = Color.White.copy(alpha = 0.88f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = tr("Theme Code", "থিম কোড"),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = tr("Import or create", "ইমপোর্ট ও তৈরি"),
+                                fontSize = 10.5.sp,
+                                color = Color.White.copy(alpha = 0.85f),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
 
-                // Custom Gallery Image Picker Card
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = cardBg,
                     border = BorderStroke(
                         width = if (currentConfig.type == HeaderWallpaperConfig.CUSTOM_IMAGE) 2.dp else 1.dp,
@@ -347,7 +468,7 @@ fun HeaderWallpaperSettingsScreen(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .clickable {
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -355,56 +476,45 @@ fun HeaderWallpaperSettingsScreen(
                         }
                         .testTag("pick_custom_wallpaper_btn")
                 ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFEC4899).copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFEC4899).copy(alpha = 0.14f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AddPhotoAlternate,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEC4899),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            if (currentConfig.type == HeaderWallpaperConfig.CUSTOM_IMAGE) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Active",
-                                    tint = Color(0xFFEC4899),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.AddPhotoAlternate,
+                                contentDescription = null,
+                                tint = Color(0xFFEC4899),
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
-                        Text(
-                            text = "গ্যালারি ওয়ালপেপার",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = primaryText
-                        )
-                        Text(
-                            text = "নিজের পছন্দের ছবি সেট করুন",
-                            fontSize = 11.sp,
-                            color = secondaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = tr("Gallery Photo", "গ্যালারি ছবি"),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = primaryText,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = tr("Use own image", "নিজের ছবি দিন"),
+                                fontSize = 10.5.sp,
+                                color = secondaryText,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
 
-            // Custom Image Active Preview & Brightness/Contrast Control
+            // Custom Gallery Contrast Control
             AnimatedVisibility(visible = !currentConfig.customUri.isNullOrBlank()) {
                 Card(
                     shape = RoundedCornerShape(18.dp),
@@ -422,22 +532,24 @@ fun HeaderWallpaperSettingsScreen(
                                     .data(currentConfig.customUri)
                                     .crossfade(true)
                                     .build(),
-                                contentDescription = "Selected Custom Image",
+                                contentDescription = tr("Saved photo", "সংরক্ষিত ছবি"),
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(52.dp)
+                                    .size(48.dp)
                                     .clip(RoundedCornerShape(12.dp))
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "সংরক্ষিত গ্যালারি ওয়ালপেপার",
+                                    text = tr("Saved Photo", "সংরক্ষিত ছবি"),
                                     fontSize = 13.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = primaryText
                                 )
                                 Text(
-                                    text = if (currentConfig.type == HeaderWallpaperConfig.CUSTOM_IMAGE) "বর্তমানে ব্যবহৃত হচ্ছে" else "পুনরায় ব্যবহার করতে ট্যাপ করুন",
+                                    text = if (currentConfig.type == HeaderWallpaperConfig.CUSTOM_IMAGE)
+                                        tr("Active", "চালু আছে")
+                                    else tr("Tap to apply", "ব্যবহার করতে ট্যাপ করুন"),
                                     fontSize = 11.5.sp,
                                     color = if (currentConfig.type == HeaderWallpaperConfig.CUSTOM_IMAGE) Color(0xFF10B981) else secondaryText
                                 )
@@ -451,7 +563,7 @@ fun HeaderWallpaperSettingsScreen(
                                     },
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
-                                    Text("সেট করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(tr("Apply", "সেট করুন"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -464,12 +576,12 @@ fun HeaderWallpaperSettingsScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = "ছবির ডার্ক কন্ট্রাস্ট (লেখা স্পষ্ট করার জন্য)",
+                                    text = tr("Dark overlay", "ডার্ক কন্ট্রাস্ট"),
                                     fontSize = 11.5.sp,
                                     color = secondaryText
                                 )
                                 Text(
-                                    text = "${(currentConfig.dimOpacity * 100).toInt()}%",
+                                    text = "${toBengaliDigits((currentConfig.dimOpacity * 100).toInt())}%",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFEC4899)
@@ -493,7 +605,7 @@ fun HeaderWallpaperSettingsScreen(
                 }
             }
 
-            // 3. Imported / Saved Custom Code Themes Section
+            // Imported Custom Code Themes
             if (importedThemes.isNotEmpty() || currentConfig.type == HeaderWallpaperConfig.CUSTOM_CODE) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -501,27 +613,16 @@ fun HeaderWallpaperSettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.IntegrationInstructions,
-                                contentDescription = null,
-                                tint = Color(0xFF8B5CF6),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = "আপনার ইমপোর্ট করা থিম কোড (${importedThemes.size})",
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = primaryText
-                            )
-                        }
+                        Text(
+                            text = tr("Custom Codes (${importedThemes.size})", "কাস্টম কোড (${toBengaliDigits(importedThemes.size)})"),
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = primaryText
+                        )
                         TextButton(onClick = { showImportCodeDialog = true }) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("নতুন কোড", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("Add", "নতুন"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -547,7 +648,11 @@ fun HeaderWallpaperSettingsScreen(
                                 clipboard.setPrimaryClip(
                                     ClipData.newPlainText("MaxBird Theme Code", customTheme.toShareableCode())
                                 )
-                                Toast.makeText(context, "থিম কোড কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    AppLang.tr("Theme code copied", "থিম কোড কপি হয়েছে"),
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             },
                             onDelete = {
                                 sessionManager.deleteImportedCustomTheme(customTheme.id)
@@ -565,7 +670,7 @@ fun HeaderWallpaperSettingsScreen(
                 }
             }
 
-            // 4. Seamless Infinite Animation Toggle
+            // 4. Live Animation Switch
             Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = cardBg),
@@ -575,7 +680,7 @@ fun HeaderWallpaperSettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -585,7 +690,7 @@ fun HeaderWallpaperSettingsScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFF0EA5E9).copy(alpha = 0.14f)),
                             contentAlignment = Alignment.Center
@@ -594,19 +699,19 @@ fun HeaderWallpaperSettingsScreen(
                                 imageVector = Icons.Default.AllInclusive,
                                 contentDescription = null,
                                 tint = Color(0xFF0EA5E9),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "নন-স্টপ সিমলেস অ্যানিমেশন",
+                                text = tr("Live Motion", "লাইভ অ্যানিমেশন"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = primaryText
                             )
                             Text(
-                                text = "কোনো থেমে যাওয়া বা রিস্টার্ট ঝাঁকুনি ছাড়াই অবিরাম চলবে",
+                                text = tr("Smooth seamless motion", "মসৃণ ও নিরবচ্ছিন্ন গতি"),
                                 fontSize = 11.5.sp,
                                 color = secondaryText
                             )
@@ -627,47 +732,45 @@ fun HeaderWallpaperSettingsScreen(
                 }
             }
 
-            // 5. Built-in 16 Creative Live Themes Header & Category Filter Chips
+            // 5. 7 Interactive Themes Collection
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Palette,
-                            contentDescription = null,
-                            tint = Color(0xFF0284C7),
-                            modifier = Modifier.size(19.dp)
-                        )
-                        Text(
-                            text = "প্রিমিয়াম লাইভ অ্যানিমেটেড থিম (${com.example.utils.toBengaliDigits(HeaderWallpaperPresets.presets.size)}টি)",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = primaryText
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = null,
+                        tint = Color(0xFF0284C7),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = tr(
+                            "Interactive Themes (${HeaderWallpaperPresets.presets.size})",
+                            "ইন্টারঅ্যাক্টিভ থিম (${toBengaliDigits(HeaderWallpaperPresets.presets.size)})"
+                        ),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = primaryText
+                    )
                 }
 
-                // Category Filter Row
+                // Category Chips
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    HeaderWallpaperPresets.categories.forEach { category ->
-                        val selected = selectedCategory == category
+                    HeaderWallpaperPresets.categoryKeys.forEach { key ->
+                        val selected = selectedCategoryKey == key
                         FilterChip(
                             selected = selected,
-                            onClick = { selectedCategory = category },
+                            onClick = { selectedCategoryKey = key },
                             label = {
                                 Text(
-                                    text = category,
+                                    text = HeaderWallpaperPresets.categoryLabel(key),
                                     fontSize = 12.sp,
                                     fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium
                                 )
@@ -688,7 +791,6 @@ fun HeaderWallpaperSettingsScreen(
                     }
                 }
 
-                // Presets List with Live Mini-Canvas Previews
                 filteredPresets.forEach { preset ->
                     val isSelected = currentConfig.type == preset.id
                     LivePresetThemeCard(
@@ -725,7 +827,11 @@ fun HeaderWallpaperSettingsScreen(
                     )
                 )
                 showImportCodeDialog = false
-                Toast.makeText(context, "'${imported.titleBn}' থিমটি সফলভাবে চালু হয়েছে!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    AppLang.tr("'${imported.titleBn}' applied", "'${imported.titleBn}' চালু হয়েছে"),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         )
     }
@@ -766,11 +872,10 @@ private fun LivePresetThemeCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Live Animated Mini-Preview Box
             Box(
                 modifier = Modifier
-                    .width(96.dp)
-                    .height(64.dp)
+                    .width(92.dp)
+                    .height(62.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .border(
                         1.dp,
@@ -783,18 +888,19 @@ private fun LivePresetThemeCard(
                         type = preset.id,
                         isAnimationEnabled = true
                     ),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    interactive = false
                 )
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.48f),
+                    color = Color.Black.copy(alpha = 0.52f),
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(5.dp)
                 ) {
                     Text(
-                        text = "LIVE",
-                        fontSize = 8.5.sp,
+                        text = tr("TOUCH", "টাচ"),
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
@@ -802,38 +908,39 @@ private fun LivePresetThemeCard(
                 }
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = preset.nameBn,
-                        fontSize = 15.sp,
+                        text = preset.displayName,
+                        fontSize = 14.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = primaryText,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = preset.accentColor.copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = preset.categoryBn,
-                            fontSize = 10.sp,
+                            text = preset.displayCategory,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = preset.accentColor,
                             maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = preset.description,
+                    text = preset.displayDescription,
                     fontSize = 11.5.sp,
                     color = secondaryText,
                     maxLines = 2,
@@ -842,7 +949,7 @@ private fun LivePresetThemeCard(
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             RadioButton(
                 selected = isSelected,
@@ -892,8 +999,8 @@ private fun ImportedThemeCard(
         ) {
             Box(
                 modifier = Modifier
-                    .width(78.dp)
-                    .height(54.dp)
+                    .width(74.dp)
+                    .height(50.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .border(1.dp, accentCol.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
             ) {
@@ -903,7 +1010,8 @@ private fun ImportedThemeCard(
                         customThemeCode = theme.toShareableCode(),
                         isAnimationEnabled = true
                     ),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    interactive = false
                 )
             }
 
@@ -919,7 +1027,7 @@ private fun ImportedThemeCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "ইফেক্ট: ${theme.effectStyle} • ${theme.primaryHex} → ${theme.accentHex}",
+                    text = "${theme.effectStyle} • ${theme.primaryHex} → ${theme.accentHex}",
                     fontSize = 11.sp,
                     color = secondaryText,
                     maxLines = 1,
@@ -930,7 +1038,7 @@ private fun ImportedThemeCard(
             IconButton(onClick = onCopyCode, modifier = Modifier.size(34.dp)) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
-                    contentDescription = "Copy Code",
+                    contentDescription = tr("Copy Code", "কোড কপি"),
                     tint = Color(0xFF38BDF8),
                     modifier = Modifier.size(18.dp)
                 )
@@ -938,7 +1046,7 @@ private fun ImportedThemeCard(
             IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
                 Icon(
                     imageVector = Icons.Default.DeleteOutline,
-                    contentDescription = "Delete",
+                    contentDescription = tr("Delete", "মুছুন"),
                     tint = Color(0xFFEF4444),
                     modifier = Modifier.size(18.dp)
                 )
@@ -947,6 +1055,7 @@ private fun ImportedThemeCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ThemeCodeStudioDialog(
     isDark: Boolean,
@@ -954,37 +1063,31 @@ private fun ThemeCodeStudioDialog(
     onApplyImportedTheme: (ImportedWallpaperTheme) -> Unit
 ) {
     val context = LocalContext.current
-    var activeTab by remember { mutableIntStateOf(0) } // 0 = Import Code, 1 = Build Custom Code
+    var activeTab by remember { mutableIntStateOf(0) }
     var codeInput by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    // Custom Theme Builder states
-    var customName by remember { mutableStateOf("আমার স্পেশাল থিম") }
-    var selectedStyle by remember { mutableStateOf("AURORA") }
-    var selectedPaletteIndex by remember { mutableIntStateOf(0) }
+    var builderTitle by remember { mutableStateOf(AppLang.tr("My Live Theme", "আমার লাইভ থিম")) }
+    var builderStyle by remember { mutableStateOf("AURORA") }
+    var primaryHex by remember { mutableStateOf("#061329") }
+    var secondaryHex by remember { mutableStateOf("#1E1B4B") }
+    var accentHex by remember { mutableStateOf("#38BDF8") }
+    var particleHex by remember { mutableStateOf("#FDE68A") }
 
-    val colorPalettes = remember {
-        listOf(
-            Triple("#050816", "#1E1B4B", "#38BDF8") to "কসমিক সায়ান",
-            Triple("#090418", "#3B0764", "#EC4899") to "নিয়ন ম্যাজেন্টা",
-            Triple("#022C22", "#064E3B", "#10B981") to "এমারেল্ড অরোরা",
-            Triple("#180409", "#4C0519", "#F43F5E") to "ক্রিমসন ফ্লেম",
-            Triple("#0F0B05", "#422006", "#F59E0B") to "রয়েল গোল্ড",
-            Triple("#070A1E", "#1E1B4B", "#A855F7") to "অ্যামেথিস্ট নাইট"
+    val builderPreviewTheme = remember(builderTitle, builderStyle, primaryHex, secondaryHex, accentHex, particleHex) {
+        ImportedWallpaperTheme(
+            titleBn = builderTitle.ifBlank { AppLang.tr("Custom Theme", "কাস্টম থিম") },
+            effectStyle = builderStyle,
+            primaryHex = primaryHex,
+            secondaryHex = secondaryHex,
+            accentHex = accentHex,
+            particleHex = particleHex,
+            speedMultiplier = 1
         )
     }
 
-    val generatedBuilderTheme = remember(customName, selectedStyle, selectedPaletteIndex) {
-        val (c1, c2, c3) = colorPalettes[selectedPaletteIndex].first
-        ImportedWallpaperTheme(
-            titleBn = customName.ifBlank { "কাস্টম লাইভ থিম" },
-            effectStyle = selectedStyle,
-            primaryHex = c1,
-            secondaryHex = c2,
-            accentHex = c3,
-            particleHex = "#FFFFFF",
-            speedMultiplier = 1
-        )
+    val parsedImportPreview = remember(codeInput) {
+        if (codeInput.isBlank()) null else HeaderWallpaperCodeManager.parseThemeCode(codeInput).getOrNull()
     }
 
     val dialogBg = if (isDark) Color(0xFF0F172A) else Color.White
@@ -996,59 +1099,67 @@ private fun ThemeCodeStudioDialog(
         containerColor = dialogBg,
         shape = RoundedCornerShape(26.dp),
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(
+                            Brush.linearGradient(listOf(Color(0xFF7C3AED), Color(0xFF0284C7)))
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF8B5CF6).copy(alpha = 0.16f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Code,
-                            contentDescription = null,
-                            tint = Color(0xFF8B5CF6)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "থিম কোড ইমপোর্ট ও মেকার",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = primaryText
-                        )
-                        Text(
-                            text = "নতুন থিমের কোড পেস্ট করুন বা নিজের থিম বানান",
-                            fontSize = 11.5.sp,
-                            color = secondaryText
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Code,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
-
-                // Mode Switcher Tabs
+                Column {
+                    Text(
+                        text = tr("Theme Code Studio", "থিম কোড স্টুডিও"),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = primaryText
+                    )
+                    Text(
+                        text = tr("Import or build custom themes", "কাস্টম থিম ইমপোর্ট বা তৈরি করুন"),
+                        fontSize = 11.sp,
+                        color = secondaryText
+                    )
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
                         .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf("কোড ইমপোর্ট করুন", "নতুন কোড তৈরি করুন").forEachIndexed { idx, label ->
+                    listOf(
+                        0 to tr("Import Code", "কোড ইমপোর্ট"),
+                        1 to tr("Create", "তৈরি করুন")
+                    ).forEach { (idx, label) ->
                         val selected = activeTab == idx
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(9.dp))
-                                .background(if (selected) Color(0xFF8B5CF6) else Color.Transparent)
-                                .clickable {
-                                    activeTab = idx
-                                    errorMessage = null
-                                }
+                                .background(if (selected) Color(0xFF4F46E5) else Color.Transparent)
+                                .clickable { activeTab = idx }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1061,107 +1172,96 @@ private fun ThemeCodeStudioDialog(
                         }
                     }
                 }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+
                 if (activeTab == 0) {
                     OutlinedTextField(
                         value = codeInput,
                         onValueChange = {
                             codeInput = it
-                            errorMessage = null
+                            errorMsg = null
                         },
-                        label = { Text("থিম কোড পেস্ট করুন (MAXTHEME:... বা #Hex)") },
+                        label = { Text(tr("Paste theme code", "থিম কোড পেস্ট করুন"), fontSize = 12.sp) },
                         placeholder = {
                             Text(
-                                "MAXTHEME:v1|নিয়ন গ্যালাক্সি|GALAXY|#050816|#1E1B4B|#A855F7|#38BDF8|1",
-                                fontSize = 11.sp
+                                "MAXTHEME:v1|Name|AURORA|#090D16|#1E1B4B|#38BDF8|#FFF|1",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
                             )
                         },
                         minLines = 3,
                         maxLines = 4,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("theme_code_input_field"),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
                     )
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilledTonalButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clipText = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                                if (!clipText.isNullOrBlank()) {
-                                    codeInput = clipText.trim()
-                                    errorMessage = null
+                                val pasted = clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                                if (!pasted.isNullOrBlank()) {
+                                    codeInput = pasted
+                                    errorMsg = null
                                 } else {
-                                    Toast.makeText(context, "ক্লিপবোর্ডে কোনো কোড পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        AppLang.tr("Clipboard is empty", "ক্লিপবোর্ডে কোনো কোড নেই"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পেস্ট করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("Paste", "পেস্ট"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
                         if (codeInput.isNotBlank()) {
                             OutlinedButton(
-                                onClick = {
-                                    codeInput = ""
-                                    errorMessage = null
-                                },
-                                shape = RoundedCornerShape(10.dp)
+                                onClick = { codeInput = ""; errorMsg = null },
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("মুছুন", fontSize = 12.sp)
+                                Text(tr("Clear", "মুছুন"), fontSize = 12.sp)
                             }
                         }
                     }
 
-                    errorMessage?.let { err ->
+                    if (!errorMsg.isNullOrBlank()) {
                         Text(
-                            text = err,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFEF4444)
+                            text = errorMsg ?: "",
+                            color = Color(0xFFEF4444),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
-                    // Live preview if valid code is typed
-                    val previewParsed = remember(codeInput) {
-                        HeaderWallpaperCodeManager.parseThemeCode(codeInput).getOrNull()
-                    }
-                    if (previewParsed != null) {
+                    if (parsedImportPreview != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(74.dp)
+                                .height(68.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .border(1.5.dp, Color(0xFF10B981), RoundedCornerShape(14.dp))
+                                .border(1.dp, Color(0xFF10B981), RoundedCornerShape(14.dp))
                         ) {
                             LiveHeaderBackground(
                                 config = HeaderWallpaperConfig(
                                     type = HeaderWallpaperConfig.CUSTOM_CODE,
-                                    customThemeCode = previewParsed.toShareableCode(),
+                                    customThemeCode = parsedImportPreview.toShareableCode(),
                                     isAnimationEnabled = true
                                 ),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                interactive = false
                             )
                             Text(
-                                text = "প্রিভিউ: ${previewParsed.titleBn} (${previewParsed.effectStyle})",
-                                color = Color.White,
+                                text = "✓ ${parsedImportPreview.titleBn}",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
                                     .padding(10.dp)
@@ -1169,80 +1269,82 @@ private fun ThemeCodeStudioDialog(
                         }
                     }
 
-                    HorizontalDivider(color = secondaryText.copy(alpha = 0.2f))
-
                     Text(
-                        text = "রেডিমেড বোনাস থিম কোড (১ ট্যাপে টেস্ট করুন):",
+                        text = tr("Sample Codes", "স্যাম্পল কোড"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = primaryText
                     )
-
-                    HeaderWallpaperCodeManager.sampleCommunityCodes.forEach { sample ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
-                            border = BorderStroke(1.dp, secondaryText.copy(alpha = 0.2f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    codeInput = sample.toShareableCode()
-                                    errorMessage = null
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        HeaderWallpaperCodeManager.sampleCommunityCodes.forEach { sample ->
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+                                border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        codeInput = sample.toShareableCode()
+                                        errorMsg = null
+                                    }
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = sample.titleBn,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = primaryText
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(Brush.linearGradient(sample.parseColors()))
                                     )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = sample.titleBn,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = primaryText
+                                        )
+                                        Text(
+                                            text = sample.effectStyle,
+                                            fontSize = 10.sp,
+                                            color = secondaryText
+                                        )
+                                    }
                                     Text(
-                                        text = sample.toShareableCode(),
-                                        fontSize = 10.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = secondaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        text = tr("Use", "ব্যবহার"),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF38BDF8)
                                     )
                                 }
-                                Icon(
-                                    imageVector = Icons.Default.AddCircleOutline,
-                                    contentDescription = null,
-                                    tint = Color(0xFF8B5CF6),
-                                    modifier = Modifier.size(18.dp)
-                                )
                             }
                         }
                     }
                 } else {
-                    // Tab 1: Custom Theme Builder
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(82.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .border(1.5.dp, Color(0xFF8B5CF6), RoundedCornerShape(16.dp))
+                            .height(74.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(1.dp, Color(0xFF38BDF8).copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                     ) {
                         LiveHeaderBackground(
                             config = HeaderWallpaperConfig(
                                 type = HeaderWallpaperConfig.CUSTOM_CODE,
-                                customThemeCode = generatedBuilderTheme.toShareableCode(),
+                                customThemeCode = builderPreviewTheme.toShareableCode(),
                                 isAnimationEnabled = true
                             ),
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            interactive = false
                         )
                         Text(
-                            text = "${generatedBuilderTheme.titleBn} • LIVE",
-                            color = Color.White,
+                            text = builderPreviewTheme.titleBn,
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(10.dp)
@@ -1250,90 +1352,66 @@ private fun ThemeCodeStudioDialog(
                     }
 
                     OutlinedTextField(
-                        value = customName,
-                        onValueChange = { customName = it },
-                        label = { Text("থিমের নাম") },
+                        value = builderTitle,
+                        onValueChange = { builderTitle = it },
+                        label = { Text(tr("Theme Name", "থিমের নাম"), fontSize = 12.sp) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Text(
-                        text = "অ্যানিমেশন ইঞ্জিন নির্বাচন করুন:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryText
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        HeaderWallpaperCodeManager.effectStyles.forEach { (styleCode, styleLabel) ->
-                            val selected = selectedStyle == styleCode
-                            FilterChip(
-                                selected = selected,
-                                onClick = { selectedStyle = styleCode },
-                                label = { Text(styleLabel, fontSize = 11.5.sp) }
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = "কালার প্যালেট:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = primaryText
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        colorPalettes.forEachIndexed { idx, (_, label) ->
-                            val selected = selectedPaletteIndex == idx
-                            FilterChip(
-                                selected = selected,
-                                onClick = { selectedPaletteIndex = idx },
-                                label = { Text(label, fontSize = 11.5.sp) }
-                            )
-                        }
-                    }
-
-                    Surface(
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9),
                         modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = tr("Effect Style", "ইফেক্ট স্টাইল"),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryText
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = generatedBuilderTheme.toShareableCode(),
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = secondaryText,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                        HeaderWallpaperCodeManager.effectStyles.forEach { (styleKey, _) ->
+                            FilterChip(
+                                selected = builderStyle == styleKey,
+                                onClick = { builderStyle = styleKey },
+                                label = { Text(styleKey, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                             )
-                            IconButton(
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText("MaxBird Theme Code", generatedBuilderTheme.toShareableCode())
-                                    )
-                                    Toast.makeText(context, "কোড কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
-                                }
-                            ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color(0xFF8B5CF6))
-                            }
                         }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = primaryHex,
+                            onValueChange = { primaryHex = it },
+                            label = { Text(tr("Primary", "মূল রঙ"), fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = accentHex,
+                            onValueChange = { accentHex = it },
+                            label = { Text(tr("Accent", "অ্যাকসেন্ট"), fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = secondaryHex,
+                            onValueChange = { secondaryHex = it },
+                            label = { Text(tr("Secondary", "দ্বিতীয়"), fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = particleHex,
+                            onValueChange = { particleHex = it },
+                            label = { Text(tr("Particles", "কণা"), fontSize = 11.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }
@@ -1343,29 +1421,24 @@ private fun ThemeCodeStudioDialog(
                 onClick = {
                     if (activeTab == 0) {
                         val result = HeaderWallpaperCodeManager.parseThemeCode(codeInput)
-                        result.onSuccess { parsed ->
-                            onApplyImportedTheme(parsed)
+                        result.onSuccess { theme ->
+                            onApplyImportedTheme(theme)
                         }.onFailure { err ->
-                            errorMessage = err.message ?: "সঠিক থিম কোড দিন"
+                            errorMsg = err.message
                         }
                     } else {
-                        onApplyImportedTheme(
-                            generatedBuilderTheme.copy(rawCode = generatedBuilderTheme.toShareableCode())
-                        )
+                        onApplyImportedTheme(builderPreviewTheme.copy(rawCode = builderPreviewTheme.toShareableCode()))
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.testTag("apply_theme_code_btn")
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
             ) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(17.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("ইমপোর্ট ও চালু করুন", fontWeight = FontWeight.Bold)
+                Text(tr("Apply", "চালু করুন"), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("বাতিল", color = secondaryText, fontWeight = FontWeight.Bold)
+                Text(tr("Cancel", "বাতিল"), color = secondaryText)
             }
         }
     )

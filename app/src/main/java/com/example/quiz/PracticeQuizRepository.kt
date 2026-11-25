@@ -229,7 +229,7 @@ class PracticeQuizRepository(
 
         val response = apiService.startPracticeQuizMcqSession(query)
         val session = response.data?.startPracticeQuizMcqSession?.session
-            ?: throw IllegalStateException(response.data?.startPracticeQuizMcqSession?.message ?: "কুইজ সেশন শুরু করা সম্ভব হয়নি")
+            ?: throw IllegalStateException(response.data?.startPracticeQuizMcqSession?.message ?: com.example.utils.AppLang.tr("Could not start quiz session", "কুইজ সেশন শুরু করা সম্ভব হয়নি"))
         return session
     }
 
@@ -324,7 +324,7 @@ class PracticeQuizRepository(
         }
 
         if (result == null && !response.errors.isNullOrEmpty()) {
-            throw IllegalStateException(response.errors.firstOrNull()?.message ?: "সাবমিশন প্রক্রিয়াকরণে সমস্যা হয়েছে")
+            throw IllegalStateException(response.errors.firstOrNull()?.message ?: com.example.utils.AppLang.tr("Failed to process submission", "সাবমিশন প্রক্রিয়াকরণে সমস্যা হয়েছে"))
         }
         return result
     }
@@ -362,7 +362,7 @@ class PracticeQuizRepository(
         Log.d(TAG, "getQuizResultSummary [PARSED SUMMARY]: id=${summary?.id}, badge=${summary?.badge}, correct=${summary?.correctCount}, incorrect=${summary?.incorrectCount}, questions=${summary?.questionsCount}, spentTime=${summary?.spentTimeSeconds}, badgeUrl=${summary?.fullBadgeImageUrl}, subjectsCount=${summary?.subject_results?.size}")
 
         return summary
-            ?: throw IllegalStateException(response.errors?.firstOrNull()?.message ?: "ফলাফল লোড করা সম্ভব হয়নি")
+            ?: throw IllegalStateException(response.errors?.firstOrNull()?.message ?: com.example.utils.AppLang.tr("Could not load result", "ফলাফল লোড করা সম্ভব হয়নি"))
     }
 
     /**
@@ -436,7 +436,7 @@ class PracticeQuizRepository(
         }
 
         if (session == null) {
-            throw IllegalStateException("সলিউশন লোড করা সম্ভব হয়নি")
+            throw IllegalStateException(com.example.utils.AppLang.tr("Could not load solution", "সলিউশন লোড করা সম্ভব হয়নি"))
         }
 
         // If any question is missing its title, enrich from getMcqSession

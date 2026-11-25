@@ -98,6 +98,8 @@ import com.example.database.DownloadedItemEntity
 import com.example.database.SavedItemDao
 import com.example.database.SavedItemEntity
 import com.example.download.AppFileDownloadManager
+import com.example.utils.AppLang
+import com.example.utils.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -176,7 +178,10 @@ class PdfPageRenderer(
         try {
             if (!file.exists() || file.length() == 0L) {
                 withContext(Dispatchers.Main) {
-                    initError = "পিডিএফ ফাইলটি পাওয়া যায়নি বা ফাইলের সাইজ শূন্য।"
+                    initError = AppLang.tr(
+                        "PDF file not found or empty.",
+                        "পিডিএফ ফাইলটি পাওয়া যায়নি বা ফাইলের সাইজ শূন্য।"
+                    )
                 }
                 return@withContext
             }
@@ -212,7 +217,10 @@ class PdfPageRenderer(
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing PdfRenderer: ${e.message}", e)
             withContext(Dispatchers.Main) {
-                initError = "পিডিএফ ফাইলটি রিড করতে ব্যর্থ হয়েছে: ${e.localizedMessage ?: "অজ্ঞাত ত্রুটি"}"
+                initError = AppLang.tr(
+                    "Failed to read PDF: ${e.localizedMessage ?: "Unknown error"}",
+                    "পিডিএফ ফাইলটি রিড করতে ব্যর্থ হয়েছে: ${e.localizedMessage ?: "অজ্ঞাত ত্রুটি"}"
+                )
             }
         }
     }
@@ -466,10 +474,16 @@ fun PdfViewerContent(
 
                     sharedSlidePdfHttpClient.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) {
-                            throw Exception("সার্ভার থেকে ফাইলটি লোড করা যায়নি (HTTP ${response.code})")
+                            throw Exception(AppLang.tr(
+                                "Could not load file from server (HTTP ${response.code})",
+                                "সার্ভার থেকে ফাইলটি লোড করা যায়নি (HTTP ${response.code})"
+                            ))
                         }
 
-                        val body = response.body ?: throw Exception("সার্ভার থেকে খালি রেসপন্স এসেছে")
+                        val body = response.body ?: throw Exception(AppLang.tr(
+                            "Empty response received from server",
+                            "সার্ভার থেকে খালি রেসপন্স এসেছে"
+                        ))
                         val contentLength = body.contentLength()
                         val inputStream: InputStream = body.byteStream()
                         val partFile = File(cacheDir, "${safeFileName}.part")
@@ -507,12 +521,15 @@ fun PdfViewerContent(
                     cachedFileState = tempFile
                     isFetchingRemote = false
                 } else {
-                    throw Exception("খালি বা অসম্পূর্ণ ফাইল ডাউনলোড হয়েছে")
+                    throw Exception(AppLang.tr(
+                        "Downloaded file is empty or incomplete",
+                        "খালি বা অসম্পূর্ণ ফাইল ডাউনলোড হয়েছে"
+                    ))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error downloading PDF preview: ${e.message}", e)
                 isFetchingRemote = false
-                remoteErrorMessage = e.localizedMessage ?: "পিডিএফ লোড করা সম্ভব হয়নি"
+                remoteErrorMessage = e.localizedMessage ?: AppLang.tr("Could not load PDF", "পিডিএফ লোড করা সম্ভব হয়নি")
             }
         }
     }
@@ -589,7 +606,7 @@ fun PdfViewerContent(
             }
 
             remoteErrorMessage != null || rendererState?.initError != null -> {
-                val err = remoteErrorMessage ?: rendererState?.initError ?: "অজানা ত্রুটি"
+                val err = remoteErrorMessage ?: rendererState?.initError ?: tr("Unknown error", "অজানা ত্রুটি")
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     PdfErrorCard(
                         errorMessage = err,
@@ -630,7 +647,7 @@ fun PdfViewerContent(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     Text(
-                        text = "পিডিএফ রিডার প্রস্তুত হচ্ছে...",
+                        text = tr("Preparing PDF reader...", "পিডিএফ রিডার প্রস্তুত হচ্ছে..."),
                         color = Color.White.copy(alpha = 0.85f),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
@@ -695,14 +712,14 @@ fun PdfViewerContent(
                     coroutineScope.launch {
                         if (isSlideBookmarked) {
                             savedDao.deleteSavedItemById(bookmarkItemId)
-                            Toast.makeText(context, "সংরক্ষণ থেকে সরানো হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Removed from saved", "সংরক্ষণ থেকে সরানো হয়েছে"), Toast.LENGTH_SHORT).show()
                         } else {
                             val targetUrl = remoteCandidateUrl ?: effectiveDownloadedItem?.remoteUrl ?: slideUrl
                             val entity = SavedItemEntity(
                                 id = bookmarkItemId,
                                 type = SavedItemEntity.TYPE_NOTE,
-                                title = title.ifBlank { "লেকচার স্লাইড ও নোট" },
-                                subtitle = "লেকচার নোট ও স্লাইড",
+                                title = title.ifBlank { AppLang.tr("Lecture Notes", "লেকচার নোট") },
+                                subtitle = AppLang.tr("Lecture Notes & Slides", "লেকচার নোট ও স্লাইড"),
                                 contentJson = SavedItemEntity.buildNoteContentJson(
                                     url = targetUrl,
                                     pdfTitle = title
@@ -710,7 +727,7 @@ fun PdfViewerContent(
                                 timestamp = System.currentTimeMillis()
                             )
                             savedDao.insertSavedItem(entity)
-                            Toast.makeText(context, "লেকচার নোটটি সফলভাবে সংরক্ষিত হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Lecture note saved", "লেকচার নোটটি সংরক্ষিত হয়েছে"), Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
@@ -720,13 +737,13 @@ fun PdfViewerContent(
                         downloadManager.downloadFile(
                             id = downloadId,
                             title = title,
-                            subtitle = "পিডিএফ লেকচার নোট",
+                            subtitle = AppLang.tr("PDF Lecture Note", "পিডিএফ লেকচার নোট"),
                             fileType = DownloadedItemEntity.FILE_TYPE_PDF,
                             remoteUrl = urlToDownload
                         )
-                        Toast.makeText(context, "ইন-অ্যাপ অফলাইন ডাউনলোড শুরু হয়েছে", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, AppLang.tr("Offline download started", "অফলাইন ডাউনলোড শুরু হয়েছে"), Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "এই ফাইলটি ইতোমধ্যে অ্যাপে অফলাইনে সংরক্ষিত রয়েছে", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, AppLang.tr("Already saved offline", "ফাইলটি ইতোমধ্যে অফলাইনে সংরক্ষিত"), Toast.LENGTH_SHORT).show()
                     }
                 },
                 onHeightMeasured = { measured -> topBarHeightPx = measured }
@@ -876,7 +893,7 @@ private fun PdfViewerTopBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.GridView,
-                        contentDescription = "সকল স্লাইড দেখুন",
+                        contentDescription = tr("All slides", "সকল স্লাইড দেখুন"),
                         tint = Color.White,
                         modifier = Modifier.size(19.dp)
                     )
@@ -890,7 +907,7 @@ private fun PdfViewerTopBar(
             ) {
                 Icon(
                     imageVector = if (isLandscape) Icons.Default.ScreenLockLandscape else Icons.Default.ScreenRotation,
-                    contentDescription = if (isLandscape) "পোর্ট্রেট মোড" else "ল্যান্ডস্কেপ মোড",
+                    contentDescription = if (isLandscape) tr("Portrait mode", "পোর্ট্রেট মোড") else tr("Landscape mode", "ল্যান্ডস্কেপ মোড"),
                     tint = if (isLandscape) Color(0xFF38BDF8) else Color.White,
                     modifier = Modifier.size(19.dp)
                 )
@@ -903,7 +920,7 @@ private fun PdfViewerTopBar(
             ) {
                 Icon(
                     imageVector = if (viewMode == PdfViewMode.VERTICAL_SCROLL) Icons.Default.ViewCarousel else Icons.Default.ViewAgenda,
-                    contentDescription = if (viewMode == PdfViewMode.VERTICAL_SCROLL) "স্লাইড মোড" else "স্ক্রল মোড",
+                    contentDescription = if (viewMode == PdfViewMode.VERTICAL_SCROLL) tr("Slide mode", "স্লাইড মোড") else tr("Scroll mode", "স্ক্রল মোড"),
                     tint = if (viewMode == PdfViewMode.HORIZONTAL_SLIDES) Color(0xFF38BDF8) else Color.White,
                     modifier = Modifier.size(19.dp)
                 )
@@ -920,7 +937,7 @@ private fun PdfViewerTopBar(
                         ReadingTheme.SEPIA -> Icons.Default.AutoStories
                         ReadingTheme.NIGHT -> Icons.Default.NightsStay
                     },
-                    contentDescription = "রিডিং থিম",
+                    contentDescription = tr("Reading theme", "রিডিং থিম"),
                     tint = when (readingTheme) {
                         ReadingTheme.DAY -> Color(0xFFFBBF24)
                         ReadingTheme.SEPIA -> Color(0xFFFDE68A)
@@ -938,7 +955,7 @@ private fun PdfViewerTopBar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
-                        contentDescription = "শেয়ার করুন",
+                        contentDescription = tr("Share", "শেয়ার করুন"),
                         tint = Color.White,
                         modifier = Modifier.size(19.dp)
                     )
@@ -971,7 +988,7 @@ private fun PdfViewerTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.Default.DownloadDone,
-                            contentDescription = "অফলাইনে সংরক্ষিত",
+                            contentDescription = tr("Saved offline", "অফলাইনে সংরক্ষিত"),
                             tint = Color(0xFF34D399),
                             modifier = Modifier.size(19.dp)
                         )
@@ -984,7 +1001,7 @@ private fun PdfViewerTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Download,
-                            contentDescription = "অফলাইন ডাউনলোড",
+                            contentDescription = tr("Offline download", "অফলাইন ডাউনলোড"),
                             tint = Color.White,
                             modifier = Modifier.size(19.dp)
                         )
@@ -999,7 +1016,7 @@ private fun PdfViewerTopBar(
             ) {
                 Icon(
                     imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    contentDescription = if (isBookmarked) "সংরক্ষণ থেকে সরান" else "নোট সংরক্ষণ করুন",
+                    contentDescription = if (isBookmarked) tr("Remove bookmark", "সংরক্ষণ থেকে সরান") else tr("Save note", "নোট সংরক্ষণ করুন"),
                     tint = if (isBookmarked) Color(0xFFF59E0B) else Color.White,
                     modifier = Modifier.size(19.dp)
                 )
@@ -1022,7 +1039,7 @@ private fun PdfViewerTopBar(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "বন্ধ করুন",
+                        contentDescription = tr("Close", "বন্ধ করুন"),
                         tint = Color.White
                     )
                 }
@@ -1031,7 +1048,7 @@ private fun PdfViewerTopBar(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = title.ifBlank { "লেকচার স্লাইড ও পিডিএফ" },
+                        text = title.ifBlank { tr("Lecture Slides", "লেকচার স্লাইড") },
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -1048,7 +1065,7 @@ private fun PdfViewerTopBar(
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
-                                    text = "✓ অফলাইন",
+                                    text = tr("✓ Offline", "✓ অফলাইন"),
                                     fontSize = 10.sp,
                                     color = Color(0xFF34D399),
                                     fontWeight = FontWeight.SemiBold,
@@ -1061,7 +1078,10 @@ private fun PdfViewerTopBar(
 
                         if (pageCount > 0) {
                             Text(
-                                text = "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}",
+                                text = tr(
+                                    "Page $currentPage / $pageCount",
+                                    "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}"
+                                ),
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8),
                                 fontWeight = FontWeight.Medium,
@@ -1106,7 +1126,7 @@ private fun PdfViewerTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "বন্ধ করুন",
+                            contentDescription = tr("Close", "বন্ধ করুন"),
                             tint = Color.White
                         )
                     }
@@ -1114,7 +1134,7 @@ private fun PdfViewerTopBar(
                     Spacer(modifier = Modifier.width(4.dp))
 
                     Text(
-                        text = title.ifBlank { "লেকচার স্লাইড ও পিডিএফ" },
+                        text = title.ifBlank { tr("Lecture Slides", "লেকচার স্লাইড") },
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -1158,7 +1178,7 @@ private fun PdfViewerTopBar(
                                 shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text(
-                                    text = "✓ অফলাইন",
+                                    text = tr("✓ Offline", "✓ অফলাইন"),
                                     fontSize = 10.5.sp,
                                     color = Color(0xFF34D399),
                                     fontWeight = FontWeight.SemiBold,
@@ -1171,7 +1191,10 @@ private fun PdfViewerTopBar(
 
                         if (pageCount > 0) {
                             Text(
-                                text = "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}",
+                                text = tr(
+                                    "Page $currentPage / $pageCount",
+                                    "পৃষ্ঠা ${toBengaliDigits(currentPage)} / ${toBengaliDigits(pageCount)}"
+                                ),
                                 fontSize = 11.5.sp,
                                 color = Color(0xFFCBD5E1),
                                 fontWeight = FontWeight.SemiBold,
@@ -1671,7 +1694,10 @@ private fun NativePdfViewerContent(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "${toBengaliDigits((scale * 100).roundToInt())}% • রিসেট",
+                        text = tr(
+                            "${(scale * 100).roundToInt()}% • Reset",
+                            "${toBengaliDigits((scale * 100).roundToInt())}% • রিসেট"
+                        ),
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -1717,7 +1743,7 @@ private fun NativePdfViewerContent(
                                 .padding(horizontal = 4.dp)
                         ) {
                             Text(
-                                text = "১",
+                                text = toBengaliDigits(1),
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8),
                                 fontWeight = FontWeight.SemiBold,
@@ -1795,7 +1821,7 @@ private fun NativePdfViewerContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ZoomOut,
-                                contentDescription = "জুম আউট",
+                                contentDescription = tr("Zoom out", "জুম আউট"),
                                 tint = if (scale > 1.01f) Color.White else Color.White.copy(alpha = 0.3f),
                                 modifier = Modifier.size(19.dp)
                             )
@@ -1834,7 +1860,7 @@ private fun NativePdfViewerContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ZoomIn,
-                                contentDescription = "জুম ইন",
+                                contentDescription = tr("Zoom in", "জুম ইন"),
                                 tint = if (scale < 4.0f) Color.White else Color.White.copy(alpha = 0.3f),
                                 modifier = Modifier.size(19.dp)
                             )
@@ -1869,7 +1895,7 @@ private fun NativePdfViewerContent(
                                 } else {
                                     Icons.AutoMirrored.Filled.KeyboardArrowLeft
                                 },
-                                contentDescription = "আগের পৃষ্ঠা",
+                                contentDescription = tr("Previous page", "আগের পৃষ্ঠা"),
                                 tint = if (currentVisiblePageIndex > 0) Color.White else Color.White.copy(alpha = 0.3f),
                                 modifier = Modifier.size(21.dp)
                             )
@@ -1921,7 +1947,7 @@ private fun NativePdfViewerContent(
                                 } else {
                                     Icons.AutoMirrored.Filled.KeyboardArrowRight
                                 },
-                                contentDescription = "পরের পৃষ্ঠা",
+                                contentDescription = tr("Next page", "পরের পৃষ্ঠা"),
                                 tint = if (currentVisiblePageIndex < renderer.pageCount - 1) Color.White else Color.White.copy(alpha = 0.3f),
                                 modifier = Modifier.size(21.dp)
                             )
@@ -2125,7 +2151,7 @@ private fun PageBitmapOrPlaceholder(
         if (pageBitmap != null && !pageBitmap.isRecycled) {
             Image(
                 bitmap = pageBitmap.asImageBitmap(),
-                contentDescription = "স্লাইড ${pageIndex + 1}",
+                contentDescription = tr("Slide ${pageIndex + 1}", "স্লাইড ${pageIndex + 1}"),
                 contentScale = contentScale,
                 colorFilter = colorFilter,
                 modifier = Modifier.fillMaxSize()
@@ -2142,7 +2168,10 @@ private fun PageBitmapOrPlaceholder(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "পৃষ্ঠা ${toBengaliDigits(pageIndex + 1)} / ${toBengaliDigits(totalPages)} লোড হচ্ছে...",
+                    text = tr(
+                        "Loading page ${pageIndex + 1} / $totalPages...",
+                        "পৃষ্ঠা ${toBengaliDigits(pageIndex + 1)} / ${toBengaliDigits(totalPages)} লোড হচ্ছে..."
+                    ),
                     color = Color(0xFF64748B),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -2191,13 +2220,16 @@ private fun PdfThumbnailsBottomSheet(
             ) {
                 Column {
                     Text(
-                        text = "সকল স্লাইড ও পৃষ্ঠা (${toBengaliDigits(renderer.pageCount)}টি)",
+                        text = tr(
+                            "All Slides (${renderer.pageCount})",
+                            "সকল স্লাইড (${toBengaliDigits(renderer.pageCount)}টি)"
+                        ),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        text = "যেকোনো পৃষ্ঠায় দ্রুত যেতে ট্যাপ করুন",
+                        text = tr("Tap any page to jump", "যেকোনো পৃষ্ঠায় যেতে ট্যাপ করুন"),
                         fontSize = 12.sp,
                         color = Color(0xFF94A3B8)
                     )
@@ -2258,7 +2290,7 @@ private fun PdfThumbnailsBottomSheet(
                                 if (safeThumb != null && !safeThumb.isRecycled) {
                                     Image(
                                         bitmap = safeThumb.asImageBitmap(),
-                                        contentDescription = "পৃষ্ঠা ${pageIdx + 1}",
+                                        contentDescription = tr("Page ${pageIdx + 1}", "পৃষ্ঠা ${pageIdx + 1}"),
                                         contentScale = ContentScale.Fit,
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -2279,7 +2311,7 @@ private fun PdfThumbnailsBottomSheet(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "পৃষ্ঠা ${toBengaliDigits(pageIdx + 1)}",
+                                    text = tr("Page ${pageIdx + 1}", "পৃষ্ঠা ${toBengaliDigits(pageIdx + 1)}"),
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -2328,14 +2360,14 @@ private fun PdfShareBottomSheet(
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
             Text(
-                text = "পিডিএফ শেয়ার করুন",
+                text = tr("Share PDF", "পিডিএফ শেয়ার"),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = title.ifBlank { "পিডিএফ লেকচার ফাইল" },
+                text = title.ifBlank { tr("PDF Lecture File", "পিডিএফ লেকচার ফাইল") },
                 fontSize = 13.sp,
                 color = Color.White.copy(alpha = 0.7f),
                 maxLines = 1,
@@ -2370,12 +2402,12 @@ private fun PdfShareBottomSheet(
                                     putExtra(Intent.EXTRA_SUBJECT, title)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "পিডিএফ ফাইল পাঠান"))
+                                context.startActivity(Intent.createChooser(shareIntent, AppLang.tr("Share PDF File", "পিডিএফ ফাইল পাঠান")))
                             } catch (e: Exception) {
-                                Toast.makeText(context, "ফাইল শেয়ার করতে ব্যর্থ হয়েছে: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, AppLang.tr("Failed to share file: ${e.message}", "ফাইল শেয়ার করতে ব্যর্থ হয়েছে: ${e.message}"), Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            Toast.makeText(context, "ফাইলটি এখনো সম্পূর্ণ ডাউনলোড হয়নি, অনুগ্রহ করে অপেক্ষা করুন", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("File is still downloading, please wait", "ফাইলটি এখনো ডাউনলোড হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন"), Toast.LENGTH_SHORT).show()
                         }
                     }
             ) {
@@ -2402,14 +2434,14 @@ private fun PdfShareBottomSheet(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "ফাইল পাঠান (Share File)",
+                            text = tr("Share File", "ফাইল পাঠান"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "হোয়াটসঅ্যাপ, টেলিগ্রাম বা অন্য কোনো অ্যাপে পিডিএফ ফাইলটি সরাসরি পাঠান",
+                            text = tr("Send PDF directly via WhatsApp, Telegram, or other apps", "হোয়াটসঅ্যাপ, টেলিগ্রাম বা অন্য অ্যাপে সরাসরি পাঠান"),
                             fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.65f)
                         )
@@ -2437,9 +2469,9 @@ private fun PdfShareBottomSheet(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             val clip = android.content.ClipData.newPlainText("PDF Link", linkToCopy)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "পিডিএফ লিংক ক্লিপবোর্ডে কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("PDF link copied to clipboard!", "পিডিএফ লিংক কপি করা হয়েছে!"), Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "এই ফাইলের অনলাইন লিংক পাওয়া যায়নি (লোকাল ফাইল)", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Online link unavailable (local file)", "এই ফাইলের অনলাইন লিংক পাওয়া যায়নি (লোকাল ফাইল)"), Toast.LENGTH_SHORT).show()
                         }
                     }
             ) {
@@ -2466,14 +2498,14 @@ private fun PdfShareBottomSheet(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "লিংক কপি করুন (Copy Link)",
+                            text = tr("Copy Link", "লিংক কপি করুন"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "পিডিএফ ডাউনলোডের আসল লিংকটি কপি করুন",
+                            text = tr("Copy the direct PDF download link", "পিডিএফ ডাউনলোডের লিংকটি কপি করুন"),
                             fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.65f)
                         )
@@ -2498,12 +2530,15 @@ private fun JumpToPageDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(text = "স্লাইড / পৃষ্ঠা পরিবর্তন", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(text = tr("Jump to Page", "পৃষ্ঠা পরিবর্তন"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
         },
         text = {
             Column {
                 Text(
-                    text = "১ থেকে ${toBengaliDigits(totalPages)} এর মধ্যে যে পৃষ্ঠায় যেতে চান তার নম্বর লিখুন:",
+                    text = tr(
+                        "Enter a page number between 1 and $totalPages:",
+                        "১ থেকে ${toBengaliDigits(totalPages)} এর মধ্যে পৃষ্ঠার নম্বর লিখুন:"
+                    ),
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2527,13 +2562,13 @@ private fun JumpToPageDialog(
                         onClick = { onPageSelected(1) },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("প্রথম পৃষ্ঠা", fontSize = 11.sp)
+                        Text(tr("First Page", "প্রথম পৃষ্ঠা"), fontSize = 11.sp)
                     }
                     FilledTonalButton(
                         onClick = { onPageSelected(totalPages) },
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("শেষ পৃষ্ঠা", fontSize = 11.sp)
+                        Text(tr("Last Page", "শেষ পৃষ্ঠা"), fontSize = 11.sp)
                     }
                 }
             }
@@ -2549,12 +2584,12 @@ private fun JumpToPageDialog(
                     }
                 }
             ) {
-                Text("যান", fontWeight = FontWeight.Bold)
+                Text(tr("Go", "যান"), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("বাতিল")
+                Text(tr("Cancel", "বাতিল"))
             }
         }
     )
@@ -2596,7 +2631,7 @@ private fun RemoteLoadingCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "পিডিএফ প্রস্তুত করা হচ্ছে...",
+                text = tr("Preparing PDF...", "পিডিএফ প্রস্তুত হচ্ছে..."),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -2627,7 +2662,10 @@ private fun RemoteLoadingCard(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "${toBengaliDigits((progress * 100).toInt())}% সম্পন্ন",
+                    text = tr(
+                        "${(progress * 100).toInt()}% complete",
+                        "${toBengaliDigits((progress * 100).toInt())}% সম্পন্ন"
+                    ),
                     fontSize = 12.sp,
                     color = Color(0xFF38BDF8),
                     fontWeight = FontWeight.SemiBold
@@ -2671,7 +2709,7 @@ private fun PdfErrorCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "পিডিএফ ভিউ করতে সমস্যা হয়েছে",
+                text = tr("Unable to open PDF", "পিডিএফ ভিউ করতে সমস্যা হয়েছে"),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -2694,7 +2732,7 @@ private fun PdfErrorCard(
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("পুনরায় চেষ্টা করুন")
+                Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
             }
         }
     }

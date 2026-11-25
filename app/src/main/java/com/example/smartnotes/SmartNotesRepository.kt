@@ -261,8 +261,8 @@ query ResourceAttachmentsOfChapter(
                     attachmentsList.add(
                         AttachmentDataItem(
                             id = lesson.id.ifBlank { UUID.randomUUID().toString() },
-                            title = lesson.title ?: "লেকচার স্লাইড ও নোট",
-                            description = "ক্লাস নোট ও লেকচার স্লাইড",
+                            title = lesson.title ?: com.example.utils.AppLang.tr("Lecture Slide & Notes", "লেকচার স্লাইড ও নোট"),
+                            description = com.example.utils.AppLang.tr("Class notes & lecture slides", "ক্লাস নোট ও লেকচার স্লাইড"),
                             url = slideUrl
                         )
                     )
@@ -273,8 +273,8 @@ query ResourceAttachmentsOfChapter(
                         attachmentsList.add(
                             AttachmentDataItem(
                                 id = att.id ?: UUID.randomUUID().toString(),
-                                title = att.displayTitle.ifBlank { lesson.title ?: "লেকচার শিট" },
-                                description = "লেকচার রিসোর্স",
+                                title = att.displayTitle.ifBlank { lesson.title ?: com.example.utils.AppLang.tr("Lecture Sheet", "লেকচার শিট") },
+                                description = com.example.utils.AppLang.tr("Lecture resource", "লেকচার রিসোর্স"),
                                 url = dlUrl
                             )
                         )

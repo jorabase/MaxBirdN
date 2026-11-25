@@ -284,7 +284,7 @@ class LiveClassWebSocketManager {
             DiscoveredRoomTeacher(
                 peerId = cleanPeerId,
                 userId = cleanUserId,
-                name = cleanName.ifBlank { "শিক্ষক" },
+                name = cleanName.ifBlank { com.example.utils.AppLang.tr("Teacher", "শিক্ষক") },
                 role = role.ifBlank { "teacher" },
                 avatarUrl = avatarUrl?.takeIf { it.isNotBlank() }
             )
@@ -625,8 +625,8 @@ class LiveClassWebSocketManager {
         return resolved ?: DiscoveredRoomTeacher(
             peerId = "",
             userId = fallbackTeacherId?.trim().orEmpty(),
-            name = fallbackTeacherName?.trim()?.ifBlank { _teacherName.value.ifBlank { "শিক্ষক" } }
-                ?: _teacherName.value.ifBlank { "শিক্ষক" },
+            name = fallbackTeacherName?.trim()?.ifBlank { _teacherName.value.ifBlank { com.example.utils.AppLang.tr("Teacher", "শিক্ষক") } }
+                ?: _teacherName.value.ifBlank { com.example.utils.AppLang.tr("Teacher", "শিক্ষক") },
             role = "teacher",
             avatarUrl = fallbackTeacherAvatar
         )
@@ -806,7 +806,7 @@ class LiveClassWebSocketManager {
                             }
                         }
                     } else if (_masterUrl.value.isNullOrBlank()) {
-                        _error.value = t.message ?: "লাইভ সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে"
+                        _error.value = t.message ?: com.example.utils.AppLang.tr("Disconnected from live server", "লাইভ সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে")
                     }
                 }
 
@@ -1325,7 +1325,7 @@ class LiveClassWebSocketManager {
                                         val pinId = pinObj.optString("id").ifBlank { UUID.randomUUID().toString() }
                                         val pinnedBy = pinObj.optString(
                                             "pinnedBy",
-                                            _teacherName.value.ifBlank { "শিক্ষক" }
+                                            _teacherName.value.ifBlank { com.example.utils.AppLang.tr("Teacher", "শিক্ষক") }
                                         )
                                         val rawText = pinObj.optString("text").trim()
                                         if (pinnedBy.isNotBlank() && _teacherName.value.isBlank()) {
@@ -1337,7 +1337,7 @@ class LiveClassWebSocketManager {
                                                 id = "pin_$pinId",
                                                 senderName = pinnedBy,
                                                 message = cleanMsg,
-                                                timestamp = "পিন করা ঘোষণা",
+                                                timestamp = com.example.utils.AppLang.tr("Pinned Announcement", "পিন করা ঘোষণা"),
                                                 isTeacher = true,
                                                 role = "teacher",
                                                 targetRole = "all",
@@ -1791,11 +1791,14 @@ class LiveClassWebSocketManager {
                         ?.text
                         ?.trim()
                         ?.takeIf { it.isNotBlank() }
-                        ?: "অপশন #$finalCorrectOption"
+                        ?: com.example.utils.AppLang.tr("Option #$finalCorrectOption", "অপশন #$finalCorrectOption")
 
                     val delayLabel = formatDelayMsLabel(delayMs)
                     _autoPollToastEvent.value =
-                        "⚡ অটো পোল: ${delayLabel}s এ সঠিক উত্তর ($optText) অটোমেটিক সাবমিট হয়েছে!"
+                        com.example.utils.AppLang.tr(
+                            "⚡ Auto Poll: Correct answer ($optText) auto-submitted in ${delayLabel}s!",
+                            "⚡ অটো পোল: ${delayLabel}s এ সঠিক উত্তর ($optText) অটোমেটিক সাবমিট হয়েছে!"
+                        )
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -2370,7 +2373,7 @@ class LiveClassWebSocketManager {
                 ?: peerNamesMap[resolvedPeerId]
                 ?: params.optString("sender").takeIf { it.isNotBlank() }
                 ?: params.optString("from").takeIf { it.isNotBlank() }
-                ?: "শিক্ষার্থী"
+                ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")
         } else if (resolvedPeerId.isNotBlank()) {
             peerNamesMap[resolvedPeerId] = sender
         }
@@ -2454,12 +2457,12 @@ class LiveClassWebSocketManager {
             val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
             sdf.format(java.util.Date(timestampMillis))
         } catch (_: Exception) {
-            "এখন"
+            com.example.utils.AppLang.tr("Now", "এখন")
         }
 
         val incomingMsg = LiveChatMessage(
             id = dedupId,
-            senderName = sender ?: "শিক্ষার্থী",
+            senderName = sender ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী"),
             message = chatText,
             timestamp = formattedTime,
             isTeacher = isSenderActualTeacher,

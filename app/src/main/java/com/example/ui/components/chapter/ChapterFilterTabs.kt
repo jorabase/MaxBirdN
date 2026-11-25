@@ -26,16 +26,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 /**
- * Filter tab types to cleanly separate Live Classes (চলছে), Upcoming (আপকামিং), Recorded (রেকর্ড), and Exams (পরীক্ষা).
+ * Filter tab types to cleanly separate Live Classes, Upcoming, Recorded, and Exams.
  */
-enum class ChapterContentFilter(val titleBn: String, val icon: ImageVector) {
-    ALL("সব", Icons.Default.Dashboard),
-    LIVE("চলছে", Icons.Default.LiveTv),
-    UPCOMING("আপকামিং", Icons.Default.AccessTime),
-    RECORDED("রেকর্ড", Icons.Default.PlayCircleFilled),
-    EXAM("পরীক্ষা", Icons.Default.Assignment)
+enum class ChapterContentFilter(val titleEn: String, val titleBn: String, val icon: ImageVector) {
+    ALL("All", "সব", Icons.Default.Dashboard),
+    LIVE("Live", "চলছে", Icons.Default.LiveTv),
+    UPCOMING("Upcoming", "আপকামিং", Icons.Default.AccessTime),
+    RECORDED("Recorded", "রেকর্ড", Icons.Default.PlayCircleFilled),
+    EXAM("Exams", "পরীক্ষা", Icons.Default.Assignment)
 }
 
 @Composable
@@ -137,7 +138,7 @@ private fun ChapterFilterTabItem(
             )
 
             Text(
-                text = filter.titleBn,
+                text = tr(filter.titleEn, filter.titleBn),
                 fontSize = 12.5.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = contentColor,

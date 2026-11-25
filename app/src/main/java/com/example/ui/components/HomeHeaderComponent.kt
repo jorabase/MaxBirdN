@@ -44,7 +44,7 @@ import java.util.TimeZone
  */
 @Composable
 fun AnimatedRainbowGreetingText(
-    greetingPrefix: String = "হ্যালো,",
+    greetingPrefix: String = com.example.utils.tr("Hello,", "হ্যালো,"),
     userName: String,
     modifier: Modifier = Modifier
 ) {
@@ -99,7 +99,7 @@ fun AnimatedRainbowGreetingText(
 }
 
 /**
- * High-Density Compact Home Header with Dynamic Live Wallpaper Support
+ * High-Density Compact Home Header with Interactive Live Wallpaper Support
  */
 @Composable
 fun HomeHeader(
@@ -117,26 +117,28 @@ fun HomeHeader(
 ) {
     val context = LocalContext.current
     val activeWallpaper = wallpaperConfig ?: remember { HeaderWallpaperConfig() }
+    val isBn = com.example.utils.isBangla()
 
-    // Dynamic time-of-day Bengali greeting
-    val dynamicGreeting = remember {
+    // Dynamic time-of-day bilingual greeting
+    val dynamicGreeting = remember(isBn) {
         val dhakaCal = Calendar.getInstance(TimeZone.getTimeZone("Asia/Dhaka"))
         when (dhakaCal.get(Calendar.HOUR_OF_DAY)) {
-            in 5..11 -> "শুভ সকাল,"
-            in 12..15 -> "শুভ দুপুর,"
-            in 16..17 -> "শুভ অপরাহ্ন,"
-            in 18..20 -> "শুভ সন্ধ্যা,"
-            else -> "হ্যালো,"
+            in 5..11 -> if (isBn) "শুভ সকাল," else "Good Morning,"
+            in 12..15 -> if (isBn) "শুভ দুপুর," else "Good Afternoon,"
+            in 16..17 -> if (isBn) "শুভ অপরাহ্ন," else "Good Afternoon,"
+            in 18..20 -> if (isBn) "শুভ সন্ধ্যা," else "Good Evening,"
+            else -> if (isBn) "হ্যালো," else "Hello,"
         }
     }
 
     Box(
         modifier = modifier.fillMaxWidth()
     ) {
-        // 1. Live Dynamic Wallpaper Background
+        // 1. Live Interactive Dynamic Wallpaper Background
         LiveHeaderBackground(
             config = activeWallpaper,
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.matchParentSize(),
+            interactive = true
         )
 
         // Subtle bottom vignette for seamless blend with rounded surface
@@ -173,7 +175,6 @@ fun HomeHeader(
                     AvatarUtils.buildImageRequest(context, avatarUrl, userName)
                 }
 
-                // Isolated animated profile avatar so header does not recompose 60fps
                 AnimatedProfileAvatar(
                     imageRequest = imageRequest,
                     fallbackInitial = fallbackInitial,
@@ -212,7 +213,7 @@ fun HomeHeader(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Notification Bell Button (48dp accessible touch target + unread count badge)
+                // Notification Bell Button
                 Box(
                     modifier = Modifier.size(48.dp),
                     contentAlignment = Alignment.Center
@@ -227,7 +228,7 @@ fun HomeHeader(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Notifications,
-                                contentDescription = "নোটিফিকেশন",
+                                contentDescription = com.example.utils.tr("Notifications", "নোটিফিকেশন"),
                                 tint = Color.White,
                                 modifier = Modifier.size(21.dp)
                             )
@@ -248,7 +249,11 @@ fun HomeHeader(
                                 modifier = Modifier.padding(horizontal = 4.dp)
                             ) {
                                 Text(
-                                    text = if (unreadNotificationCount > 9) "9+" else unreadNotificationCount.toString(),
+                                    text = if (unreadNotificationCount > 9) {
+                                        com.example.utils.toBengaliDigits("9+")
+                                    } else {
+                                        com.example.utils.toBengaliDigits(unreadNotificationCount)
+                                    },
                                     color = Color.White,
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.ExtraBold
@@ -259,7 +264,7 @@ fun HomeHeader(
                 }
             }
 
-            // Sleek, Accessible 48dp Glassmorphic Course Switcher Pill
+            // Glassmorphic Course Switcher Pill
             if (!activeCourseTitle.isNullOrBlank() && onOpenCourseSwitcher != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 AnimatedCourseSwitcherPill(
@@ -323,7 +328,7 @@ private fun AnimatedProfileAvatar(
             ) {
                 SubcomposeAsyncImage(
                     model = imageRequest,
-                    contentDescription = "প্রোফাইল ছবি",
+                    contentDescription = com.example.utils.tr("Profile photo", "প্রোফাইল ছবি"),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     error = { AvatarFallbackBadge(fallbackInitial) },
@@ -332,7 +337,6 @@ private fun AnimatedProfileAvatar(
             }
         }
 
-        // Online/Verified dot indicator
         Box(
             modifier = Modifier
                 .size(13.dp)
@@ -435,7 +439,7 @@ private fun AnimatedCourseSwitcherPill(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "পরিবর্তন",
+                        text = com.example.utils.tr("Switch", "পরিবর্তন"),
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFBAE6FD)
@@ -443,7 +447,7 @@ private fun AnimatedCourseSwitcherPill(
                     Spacer(modifier = Modifier.width(2.dp))
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "কোর্স পরিবর্তন",
+                        contentDescription = com.example.utils.tr("Switch Course", "কোর্স পরিবর্তন"),
                         tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )

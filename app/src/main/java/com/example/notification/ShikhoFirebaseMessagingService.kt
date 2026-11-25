@@ -168,7 +168,7 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
                 ?: data["heading"]
                 ?: data["notification_title"]
                 ?: oneSignalAdditionalData?.optString("title", "")?.takeIf { it.isNotBlank() }
-                ?: "শিখো নোটিফিকেশন"
+                ?: com.example.utils.AppLang.tr("MaxBird Notification", "শিখো নোটিফিকেশন")
             ).trim()
 
         ShikhoNotificationManager.recordIncomingPush(

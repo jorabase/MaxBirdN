@@ -33,8 +33,11 @@ import com.example.api.UserProfile
 import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
 import com.example.gamification.rememberGamificationStats
+import com.example.utils.AppLang
 import com.example.utils.AvatarUtils
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,7 +77,7 @@ fun ProfileScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "ফিরে যান",
+                                contentDescription = tr("Back", "ফিরে যান"),
                                 tint = MaterialTheme.colorScheme.onBackground
                             )
                         }
@@ -82,9 +85,9 @@ fun ProfileScreen(
                 },
                 title = {
                     Text(
-                        text = "প্রোফাইল ও অ্যাচিভমেন্ট",
+                        text = tr("Profile", "প্রোফাইল"),
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = 16.sp,
+                        fontSize = 18.sp,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
@@ -93,28 +96,28 @@ fun ProfileScreen(
                     IconButton(onClick = onNavigateToDownloads) {
                         Icon(
                             Icons.Default.DownloadDone,
-                            contentDescription = "ডাউনলোড",
+                            contentDescription = tr("Downloads", "ডাউনলোড"),
                             tint = Color(0xFF10B981)
                         )
                     }
                     IconButton(onClick = onNavigateToSavedItems) {
                         Icon(
                             Icons.Default.Bookmark,
-                            contentDescription = "সংরক্ষিত আইটেম",
+                            contentDescription = tr("Saved", "সংরক্ষিত"),
                             tint = Color(0xFFF59E0B)
                         )
                     }
                     IconButton(onClick = onNavigateToEditProfile) {
                         Icon(
                             Icons.Default.Edit,
-                            contentDescription = "প্রোফাইল এডিট",
+                            contentDescription = tr("Edit Profile", "প্রোফাইল এডিট"),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     IconButton(onClick = { showLogoutConfirmDialog = true }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = "লগআউট",
+                            contentDescription = tr("Log Out", "লগআউট"),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -154,7 +157,7 @@ fun ProfileScreen(
                         Button(onClick = { viewModel.fetchProfile() }) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন", fontWeight = FontWeight.Bold)
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -170,11 +173,12 @@ fun ProfileScreen(
                     )
                 }
                 else -> {
+                    val isBn = isBangla()
                     // Fallback profile display from sessionManager if AuthState is idle
-                    val fallbackProfile = remember(sessionManager) {
+                    val fallbackProfile = remember(sessionManager, isBn) {
                         UserProfile(
                             id = sessionManager?.getUserId(),
-                            first_name = sessionManager?.getUserFullName() ?: "শিক্ষার্থী",
+                            first_name = sessionManager?.getUserFullName() ?: AppLang.tr("Student", "শিক্ষার্থী"),
                             last_name = "",
                             avatar = sessionManager?.getUserAvatar(),
                             study_group = sessionManager?.getUserGroup()
@@ -208,8 +212,8 @@ fun ProfileScreen(
                             tint = MaterialTheme.colorScheme.error
                         )
                     },
-                    title = { Text("লগআউট করতে চান?", fontWeight = FontWeight.Bold) },
-                    text = { Text("আপনি কি নিশ্চিত যে আপনার অ্যাকাউন্ট থেকে লগআউট করতে চান?") },
+                    title = { Text(tr("Log Out?", "লগআউট করতে চান?"), fontWeight = FontWeight.Bold) },
+                    text = { Text(tr("Are you sure you want to log out of your account?", "আপনি কি নিশ্চিত যে আপনার অ্যাকাউন্ট থেকে লগআউট করতে চান?")) },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -218,7 +222,7 @@ fun ProfileScreen(
                             }
                         ) {
                             Text(
-                                "লগআউট",
+                                tr("Log Out", "লগআউট"),
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
@@ -226,7 +230,7 @@ fun ProfileScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showLogoutConfirmDialog = false }) {
-                            Text("না, থাক")
+                            Text(tr("Cancel", "না, থাক"))
                         }
                     }
                 )
@@ -258,33 +262,34 @@ fun ProfileContent(
         profile.first_name?.trim()?.firstOrNull()?.toString()?.uppercase() ?: "S"
     }
 
-    val fullName = remember(profile.first_name, profile.last_name) {
-        "${profile.first_name ?: ""} ${profile.last_name ?: ""}".trim().ifBlank { "শিক্ষার্থী" }
+    val isBn = isBangla()
+    val fullName = remember(profile.first_name, profile.last_name, isBn) {
+        "${profile.first_name ?: ""} ${profile.last_name ?: ""}".trim().ifBlank { AppLang.tr("Student", "শিক্ষার্থী") }
     }
 
-    val classDisplayBn = remember(profile.`class`?.display, sessionManager) {
+    val classDisplayBn = remember(profile.`class`?.display, sessionManager, isBn) {
         val raw = profile.`class`?.display ?: sessionManager?.getUserClassDisplay() ?: sessionManager?.getUserClassName() ?: ""
         when (raw.trim().uppercase()) {
-            "C11", "CLASS 11", "11", "XI" -> "একাদশ শ্রেণি"
-            "C12", "CLASS 12", "12", "XII" -> "দ্বাদশ শ্রেণি"
-            "C10", "CLASS 10", "10", "X" -> "দশম শ্রেণি"
-            "C9", "CLASS 9", "9", "IX" -> "নবম শ্রেণি"
-            else -> raw.ifBlank { "এইচএসসি" }
+            "C11", "CLASS 11", "11", "XI" -> AppLang.tr("Class 11", "একাদশ শ্রেণি")
+            "C12", "CLASS 12", "12", "XII" -> AppLang.tr("Class 12", "দ্বাদশ শ্রেণি")
+            "C10", "CLASS 10", "10", "X" -> AppLang.tr("Class 10", "দশম শ্রেণি")
+            "C9", "CLASS 9", "9", "IX" -> AppLang.tr("Class 9", "নবম শ্রেণি")
+            else -> raw.ifBlank { AppLang.tr("HSC", "এইচএসসি") }
         }
     }
 
-    val groupDisplayBn = remember(profile.study_group, sessionManager) {
+    val groupDisplayBn = remember(profile.study_group, sessionManager, isBn) {
         val raw = profile.study_group ?: sessionManager?.getUserGroup() ?: ""
         when (raw.trim().lowercase()) {
-            "humanities", "humanities_group", "hum", "arts" -> "মানবিক বিভাগ"
-            "science", "science_group", "sci" -> "বিজ্ঞান বিভাগ"
-            "business", "business_studies", "commerce", "bs", "bba" -> "ব্যবসায় শিক্ষা বিভাগ"
-            else -> raw.ifBlank { "নির্ধারিত নয়" }
+            "humanities", "humanities_group", "hum", "arts" -> AppLang.tr("Humanities", "মানবিক বিভাগ")
+            "science", "science_group", "sci" -> AppLang.tr("Science", "বিজ্ঞান বিভাগ")
+            "business", "business_studies", "commerce", "bs", "bba" -> AppLang.tr("Business Studies", "ব্যবসায় শিক্ষা বিভাগ")
+            else -> raw.ifBlank { AppLang.tr("Not Set", "নির্ধারিত নয়") }
         }
     }
 
-    val schoolDisplayBn = remember(profile.school?.name) {
-        profile.school?.name?.takeIf { it.isNotBlank() } ?: "কলেজ / শিক্ষাপ্রতিষ্ঠান যুক্ত করুন"
+    val schoolDisplayBn = remember(profile.school?.name, isBn) {
+        profile.school?.name?.takeIf { it.isNotBlank() } ?: AppLang.tr("Add Institution", "শিক্ষাপ্রতিষ্ঠান যুক্ত করুন")
     }
 
     Column(
@@ -394,7 +399,7 @@ fun ProfileContent(
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = "সক্রিয় শিক্ষার্থী",
+                                text = tr("Active Student", "সক্রিয় শিক্ষার্থী"),
                                 color = Color(0xFFD1FAE5),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -412,20 +417,20 @@ fun ProfileContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         GamifiedStatMiniBox(
-                            value = "${toBengaliDigits(stats.streakDays)} দিন",
-                            label = "🔥 স্ট্রিক",
+                            value = tr("${stats.streakDays}d", "${toBengaliDigits(stats.streakDays)} দিন"),
+                            label = tr("🔥 Streak", "🔥 স্ট্রিক"),
                             accent = Color(0xFFF97316),
                             modifier = Modifier.weight(1f)
                         )
                         GamifiedStatMiniBox(
                             value = toBengaliDigits(stats.completedLessonsCount),
-                            label = "🎓 ক্লাস সম্পন্ন",
+                            label = tr("🎓 Lessons", "🎓 ক্লাস সম্পন্ন"),
                             accent = Color(0xFF10B981),
                             modifier = Modifier.weight(1f)
                         )
                         GamifiedStatMiniBox(
                             value = toBengaliDigits(stats.watchedAnimatedCount),
-                            label = "🎬 অ্যানিমেশন",
+                            label = tr("🎬 Animated", "🎬 অ্যানিমেশন"),
                             accent = Color(0xFF38BDF8),
                             modifier = Modifier.weight(1f)
                         )
@@ -446,17 +451,17 @@ fun ProfileContent(
             shape = RoundedCornerShape(18.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                ProfileDetailRow(label = "শ্রেণি", value = classDisplayBn)
+                ProfileDetailRow(label = tr("Class", "শ্রেণি"), value = classDisplayBn)
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                 )
-                ProfileDetailRow(label = "বিভাগ", value = groupDisplayBn)
+                ProfileDetailRow(label = tr("Group", "বিভাগ"), value = groupDisplayBn)
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                 )
-                ProfileDetailRow(label = "শিক্ষাপ্রতিষ্ঠান", value = schoolDisplayBn)
+                ProfileDetailRow(label = tr("Institution", "শিক্ষাপ্রতিষ্ঠান"), value = schoolDisplayBn)
             }
         }
 
@@ -498,13 +503,13 @@ fun ProfileContent(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "অফলাইন ডাউনলোড",
+                        text = tr("Downloads", "ডাউনলোড"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "ইন্টারনেট ছাড়া সংরক্ষিত ভিডিও ও পিডিএফ লেকচার",
+                        text = tr("Saved offline videos & PDFs", "অফলাইন ভিডিও ও পিডিএফ লেকচার"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -558,13 +563,13 @@ fun ProfileContent(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "সেশন শেয়ার ও কিউআর ব্যাকআপ",
+                            text = tr("Session QR", "সেশন কিউআর"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "অন্য ডিভাইসে অ্যাকাউন্ট পাঠাতে কিউআর কোড দেখুন",
+                            text = tr("Transfer account via QR code", "কিউআর দিয়ে অন্য ডিভাইসে সেশন নিন"),
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -618,13 +623,16 @@ fun ProfileContent(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "সংরক্ষিত আইটেম (${toBengaliDigits(stats.savedItemsCount)})",
+                        text = tr(
+                            "Saved (${stats.savedItemsCount})",
+                            "সংরক্ষিত (${toBengaliDigits(stats.savedItemsCount)})"
+                        ),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "বুকমার্ক করা প্রশ্ন, নোট ও গুরুত্বপূর্ণ ক্লাস",
+                        text = tr("Bookmarked questions, notes & classes", "বুকমার্ক করা প্রশ্ন, নোট ও ক্লাস"),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -655,7 +663,7 @@ fun ProfileContent(
                         isClearingCache = false
                         android.widget.Toast.makeText(
                             context,
-                            "অ্যাপের সমস্ত ক্যাশ মেমোরি সম্পূর্ণ খালি করা হয়েছে!",
+                            AppLang.tr("App cache cleared!", "অ্যাপের ক্যাশ মেমোরি খালি করা হয়েছে!"),
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -691,7 +699,7 @@ fun ProfileContent(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "ক্যাশ মেমোরি পরিষ্কার করুন",
+                        text = tr("Clear Cache", "ক্যাশ পরিষ্কার"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -699,9 +707,12 @@ fun ProfileContent(
                     val isCacheEmpty = rawCacheSize == "0.0 MB" || rawCacheSize == "0 B" || rawCacheSize.startsWith("0.0 ")
                     Text(
                         text = when {
-                            isClearingCache -> "ক্যাশ মেমোরি পরিষ্কার করা হচ্ছে..."
-                            !isCacheEmpty -> "${toBengaliDigits(rawCacheSize)} ক্যাশ জমা আছে • খালি করতে ট্যাপ করুন"
-                            else -> "ক্যাশ মেমোরি সম্পূর্ণ পরিষ্কার আছে (০.০ MB)"
+                            isClearingCache -> tr("Clearing cache...", "ক্যাশ পরিষ্কার করা হচ্ছে...")
+                            !isCacheEmpty -> tr(
+                                "$rawCacheSize cached • Tap to clear",
+                                "${toBengaliDigits(rawCacheSize)} ক্যাশ জমা আছে • খালি করতে ট্যাপ করুন"
+                            )
+                            else -> tr("Cache is clean (0.0 MB)", "ক্যাশ পরিষ্কার আছে (০.০ MB)")
                         },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

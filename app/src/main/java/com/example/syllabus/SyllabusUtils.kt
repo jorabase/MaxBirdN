@@ -30,19 +30,27 @@ fun StudyGroupItem.matchesCodeOrName(raw: String?): Boolean {
  * Unknown code হলে API-র name_bn / title_bn / name_en use করবে — hardcoded fallback ছাড়া।
  */
 fun ClassItem.bengaliClassName(): String {
+    val isBn = com.example.utils.AppLang.isBn()
     return when (code.trim().uppercase()) {
-        "C5", "C05" -> "পঞ্চম শ্রেণি"
-        "C6", "C06" -> "ষষ্ঠ শ্রেণি"
-        "C7", "C07" -> "সপ্তম শ্রেণি"
-        "C8", "C08" -> "অষ্টম শ্রেণি"
-        "C9", "C09" -> "নবম শ্রেণি"
-        "C10" -> "দশম শ্রেণি"
-        "C11" -> "একাদশ শ্রেণি"
-        "C12" -> "দ্বাদশ শ্রেণি"
-        else -> name_bn?.takeIf { it.isNotBlank() }
-            ?: title_bn?.takeIf { it.isNotBlank() }
-            ?: name_en
-            ?: code
+        "C5", "C05" -> com.example.utils.AppLang.tr("Class 5", "পঞ্চম শ্রেণি")
+        "C6", "C06" -> com.example.utils.AppLang.tr("Class 6", "ষষ্ঠ শ্রেণি")
+        "C7", "C07" -> com.example.utils.AppLang.tr("Class 7", "সপ্তম শ্রেণি")
+        "C8", "C08" -> com.example.utils.AppLang.tr("Class 8", "অষ্টম শ্রেণি")
+        "C9", "C09" -> com.example.utils.AppLang.tr("Class 9", "নবম শ্রেণি")
+        "C10" -> com.example.utils.AppLang.tr("Class 10", "দশম শ্রেণি")
+        "C11" -> com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি")
+        "C12" -> com.example.utils.AppLang.tr("Class 12", "দ্বাদশ শ্রেণি")
+        else -> if (isBn) {
+            name_bn?.takeIf { it.isNotBlank() }
+                ?: title_bn?.takeIf { it.isNotBlank() }
+                ?: name_en
+                ?: code
+        } else {
+            name_en?.takeIf { it.isNotBlank() }
+                ?: name_bn?.takeIf { it.isNotBlank() }
+                ?: title_bn?.takeIf { it.isNotBlank() }
+                ?: code
+        }
     }
 }
 

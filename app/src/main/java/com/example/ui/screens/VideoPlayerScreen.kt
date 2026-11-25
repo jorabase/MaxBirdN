@@ -65,8 +65,10 @@ import com.example.ui.components.PlayerControlsOverlay
 import com.example.ui.components.VideoDownloadQualityDialog
 import com.example.ui.components.VideoQualityDialog
 import com.example.player.EqualizerManager
+import com.example.utils.AppLang
 import com.example.utils.PipHelper
 import com.example.utils.SetupPipController
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -103,7 +105,7 @@ fun VideoPlayerScreen(
     var showEqualizerBottomSheet by remember { mutableStateOf(false) }
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
     var availableQualities by remember { mutableStateOf<List<VideoTrackQuality>>(emptyList()) }
-    var selectedQualityLabel by remember { mutableStateOf("অটো") }
+    var selectedQualityLabel by remember { mutableStateOf(AppLang.tr("Auto", "অটো")) }
 
     // Controls visibility state
     var areControlsVisible by remember { mutableStateOf(true) }
@@ -238,12 +240,12 @@ fun VideoPlayerScreen(
         if (isMuted) {
             exoPlayer.volume = if (previousVolume > 0f) previousVolume else 1f
             isMuted = false
-            Toast.makeText(context, "🔊 সাউন্ড চালু করা হয়েছে", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("🔊 Sound unmuted", "🔊 সাউন্ড চালু করা হয়েছে"), Toast.LENGTH_SHORT).show()
         } else {
             previousVolume = if (exoPlayer.volume > 0f) exoPlayer.volume else 1f
             exoPlayer.volume = 0f
             isMuted = true
-            Toast.makeText(context, "🔇 সাউন্ড বন্ধ করা হয়েছে (Muted)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("🔇 Sound muted", "🔇 সাউন্ড বন্ধ করা হয়েছে"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -252,10 +254,10 @@ fun VideoPlayerScreen(
         val act = activity ?: (context as? Activity)
         if (isAudioOnlyMode) {
             act?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(context, "অডিও মোড চালু হয়েছে! এখন স্ক্রিন বন্ধ করলেও লেকচার শুনতে পারবেন। 🎧", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Audio mode enabled! You can listen with screen off. 🎧", "অডিও মোড চালু হয়েছে! এখন স্ক্রিন বন্ধ করলেও লেকচার শুনতে পারবেন। 🎧"), Toast.LENGTH_SHORT).show()
         } else {
             act?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            Toast.makeText(context, "ভিডিও মোডে ফিরে আসা হয়েছে", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Switched back to Video mode", "ভিডিও মোডে ফিরে আসা হয়েছে"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -263,7 +265,7 @@ fun VideoPlayerScreen(
         exoPlayer.seekTo(0L)
         resumeNotificationText = null
         videoProgressManager.resetProgress(videoKey)
-        Toast.makeText(context, "শুরু থেকে প্লে করা হচ্ছে", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, AppLang.tr("Playing from beginning", "শুরু থেকে প্লে করা হচ্ছে"), Toast.LENGTH_SHORT).show()
     }
 
     val toggleResizeMode: () -> Unit = {
@@ -275,10 +277,10 @@ fun VideoPlayerScreen(
             else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
         val modeName = when (resizeMode) {
-            AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ভিডিও সাইজ: ফিট স্ক্রিন"
-            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন"
-            AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ভিডিও সাইজ: ফুল স্ক্রিন"
-            else -> "ফিট স্ক্রিন"
+            AspectRatioFrameLayout.RESIZE_MODE_FIT -> AppLang.tr("Video Size: Fit Screen", "ভিডিও সাইজ: ফিট স্ক্রিন")
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AppLang.tr("Video Size: Zoom & Fill", "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন")
+            AspectRatioFrameLayout.RESIZE_MODE_FILL -> AppLang.tr("Video Size: Full Screen", "ভিডিও সাইজ: ফুল স্ক্রিন")
+            else -> AppLang.tr("Fit Screen", "ফিট স্ক্রিন")
         }
         Toast.makeText(context, modeName, Toast.LENGTH_SHORT).show()
     }
@@ -363,8 +365,8 @@ fun VideoPlayerScreen(
                                 exoPlayer.seekTo(target)
                             }
                             currentPosition = target
-                            val timeFormatted = ShikhoPlayerManager.formatTime(target, true)
-                            resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                            val timeFormatted = ShikhoPlayerManager.formatTime(target, AppLang.isBn())
+                            resumeNotificationText = AppLang.tr("Resumed from $timeFormatted", "পূর্বের $timeFormatted মিনিট থেকে চলছে")
                             coroutineScope.launch {
                                 delay(6000)
                                 resumeNotificationText = null
@@ -411,8 +413,8 @@ fun VideoPlayerScreen(
                 exoPlayer.seekTo(dbProgress.positionMs)
                 currentPosition = dbProgress.positionMs
                 lastPlaybackPositionMs = dbProgress.positionMs
-                val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, true)
-                resumeNotificationText = "পূর্বের $timeFormatted মিনিট থেকে চলছে"
+                val timeFormatted = ShikhoPlayerManager.formatTime(dbProgress.positionMs, AppLang.isBn())
+                resumeNotificationText = AppLang.tr("Resumed from $timeFormatted", "পূর্বের $timeFormatted মিনিট থেকে চলছে")
                 coroutineScope.launch {
                     delay(6000)
                     resumeNotificationText = null
@@ -473,7 +475,7 @@ fun VideoPlayerScreen(
                                 }
                                 exoPlayer.prepare()
                                 exoPlayer.playWhenReady = true
-                                Toast.makeText(context, "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, AppLang.tr("Back online, resuming playback...", "ইন্টারনেট পুনরায় সংযুক্ত হয়েছে, ক্লাস চালু হচ্ছে..."), Toast.LENGTH_SHORT).show()
                             }
                         } catch (_: Exception) {}
                     }
@@ -652,7 +654,7 @@ fun VideoPlayerScreen(
         // 2. Ambient Audio Visualizer Overlay (Battery-saving screen for screen-off listen mode)
         if (isAudioOnlyMode) {
             AmbientAudioVisualizerOverlay(
-                title = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
+                title = title.ifBlank { tr("Video Lecture", "ক্লাস ভিডিও লেকচার") },
                 subjectName = subjectName ?: "",
                 isPlaying = isPlaying,
                 isMuted = isMuted,
@@ -668,7 +670,7 @@ fun VideoPlayerScreen(
         // 3. Unified Adaptive Player Controls Overlay
         val seekStep = 10000L
         PlayerControlsOverlay(
-            title = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
+            title = title.ifBlank { tr("Video Lecture", "ক্লাস ভিডিও লেকচার") },
             subjectName = subjectName ?: "",
             isPlaying = isPlaying,
             isBuffering = isBuffering,
@@ -731,7 +733,7 @@ fun VideoPlayerScreen(
                 when (downloadedItem?.status) {
                     DownloadedItemEntity.STATUS_DOWNLOADING -> {
                         downloadManager.cancelDownload(downloadId)
-                        Toast.makeText(context, "ভিডিও ডাউনলোড বাতিল করা হয়েছে", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, AppLang.tr("Video download cancelled", "ভিডিও ডাউনলোড বাতিল করা হয়েছে"), Toast.LENGTH_SHORT).show()
                     }
                     DownloadedItemEntity.STATUS_COMPLETED -> {
                         showDeleteDownloadDialog = true
@@ -740,7 +742,7 @@ fun VideoPlayerScreen(
                         if (effectivePlaybackUrl.isNotBlank()) {
                             showDownloadQualityDialog = true
                         } else {
-                            Toast.makeText(context, "ভিডিও ডাউনলোড লিংক পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Download link not available", "ভিডিও ডাউনলোড লিংক পাওয়া যায়নি"), Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -790,7 +792,7 @@ fun VideoPlayerScreen(
                 availableQualities = availableQualities,
                 selectedQualityLabel = selectedQualityLabel,
                 onSelectQuality = { quality ->
-                    selectedQualityLabel = if (quality.id == "auto") "অটো" else quality.label
+                    selectedQualityLabel = if (quality.id == "auto") AppLang.tr("Auto", "অটো") else quality.label
                     if (!quality.targetStreamUrl.isNullOrBlank() && quality.targetStreamUrl != effectivePlaybackUrl) {
                         val resumePos = exoPlayer.currentPosition.coerceAtLeast(0L)
                         lastPlaybackPositionMs = resumePos
@@ -830,21 +832,24 @@ fun VideoPlayerScreen(
         if (showDownloadQualityDialog) {
             VideoDownloadQualityDialog(
                 videoUrl = effectivePlaybackUrl,
-                title = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
+                title = title.ifBlank { tr("Video Lecture", "ক্লাস ভিডিও লেকচার") },
                 downloadedItem = downloadedItem,
                 onDismiss = { showDownloadQualityDialog = false },
                 onConfirmDownload = { selectedQuality ->
                     showDownloadQualityDialog = false
                     downloadManager.downloadFile(
                         id = downloadId,
-                        title = title.ifBlank { "ক্লাস ভিডিও লেকচার" },
+                        title = title.ifBlank { AppLang.tr("Video Lecture", "ক্লাস ভিডিও লেকচার") },
                         subtitle = subjectName,
                         fileType = DownloadedItemEntity.FILE_TYPE_VIDEO,
                         remoteUrl = selectedQuality.targetM3u8Url
                     )
                     Toast.makeText(
                         context,
-                        "ভিডিও ডাউনলোড শুরু হয়েছে (${selectedQuality.labelBangla})। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।",
+                        AppLang.tr(
+                            "Download started (${selectedQuality.labelBangla}). Check the Downloads tab.",
+                            "ভিডিও ডাউনলোড শুরু হয়েছে (${selectedQuality.labelBangla})। 'ডাউনলোড' ট্যাবে দেখতে পাবেন।"
+                        ),
                         Toast.LENGTH_LONG
                     ).show()
                 }
@@ -866,20 +871,20 @@ fun VideoPlayerScreen(
                             tint = Color(0xFF10B981),
                             modifier = Modifier.size(24.dp)
                         )
-                        Text("অফলাইন ডাউনলোড", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(tr("Offline Download", "অফলাইন ডাউনলোড"), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 },
                 text = {
                     Column {
                         Text(
-                            text = "এই ভিডিওটি আপনার ডিভাইসের সুরক্ষিত অ্যাপ স্টোরেজে অফলাইনে সংরক্ষিত রয়েছে।",
+                            text = tr("This video is saved offline in your app's secure storage.", "এই ভিডিওটি আপনার ডিভাইসের সুরক্ষিত অ্যাপ স্টোরেজে অফলাইনে সংরক্ষিত রয়েছে।"),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         downloadedItem?.let { item ->
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "সাইজ: ${downloadManager.formatFileSize(item.totalBytes)}",
+                                text = tr("Size: ${downloadManager.formatFileSize(item.totalBytes)}", "সাইজ: ${downloadManager.formatFileSize(item.totalBytes)}"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -889,7 +894,7 @@ fun VideoPlayerScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showDeleteDownloadDialog = false }) {
-                        Text("ঠিক আছে", fontWeight = FontWeight.Bold)
+                        Text(tr("OK", "ঠিক আছে"), fontWeight = FontWeight.Bold)
                     }
                 },
                 dismissButton = {
@@ -897,10 +902,10 @@ fun VideoPlayerScreen(
                         onClick = {
                             downloadManager.deleteDownloadedFile(downloadId)
                             showDeleteDownloadDialog = false
-                            Toast.makeText(context, "ডাউনলোড করা ফাইল ডিলিট করা হয়েছে", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, AppLang.tr("Downloaded file deleted", "ডাউনলোড করা ফাইল ডিলিট করা হয়েছে"), Toast.LENGTH_SHORT).show()
                         }
                     ) {
-                        Text("ডিলিট করুন", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                        Text(tr("Delete", "ডিলিট করুন"), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                     }
                 }
             )

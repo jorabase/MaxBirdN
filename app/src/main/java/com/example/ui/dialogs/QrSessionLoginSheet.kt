@@ -33,7 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.auth.SessionManager
+import com.example.utils.AppLang
 import com.example.utils.QrSessionUtils
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,14 +62,24 @@ fun QrSessionLoginSheet(
                 val success = QrSessionUtils.importSessionPayload(qrText, sessionManager)
                 isLoading = false
                 if (success) {
-                    Toast.makeText(context, "কিউআর সেশন সফলভাবে ইনপোর্ট হয়েছে!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        context,
+                        AppLang.tr("QR session imported!", "কিউআর সেশন ইনপোর্ট হয়েছে!"),
+                        Toast.LENGTH_SHORT
+                    ).show()
                     onLoginSuccess()
                 } else {
-                    errorMessage = "কিউআর কোডে কোনো বৈধ সেশন টোকেন পাওয়া যায়নি।"
+                    errorMessage = AppLang.tr(
+                        "No valid session token found in QR code.",
+                        "কিউআর কোডে বৈধ সেশন টোকেন পাওয়া যায়নি।"
+                    )
                 }
             } else {
                 isLoading = false
-                errorMessage = "ছবিটি থেকে কিউআর কোড স্ক্যান করা সম্ভব হয়নি। সঠিক সেশন কিউআর কোডের ছবি নির্বাচন করুন।"
+                errorMessage = AppLang.tr(
+                    "Could not scan QR code from this image. Please select a valid session QR image.",
+                    "ছবি থেকে কিউআর কোড স্ক্যান করা যায়নি। সঠিক সেশন কিউআর ছবি নির্বাচন করুন।"
+                )
             }
         }
     }
@@ -112,7 +124,7 @@ fun QrSessionLoginSheet(
                             )
                         }
                         Text(
-                            text = "কিউআর বা সেশন লগইন",
+                            text = tr("QR & Session Login", "কিউআর ও সেশন লগইন"),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -133,7 +145,11 @@ fun QrSessionLoginSheet(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .padding(4.dp)
                 ) {
-                    listOf("পেস্ট কোড", "গ্যালারি ছবি", "ক্যামেরা").forEachIndexed { index, title ->
+                    listOf(
+                        tr("Paste Code", "পেস্ট কোড"),
+                        tr("Gallery", "গ্যালারি"),
+                        tr("Camera", "ক্যামেরা")
+                    ).forEachIndexed { index, title ->
                         val isSelected = selectedTab == index
                         Box(
                             modifier = Modifier
@@ -170,7 +186,7 @@ fun QrSessionLoginSheet(
                                 errorMessage = null
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("এখানে সেশন কোড বা টোকেন পেস্ট করুন...", fontSize = 13.sp) },
+                            placeholder = { Text(tr("Paste session code or token...", "সেশন কোড বা টোকেন পেস্ট করুন..."), fontSize = 13.sp) },
                             shape = RoundedCornerShape(14.dp),
                             minLines = 3,
                             maxLines = 4,
@@ -183,7 +199,11 @@ fun QrSessionLoginSheet(
                                         if (pasteText.isNotBlank()) {
                                             tokenInput = pasteText
                                             errorMessage = null
-                                            Toast.makeText(context, "ক্লিপবোর্ড থেকে পেস্ট করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                AppLang.tr("Pasted from clipboard", "ক্লিপবোর্ড থেকে পেস্ট করা হয়েছে"),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         }
                                     }
                                 }) {
@@ -197,15 +217,22 @@ fun QrSessionLoginSheet(
                         Button(
                             onClick = {
                                 if (tokenInput.isBlank()) {
-                                    errorMessage = "অনুগ্রহ করে সেশন কোডটি ইনপুট দিন।"
+                                    errorMessage = AppLang.tr("Please enter a session code.", "অনুগ্রহ করে সেশন কোড দিন।")
                                     return@Button
                                 }
                                 val success = QrSessionUtils.importSessionPayload(tokenInput, sessionManager)
                                 if (success) {
-                                    Toast.makeText(context, "সেশন ইনপোর্ট সফল হয়েছে!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(
+                                        context,
+                                        AppLang.tr("Session imported!", "সেশন ইনপোর্ট সফল হয়েছে!"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                     onLoginSuccess()
                                 } else {
-                                    errorMessage = "অবৈধ সেশন কোড। সঠিকভাবে সেশন কোড দিন।"
+                                    errorMessage = AppLang.tr(
+                                        "Invalid session code. Please enter a valid code.",
+                                        "অবৈধ সেশন কোড। সঠিক সেশন কোড দিন।"
+                                    )
                                 }
                             },
                             shape = RoundedCornerShape(14.dp),
@@ -213,7 +240,7 @@ fun QrSessionLoginSheet(
                                 .fillMaxWidth()
                                 .height(50.dp)
                         ) {
-                            Text("সেশন কোড দিয়ে লগইন করুন", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text(tr("Log In with Code", "কোড দিয়ে লগইন"), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -223,7 +250,10 @@ fun QrSessionLoginSheet(
                             modifier = Modifier.padding(vertical = 10.dp)
                         ) {
                             Text(
-                                text = "অন্য ডিভাইস থেকে পাওয়া সেশন কিউআর কোডের স্ক্রিনশট বা ছবিটি আপনার গ্যালারি থেকে সিলেক্ট করুন।",
+                                text = tr(
+                                    "Select a screenshot or photo of your session QR code from another device.",
+                                    "অন্য ডিভাইস থেকে নেওয়া সেশন কিউআর কোডের ছবি গ্যালারি থেকে সিলেক্ট করুন।"
+                                ),
                                 fontSize = 13.sp,
                                 textAlign = TextAlign.Center,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -244,7 +274,7 @@ fun QrSessionLoginSheet(
                             ) {
                                 Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(10.dp))
-                                Text("গ্যালারি থেকে কিউআর ছবি সিলেক্ট করুন", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(tr("Select QR from Gallery", "গ্যালারি থেকে কিউআর দিন"), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -271,7 +301,7 @@ fun QrSessionLoginSheet(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = "কিউআর কোডের দিকে ফ্রেমটি রাখুন",
+                                        text = tr("Point frame at QR code", "কিউআর কোডের দিকে ফ্রেম রাখুন"),
                                         color = Color.White.copy(alpha = 0.8f),
                                         fontSize = 11.5.sp
                                     )
@@ -293,7 +323,7 @@ fun QrSessionLoginSheet(
                             ) {
                                 Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("গ্যালারি থেকে কিউআর ছবি দিন", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(tr("Choose QR from Gallery", "গ্যালারি থেকে কিউআর দিন"), fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
 import com.example.ui.components.ResponsiveDigitInputField
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,7 +121,7 @@ fun PinScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Text(
-                    text = "পিন লিখুন",
+                    text = tr("Enter PIN", "পিন লিখুন"),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -129,7 +130,7 @@ fun PinScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "আপনার একাউন্টের ৬ ডিজিটের পিন নম্বর দিন",
+                    text = tr("Enter your 6-digit account PIN", "আপনার ৬ ডিজিটের পিন দিন"),
                     fontSize = 14.sp,
                     color = Color(0xFF94A3B8),
                     textAlign = TextAlign.Center
@@ -185,7 +186,7 @@ fun PinScreen(
                             enabled = authState != AuthState.Loading
                         ) {
                             Text(
-                                text = "পিন ভুলে গেছেন?",
+                                text = tr("Forgot PIN?", "পিন ভুলে গেছেন?"),
                                 color = Color(0xFF38BDF8),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold

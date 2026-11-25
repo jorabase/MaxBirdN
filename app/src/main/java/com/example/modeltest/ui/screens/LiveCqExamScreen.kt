@@ -24,6 +24,8 @@ import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.components.QuizRichContent
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.isBangla
+import com.example.utils.tr
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +112,10 @@ fun LiveCqExamScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "তোমার সবগুলো প্রশ্নের উত্তর খাতায় লেখার পর উত্তরপত্র আপলোড করো",
+                            text = tr(
+                                "Write all answers on paper, then upload your answer sheets",
+                                "তোমার সবগুলো প্রশ্নের উত্তর খাতায় লেখার পর উত্তরপত্র আপলোড করো"
+                            ),
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 18.sp
@@ -128,7 +133,7 @@ fun LiveCqExamScreen(
                             .height(48.dp)
                     ) {
                         Text(
-                            text = "উত্তরপত্র আপলোড করো",
+                            text = tr("Upload Answer Sheet", "উত্তরপত্র আপলোড করো"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -181,13 +186,13 @@ fun LiveCqExamScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "তোমার ইউনিক কোড : ",
+                                    text = tr("Your Unique Code: ", "তোমার ইউনিক কোড : "),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = uiState.liveCqUCode.ifBlank { "৪২৮৭" },
+                                    text = toBengaliDigits(uiState.liveCqUCode.ifBlank { "4287" }),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isDark) Color(0xFF818CF8) else Color(0xFF4F46E5)
@@ -195,7 +200,10 @@ fun LiveCqExamScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "উত্তর পত্রের প্রতি পৃষ্ঠার সাথে ইউনিক কোডটি খাতায় লিখ",
+                                text = tr(
+                                    "Write this unique code on every page of your answer sheet",
+                                    "উত্তর পত্রের প্রতি পৃষ্ঠার সাথে ইউনিক কোডটি খাতায় লিখ"
+                                ),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 lineHeight = 18.sp
@@ -215,7 +223,7 @@ fun LiveCqExamScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "টেস্টের নিয়মাবলী",
+                            text = tr("Test Rules", "টেস্টের নিয়মাবলী"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -233,18 +241,36 @@ fun LiveCqExamScreen(
                         val uploadMins = uiState.liveCqUploadInfo?.getSubmissionDurationMinutes() ?: 40
 
                         val writingTimeText = if (writingMins >= 60 && writingMins % 60 == 0) {
-                            "${formatToBengaliNumber(writingMins / 60)} ঘণ্টা"
+                            tr("${formatToBengaliNumber(writingMins / 60)} hr", "${formatToBengaliNumber(writingMins / 60)} ঘণ্টা")
                         } else if (writingMins >= 60) {
-                            "${formatToBengaliNumber(writingMins / 60)} ঘণ্টা ${formatToBengaliNumber(writingMins % 60)} মিনিট"
+                            tr(
+                                "${formatToBengaliNumber(writingMins / 60)} hr ${formatToBengaliNumber(writingMins % 60)} min",
+                                "${formatToBengaliNumber(writingMins / 60)} ঘণ্টা ${formatToBengaliNumber(writingMins % 60)} মিনিট"
+                            )
                         } else {
-                            "${formatToBengaliNumber(writingMins)} মিনিট"
+                            tr("${formatToBengaliNumber(writingMins)} min", "${formatToBengaliNumber(writingMins)} মিনিট")
                         }
 
-                        RuleBulletItem(text = "তোমাকে ${formatToBengaliNumber(qCount)} টার মধ্যে ${formatToBengaliNumber(ansCount)} টা আনসার করতে হবে।")
+                        RuleBulletItem(
+                            text = tr(
+                                "Answer ${formatToBengaliNumber(ansCount)} out of ${formatToBengaliNumber(qCount)} questions.",
+                                "তোমাকে ${formatToBengaliNumber(qCount)} টার মধ্যে ${formatToBengaliNumber(ansCount)} টা আনসার করতে হবে।"
+                            )
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
-                        RuleBulletItem(text = "প্রশ্নের উত্তর লেখার সময় $writingTimeText")
+                        RuleBulletItem(
+                            text = tr(
+                                "Writing time: $writingTimeText",
+                                "প্রশ্নের উত্তর লেখার সময় $writingTimeText"
+                            )
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
-                        RuleBulletItem(text = "উত্তরপত্র আপলোড করার সময় ${formatToBengaliNumber(uploadMins)} মিনিট")
+                        RuleBulletItem(
+                            text = tr(
+                                "Upload window: ${formatToBengaliNumber(uploadMins)} min",
+                                "উত্তরপত্র আপলোড করার সময় ${formatToBengaliNumber(uploadMins)} মিনিট"
+                            )
+                        )
                     }
                 }
             }
@@ -277,7 +303,7 @@ fun LiveCqExamScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "কোনো CQ প্রশ্ন পাওয়া যায়নি",
+                                text = tr("No CQ questions found", "কোনো CQ প্রশ্ন পাওয়া যায়নি"),
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -371,11 +397,12 @@ fun LiveCqQuestionCard(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                 Spacer(modifier = Modifier.height(12.dp))
 
-                val defaultKeys = listOf("ক", "খ", "গ", "ঘ")
+                val checkKeys = listOf("ক", "খ", "গ", "ঘ", "a", "b", "c", "d", "A", "B", "C", "D")
+                val displayKeys = if (isBangla()) listOf("ক", "খ", "গ", "ঘ") else listOf("a", "b", "c", "d")
                 subQuestions.forEachIndexed { sIdx, sub ->
                     val rawQ = sub.question?.replace("$", "")?.trim() ?: ""
-                    val hasPrefix = defaultKeys.any { rawQ.startsWith("$it)") || rawQ.startsWith("$it.") || rawQ.startsWith("($it)") }
-                    val displayQ = if (hasPrefix) rawQ else "${defaultKeys.getOrElse(sIdx) { "${sIdx + 1}" }}) $rawQ"
+                    val hasPrefix = checkKeys.any { rawQ.startsWith("$it)") || rawQ.startsWith("$it.") || rawQ.startsWith("($it)") }
+                    val displayQ = if (hasPrefix) rawQ else "${displayKeys.getOrElse(sIdx) { "${sIdx + 1}" }}) $rawQ"
                     val marksInt = sub.getEffectiveMarks().toInt()
 
                     Row(

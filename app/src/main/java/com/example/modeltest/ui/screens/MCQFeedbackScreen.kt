@@ -29,7 +29,9 @@ import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.modeltest.ui.components.RetryErrorView
 import com.example.ui.components.QuizRichContent
+import com.example.utils.isBangla
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 
 /**
  * Analytics Feedback Screen (analytics.shikho.com):
@@ -67,10 +69,10 @@ fun MCQFeedbackScreen(
     }
 
     val filterLabel = when (filter) {
-        FeedbackFilter.ALL -> "সব উত্তর"
-        FeedbackFilter.CORRECT -> "সঠিক উত্তর"
-        FeedbackFilter.WRONG -> "ভুল উত্তর"
-        FeedbackFilter.UNATTEMPTED -> "অনুত্তরিত প্রশ্ন"
+        FeedbackFilter.ALL -> tr("All", "সব উত্তর")
+        FeedbackFilter.CORRECT -> tr("Correct", "সঠিক উত্তর")
+        FeedbackFilter.WRONG -> tr("Wrong", "ভুল উত্তর")
+        FeedbackFilter.UNATTEMPTED -> tr("Skipped", "অনুত্তরিত")
     }
 
     Scaffold(
@@ -78,7 +80,7 @@ fun MCQFeedbackScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "টেস্ট ফিডব্যাক ও সমাধান",
+                        text = tr("Test Feedback", "টেস্ট ফিডব্যাক"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -107,7 +109,7 @@ fun MCQFeedbackScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     RetryErrorView(
-                        message = uiState.feedbackError ?: "ফিডব্যাক লোড করা যায়নি",
+                        message = uiState.feedbackError ?: tr("Could not load feedback", "ফিডব্যাক লোড করা যায়নি"),
                         onRetry = { viewModel.loadFeedback(sessionId) }
                     )
                 }
@@ -130,7 +132,7 @@ fun MCQFeedbackScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "ফলাফল সারসংক্ষেপ",
+                                    text = tr("Result Summary", "ফলাফল সারসংক্ষেপ"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -142,22 +144,22 @@ fun MCQFeedbackScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     MetricPill(
-                                        label = "সঠিক",
+                                        label = tr("Correct", "সঠিক"),
                                         value = toBengaliDigits((feedback?.correct_count ?: 0).toString()),
                                         color = Color(0xFF10B981)
                                     )
                                     MetricPill(
-                                        label = "ভুল",
+                                        label = tr("Wrong", "ভুল"),
                                         value = toBengaliDigits((feedback?.wrong_count ?: 0).toString()),
                                         color = Color(0xFFEF4444)
                                     )
                                     MetricPill(
-                                        label = "অনুত্তরিত",
+                                        label = tr("Skipped", "অনুত্তরিত"),
                                         value = toBengaliDigits((feedback?.unattempted_count ?: 0).toString()),
                                         color = Color(0xFF64748B)
                                     )
                                     MetricPill(
-                                        label = "মোট",
+                                        label = tr("Total", "মোট"),
                                         value = toBengaliDigits((feedback?.total_questions ?: allQuestions.size).toString()),
                                         color = Color(0xFF3B82F6)
                                     )
@@ -174,7 +176,10 @@ fun MCQFeedbackScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "প্রশ্ন তালিকা (${toBengaliDigits(filteredQuestions.size.toString())})",
+                                text = tr(
+                                    "Questions (${toBengaliDigits(filteredQuestions.size.toString())})",
+                                    "প্রশ্ন তালিকা (${toBengaliDigits(filteredQuestions.size.toString())})"
+                                ),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -196,28 +201,28 @@ fun MCQFeedbackScreen(
                                     onDismissRequest = { filterMenuExpanded = false }
                                 ) {
                                     DropdownMenuItem(
-                                        text = { Text("সব উত্তর") },
+                                        text = { Text(tr("All Answers", "সব উত্তর")) },
                                         onClick = {
                                             viewModel.setFeedbackFilter(FeedbackFilter.ALL)
                                             filterMenuExpanded = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("সঠিক উত্তর") },
+                                        text = { Text(tr("Correct", "সঠিক উত্তর")) },
                                         onClick = {
                                             viewModel.setFeedbackFilter(FeedbackFilter.CORRECT)
                                             filterMenuExpanded = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("ভুল উত্তর") },
+                                        text = { Text(tr("Wrong", "ভুল উত্তর")) },
                                         onClick = {
                                             viewModel.setFeedbackFilter(FeedbackFilter.WRONG)
                                             filterMenuExpanded = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("অনুত্তরিত প্রশ্ন") },
+                                        text = { Text(tr("Unattempted", "অনুত্তরিত প্রশ্ন")) },
                                         onClick = {
                                             viewModel.setFeedbackFilter(FeedbackFilter.UNATTEMPTED)
                                             filterMenuExpanded = false
@@ -261,7 +266,7 @@ private fun FeedbackQuestionCard(
     index: Int,
     item: FeedbackQuestionItem
 ) {
-    val bengaliLetters = listOf("ক", "খ", "গ", "ঘ")
+    val optionLetters = if (isBangla()) listOf("ক", "খ", "গ", "ঘ") else listOf("A", "B", "C", "D")
 
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -277,16 +282,16 @@ private fun FeedbackQuestionCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "প্রশ্ন ${toBengaliDigits(index.toString())}",
+                    text = tr("Question ${toBengaliDigits(index.toString())}", "প্রশ্ন ${toBengaliDigits(index.toString())}"),
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
 
                 val (badgeText, badgeBg, badgeColor) = when {
-                    item.is_correct == true -> Triple("সঠিক", Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
-                    item.user_selected_option != null -> Triple("ভুল", Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
-                    else -> Triple("অনুত্তরিত", Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
+                    item.is_correct == true -> Triple(tr("Correct", "সঠিক"), Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
+                    item.user_selected_option != null -> Triple(tr("Wrong", "ভুল"), Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
+                    else -> Triple(tr("Skipped", "অনুত্তরিত"), Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
                 }
 
                 Surface(
@@ -313,14 +318,14 @@ private fun FeedbackQuestionCard(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "প্রশ্ন:",
+                        text = tr("Question:", "প্রশ্ন:"),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     QuizRichContent(
-                        text = item.question_text?.takeIf { it.isNotBlank() } ?: "প্রশ্ন নং ${toBengaliDigits(index.toString())}",
+                        text = item.question_text?.takeIf { it.isNotBlank() } ?: tr("Question ${toBengaliDigits(index.toString())}", "প্রশ্ন নং ${toBengaliDigits(index.toString())}"),
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -364,8 +369,8 @@ private fun FeedbackQuestionCard(
             }
 
             // Answer Status Summary Banner
-            val userSelectedLetter = item.user_selected_option?.let { bengaliLetters.getOrElse(it) { "${it + 1}" } }
-            val correctLetter = effectiveCorrectOption?.let { bengaliLetters.getOrElse(it) { "${it + 1}" } }
+            val userSelectedLetter = item.user_selected_option?.let { optionLetters.getOrElse(it) { "${it + 1}" } }
+            val correctLetter = effectiveCorrectOption?.let { optionLetters.getOrElse(it) { "${it + 1}" } }
             val isUserCorrect = item.is_correct == true || (item.user_selected_option != null && item.user_selected_option == effectiveCorrectOption)
 
             Surface(
@@ -392,9 +397,18 @@ private fun FeedbackQuestionCard(
                 ) {
                     Text(
                         text = when {
-                            item.user_selected_option == null -> "তুমি কোনো উত্তর দেওনি • সঠিক উত্তর: (${correctLetter ?: "-"})"
-                            isUserCorrect -> "তোমার উত্তর সঠিক: ($userSelectedLetter)"
-                            else -> "তোমার উত্তর: ($userSelectedLetter) • সঠিক উত্তর: (${correctLetter ?: "-"})"
+                            item.user_selected_option == null -> tr(
+                                "Unattempted • Correct: (${correctLetter ?: "-"})",
+                                "তুমি কোনো উত্তর দাওনি • সঠিক উত্তর: (${correctLetter ?: "-"})"
+                            )
+                            isUserCorrect -> tr(
+                                "Correct Answer: ($userSelectedLetter)",
+                                "তোমার উত্তর সঠিক: ($userSelectedLetter)"
+                            )
+                            else -> tr(
+                                "Your Answer: ($userSelectedLetter) • Correct: (${correctLetter ?: "-"})",
+                                "তোমার উত্তর: ($userSelectedLetter) • সঠিক উত্তর: (${correctLetter ?: "-"})"
+                            )
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -436,7 +450,7 @@ private fun FeedbackQuestionCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "(${bengaliLetters.getOrElse(optIdx) { "${optIdx + 1}" }})",
+                        text = "(${optionLetters.getOrElse(optIdx) { "${optIdx + 1}" }})",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -457,7 +471,7 @@ private fun FeedbackQuestionCard(
                                 color = Color(0xFF10B981)
                             ) {
                                 Text(
-                                    text = "তোমার সঠিক উত্তর",
+                                    text = tr("Your Correct", "তোমার সঠিক উত্তর"),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -471,7 +485,7 @@ private fun FeedbackQuestionCard(
                                 color = Color(0xFF059669)
                             ) {
                                 Text(
-                                    text = "সঠিক উত্তর",
+                                    text = tr("Correct", "সঠিক উত্তর"),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -485,7 +499,7 @@ private fun FeedbackQuestionCard(
                                 color = Color(0xFFEF4444)
                             ) {
                                 Text(
-                                    text = "তোমার ভুল উত্তর",
+                                    text = tr("Your Wrong", "তোমার ভুল উত্তর"),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -509,7 +523,7 @@ private fun FeedbackQuestionCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lightbulb, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "ব্যাখ্যা ও সমাধান:", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                        Text(text = tr("Solution:", "ব্যাখ্যা ও সমাধান:"), fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     if (!item.solution.isNullOrBlank()) {
@@ -525,9 +539,15 @@ private fun FeedbackQuestionCard(
                         }?.takeIf { it.isNotBlank() }
                         Text(
                             text = if (correctOptText != null && correctLetter != null) {
-                                "এই প্রশ্নের সঠিক উত্তর হলো অপশন ($correctLetter): $correctOptText"
+                                tr(
+                                    "The correct answer is option ($correctLetter): $correctOptText",
+                                    "এই প্রশ্নের সঠিক উত্তর হলো অপশন ($correctLetter): $correctOptText"
+                                )
                             } else {
-                                "এই প্রশ্নের জন্য অতিরিক্ত লিখিত ব্যাখ্যা সংযুক্ত নেই।"
+                                tr(
+                                    "No additional written explanation is attached for this question.",
+                                    "এই প্রশ্নের জন্য অতিরিক্ত লিখিত ব্যাখ্যা সংযুক্ত নেই।"
+                                )
                             },
                             fontSize = 13.sp,
                             color = Color(0xFF475569),

@@ -42,6 +42,9 @@ class SessionManager(context: Context) {
     private fun syncCompanionFlowsFromPrefs() {
         try {
             _sharedThemeModeFlow.value = getThemeMode()
+            val savedLang = getAppLanguage()
+            com.example.utils.AppLang.current = savedLang
+            _sharedAppLanguageFlow.value = savedLang
             _sharedHeaderWallpaperFlow.value = getHeaderWallpaperConfig()
             _sharedClassNotificationLeadTimeFlow.value = getClassNotificationLeadTimeMinutes()
             _sharedUserAvatarFlow.value = getUserAvatar()
@@ -205,6 +208,7 @@ class SessionManager(context: Context) {
         }
 
         internal val _sharedThemeModeFlow = MutableStateFlow("system")
+        internal val _sharedAppLanguageFlow = MutableStateFlow(com.example.utils.AppLanguage.ENGLISH)
         internal val _sharedHeaderWallpaperFlow = MutableStateFlow(com.example.ui.theme.HeaderWallpaperConfig())
         internal val _sharedClassNotificationLeadTimeFlow = MutableStateFlow(30)
         internal val _sharedUserAvatarFlow = MutableStateFlow<String?>(null)
@@ -665,6 +669,22 @@ class SessionManager(context: Context) {
         sharedPreferences.edit().putString("app_theme_mode", cleanMode).apply()
         fallbackPrefs.edit().putString("app_theme_mode", cleanMode).apply()
         _sharedThemeModeFlow.value = cleanMode
+    }
+
+    // App Language Management ("en" default, "bn" Bangla)
+    val appLanguageFlow: StateFlow<com.example.utils.AppLanguage> = _sharedAppLanguageFlow
+
+    fun getAppLanguage(): com.example.utils.AppLanguage {
+        val raw = sharedPreferences.getString("app_language", null)
+            ?: fallbackPrefs.getString("app_language", null)
+        return com.example.utils.AppLanguage.fromCode(raw)
+    }
+
+    fun setAppLanguage(language: com.example.utils.AppLanguage) {
+        sharedPreferences.edit().putString("app_language", language.code).apply()
+        fallbackPrefs.edit().putString("app_language", language.code).apply()
+        com.example.utils.AppLang.current = language
+        _sharedAppLanguageFlow.value = language
     }
 
     // Header Wallpaper & Live Theme Management

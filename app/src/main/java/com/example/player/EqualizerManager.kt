@@ -11,6 +11,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import com.example.utils.AppLang
 
 data class ExternalEqualizerAppInfo(
     val packageName: String,
@@ -54,16 +55,17 @@ object EqualizerManager {
         val nameBn: String,
         val nameEn: String,
         val subtitleBn: String,
+        val subtitleEn: String,
         val bandOffsetsPercent: List<Int> // 5 bands from -100 to +100
     )
 
     val presets = listOf(
-        PresetItem(0, "ভোকাল বুস্ট", "Vocal Clear", "ক্লাসের কথা স্পষ্ট শোনার জন্য সেরা", listOf(-20, 10, 65, 55, 20)),
-        PresetItem(1, "নরমাল স্টুডিও", "Studio Flat", "স্বাভাবিক ও ব্যালেন্সড সাউন্ড", listOf(0, 0, 0, 0, 0)),
-        PresetItem(2, "বেস বুস্ট", "Deep Bass", "গভীর ও ভারী সাউন্ড ইফেক্ট", listOf(75, 50, 0, 10, 20)),
-        PresetItem(3, "ক্রিস্টাল ক্লিয়ার", "Treble HD", "হাই-ডেফিনিশন শার্প অডিও", listOf(-10, 15, 35, 65, 80)),
-        PresetItem(4, "নাইট স্টাডি", "Soft Night", "কানের আরামের জন্য কোমল সাউন্ড", listOf(20, 25, 15, -15, -25)),
-        PresetItem(5, "কাস্টম প্রোফাইল", "Custom EQ", "নিজের মতো ব্যান্ড কাস্টমাইজ করুন", listOf(0, 0, 0, 0, 0))
+        PresetItem(0, "ভোকাল বুস্ট", "Vocal Clear", "ক্লাসের কথা স্পষ্ট শোনার জন্য সেরা", "Best for crisp, clear lecture voices", listOf(-20, 10, 65, 55, 20)),
+        PresetItem(1, "নরমাল স্টুডিও", "Studio Flat", "স্বাভাবিক ও ব্যালেন্সড সাউন্ড", "Natural and balanced studio sound", listOf(0, 0, 0, 0, 0)),
+        PresetItem(2, "বেস বুস্ট", "Deep Bass", "গভীর ও ভারী সাউন্ড ইফেক্ট", "Rich, deep low-end bass response", listOf(75, 50, 0, 10, 20)),
+        PresetItem(3, "ক্রিস্টাল ক্লিয়ার", "Treble HD", "হাই-ডেফিনিশন শার্প অডিও", "High-definition crisp vocal clarity", listOf(-10, 15, 35, 65, 80)),
+        PresetItem(4, "নাইট স্টাডি", "Soft Night", "কানের আরামের জন্য কোমল সাউন্ড", "Gentle sound for late-night study", listOf(20, 25, 15, -15, -25)),
+        PresetItem(5, "কাস্টম প্রোফাইল", "Custom EQ", "নিজের মতো ব্যান্ড কাস্টমাইজ করুন", "Customize each frequency band", listOf(0, 0, 0, 0, 0))
     )
 
     fun bindPlayer(context: Context, player: androidx.media3.exoplayer.ExoPlayer) {
@@ -265,7 +267,7 @@ object EqualizerManager {
         if (discovered.isEmpty()) {
             discovered["system_default_audiofx"] = ExternalEqualizerAppInfo(
                 packageName = "system_default_audiofx",
-                appName = "মোবাইল সিস্টেম সাউন্ড ইঞ্জিন (System AudioFX)",
+                appName = AppLang.tr("System AudioFX", "সিস্টেম সাউন্ড ইঞ্জিন"),
                 activityName = null,
                 icon = null,
                 isSystemDefault = true
@@ -383,7 +385,7 @@ object EqualizerManager {
                 context.startActivity(soundSettingsIntent)
                 Toast.makeText(
                     context,
-                    "সাউন্ড সেটিংস খোলা হয়েছে",
+                    AppLang.tr("Sound settings opened", "সাউন্ড সেটিংস খোলা হয়েছে"),
                     Toast.LENGTH_SHORT
                 ).show()
                 true
@@ -391,7 +393,7 @@ object EqualizerManager {
         } catch (e: Throwable) {
             Toast.makeText(
                 context,
-                "ডিভাইসের অডিও কন্ট্রোল প্যানেল পাওয়া যায়নি",
+                AppLang.tr("Device audio control panel not found", "ডিভাইসের অডিও কন্ট্রোল প্যানেল পাওয়া যায়নি"),
                 Toast.LENGTH_SHORT
             ).show()
             false
@@ -555,9 +557,9 @@ object EqualizerManager {
         if (isEnabled(context)) {
             val presetIdx = getSelectedPresetIndex(context)
             val preset = presets.find { it.index == presetIdx } ?: presets[0]
-            return preset.nameBn
+            return AppLang.tr(preset.nameEn, preset.nameBn)
         }
-        return "ইকুলাইজার"
+        return AppLang.tr("Equalizer", "ইকুলাইজার")
     }
 
     fun release() {

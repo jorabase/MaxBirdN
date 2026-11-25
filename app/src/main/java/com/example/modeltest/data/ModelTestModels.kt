@@ -420,7 +420,7 @@ data class ShikhoCqQuestionRaw(
     fun getEffectiveStimulus(): String {
         return title?.takeIf { it.isNotBlank() }
             ?: description?.takeIf { it.isNotBlank() }
-            ?: "উদ্দীপক"
+            ?: com.example.utils.AppLang.tr("Stem", "উদ্দীপক")
     }
 }
 

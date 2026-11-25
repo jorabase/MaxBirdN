@@ -113,7 +113,7 @@ class PracticeQuizViewModel(
                     } ?: if (cleanTargetId != null) {
                         HierarchyChapterItem(
                             id = cleanTargetId,
-                            name = cleanTargetName ?: "অধ্যায়",
+                            name = cleanTargetName ?: com.example.utils.AppLang.tr("Chapter", "অধ্যায়"),
                             should_render = true,
                             total_active_questions = null
                         )
@@ -142,7 +142,7 @@ class PracticeQuizViewModel(
                         subjectIcon = subjectItem?.icon,
                         totalActiveQuestionsInSubject = subjectItem?.total_active_questions ?: chapters.sumOf { ch -> ch.total_active_questions ?: 0 },
                         practiceLimits = limits,
-                        chaptersError = if (effectiveChapters.isEmpty()) "এই বিষয়ে বর্তমানে কোনো প্র্যাকটিস কুইজ উপলব্ধ নেই" else null
+                        chaptersError = if (effectiveChapters.isEmpty()) com.example.utils.AppLang.tr("No practice quizzes are currently available for this subject", "এই বিষয়ে বর্তমানে কোনো প্র্যাকটিস কুইজ উপলব্ধ নেই") else null
                     )
                 }
             } catch (e: Exception) {
@@ -150,7 +150,7 @@ class PracticeQuizViewModel(
                 _uiState.update {
                     it.copy(
                         isChaptersLoading = false,
-                        chaptersError = "অধ্যায়সমূহ লোড করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।"
+                        chaptersError = com.example.utils.AppLang.tr("Failed to load chapters. Please try again.", "অধ্যায়সমূহ লোড করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।")
                     )
                 }
             }
@@ -217,7 +217,7 @@ class PracticeQuizViewModel(
         val state = _uiState.value
         val chapterIds = state.selectedChapterIds.toList()
         if (chapterIds.isEmpty()) {
-            _uiState.update { it.copy(startQuizError = "অনুগ্রহ করে অন্তত একটি অধ্যায় সিলেক্ট করুন") }
+            _uiState.update { it.copy(startQuizError = com.example.utils.AppLang.tr("Please select at least one chapter", "অনুগ্রহ করে অন্তত একটি অধ্যায় সিলেক্ট করুন")) }
             return
         }
 
@@ -264,7 +264,7 @@ class PracticeQuizViewModel(
                 _uiState.update {
                     it.copy(
                         isStartingQuiz = false,
-                        startQuizError = e.message ?: "কুইজ শুরু করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।"
+                        startQuizError = e.message ?: com.example.utils.AppLang.tr("Failed to start quiz. Please try again.", "কুইজ শুরু করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।")
                     )
                 }
             }
@@ -439,7 +439,7 @@ class PracticeQuizViewModel(
                 _uiState.update {
                     it.copy(
                         isSubmitting = false,
-                        submitError = e.message ?: "সাবমিট করতে সমস্যা হয়েছে"
+                        submitError = e.message ?: com.example.utils.AppLang.tr("Failed to submit", "সাবমিট করতে সমস্যা হয়েছে")
                     )
                 }
             }
@@ -487,7 +487,7 @@ class PracticeQuizViewModel(
                     completedItemRepository?.markCompleted(
                         itemId = sessionId,
                         itemType = "QUIZ",
-                        title = _uiState.value.targetChapterName ?: "প্র্যাকটিস কুইজ"
+                        title = _uiState.value.targetChapterName ?: com.example.utils.AppLang.tr("Practice Quiz", "প্র্যাকটিস কুইজ")
                     )
                 }
 
@@ -502,7 +502,7 @@ class PracticeQuizViewModel(
                 _uiState.update {
                     it.copy(
                         isResultLoading = false,
-                        resultError = "ফলাফল লোড করা যায়নি। পুনরায় চেষ্টা করুন।"
+                        resultError = com.example.utils.AppLang.tr("Could not load result. Please try again.", "ফলাফল লোড করা যায়নি। পুনরায় চেষ্টা করুন।")
                     )
                 }
             }
@@ -594,7 +594,7 @@ class PracticeQuizViewModel(
                     _uiState.update {
                         it.copy(
                             isFeedbackLoading = false,
-                            feedbackError = "ফিডব্যাক লোড করা যায়নি। পুনরায় চেষ্টা করুন।"
+                            feedbackError = com.example.utils.AppLang.tr("Could not load feedback. Please try again.", "ফিডব্যাক লোড করা যায়নি। পুনরায় চেষ্টা করুন।")
                         )
                     }
                 }
@@ -614,7 +614,7 @@ class PracticeQuizViewModel(
             _uiState.update {
                 it.copy(
                     bookmarkedQuestionIds = it.bookmarkedQuestionIds - questionId,
-                    bookmarkMessage = "বুকমার্ক সরানো হয়েছে"
+                    bookmarkMessage = com.example.utils.AppLang.tr("Bookmark removed", "বুকমার্ক সরানো হয়েছে")
                 )
             }
             viewModelScope.launch {
@@ -630,7 +630,7 @@ class PracticeQuizViewModel(
         _uiState.update {
             it.copy(
                 bookmarkedQuestionIds = it.bookmarkedQuestionIds + questionId,
-                bookmarkMessage = "প্রশ্নটি সংরক্ষণ করা হয়েছে"
+                bookmarkMessage = com.example.utils.AppLang.tr("Question saved", "প্রশ্নটি সংরক্ষণ করা হয়েছে")
             )
         }
 
@@ -679,7 +679,7 @@ class PracticeQuizViewModel(
                     type = SavedItemEntity.TYPE_QUESTION,
                     title = fbQ?.title?.takeIf { it.isNotBlank() }
                         ?: origQ?.title?.takeIf { it.isNotBlank() }
-                        ?: "প্রশ্ন",
+                        ?: com.example.utils.AppLang.tr("Question", "প্রশ্ন"),
                     subtitle = listOfNotNull(subjectTitle, chapterName).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { null },
                     contentJson = contentJson,
                     timestamp = System.currentTimeMillis()

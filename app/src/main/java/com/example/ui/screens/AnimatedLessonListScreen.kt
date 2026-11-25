@@ -31,7 +31,9 @@ import coil.compose.AsyncImage
 import com.example.api.TopicFullItem
 import com.example.course.CourseViewModel
 import com.example.gamification.StudentGamificationManager
+import com.example.utils.AppLang
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,10 +81,13 @@ fun AnimatedLessonListScreen(
                 if (topicsList.isNotEmpty()) {
                     viewModel.setAnimatedPlaylist(topicsList)
                 } else {
-                    errorMessage = "এই অধ্যায়ে কোনো অ্যানিমেটেড লেসন পাওয়া যায়নি"
+                    errorMessage = AppLang.tr("No animated lessons found in this chapter", "এই অধ্যায়ে কোনো অ্যানিমেটেড লেসন পাওয়া যায়নি")
                 }
             } catch (e: Exception) {
-                errorMessage = "লেসন লোড করতে সমস্যা হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক এরর"}"
+                errorMessage = AppLang.tr(
+                    "Failed to load lessons: ${e.localizedMessage ?: "Network error"}",
+                    "লেসন লোড করতে সমস্যা হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক এরর"}"
+                )
             } finally {
                 isLoading = false
             }
@@ -123,7 +128,7 @@ fun AnimatedLessonListScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = chapterName.ifBlank { "অ্যানিমেটেড লেসনস" },
+                            text = chapterName.ifBlank { tr("Animated Lessons", "অ্যানিমেটেড লেসন") },
                             fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -141,7 +146,7 @@ fun AnimatedLessonListScreen(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "থ্রিডি অ্যানিমেটেড কোয়েস্ট প্লেলিস্ট",
+                                text = tr("Animated Playlist", "অ্যানিমেটেড প্লেলিস্ট"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = themeColor
@@ -168,7 +173,7 @@ fun AnimatedLessonListScreen(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "${toBengaliDigits(topicsList.size)}টি অ্যানিমেশন",
+                                    text = tr("${topicsList.size} Videos", "${toBengaliDigits(topicsList.size)}টি ভিডিও"),
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
@@ -205,7 +210,7 @@ fun AnimatedLessonListScreen(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "অ্যানিমেটেড লেসন লোড হচ্ছে...",
+                            text = tr("Loading animated lessons...", "অ্যানিমেটেড লেসন লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -237,7 +242,7 @@ fun AnimatedLessonListScreen(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = errorMessage ?: "কোনো অ্যানিমেটেড ভিডিও পাওয়া যায়নি",
+                            text = errorMessage ?: tr("No animated videos found", "কোনো অ্যানিমেটেড ভিডিও পাওয়া যায়নি"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -251,7 +256,7 @@ fun AnimatedLessonListScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -317,13 +322,13 @@ fun AnimatedLessonListScreen(
                                             }
                                             Column {
                                                 Text(
-                                                    text = "অ্যানিমেটেড ভিডিও প্লেলিস্ট: ${toBengaliDigits(topicsList.size)}টি",
+                                                    text = tr("Playlist: ${topicsList.size} Videos", "ভিডিও প্লেলিস্ট: ${toBengaliDigits(topicsList.size)}টি"),
                                                     fontSize = 14.5.sp,
                                                     fontWeight = FontWeight.ExtraBold,
                                                     color = Color.White
                                                 )
                                                 Text(
-                                                    text = "একটি প্লে করলে প্লেয়ারের ভেতরেই সব ভিডিও পরপর দেখতে পারবেন!",
+                                                    text = tr("Play any video to watch them back-to-back", "একটি প্লে করলে সব ভিডিও পরপর দেখতে পারবেন"),
                                                     fontSize = 11.5.sp,
                                                     color = Color(0xFFCBD5E1)
                                                 )
@@ -337,7 +342,7 @@ fun AnimatedLessonListScreen(
                                                 border = BorderStroke(1.dp, Color(0xFF34D399).copy(alpha = 0.5f))
                                             ) {
                                                 Text(
-                                                    text = "${toBengaliDigits(watchedCount)}/${toBengaliDigits(topicsList.size)} সম্পন্ন",
+                                                    text = tr("$watchedCount/${topicsList.size} Done", "${toBengaliDigits(watchedCount)}/${toBengaliDigits(topicsList.size)} সম্পন্ন"),
                                                     color = Color(0xFF34D399),
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
@@ -354,7 +359,7 @@ fun AnimatedLessonListScreen(
                             val videoData = topic.videos?.data?.firstOrNull { !it.playback_url.isNullOrBlank() }
                             val playbackUrl = videoData?.playback_url ?: ""
                             val thumbnail = videoData?.video_thumbnail_url?.firstOrNull()
-                            val topicTitle = topic.name ?: "ভিডিও ${index + 1}"
+                            val topicTitle = topic.name ?: tr("Video ${index + 1}", "ভিডিও ${toBengaliDigits(index + 1)}")
                             val serialNo = topic.no?.let { toBengaliDigits(it) } ?: toBengaliDigits(index + 1)
                             val isWatched = watchedUrls.contains(playbackUrl)
 
@@ -442,7 +447,7 @@ fun AnimatedVideoCard(
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
                     Text(
-                        text = "লেসন $serialNo",
+                        text = tr("Lesson $serialNo", "লেসন $serialNo"),
                         color = Color.White,
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -464,7 +469,7 @@ fun AnimatedVideoCard(
                             color = Color(0xFF10B981).copy(alpha = 0.9f)
                         ) {
                             Text(
-                                text = "দেখা হয়েছে ✓",
+                                text = tr("Watched ✓", "দেখা হয়েছে ✓"),
                                 color = Color.White,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,

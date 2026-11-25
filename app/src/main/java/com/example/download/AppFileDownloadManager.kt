@@ -176,53 +176,54 @@ class AppFileDownloadManager private constructor(
                 return listOf(
                     DownloadQualityOption(
                         id = "original",
-                        labelBangla = "মূল ভিডিও কোয়ালিটি",
-                        descriptionBangla = "ভিডিওটির মূল স্ট্রিম অনুযায়ী ডাউনলোড হবে",
-                        estimatedSizeBangla = "স্ট্রিম সাইজ অনুযায়ী",
+                        labelBangla = com.example.utils.AppLang.tr("Original Video Quality", "মূল ভিডিও কোয়ালিটি"),
+                        descriptionBangla = com.example.utils.AppLang.tr("Downloads using the original stream", "ভিডিওটির মূল স্ট্রিম অনুযায়ী ডাউনলোড হবে"),
+                        estimatedSizeBangla = com.example.utils.AppLang.tr("Based on stream size", "স্ট্রিম সাইজ অনুযায়ী"),
                         targetM3u8Url = inputUrl,
                         isRecommended = true
                     )
                 )
             }
 
+            val calcLabel = com.example.utils.AppLang.tr("Calculating...", "গণনা করা হচ্ছে...")
             return listOf(
                 DownloadQualityOption(
                     id = "1080p",
-                    labelBangla = "1080p (ফুল এইচডি)",
-                    descriptionBangla = "সর্বোচ্চ মান ও সেরা স্পষ্টতা",
-                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                    labelBangla = com.example.utils.AppLang.tr("1080p (Full HD)", "1080p (ফুল এইচডি)"),
+                    descriptionBangla = com.example.utils.AppLang.tr("Highest quality & crispest clarity", "সর্বোচ্চ মান ও সেরা স্পষ্টতা"),
+                    estimatedSizeBangla = calcLabel,
                     targetM3u8Url = url1080,
                     isRecommended = false
                 ),
                 DownloadQualityOption(
                     id = "720p",
-                    labelBangla = "720p (এইচডি)",
-                    descriptionBangla = "উচ্চ মান ও সবচেয়ে স্পষ্ট ভিডিও",
-                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                    labelBangla = com.example.utils.AppLang.tr("720p (HD)", "720p (এইচডি)"),
+                    descriptionBangla = com.example.utils.AppLang.tr("High quality & sharp video", "উচ্চ মান ও সবচেয়ে স্পষ্ট ভিডিও"),
+                    estimatedSizeBangla = calcLabel,
                     targetM3u8Url = url720,
                     isRecommended = false
                 ),
                 DownloadQualityOption(
                     id = "480p",
-                    labelBangla = "480p (মাঝারি - সেরা পছন্দ)",
-                    descriptionBangla = "সাশ্রয়ী ইন্টারনেট ও স্পষ্ট ভিডিও",
-                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                    labelBangla = com.example.utils.AppLang.tr("480p (Medium - Best Choice)", "480p (মাঝারি - সেরা পছন্দ)"),
+                    descriptionBangla = com.example.utils.AppLang.tr("Balanced data & clear video", "সাশ্রয়ী ইন্টারনেট ও স্পষ্ট ভিডিও"),
+                    estimatedSizeBangla = calcLabel,
                     targetM3u8Url = url480,
                     isRecommended = true
                 ),
                 DownloadQualityOption(
                     id = "360p",
-                    labelBangla = "360p (কম ডাটা)",
-                    descriptionBangla = "দ্রুত ডাউনলোড ও কম ডাটা খরচ",
-                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                    labelBangla = com.example.utils.AppLang.tr("360p (Data Saver)", "360p (কম ডাটা)"),
+                    descriptionBangla = com.example.utils.AppLang.tr("Fast download & low data usage", "দ্রুত ডাউনলোড ও কম ডাটা খরচ"),
+                    estimatedSizeBangla = calcLabel,
                     targetM3u8Url = url360,
                     isRecommended = false
                 ),
                 DownloadQualityOption(
                     id = "240p",
-                    labelBangla = "240p (অতি কম ডাটা)",
-                    descriptionBangla = "দুর্বল ইন্টারনেটে দ্রুত ডাউনলোড",
-                    estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                    labelBangla = com.example.utils.AppLang.tr("240p (Ultra Low Data)", "240p (অতি কম ডাটা)"),
+                    descriptionBangla = com.example.utils.AppLang.tr("Quick download on slow networks", "দুর্বল ইন্টারনেটে দ্রুত ডাউনলোড"),
+                    estimatedSizeBangla = calcLabel,
                     targetM3u8Url = url240,
                     isRecommended = false
                 )
@@ -273,9 +274,9 @@ class AppFileDownloadManager private constructor(
                 return@withContext listOf(
                     DownloadQualityOption(
                         id = "original",
-                        labelBangla = "মূল ভিডিও কোয়ালিটি",
-                        descriptionBangla = "ভিডিওটির মূল স্ট্রিম অনুযায়ী ডাউনলোড হবে",
-                        estimatedSizeBangla = "স্ট্রিম সাইজ অনুযায়ী",
+                        labelBangla = com.example.utils.AppLang.tr("Original Video Quality", "মূল ভিডিও কোয়ালিটি"),
+                        descriptionBangla = com.example.utils.AppLang.tr("Downloads using the original stream", "ভিডিওটির মূল স্ট্রিম অনুযায়ী ডাউনলোড হবে"),
+                        estimatedSizeBangla = com.example.utils.AppLang.tr("Based on stream size", "স্ট্রিম সাইজ অনুযায়ী"),
                         targetM3u8Url = inputUrl,
                         isRecommended = true
                     )
@@ -319,11 +320,11 @@ class AppFileDownloadManager private constructor(
                         }
 
                         val (label, desc) = when (qualityId) {
-                            "1080p" -> "1080p (ফুল এইচডি)" to "সর্বোচ্চ মান ও সেরা স্পষ্টতা"
-                            "720p" -> "720p (এইচডি)" to "উচ্চ মান ও সবচেয়ে স্পষ্ট ভিডিও"
-                            "480p" -> "480p (মাঝারি - সেরা পছন্দ)" to "সাশ্রয়ী ইন্টারনেট ও স্পষ্ট ভিডিও"
-                            "360p" -> "360p (কম ডাটা)" to "দ্রুত ডাউনলোড ও কম ডাটা খরচ"
-                            else -> "240p (অতি কম ডাটা)" to "দুর্বল ইন্টারনেটে দ্রুত ডাউনলোড"
+                            "1080p" -> com.example.utils.AppLang.tr("1080p (Full HD)", "1080p (ফুল এইচডি)") to com.example.utils.AppLang.tr("Highest quality & sharpest clarity", "সর্বোচ্চ মান ও সেরা স্পষ্টতা")
+                            "720p" -> com.example.utils.AppLang.tr("720p (HD)", "720p (এইচডি)") to com.example.utils.AppLang.tr("High quality & crisp video", "উচ্চ মান ও সবচেয়ে স্পষ্ট ভিডিও")
+                            "480p" -> com.example.utils.AppLang.tr("480p (Standard · Best)", "480p (মাঝারি - সেরা পছন্দ)") to com.example.utils.AppLang.tr("Balanced data & clear video", "সাশ্রয়ী ইন্টারনেট ও স্পষ্ট ভিডিও")
+                            "360p" -> com.example.utils.AppLang.tr("360p (Low Data)", "360p (কম ডাটা)") to com.example.utils.AppLang.tr("Fast download & low data usage", "দ্রুত ডাউনলোড ও কম ডাটা খরচ")
+                            else -> com.example.utils.AppLang.tr("240p (Data Saver)", "240p (অতি কম ডাটা)") to com.example.utils.AppLang.tr("Quick download on slow internet", "দুর্বল ইন্টারনেটে দ্রুত ডাউনলোড")
                         }
 
                         parsedOptions.add(
@@ -331,7 +332,7 @@ class AppFileDownloadManager private constructor(
                                 id = qualityId,
                                 labelBangla = label,
                                 descriptionBangla = desc,
-                                estimatedSizeBangla = "গণনা করা হচ্ছে...",
+                                estimatedSizeBangla = com.example.utils.AppLang.tr("Calculating...", "গণনা করা হচ্ছে..."),
                                 targetM3u8Url = fullTargetUrl,
                                 isRecommended = false
                             )
@@ -543,7 +544,7 @@ class AppFileDownloadManager private constructor(
             ) {
                 Log.d(TAG, "Item $id is already downloaded. Skipping duplicate download.")
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "এই ফাইলটি ইতোমধ্যে ডাউনলোড করা আছে", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, com.example.utils.AppLang.tr("This file is already downloaded", "এই ফাইলটি ইতোমধ্যে ডাউনলোড করা আছে"), Toast.LENGTH_SHORT).show()
                 }
                 return@launch
             }
@@ -1664,7 +1665,8 @@ class AppFileDownloadManager private constructor(
      * Helper to format bytes into readable GB/MB/KB string with Bengali digits.
      */
     fun formatFileSize(bytes: Long, inBengali: Boolean = true): String {
-        if (bytes <= 0L) return if (inBengali) "০ মেগাবাইট" else "0 MB"
+        val useBn = inBengali && com.example.utils.AppLang.isBn()
+        if (bytes <= 0L) return if (useBn) "০ মেগাবাইট" else "0 MB"
         val kb = bytes / 1024.0
         val mb = kb / 1024.0
         val gb = mb / 1024.0
@@ -1675,7 +1677,7 @@ class AppFileDownloadManager private constructor(
             else -> String.format(Locale.US, "%.0f KB", kb.coerceAtLeast(1.0))
         }
 
-        return if (inBengali) {
+        return if (useBn) {
             val bnDigits = charArrayOf('০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯')
             val sb = StringBuilder(formatted.length + 8)
             for (ch in formatted) {

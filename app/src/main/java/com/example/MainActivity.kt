@@ -137,6 +137,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val sessionManager = remember { SessionManager.getInstance(applicationContext) }
             val themeMode by sessionManager.themeModeFlow.collectAsStateWithLifecycle()
+            val appLanguage by sessionManager.appLanguageFlow.collectAsStateWithLifecycle()
+            SideEffect {
+                com.example.utils.AppLang.current = appLanguage
+            }
             val systemInDark = isSystemInDarkTheme()
             val isDarkTheme = when (themeMode) {
                 "light" -> false
@@ -150,7 +154,10 @@ class MainActivity : ComponentActivity() {
             var isRecheckingKillSwitch by remember { mutableStateOf(false) }
             val mainScope = rememberCoroutineScope()
 
-            CompositionLocalProvider(LocalPictureInPictureMode provides isPipModeState.value) {
+            CompositionLocalProvider(
+                LocalPictureInPictureMode provides isPipModeState.value,
+                com.example.utils.LocalAppLanguage provides appLanguage
+            ) {
                 MyApplicationTheme(darkTheme = isDarkTheme) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
@@ -444,7 +451,7 @@ private fun SecurityViolationShieldScreen(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
-                    text = violation.titleBn,
+                    text = com.example.utils.tr("Security Warning", violation.titleBn),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -454,7 +461,10 @@ private fun SecurityViolationShieldScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = violation.messageBn,
+                    text = com.example.utils.tr(
+                        "A restricted proxy, packet capture, VPN, or tampering environment was detected. Please disable it and try again.",
+                        violation.messageBn
+                    ),
                     fontSize = 14.sp,
                     color = Color(0xFFCBD5E1),
                     textAlign = TextAlign.Center,
@@ -474,7 +484,10 @@ private fun SecurityViolationShieldScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "শনাক্তকৃত কারণ: ${violation.detectedDetail}",
+                            text = com.example.utils.tr(
+                                "Detected: ${violation.detectedDetail}",
+                                "শনাক্তকৃত কারণ: ${violation.detectedDetail}"
+                            ),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFFCA5A5),
@@ -496,7 +509,7 @@ private fun SecurityViolationShieldScreen(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("পুনরায় যাচাই করুন", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(com.example.utils.tr("Verify Again", "পুনরায় যাচাই করুন"), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -513,7 +526,7 @@ private fun SecurityViolationShieldScreen(
                 ) {
                     Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("অ্যাপ বন্ধ করুন", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(com.example.utils.tr("Exit App", "অ্যাপ বন্ধ করুন"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

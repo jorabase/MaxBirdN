@@ -198,7 +198,10 @@ object LibraryRepository {
                     r2BaseUrl = "",
                     isFromOfflineCache = cached != null,
                     errorMessage = if (cached == null) {
-                        "Cloudflare R2 লিংক এখনো সেট করা হয়নি। অ্যাডমিন অ্যাপ থেকে বই আপলোড করলে অথবা R2 লিংক সেট করলে এখানে সব বই দেখাবে।"
+                        com.example.utils.AppLang.tr(
+                            "Cloudflare R2 link is not configured yet. Upload books from the admin app or set the R2 link to see books here.",
+                            "Cloudflare R2 লিংক এখনো সেট করা হয়নি। অ্যাডমিন অ্যাপ থেকে বই আপলোড করলে অথবা R2 লিংক সেট করলে এখানে সব বই দেখাবে।"
+                        )
                     } else null
                 )
             }
@@ -237,13 +240,22 @@ object LibraryRepository {
                                 )
                             }
                         } else if (resp.code == 404) {
-                            lastError = "অ্যাডমিন অ্যাপ থেকে এখনো লাইব্রেরিতে কোনো বই আপলোড করা হয়নি (library_index.json পাওয়া যায়নি)।"
+                            lastError = com.example.utils.AppLang.tr(
+                                "No books have been uploaded to the library yet (library_index.json not found).",
+                                "অ্যাডমিন অ্যাপ থেকে এখনো লাইব্রেরিতে কোনো বই আপলোড করা হয়নি (library_index.json পাওয়া যায়নি)।"
+                            )
                         } else {
-                            lastError = "সার্ভার থেকে লাইব্রেরি লোড করা যায়নি (HTTP ${resp.code})।"
+                            lastError = com.example.utils.AppLang.tr(
+                                "Could not load library from server (HTTP ${resp.code}).",
+                                "সার্ভার থেকে লাইব্রেরি লোড করা যায়নি (HTTP ${resp.code})।"
+                            )
                         }
                     }
                 } catch (e: Throwable) {
-                    lastError = "ইন্টারনেট সংযোগ পাওয়া যায়নি। ডাউনলোড করা বইগুলো অফলাইনে পড়তে পারবেন।"
+                    lastError = com.example.utils.AppLang.tr(
+                        "No internet connection. You can still read your downloaded books offline.",
+                        "ইন্টারনেট সংযোগ পাওয়া যায়নি। ডাউনলোড করা বইগুলো অফলাইনে পড়তে পারবেন।"
+                    )
                     Log.w(TAG, "fetchLibraryIndex failed for $endpoint: ${e.message}")
                 }
             }
@@ -254,7 +266,7 @@ object LibraryRepository {
                 index = cached,
                 r2BaseUrl = baseUrl,
                 isFromOfflineCache = cached != null,
-                errorMessage = if (cached == null) lastError.ifBlank { "লাইব্রেরি লোড করা যায়নি।" } else null
+                errorMessage = if (cached == null) lastError.ifBlank { com.example.utils.AppLang.tr("Could not load library.", "লাইব্রেরি লোড করা যায়নি।") } else null
             )
         }
     }
@@ -266,7 +278,7 @@ object LibraryRepository {
         try {
             val cleanUrl = remoteUrl.trim()
             if (cleanUrl.isBlank()) {
-                return@withContext Result.failure(Exception("বইয়ের লিংক পাওয়া যায়নি।"))
+                return@withContext Result.failure(Exception(com.example.utils.AppLang.tr("Book link not found.", "বইয়ের লিংক পাওয়া যায়নি।")))
             }
             val req = Request.Builder()
                 .url(cleanUrl)
@@ -275,16 +287,16 @@ object LibraryRepository {
                 .build()
             httpClient.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) {
-                    return@withContext Result.failure(Exception("বইটি লোড করা যায়নি (HTTP ${resp.code})।"))
+                    return@withContext Result.failure(Exception(com.example.utils.AppLang.tr("Failed to load book (HTTP ${resp.code}).", "বইটি লোড করা যায়নি (HTTP ${resp.code})।")))
                 }
                 val html = resp.body?.string().orEmpty()
                 if (html.isBlank()) {
-                    return@withContext Result.failure(Exception("HTML ফাইলটি খালি পাওয়া গেছে।"))
+                    return@withContext Result.failure(Exception(com.example.utils.AppLang.tr("The HTML file is empty.", "HTML ফাইলটি খালি পাওয়া গেছে।")))
                 }
                 Result.success(html)
             }
         } catch (e: Throwable) {
-            Result.failure(Exception("ইন্টারনেট সংযোগ ব্যর্থ হয়েছে: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}"))
+            Result.failure(Exception(com.example.utils.AppLang.tr("Internet connection failed: ${e.localizedMessage ?: "Please try again"}", "ইন্টারনেট সংযোগ ব্যর্থ হয়েছে: ${e.localizedMessage ?: "আবার চেষ্টা করুন"}")))
         }
     }
 
@@ -295,11 +307,11 @@ object LibraryRepository {
         try {
             val file = File(localFilePath)
             if (!file.exists() || file.length() == 0L) {
-                return@withContext Result.failure(Exception("অফলাইন ফাইলটি ডিভাইসে পাওয়া যায়নি।"))
+                return@withContext Result.failure(Exception(com.example.utils.AppLang.tr("Offline file not found on device.", "অফলাইন ফাইলটি ডিভাইসে পাওয়া যায়নি।")))
             }
             Result.success(file.readText(Charsets.UTF_8))
         } catch (e: Throwable) {
-            Result.failure(Exception("ফাইলটি পড়া যায়নি: ${e.localizedMessage ?: "অজানা ত্রুটি"}"))
+            Result.failure(Exception(com.example.utils.AppLang.tr("Could not read file: ${e.localizedMessage ?: "Unknown error"}", "ফাইলটি পড়া যায়নি: ${e.localizedMessage ?: "অজানা ত্রুটি"}")))
         }
     }
 
@@ -317,7 +329,7 @@ object LibraryRepository {
         manager.downloadFile(
             id = file.downloadEntityId,
             title = file.title,
-            subtitle = file.downloadSubtitle.ifBlank { "লাইব্রেরি বই" },
+            subtitle = file.downloadSubtitle.ifBlank { com.example.utils.AppLang.tr("Library Book", "লাইব্রেরি বই") },
             fileType = DownloadedItemEntity.FILE_TYPE_HTML_BOOK,
             remoteUrl = file.fileUrl,
             forceRedownload = forceRedownload
@@ -340,7 +352,7 @@ object LibraryRepository {
         manager.downloadFile(
             id = downloadEntityId,
             title = title,
-            subtitle = subtitle.ifBlank { "লাইব্রেরি বই" },
+            subtitle = subtitle.ifBlank { com.example.utils.AppLang.tr("Library Book", "লাইব্রেরি বই") },
             fileType = DownloadedItemEntity.FILE_TYPE_HTML_BOOK,
             remoteUrl = remoteUrl,
             forceRedownload = forceRedownload
@@ -440,7 +452,7 @@ object LibraryRepository {
                 if (url.isNotBlank()) {
                     ttsModels[langKey] = TtsModelPackInfo(
                         lang = langKey,
-                        name = mObj.optString("name", if (langKey == "bn") "বাংলা ন্যাচারাল ভয়েস" else "English Natural Voice").trim(),
+                        name = mObj.optString("name", if (langKey == "bn") com.example.utils.AppLang.tr("Bangla Natural Voice", "বাংলা ন্যাচারাল ভয়েস") else "English Natural Voice").trim(),
                         url = url,
                         version = mObj.optInt("version", 1),
                         sizeMb = mObj.optInt("size_mb", 35).coerceAtLeast(1)
@@ -459,7 +471,7 @@ object LibraryRepository {
                 if (cObj.has("is_active") && !cObj.optBoolean("is_active", true)) continue
                 val classId = cObj.optString("id", "class_$cIdx").trim().ifBlank { "class_$cIdx" }
                 val classTitle = cObj.optString("title", "")
-                    .ifBlank { cObj.optString("name", "শ্রেণী ${cIdx + 1}") }.trim()
+                    .ifBlank { cObj.optString("name", com.example.utils.AppLang.tr("Class ${cIdx + 1}", "শ্রেণী ${cIdx + 1}")) }.trim()
                 val classSubtitle = cObj.optString("subtitle", "")
                     .ifBlank { cObj.optString("description", "") }.trim()
                 val classBadge = cObj.optString("badge", "").trim()
@@ -498,7 +510,7 @@ object LibraryRepository {
                         .ifBlank { sObj.optString("class_name", "") }
                         .ifBlank { sObj.optString("class_code", "") }
                         .trim()
-                        .ifBlank { "সকল বই ও পাঠ্যবই" }
+                        .ifBlank { com.example.utils.AppLang.tr("All Books & Textbooks", "সকল বই ও পাঠ্যবই") }
                     grouped.getOrPut(groupName) { mutableListOf() }.add(sObj)
                 }
                 var gIdx = 0
@@ -511,7 +523,7 @@ object LibraryRepository {
                         LibraryClassGroup(
                             id = classId,
                             title = groupTitle,
-                            subtitle = "লাইব্রেরি সংগ্রহ",
+                            subtitle = com.example.utils.AppLang.tr("Library Collection", "লাইব্রেরি সংগ্রহ"),
                             order = gIdx,
                             subjects = subjects
                         )
@@ -541,7 +553,7 @@ object LibraryRepository {
             if (sObj.has("is_active") && !sObj.optBoolean("is_active", true)) continue
             val subId = sObj.optString("id", "${classId}_sub_$sIdx").trim().ifBlank { "${classId}_sub_$sIdx" }
             val subTitle = sObj.optString("title", "")
-                .ifBlank { sObj.optString("name", "সাবজেক্ট ${sIdx + 1}") }.trim()
+                .ifBlank { sObj.optString("name", com.example.utils.AppLang.tr("Subject ${sIdx + 1}", "সাবজেক্ট ${sIdx + 1}")) }.trim()
             val subSubtitle = sObj.optString("subtitle", "")
                 .ifBlank { sObj.optString("description", "") }.trim()
             val coverUrl = resolveFullUrl(sObj.optString("cover_url", ""), baseUrl)
@@ -557,7 +569,7 @@ object LibraryRepository {
                 val chId = chObj.optString("id", "${subId}_ch_$chIdx").trim().ifBlank { "${subId}_ch_$chIdx" }
                 val chNum = chObj.optInt("chapter_number", chObj.optInt("chapter_no", chIdx + 1))
                 val chTitle = chObj.optString("title", "")
-                    .ifBlank { chObj.optString("name", "অধ্যায় $chNum") }.trim()
+                    .ifBlank { chObj.optString("name", com.example.utils.AppLang.tr("Chapter $chNum", "অধ্যায় $chNum")) }.trim()
                 val chSubtitle = chObj.optString("subtitle", "")
                     .ifBlank { chObj.optString("description", "") }.trim()
                 val chOrder = chObj.optInt("order", chObj.optInt("sort_order", chIdx))
@@ -574,7 +586,7 @@ object LibraryRepository {
                     if (resolvedFileUrl.isBlank()) continue
                     val fileId = fObj.optString("id", "${chId}_f_$fIdx").trim().ifBlank { "${chId}_f_$fIdx" }
                     val fileTitle = fObj.optString("title", "")
-                        .ifBlank { fObj.optString("name", "পাঠ ${fIdx + 1}") }.trim()
+                        .ifBlank { fObj.optString("name", com.example.utils.AppLang.tr("Lesson ${fIdx + 1}", "পাঠ ${fIdx + 1}")) }.trim()
                     val fileDesc = fObj.optString("description", "")
                         .ifBlank { fObj.optString("subtitle", "") }.trim()
                     val fileSize = fObj.optLong("file_size_bytes", fObj.optLong("size_bytes", fObj.optLong("size", 0L)))

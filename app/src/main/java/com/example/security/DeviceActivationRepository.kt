@@ -30,7 +30,7 @@ sealed class HeartbeatResult {
 sealed class StudentVerificationStatus {
     object NotRequested : StudentVerificationStatus()
     data class Pending(val studentName: String = "", val requestedAt: String = "") : StudentVerificationStatus()
-    data class Approved(val message: String = "আপনার ডিভাইসটি ভেরিফাইড রয়েছে। এখন অ্যাপে প্রবেশ করতে পারেন!") : StudentVerificationStatus()
+    data class Approved(val message: String = com.example.utils.AppLang.tr("Your device is verified. You can enter the app now!", "আপনার ডিভাইসটি ভেরিফাইড রয়েছে। এখন অ্যাপে প্রবেশ করতে পারেন!")) : StudentVerificationStatus()
     data class Blocked(val reason: String) : StudentVerificationStatus()
     data class Error(val message: String) : StudentVerificationStatus()
 }
@@ -267,7 +267,7 @@ object DeviceActivationRepository {
         try {
             val (supabaseUrl, anonKey) = getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) {
-                return@withContext StudentVerificationStatus.Error("সার্ভার কনফিগারেশন পাওয়া যায়নি।")
+                return@withContext StudentVerificationStatus.Error(com.example.utils.AppLang.tr("Server configuration not found.", "সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
             }
 
             val deviceHardwareHash = DeviceSecurityManager.getDeviceHardwareHash(context)
@@ -305,7 +305,7 @@ object DeviceActivationRepository {
                         val status = json.optCleanString("status").lowercase()
                         val reason = json.optCleanString("ban_reason").ifBlank {
                             json.optCleanString("rejection_reason").ifBlank {
-                                json.optCleanString("reason", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।")
+                                json.optCleanString("reason", com.example.utils.AppLang.tr("Access on this device has been suspended.", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।"))
                             }
                         }
                         val token = json.optCleanString("session_token").ifBlank {
@@ -368,7 +368,7 @@ object DeviceActivationRepository {
                     val status = obj.optCleanString("status").lowercase()
                     val reason = obj.optCleanString("ban_reason").ifBlank {
                         obj.optCleanString("rejection_reason").ifBlank {
-                            "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।"
+                            com.example.utils.AppLang.tr("Access on this device has been suspended.", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।")
                         }
                     }
                     val canViewProfiles = obj.optBoolean("can_view_profiles", false)
@@ -415,7 +415,7 @@ object DeviceActivationRepository {
             if (isPendingRequestedLocally(context)) {
                 StudentVerificationStatus.Pending(studentName = getSavedStudentName(context))
             } else {
-                StudentVerificationStatus.Error("ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।")
+                StudentVerificationStatus.Error(com.example.utils.AppLang.tr("Please check your internet connection and try again.", "ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।"))
             }
         }
     }
@@ -432,7 +432,7 @@ object DeviceActivationRepository {
         try {
             val (supabaseUrl, anonKey) = getSupabaseConfig()
             if (supabaseUrl.isBlank() || anonKey.isBlank()) {
-                return@withContext StudentVerificationStatus.Error("সার্ভার কনফিগারেশন পাওয়া যায়নি।")
+                return@withContext StudentVerificationStatus.Error(com.example.utils.AppLang.tr("Server configuration not found.", "সার্ভার কনফিগারেশন পাওয়া যায়নি।"))
             }
 
             val sessionManager = com.example.auth.SessionManager(context)
@@ -485,13 +485,13 @@ object DeviceActivationRepository {
                             clearActivation(context)
                             val banReason = json.optCleanString("ban_reason").ifBlank {
                                 json.optCleanString("rejection_reason").ifBlank {
-                                    json.optCleanString("message", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।")
+                                    json.optCleanString("message", com.example.utils.AppLang.tr("Access on this device has been suspended.", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।"))
                                 }
                             }
                             return@withContext StudentVerificationStatus.Blocked(banReason)
                         }
                         if (status == "error" || (json.has("success") && !json.optBoolean("success", true))) {
-                            val errMsg = json.optCleanString("message", "আবেদন পাঠানো যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।")
+                            val errMsg = json.optCleanString("message", com.example.utils.AppLang.tr("Could not submit request. Please try again.", "আবেদন পাঠানো যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।"))
                             return@withContext StudentVerificationStatus.Error(errMsg)
                         }
                         if (status == "active" || status == "approved") {
@@ -561,12 +561,12 @@ object DeviceActivationRepository {
                     )
                     return@withContext StudentVerificationStatus.Pending(studentName = cleanName)
                 } else {
-                    return@withContext StudentVerificationStatus.Error("আবেদন পাঠানো যায়নি (HTTP ${upsertResp.code})। ইন্টারনেট সংযোগ চেক করুন।")
+                    return@withContext StudentVerificationStatus.Error(com.example.utils.AppLang.tr("Could not submit request (HTTP ${upsertResp.code}). Check your internet connection.", "আবেদন পাঠানো যায়নি (HTTP ${upsertResp.code})। ইন্টারনেট সংযোগ চেক করুন।"))
                 }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "submitStudentVerificationRequest error: ${t.message}", t)
-            StudentVerificationStatus.Error("সংযোগ ত্রুটি: অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।")
+            StudentVerificationStatus.Error(com.example.utils.AppLang.tr("Connection error: please check your internet and try again.", "সংযোগ ত্রুটি: অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।"))
         }
     }
 
@@ -662,7 +662,7 @@ object DeviceActivationRepository {
                             if (isDeviceBlockedState(status, isBanned, isBlocked) || status == "pending" || status == "unverified") {
                                 val reason = obj.optCleanString("ban_reason").ifBlank {
                                     obj.optCleanString("rejection_reason").ifBlank {
-                                        "ডিভাইস ভেরিফিকেশন স্থগিত করা হয়েছে।"
+                                        com.example.utils.AppLang.tr("Device verification has been suspended.", "ডিভাইস ভেরিফিকেশন স্থগিত করা হয়েছে।")
                                     }
                                 }
                                 clearActivation(context)

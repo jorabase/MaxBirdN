@@ -26,15 +26,17 @@ import androidx.compose.ui.unit.sp
 import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
 import com.example.ui.components.ResponsiveDigitInputField
+import com.example.utils.AppLang
+import com.example.utils.tr
 import kotlinx.coroutines.delay
 
 private fun toBengaliDigits(input: String): String = com.example.utils.toBengaliDigits(input)
 
-private fun formatBengaliOtpCountdown(totalSeconds: Int): String {
+private fun formatOtpCountdown(totalSeconds: Int): String {
     val safeSec = totalSeconds.coerceAtLeast(0)
     val mins = (safeSec / 60).toString().padStart(2, '0')
     val secs = (safeSec % 60).toString().padStart(2, '0')
-    val unit = if (mins == "00") "সেকেন্ড" else "মিনিট"
+    val unit = if (mins == "00") AppLang.tr("sec", "সেকেন্ড") else AppLang.tr("min", "মিনিট")
     return "${toBengaliDigits(mins)} : ${toBengaliDigits(secs)} $unit"
 }
 
@@ -141,7 +143,11 @@ fun OtpScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                val title = if (authType == "login") "পাসওয়ার্ড রিসেট ভেরিফিকেশন" else "মোবাইল নম্বর ভেরিফাই"
+                val title = if (authType == "login") {
+                    tr("Reset PIN", "পিন রিসেট")
+                } else {
+                    tr("Verify Phone", "নম্বর ভেরিফাই")
+                }
 
                 Text(
                     text = title,
@@ -154,7 +160,7 @@ fun OtpScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "আপনার $phone নম্বরে One Time Password (OTP) পাঠানো হয়েছে",
+                    text = tr("An OTP has been sent to $phone", "আপনার $phone নম্বরে OTP পাঠানো হয়েছে"),
                     fontSize = 14.sp,
                     color = Color(0xFF94A3B8),
                     textAlign = TextAlign.Center
@@ -176,7 +182,7 @@ fun OtpScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "আপনার নম্বরে পাঠানো ৪ সংখ্যার OTP-টি লিখুন",
+                            text = tr("Enter the 4-digit OTP", "৪ সংখ্যার OTP লিখুন"),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFE2E8F0),
@@ -240,7 +246,7 @@ fun OtpScreen(
                                 )
                             } else {
                                 Text(
-                                    text = "ভেরিফাই করুন",
+                                    text = tr("Verify", "ভেরিফাই করুন"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -250,7 +256,7 @@ fun OtpScreen(
                         Spacer(modifier = Modifier.height(20.dp))
 
                         Text(
-                            text = "কোনো OTP পাননি?",
+                            text = tr("Didn't receive OTP?", "OTP পাননি?"),
                             fontSize = 13.sp,
                             color = Color(0xFF94A3B8),
                             textAlign = TextAlign.Center
@@ -259,14 +265,14 @@ fun OtpScreen(
                         if (timer > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "আবার OTP পাঠানোর অনুরোধ জানাতে অপেক্ষা করুন:",
+                                text = tr("You can request a new OTP in:", "নতুন OTP পাঠাতে অপেক্ষা করুন:"),
                                 fontSize = 13.sp,
                                 color = Color(0xFF94A3B8),
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = formatBengaliOtpCountdown(timer),
+                                text = formatOtpCountdown(timer),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFEC4899),
@@ -282,7 +288,7 @@ fun OtpScreen(
                                 enabled = authState != AuthState.Loading
                             ) {
                                 Text(
-                                    text = "পুনরায় ওটিপি পাঠান",
+                                    text = tr("Resend OTP", "পুনরায় OTP পাঠান"),
                                     color = Color(0xFFC084FC),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
@@ -309,7 +315,7 @@ fun OtpScreen(
                     ) {
                         Column {
                             Text(
-                                text = "মোবাইল নম্বর ভুল হয়নি তো?",
+                                text = tr("Wrong phone number?", "নম্বরটি ভুল?"),
                                 fontSize = 12.sp,
                                 color = Color(0xFF94A3B8)
                             )
@@ -330,7 +336,7 @@ fun OtpScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "নম্বর পরিবর্তন",
+                                text = tr("Change", "পরিবর্তন"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF60A5FA)

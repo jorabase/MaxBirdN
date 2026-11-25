@@ -61,7 +61,10 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import com.example.LocalPictureInPictureMode
 import com.example.auth.SessionManager
 import com.example.liveclass.poll.*
+import com.example.utils.AppLang
 import com.example.utils.PipHelper
+import com.example.utils.isBangla
+import com.example.utils.tr
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
@@ -84,7 +87,7 @@ data class LiveChatMessage(
     val id: String = java.util.UUID.randomUUID().toString(),
     val senderName: String,
     val message: String,
-    val timestamp: String = "এখন",
+    val timestamp: String = AppLang.tr("Now", "এখন"),
     val isTeacher: Boolean = false,
     val role: String = "student",
     val targetRole: String = "student",
@@ -104,25 +107,26 @@ data class LiveResolutionOption(
     val badge: String = ""
 )
 
-val DEFAULT_AUTO_RESOLUTION = listOf(
-    LiveResolutionOption(
-        id = "auto",
-        title = "Auto (স্বয়ংক্রিয়)",
-        subtitle = "নেটওয়ার্ক স্পিড অনুযায়ী স্বয়ংক্রিয় রেজুলেশন",
-        width = 0,
-        height = Int.MAX_VALUE,
-        bitrate = 0,
-        badge = "AUTO"
+val DEFAULT_AUTO_RESOLUTION: List<LiveResolutionOption>
+    get() = listOf(
+        LiveResolutionOption(
+            id = "auto",
+            title = AppLang.tr("Auto (Adaptive)", "Auto (স্বয়ংক্রিয়)"),
+            subtitle = AppLang.tr("Automatic resolution by network speed", "নেটওয়ার্ক স্পিড অনুযায়ী স্বয়ংক্রিয় রেজুলেশন"),
+            width = 0,
+            height = Int.MAX_VALUE,
+            bitrate = 0,
+            badge = "AUTO"
+        )
     )
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveClassPage(
     classId: String,
     lessonId: String,
-    lessonTitle: String = "লাইভ ক্লাস",
-    subjectName: String = "বিষয়",
+    lessonTitle: String = AppLang.tr("Live Class", "লাইভ ক্লাস"),
+    subjectName: String = AppLang.tr("Subject", "বিষয়"),
     initialCandidateUrls: List<String> = emptyList(),
     sessionManager: SessionManager,
     onBack: () -> Unit,
@@ -173,8 +177,9 @@ fun LiveClassPage(
     var canViewProfiles by remember {
         mutableStateOf(com.example.security.DeviceActivationRepository.isProfileViewPermissionCached(context))
     }
-    val defaultProfileName = remember {
-        sessionManager.getUserFullName()?.takeIf { it.isNotBlank() } ?: "শিক্ষার্থী"
+    val isBn = isBangla()
+    val defaultProfileName = remember(isBn) {
+        sessionManager.getUserFullName()?.takeIf { it.isNotBlank() } ?: AppLang.tr("Student", "শিক্ষার্থী")
     }
     var studentName by remember {
         mutableStateOf(
@@ -243,7 +248,7 @@ fun LiveClassPage(
     activeLiveSlideUrl?.takeIf { it.isNotBlank() }?.let { slideUrl ->
         com.example.ui.components.SlideViewerDialog(
             slideUrl = slideUrl,
-            title = "$effectiveLessonTitle - লেকচার স্লাইড",
+            title = tr("$effectiveLessonTitle - Lecture Slide", "$effectiveLessonTitle - লেকচার স্লাইড"),
             onDismiss = { activeLiveSlideUrl = null }
         )
     }
@@ -268,14 +273,24 @@ fun LiveClassPage(
     }
     val chatListState = rememberLazyListState()
 
-    val quickReplyChips = remember {
-        listOf(
-            "হ্যালো স্যার 👋",
-            "জি বুঝতে পেরেছি ✅",
-            "আরেকবার বুঝিয়ে দিন 🙏",
-            "ক্লিয়ার দেখা যাচ্ছে ✨",
-            "সাউন্ড ও ভিডিও ঠিক আছে 👍"
-        )
+    val quickReplyChips = remember(isBn) {
+        if (isBn) {
+            listOf(
+                "হ্যালো স্যার 👋",
+                "জি বুঝতে পেরেছি ✅",
+                "আরেকবার বুঝিয়ে দিন 🙏",
+                "ক্লিয়ার দেখা যাচ্ছে ✨",
+                "সাউন্ড ও ভিডিও ঠিক আছে 👍"
+            )
+        } else {
+            listOf(
+                "Hello Sir 👋",
+                "Got it ✅",
+                "Please explain again 🙏",
+                "Video is clear ✨",
+                "Audio & video are fine 👍"
+            )
+        }
     }
 
     // 100ms Real Live Poll / Quiz State & Auto Poll Engine State
@@ -421,7 +436,7 @@ fun LiveClassPage(
         coroutineScope.launch {
             val userToken = sessionManager.getAccessToken()
             if (userToken.isNullOrBlank()) {
-                uiState = LiveClassState.Error("ব্যবহারকারীর অথেন্টিকেশন পাওয়া যায়নি। অনুগ্রহ করে লগইন করুন।")
+                uiState = LiveClassState.Error(AppLang.tr("Authentication not found. Please log in.", "ব্যবহারকারীর অথেন্টিকেশন পাওয়া যায়নি। অনুগ্রহ করে লগইন করুন।"))
                 return@launch
             }
 
@@ -531,7 +546,10 @@ fun LiveClassPage(
             }
 
             val errMsg = roomResult.exceptionOrNull()?.message
-                ?: "লাইভ ক্লাসের ব্রডকাস্ট সংযোগ পাওয়া যায়নি। ক্লাস শুরু হতে বিলম্ব হলে অনুগ্রহ করে একটু অপেক্ষা করে রিফ্রেশ করুন।"
+                ?: AppLang.tr(
+                    "Live broadcast connection unavailable. Please wait a moment and refresh.",
+                    "লাইভ ক্লাসের ব্রডকাস্ট সংযোগ পাওয়া যায়নি। ক্লাস শুরু হতে বিলম্ব হলে অনুগ্রহ করে একটু অপেক্ষা করে রিফ্রেশ করুন।"
+                )
             uiState = LiveClassState.Error(errMsg)
         }
     }
@@ -673,7 +691,7 @@ fun LiveClassPage(
             uiState = LiveClassState.Playing
             Toast.makeText(
                 context,
-                "শিক্ষক '$teacherDisplayName' এর আইডি দিয়ে ক্লাসে জয়েন করা হয়েছে ✨",
+                AppLang.tr("Joined with teacher '$teacherDisplayName' ID ✨", "শিক্ষক '$teacherDisplayName' এর আইডি দিয়ে ক্লাসে জয়েন করা হয়েছে ✨"),
                 Toast.LENGTH_SHORT
             ).show()
 
@@ -703,7 +721,7 @@ fun LiveClassPage(
                 wsManager.setMasterUrl(fallback)
                 uiState = LiveClassState.Playing
             } else {
-                uiState = LiveClassState.Error("কানেকশন ত্রুটি: $wsError")
+                uiState = LiveClassState.Error(AppLang.tr("Connection error: $wsError", "কানেকশন ত্রুটি: $wsError"))
             }
         }
     }
@@ -731,21 +749,21 @@ fun LiveClassPage(
 
     fun sendUserChat(textToSend: String) {
         if (!canViewProfiles) {
-            Toast.makeText(context, "শুধুমাত্র প্রোফাইল ভিউ পারমিশন অন থাকলে কমেন্ট করা যাবে।", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Commenting requires profile view permission.", "শুধুমাত্র প্রোফাইল ভিউ পারমিশন অন থাকলে কমেন্ট করা যাবে।"), Toast.LENGTH_SHORT).show()
             return
         }
         val cleanText = textToSend.trim()
         if (cleanText.isBlank() || !isChatEnabled) return
         if (!isConnected) {
-            Toast.makeText(context, "লাইভ সার্ভারের সাথে সংযোগ নেই! বার্তা পাঠানো সম্ভব হয়নি।", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Not connected to live server! Message could not be sent.", "লাইভ সার্ভারের সাথে সংযোগ নেই! বার্তা পাঠানো সম্ভব হয়নি।"), Toast.LENGTH_SHORT).show()
             return
         }
-        val myName = studentName.ifBlank { "আপনি" }
+        val myName = studentName.ifBlank { AppLang.tr("You", "আপনি") }
         val effectiveTargetRole = selectedRole
         val formattedTime = try {
             java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
         } catch (_: Exception) {
-            "এখন"
+            AppLang.tr("Now", "এখন")
         }
         val msgId = java.util.UUID.randomUUID().toString()
 
@@ -786,7 +804,7 @@ fun LiveClassPage(
                     )
                 }
                 if (!isSuccess) {
-                    Toast.makeText(context, "বার্তা পাঠানো যায়নি! অনুগ্রহ করে পুনরায় চেষ্টা করুন।", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, AppLang.tr("Failed to send message. Please retry.", "বার্তা পাঠানো যায়নি! অনুগ্রহ করে পুনরায় চেষ্টা করুন।"), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -798,7 +816,7 @@ fun LiveClassPage(
         if (idx < 0) return
         val msg = chatMessages[idx]
         if (!isConnected) {
-            Toast.makeText(context, "লাইভ সার্ভারের সাথে সংযোগ নেই! পুনরায় সংযোগের চেষ্টা করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, AppLang.tr("Not connected to live server! Reconnecting...", "লাইভ সার্ভারের সাথে সংযোগ নেই! পুনরায় সংযোগের চেষ্টা করা হচ্ছে..."), Toast.LENGTH_SHORT).show()
             return
         }
         val effectiveTargetRole = msg.targetRole.ifBlank { selectedRole }
@@ -903,7 +921,7 @@ fun LiveClassPage(
                         Spacer(modifier = Modifier.height(24.dp))
 
                         Text(
-                            text = "লাইভ ক্লাসের তথ্য লোড হচ্ছে...",
+                            text = tr("Loading live class...", "লাইভ ক্লাসের তথ্য লোড হচ্ছে..."),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -924,9 +942,10 @@ fun LiveClassPage(
                     var lobbyNameInput by remember(studentName, canViewProfiles) {
                         mutableStateOf(if (canViewProfiles) studentName else defaultProfileName)
                     }
+                    val defaultTeacherLabel = tr("Assigned Teacher", "নির্ধারিত শিক্ষক")
                     val displayTeacherName = selectedTeacherForJoin?.name?.takeIf { it.isNotBlank() }
                         ?: activeRoomTeacher?.name?.takeIf { it.isNotBlank() }
-                        ?: roomTeacherName.ifBlank { "নির্ধারিত শিক্ষক" }
+                        ?: roomTeacherName.ifBlank { defaultTeacherLabel }
                     val displayTeacherId = selectedTeacherForJoin?.userId?.takeIf { it.isNotBlank() }
                         ?: activeRoomTeacher?.userId?.takeIf { it.isNotBlank() }
                         ?: selectedTeacherForJoin?.peerId?.takeIf { it.isNotBlank() }
@@ -986,11 +1005,11 @@ fun LiveClassPage(
                                     )
                                     Text(
                                         text = if (viewerCount > 0) {
-                                            "LIVE • $viewerCount জন ক্লাসে আছেন"
+                                            tr("LIVE • $viewerCount watching", "LIVE • $viewerCount জন ক্লাসে আছেন")
                                         } else if (isLiveOnGoing) {
-                                            "LIVE • ক্লাস চলছে"
+                                            tr("LIVE • In Progress", "LIVE • ক্লাস চলছে")
                                         } else {
-                                            "রেকর্ডেড / প্রিভিউ"
+                                            tr("Recorded / Preview", "রেকর্ডেড / প্রিভিউ")
                                         },
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.ExtraBold,
@@ -1077,7 +1096,7 @@ fun LiveClassPage(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            text = "ক্লাস নিচ্ছেন: $displayTeacherName",
+                                            text = tr("Instructor: $displayTeacherName", "ক্লাস নিচ্ছেন: $displayTeacherName"),
                                             fontSize = 12.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFE2E8F0)
@@ -1120,7 +1139,7 @@ fun LiveClassPage(
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
-                                            text = "আপনার প্রদর্শিত নাম",
+                                            text = tr("Display Name", "আপনার প্রদর্শিত নাম"),
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White
@@ -1147,7 +1166,7 @@ fun LiveClassPage(
                                                 modifier = Modifier.size(11.dp)
                                             )
                                             Text(
-                                                text = if (canViewProfiles) "নাম পরিবর্তন অনুমোদিত" else "নির্ধারিত নাম",
+                                                text = if (canViewProfiles) tr("Editable", "নাম পরিবর্তন অনুমোদিত") else tr("Fixed Name", "নির্ধারিত নাম"),
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (canViewProfiles) Color(0xFF6EE7B7) else Color(0xFF94A3B8)
@@ -1164,7 +1183,7 @@ fun LiveClassPage(
                                         onValueChange = { lobbyNameInput = it },
                                         singleLine = true,
                                         placeholder = {
-                                            Text("ক্লাসে যে নামে জয়েন করতে চান লিখুন...", color = Color(0xFF64748B), fontSize = 12.5.sp)
+                                            Text(tr("Enter name to join with...", "ক্লাসে যে নামে জয়েন করতে চান লিখুন..."), color = Color(0xFF64748B), fontSize = 12.5.sp)
                                         },
                                         leadingIcon = {
                                             Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
@@ -1198,7 +1217,7 @@ fun LiveClassPage(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "কুইক সেট:",
+                                            text = tr("Quick Set:", "কুইক সেট:"),
                                             fontSize = 11.sp,
                                             color = Color(0xFF94A3B8)
                                         )
@@ -1209,13 +1228,13 @@ fun LiveClassPage(
                                             modifier = Modifier.clickable { lobbyNameInput = defaultProfileName }
                                         ) {
                                             Text(
-                                                text = "নিজের নাম ($defaultProfileName)",
+                                                text = tr("My Name ($defaultProfileName)", "নিজের নাম ($defaultProfileName)"),
                                                 fontSize = 10.5.sp,
                                                 color = Color(0xFF38BDF8),
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                             )
                                         }
-                                        if (displayTeacherName.isNotBlank() && displayTeacherName != "নির্ধারিত শিক্ষক") {
+                                        if (displayTeacherName.isNotBlank() && displayTeacherName != defaultTeacherLabel) {
                                             Surface(
                                                 shape = RoundedCornerShape(8.dp),
                                                 color = Color(0xFF162032),
@@ -1223,7 +1242,7 @@ fun LiveClassPage(
                                                 modifier = Modifier.clickable { lobbyNameInput = displayTeacherName }
                                             ) {
                                                 Text(
-                                                    text = "স্যারের নাম ($displayTeacherName)",
+                                                    text = tr("Teacher ($displayTeacherName)", "স্যারের নাম ($displayTeacherName)"),
                                                     fontSize = 10.5.sp,
                                                     color = Color(0xFFFBBF24),
                                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1298,7 +1317,7 @@ fun LiveClassPage(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "আপনার আইডি দিয়ে জয়েন হচ্ছে...",
+                                    text = tr("Joining with your ID...", "আপনার আইডি দিয়ে জয়েন হচ্ছে..."),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
@@ -1312,7 +1331,7 @@ fun LiveClassPage(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "ক্লাসে জয়েন করুন",
+                                    text = tr("Join Class", "ক্লাসে জয়েন করুন"),
                                     fontSize = 15.5.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
@@ -1321,8 +1340,6 @@ fun LiveClassPage(
                         }
 
                         // 2. Extra Options ONLY for `canViewProfiles == true`:
-                        //    (A) Separate Opt-In Button: "শিক্ষকের আইডি দিয়ে জয়েন করুন" (Only extracts teacher info when clicked!)
-                        //    (B) Auto Poll ("অটো") Configuration Card
                         if (canViewProfiles) {
                             Spacer(modifier = Modifier.height(14.dp))
 
@@ -1359,13 +1376,16 @@ fun LiveClassPage(
                                         }
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "শিক্ষকের আইডি দিয়ে প্রবেশ (ঐচ্ছিক)",
+                                                text = tr("Join with Teacher ID (Optional)", "শিক্ষকের আইডি দিয়ে প্রবেশ (ঐচ্ছিক)"),
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color.White
                                             )
                                             Text(
-                                                text = "উপরের বাটনে ক্লিক করলে সাধারণ শিক্ষার্থীর মতো আপনার নিজের আইডিতে জয়েন হবে। শুধুমাত্র নিচের বাটনে ক্লিক করলেই শিক্ষকের তথ্য বের করে শিক্ষকের আইডিতে জয়েন করবে।",
+                                                text = tr(
+                                                    "The button above joins with your normal student ID. Tap below only to join using the teacher's ID.",
+                                                    "উপরের বাটনে ক্লিক করলে সাধারণ শিক্ষার্থীর মতো আপনার নিজের আইডিতে জয়েন হবে। শুধুমাত্র নিচের বাটনে ক্লিক করলেই শিক্ষকের তথ্য বের করে শিক্ষকের আইডিতে জয়েন করবে।"
+                                                ),
                                                 fontSize = 11.sp,
                                                 color = Color(0xFF94A3B8),
                                                 lineHeight = 15.sp
@@ -1393,7 +1413,7 @@ fun LiveClassPage(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "শিক্ষকের তথ্য বের করে জয়েন হচ্ছে...",
+                                                text = tr("Joining as teacher...", "শিক্ষকের তথ্য বের করে জয়েন হচ্ছে..."),
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color.White
@@ -1407,7 +1427,7 @@ fun LiveClassPage(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "শিক্ষকের আইডি দিয়ে জয়েন করুন",
+                                                text = tr("Join with Teacher ID", "শিক্ষকের আইডি দিয়ে জয়েন করুন"),
                                                 fontSize = 14.sp,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 color = Color.White
@@ -1506,10 +1526,10 @@ fun LiveClassPage(
                                                 if (videoScale > 1.05f) {
                                                     videoScale = 1.0f
                                                     videoPan = Offset.Zero
-                                                    Toast.makeText(context, "জুম রিসেট (১.০x)", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, AppLang.tr("Zoom reset (1.0x)", "জুম রিসেট (১.০x)"), Toast.LENGTH_SHORT).show()
                                                 } else {
                                                     videoScale = 1.5f
-                                                    Toast.makeText(context, "১.৫x জুম করা হয়েছে ✨", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(context, AppLang.tr("Zoomed to 1.5x ✨", "১.৫x জুম করা হয়েছে ✨"), Toast.LENGTH_SHORT).show()
                                                 }
                                             },
                                             onTap = {
@@ -1569,7 +1589,7 @@ fun LiveClassPage(
                                         .clickable {
                                             videoScale = 1.0f
                                             videoPan = Offset.Zero
-                                            Toast.makeText(context, "জুম রিসেট করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, AppLang.tr("Zoom reset", "জুম রিসেট করা হয়েছে"), Toast.LENGTH_SHORT).show()
                                         }
                                 ) {
                                     Row(
@@ -1584,7 +1604,7 @@ fun LiveClassPage(
                                             modifier = Modifier.size(15.dp)
                                         )
                                         Text(
-                                            text = "${(videoScale * 100).toInt()}% জুম • রিসেট",
+                                            text = tr("${(videoScale * 100).toInt()}% Zoom • Reset", "${(videoScale * 100).toInt()}% জুম • রিসেট"),
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White
@@ -1835,7 +1855,7 @@ fun LiveClassPage(
                                                             modifier = Modifier.size(13.dp)
                                                         )
                                                         Text(
-                                                            text = "পোল",
+                                                            text = tr("Poll", "পোল"),
                                                             fontSize = 10.5.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = Color.White,
@@ -1911,7 +1931,7 @@ fun LiveClassPage(
                                                         modifier = Modifier.size(14.dp)
                                                     )
                                                     Text(
-                                                        text = if (isPausedByUser) "প্লে" else "পজ",
+                                                        text = if (isPausedByUser) tr("Play", "প্লে") else tr("Pause", "পজ"),
                                                         fontSize = 10.5.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color.White,
@@ -1949,9 +1969,9 @@ fun LiveClassPage(
                                                     )
                                                     Text(
                                                         text = when {
-                                                            isPausedByUser -> "⚡ লাইভে ফিরুন"
-                                                            isBehindLiveEdge -> "⚡ ${liveDelaySeconds}s পিছিয়ে • সিঙ্ক করুন"
-                                                            else -> "লাইভ সিঙ্কড"
+                                                            isPausedByUser -> tr("⚡ Back to Live", "⚡ লাইভে ফিরুন")
+                                                            isBehindLiveEdge -> tr("⚡ ${liveDelaySeconds}s behind • Sync", "⚡ ${liveDelaySeconds}s পিছিয়ে • সিঙ্ক করুন")
+                                                            else -> tr("Live Synced", "লাইভ সিঙ্কড")
                                                         },
                                                         fontSize = 10.5.sp,
                                                         fontWeight = FontWeight.Bold,
@@ -1998,11 +2018,11 @@ fun LiveClassPage(
                                                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                                                                 videoScale = 1.0f
                                                                 videoPan = Offset.Zero
-                                                                Toast.makeText(context, "ভিডিও: ফিট স্ক্রিন (Fit)", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, AppLang.tr("Video: Fit Screen", "ভিডিও: ফিট স্ক্রিন (Fit)"), Toast.LENGTH_SHORT).show()
                                                             }
                                                         ) {
                                                             Text(
-                                                                text = "ফিট",
+                                                                text = tr("Fit", "ফিট"),
                                                                 fontSize = 10.5.sp,
                                                                 fontWeight = FontWeight.Bold,
                                                                 color = Color.White,
@@ -2018,11 +2038,11 @@ fun LiveClassPage(
                                                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                                                                 videoScale = 1.0f
                                                                 videoPan = Offset.Zero
-                                                                Toast.makeText(context, "ভিডিও: জুম ও ফিল স্ক্রিন (Zoom & Fill)", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, AppLang.tr("Video: Zoom & Fill", "ভিডিও: জুম ও ফিল স্ক্রিন (Zoom & Fill)"), Toast.LENGTH_SHORT).show()
                                                             }
                                                         ) {
                                                             Text(
-                                                                text = "জুম",
+                                                                text = tr("Zoom", "জুম"),
                                                                 fontSize = 10.5.sp,
                                                                 fontWeight = FontWeight.Bold,
                                                                 color = Color.White,
@@ -2038,11 +2058,11 @@ fun LiveClassPage(
                                                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
                                                                 videoScale = 1.0f
                                                                 videoPan = Offset.Zero
-                                                                Toast.makeText(context, "ভিডিও: পূর্ণ পর্দা (Stretch Full)", Toast.LENGTH_SHORT).show()
+                                                                Toast.makeText(context, AppLang.tr("Video: Stretch Full", "ভিডিও: পূর্ণ পর্দা (Stretch Full)"), Toast.LENGTH_SHORT).show()
                                                             }
                                                         ) {
                                                             Text(
-                                                                text = "ফুল",
+                                                                text = tr("Full", "ফুল"),
                                                                 fontSize = 10.5.sp,
                                                                 fontWeight = FontWeight.Bold,
                                                                 color = Color.White,
@@ -2128,10 +2148,10 @@ fun LiveClassPage(
                                                                 else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                                                             }
                                                             val label = when (resizeMode) {
-                                                                AspectRatioFrameLayout.RESIZE_MODE_FIT -> "ভিডিও সাইজ: ফিট স্ক্রিন (Fit)"
-                                                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন (Zoom & Fill)"
-                                                                AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ভিডিও সাইজ: ফুল স্ক্রিন (Stretch)"
-                                                                else -> "ফিট স্ক্রিন"
+                                                                AspectRatioFrameLayout.RESIZE_MODE_FIT -> AppLang.tr("Video Size: Fit Screen", "ভিডিও সাইজ: ফিট স্ক্রিন (Fit)")
+                                                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AppLang.tr("Video Size: Zoom & Fill", "ভিডিও সাইজ: জুম ও ফিল স্ক্রিন (Zoom & Fill)")
+                                                                AspectRatioFrameLayout.RESIZE_MODE_FILL -> AppLang.tr("Video Size: Stretch Full", "ভিডিও সাইজ: ফুল স্ক্রিন (Stretch)")
+                                                                else -> AppLang.tr("Fit Screen", "ফিট স্ক্রিন")
                                                             }
                                                             Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
                                                         }
@@ -2153,9 +2173,9 @@ fun LiveClassPage(
                                                         )
                                                         Text(
                                                             text = when (resizeMode) {
-                                                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "জুম"
-                                                                AspectRatioFrameLayout.RESIZE_MODE_FILL -> "ফুল"
-                                                                else -> "ফিট"
+                                                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> tr("Zoom", "জুম")
+                                                                AspectRatioFrameLayout.RESIZE_MODE_FILL -> tr("Full", "ফুল")
+                                                                else -> tr("Fit", "ফিট")
                                                             },
                                                             fontSize = 10.5.sp,
                                                             fontWeight = FontWeight.Bold,
@@ -2302,7 +2322,7 @@ fun LiveClassPage(
                                             )
                                             Spacer(Modifier.width(6.dp))
                                             Text(
-                                                text = if (canViewProfiles) "লাইভ চ্যাট" else "শিক্ষকের ঘোষণা",
+                                                text = if (canViewProfiles) tr("Live Chat", "লাইভ চ্যাট") else tr("Announcements", "শিক্ষকের ঘোষণা"),
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.White
@@ -2323,7 +2343,7 @@ fun LiveClassPage(
                                                     ) {
                                                         Icon(Icons.Default.Forum, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(10.dp))
                                                         Text(
-                                                            text = "ভিউ (${visibleChatMessages.size})",
+                                                            text = tr("View (${visibleChatMessages.size})", "ভিউ (${visibleChatMessages.size})"),
                                                             fontSize = 10.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = Color(0xFF38BDF8)
@@ -2407,7 +2427,7 @@ fun LiveClassPage(
                                                     onValueChange = { chatMessageInput = it },
                                                     placeholder = {
                                                         Text(
-                                                            "বার্তা লিখুন...",
+                                                            tr("Write a message...", "বার্তা লিখুন..."),
                                                             fontSize = 11.sp,
                                                             color = Color.White.copy(0.5f)
                                                         )
@@ -2460,7 +2480,7 @@ fun LiveClassPage(
                                                         modifier = Modifier.size(13.dp)
                                                     )
                                                     Text(
-                                                        text = "শুধুমাত্র প্রোফাইল ভিউ পারমিশন থাকলে কমেন্ট করা যাবে",
+                                                        text = tr("Commenting requires profile view permission", "শুধুমাত্র প্রোফাইল ভিউ পারমিশন থাকলে কমেন্ট করা যাবে"),
                                                         fontSize = 10.5.sp,
                                                         color = Color(0xFF94A3B8)
                                                     )
@@ -2570,7 +2590,7 @@ fun LiveClassPage(
                                                             .background(if (isConnected) Color(0xFF34D399) else Color(0xFF94A3B8))
                                                     )
                                                     Text(
-                                                        text = if (isConnected) "কানেক্টেড" else "অফলাইন",
+                                                        text = if (isConnected) tr("Connected", "কানেক্টেড") else tr("Offline", "অফলাইন"),
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = if (isConnected) Color(0xFF6EE7B7) else Color(0xFF94A3B8)
@@ -2624,7 +2644,7 @@ fun LiveClassPage(
                                                         modifier = Modifier.size(13.dp)
                                                     )
                                                     Text(
-                                                        text = if (isHandRaised) "হাত নামান" else "হাত তুলুন",
+                                                        text = if (isHandRaised) tr("Lower Hand", "হাত নামান") else tr("Raise Hand", "হাত তুলুন"),
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = if (isHandRaised) Color(0xFF090D16) else Color.White,
@@ -2667,11 +2687,11 @@ fun LiveClassPage(
                                                     )
                                                     Text(
                                                         text = if (isPollLive) {
-                                                            "পোল চলছে"
+                                                            tr("Live Poll", "পোল চলছে")
                                                         } else if (previousPolls.isNotEmpty()) {
-                                                            "পোল (${previousPolls.size})"
+                                                            tr("Polls (${previousPolls.size})", "পোল (${previousPolls.size})")
                                                         } else {
-                                                            "পোল/কুইজ"
+                                                            tr("Poll/Quiz", "পোল/কুইজ")
                                                         },
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
@@ -2705,9 +2725,12 @@ fun LiveClassPage(
                                                         )
                                                         Text(
                                                             text = if (autoPollEnabled) {
-                                                                "অটো (${com.example.liveclass.poll.formatPollDelayMsToSeconds(autoPollDelayMs)}s)"
+                                                                tr(
+                                                                    "Auto (${com.example.liveclass.poll.formatPollDelayMsToSeconds(autoPollDelayMs)}s)",
+                                                                    "অটো (${com.example.liveclass.poll.formatPollDelayMsToSeconds(autoPollDelayMs)}s)"
+                                                                )
                                                             } else {
-                                                                "অটো পোল"
+                                                                tr("Auto Poll", "অটো পোল")
                                                             },
                                                             fontSize = 11.sp,
                                                             fontWeight = FontWeight.Bold,
@@ -2718,7 +2741,7 @@ fun LiveClassPage(
                                                 }
                                             }
 
-                                            // 3. View Messages Pill ("ভিউ ম্যাসেজ" — ONLY for Admin-permitted devices with can_view_profiles)
+                                            // 3. View Messages Pill
                                             if (canViewProfiles) {
                                                 Surface(
                                                     shape = RoundedCornerShape(10.dp),
@@ -2739,9 +2762,9 @@ fun LiveClassPage(
                                                         )
                                                         Text(
                                                             text = if (visibleChatMessages.isNotEmpty()) {
-                                                                "ভিউ ম্যাসেজ (${visibleChatMessages.size})"
+                                                                tr("Messages (${visibleChatMessages.size})", "ভিউ ম্যাসেজ (${visibleChatMessages.size})")
                                                             } else {
-                                                                "ভিউ ম্যাসেজ"
+                                                                tr("Messages", "ভিউ ম্যাসেজ")
                                                             },
                                                             fontSize = 11.sp,
                                                             fontWeight = FontWeight.Bold,
@@ -2755,9 +2778,9 @@ fun LiveClassPage(
                                                 val activeTeacherLabel = if (isJoinedAsTeacherIdentity) {
                                                     selectedTeacherForJoin?.name?.takeIf { it.isNotBlank() }
                                                         ?: activeRoomTeacher?.name?.takeIf { it.isNotBlank() }
-                                                        ?: roomTeacherName.ifBlank { "শিক্ষক আইডি" }
+                                                        ?: roomTeacherName.ifBlank { tr("Teacher ID", "শিক্ষক আইডি") }
                                                 } else {
-                                                    "শিক্ষক আইডি জয়েন"
+                                                    tr("Teacher ID", "শিক্ষক আইডি জয়েন")
                                                 }
                                                 Surface(
                                                     shape = RoundedCornerShape(10.dp),
@@ -2780,7 +2803,7 @@ fun LiveClassPage(
                                                             modifier = Modifier.size(13.dp)
                                                         )
                                                         Text(
-                                                            text = if (isJoinedAsTeacherIdentity) "শিক্ষক: $activeTeacherLabel" else activeTeacherLabel,
+                                                            text = if (isJoinedAsTeacherIdentity) tr("Teacher: $activeTeacherLabel", "শিক্ষক: $activeTeacherLabel") else activeTeacherLabel,
                                                             fontSize = 11.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = if (isJoinedAsTeacherIdentity) Color(0xFF6EE7B7) else Color(0xFFFDE68A),
@@ -2888,7 +2911,7 @@ fun LiveClassPage(
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Text(
-                                                text = "রোল:",
+                                                text = tr("Role:", "রোল:"),
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = Color(0xFF94A3B8)
@@ -2933,7 +2956,7 @@ fun LiveClassPage(
 
                                             Spacer(modifier = Modifier.weight(1f))
 
-                                            // Prominent "ভিউ ম্যাসেজ" (View Messages) Button
+                                            // Prominent View Messages Button
                                             Surface(
                                                 shape = RoundedCornerShape(10.dp),
                                                 color = Color(0xFF0C2440),
@@ -2947,15 +2970,15 @@ fun LiveClassPage(
                                                 ) {
                                                     Icon(
                                                         imageVector = Icons.Default.Visibility,
-                                                        contentDescription = "ভিউ ম্যাসেজ",
+                                                        contentDescription = tr("View Messages", "ভিউ ম্যাসেজ"),
                                                         tint = Color(0xFF38BDF8),
                                                         modifier = Modifier.size(12.dp)
                                                     )
                                                     Text(
                                                         text = if (visibleChatMessages.isNotEmpty()) {
-                                                            "ভিউ ম্যাসেজ (${visibleChatMessages.size})"
+                                                            tr("Messages (${visibleChatMessages.size})", "ভিউ ম্যাসেজ (${visibleChatMessages.size})")
                                                         } else {
-                                                            "ভিউ ম্যাসেজ"
+                                                            tr("Messages", "ভিউ ম্যাসেজ")
                                                         },
                                                         fontSize = 10.5.sp,
                                                         color = Color(0xFF38BDF8),
@@ -2991,7 +3014,7 @@ fun LiveClassPage(
                                                         modifier = Modifier.size(13.dp)
                                                     )
                                                     Text(
-                                                        text = "শিক্ষকের মেসেজ ও নোটিশ",
+                                                        text = tr("Announcements", "শিক্ষকের মেসেজ ও নোটিশ"),
                                                         fontSize = 10.5.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color.White
@@ -3000,7 +3023,7 @@ fun LiveClassPage(
                                             }
 
                                             Text(
-                                                text = "শিক্ষকের সকল গুরুত্বপূর্ণ বার্তা এখানে দেখা যাবে",
+                                                text = tr("Teacher updates will appear here", "শিক্ষকের সকল গুরুত্বপূর্ণ বার্তা এখানে দেখা যাবে"),
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = Color(0xFF94A3B8),
@@ -3035,7 +3058,7 @@ fun LiveClassPage(
                                                 Spacer(Modifier.width(8.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = "📌 শিক্ষকের পিন করা ঘোষণা (${pinnedTeacherMsg.senderName}):",
+                                                        text = tr("📌 Pinned by ${pinnedTeacherMsg.senderName}:", "📌 শিক্ষকের পিন করা ঘোষণা (${pinnedTeacherMsg.senderName}):"),
                                                         fontSize = 10.5.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color(0xFF38BDF8)
@@ -3089,16 +3112,16 @@ fun LiveClassPage(
                                                             }
                                                         }
                                                         Text(
-                                                            text = if (canViewProfiles) "লাইভ চ্যাটে স্বাগতম!" else "শিক্ষকের ঘোষণা ও মেসেজ বোর্ড",
+                                                            text = if (canViewProfiles) tr("Welcome to Live Chat!", "লাইভ চ্যাটে স্বাগতম!") else tr("Announcements Board", "শিক্ষকের ঘোষণা ও মেসেজ বোর্ড"),
                                                             fontSize = 13.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = Color(0xFFCBD5E1)
                                                         )
                                                         Text(
                                                             text = if (canViewProfiles) {
-                                                                "সকল শিক্ষার্থীর কমেন্ট এবং শিক্ষকের মেসেজ এখানে রিয়েল-টাইমে দেখা যাবে"
+                                                                tr("Student comments and teacher messages appear here in real time", "সকল শিক্ষার্থীর কমেন্ট এবং শিক্ষকের মেসেজ এখানে রিয়েল-টাইমে দেখা যাবে")
                                                             } else {
-                                                                "ক্লাস চলাকালীন শিক্ষকের পাঠানো সকল মেসেজ ও লিংক এখানে প্রদর্শিত হবে"
+                                                                tr("Messages and links shared by the teacher will appear here", "ক্লাস চলাকালীন শিক্ষকের পাঠানো সকল মেসেজ ও লিংক এখানে প্রদর্শিত হবে")
                                                             },
                                                             fontSize = 11.5.sp,
                                                             color = Color(0xFF64748B),
@@ -3171,7 +3194,7 @@ fun LiveClassPage(
                                                     )
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     Text(
-                                                        text = "শিক্ষক এই মুহূর্তে লাইভ চ্যাট বন্ধ রেখেছেন",
+                                                        text = tr("Live chat is currently paused by the teacher", "শিক্ষক এই মুহূর্তে লাইভ চ্যাট বন্ধ রেখেছেন"),
                                                         fontSize = 12.sp,
                                                         fontWeight = FontWeight.Medium,
                                                         color = Color(0xFFE2E8F0)
@@ -3189,9 +3212,9 @@ fun LiveClassPage(
                                                     onValueChange = { chatMessageInput = it },
                                                     placeholder = {
                                                         val roleHint = when (selectedRole) {
-                                                            "teacher" -> "শুধুমাত্র শিক্ষককে মেসেজ লিখুন..."
-                                                            "student" -> "সকল স্টুডেন্টকে মেসেজ লিখুন..."
-                                                            else -> "সকলকে (All) মেসেজ লিখুন..."
+                                                            "teacher" -> tr("Message teacher only...", "শুধুমাত্র শিক্ষককে মেসেজ লিখুন...")
+                                                            "student" -> tr("Message all students...", "সকল স্টুডেন্টকে মেসেজ লিখুন...")
+                                                            else -> tr("Message everyone...", "সকলকে (All) মেসেজ লিখুন...")
                                                         }
                                                         Text(
                                                             roleHint,
@@ -3261,7 +3284,7 @@ fun LiveClassPage(
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                                 Text(
-                                                    text = "শুধুমাত্র প্রোফাইল ভিউ পারমিশন অন থাকা ব্যবহারকারীরা লাইভ ক্লাসে কমেন্ট করতে পারবেন।",
+                                                    text = tr("Only users with profile view permission can comment in live classes.", "শুধুমাত্র প্রোফাইল ভিউ পারমিশন অন থাকা ব্যবহারকারীরা লাইভ ক্লাসে কমেন্ট করতে পারবেন।"),
                                                     fontSize = 11.5.sp,
                                                     fontWeight = FontWeight.Medium,
                                                     color = Color(0xFFCBD5E1),
@@ -3302,7 +3325,7 @@ fun LiveClassPage(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
-                            text = "লাইভ ক্লাসে কানেক্ট করা সম্ভব হয়নি",
+                            text = tr("Could not connect to live class", "লাইভ ক্লাসে কানেক্ট করা সম্ভব হয়নি"),
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -3331,7 +3354,7 @@ fun LiveClassPage(
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
                                 border = BorderStroke(1.dp, Color(0xFF475569))
                             ) {
-                                Text("ফিরে যান")
+                                Text(tr("Go Back", "ফিরে যান"))
                             }
 
                             Button(
@@ -3339,7 +3362,7 @@ fun LiveClassPage(
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                             ) {
-                                Text("পুনরায় চেষ্টা করুন")
+                                Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                             }
                         }
                     }
@@ -3371,7 +3394,7 @@ fun LiveClassPage(
                             modifier = Modifier.size(22.dp)
                         )
                         Text(
-                            text = "ভিডিও রেজুলেশন (Real Stream)",
+                            text = tr("Video Quality", "ভিডিও রেজুলেশন"),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -3395,7 +3418,7 @@ fun LiveClassPage(
                                         .background(Color(0xFF34D399))
                                 )
                                 Text(
-                                    text = "বর্তমানে স্ট্রিমে প্লে হচ্ছে: $currentPlayingResolution",
+                                    text = tr("Currently playing: $currentPlayingResolution", "বর্তমানে স্ট্রিমে প্লে হচ্ছে: $currentPlayingResolution"),
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF6EE7B7)
@@ -3430,7 +3453,7 @@ fun LiveClassPage(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = "লাইভ স্ট্রিম থেকে আসল রেজুলেশন তালিকা স্ক্যান করা হচ্ছে...",
+                                    text = tr("Scanning available stream qualities...", "লাইভ স্ট্রিম থেকে আসল রেজুলেশন তালিকা স্ক্যান করা হচ্ছে..."),
                                     fontSize = 11.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -3454,10 +3477,10 @@ fun LiveClassPage(
                                 .clickable {
                                     selectedResolution = option.id
                                     showResolutionDialog = false
-                                    val toastLabel = if (option.id == "auto") "Auto (স্বয়ংক্রিয়)" else option.title
+                                    val toastLabel = if (option.id == "auto") AppLang.tr("Auto", "Auto (স্বয়ংক্রিয়)") else option.title
                                     Toast.makeText(
                                         context,
-                                        "রেজুলেশন '$toastLabel' নির্বাচন করা হয়েছে ✨",
+                                        AppLang.tr("Quality '$toastLabel' selected ✨", "রেজুলেশন '$toastLabel' নির্বাচন করা হয়েছে ✨"),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 }
@@ -3501,7 +3524,7 @@ fun LiveClassPage(
                                                 color = Color(0xFF065F46)
                                             ) {
                                                 Text(
-                                                    text = "চলছে",
+                                                    text = tr("Playing", "চলছে"),
                                                     fontSize = 9.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color(0xFF6EE7B7),
@@ -3542,7 +3565,7 @@ fun LiveClassPage(
             },
             confirmButton = {
                 TextButton(onClick = { showResolutionDialog = false }) {
-                    Text("বন্ধ করুন", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                    Text(tr("Close", "বন্ধ করুন"), color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -3575,7 +3598,7 @@ fun LiveClassPage(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = if (isFirstJoin) "লাইভ ক্লাসে যোগদানের নাম" else "প্রদর্শন নাম পরিবর্তন করুন",
+                        text = if (isFirstJoin) com.example.utils.tr("Display Name for Live Class", "লাইভ ক্লাসে যোগদানের নাম") else com.example.utils.tr("Change Display Name", "প্রদর্শন নাম পরিবর্তন করুন"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -3587,7 +3610,10 @@ fun LiveClassPage(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "লাইভ চ্যাটে বার্তা পাঠানোর সময় এবং শিক্ষক ও অন্য শিক্ষার্থীদের কাছে আপনার এই নতুন নামটি ১০০% বাস্তবে আপডেট হবে:",
+                        text = com.example.utils.tr(
+                            "Your updated name will appear live in chat and to teachers and other students:",
+                            "লাইভ চ্যাটে বার্তা পাঠানোর সময় এবং শিক্ষক ও অন্য শিক্ষার্থীদের কাছে আপনার এই নতুন নামটি ১০০% বাস্তবে আপডেট হবে:"
+                        ),
                         fontSize = 12.5.sp,
                         color = Color(0xFF94A3B8),
                         lineHeight = 17.sp
@@ -3598,7 +3624,7 @@ fun LiveClassPage(
                         onValueChange = { nameInput = it },
                         singleLine = true,
                         enabled = !isUpdatingNameInLiveClass,
-                        placeholder = { Text("আপনার নাম লিখুন...", color = Color.Gray, fontSize = 13.sp) },
+                        placeholder = { Text(com.example.utils.tr("Enter your name...", "আপনার নাম লিখুন..."), color = Color.Gray, fontSize = 13.sp) },
                         leadingIcon = {
                             Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
                         },
@@ -3630,7 +3656,7 @@ fun LiveClassPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "কুইক সেট:",
+                            text = com.example.utils.tr("Quick set:", "কুইক সেট:"),
                             fontSize = 11.sp,
                             color = Color(0xFF64748B)
                         )
@@ -3641,7 +3667,7 @@ fun LiveClassPage(
                             modifier = Modifier.clickable(enabled = !isUpdatingNameInLiveClass) { nameInput = defaultProfileName }
                         ) {
                             Text(
-                                text = "প্রোফাইল নাম",
+                                text = com.example.utils.tr("Profile Name", "প্রোফাইল নাম"),
                                 fontSize = 10.5.sp,
                                 color = Color(0xFF38BDF8),
                                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -3656,7 +3682,7 @@ fun LiveClassPage(
                                 modifier = Modifier.clickable(enabled = !isUpdatingNameInLiveClass) { nameInput = currentTeacherDisplayName }
                             ) {
                                 Text(
-                                    text = "স্যারের নাম ($currentTeacherDisplayName)",
+                                    text = com.example.utils.tr("Teacher ($currentTeacherDisplayName)", "স্যারের নাম ($currentTeacherDisplayName)"),
                                     fontSize = 10.5.sp,
                                     color = Color(0xFFFBBF24),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
@@ -3700,7 +3726,14 @@ fun LiveClassPage(
                             isUpdatingNameInLiveClass = false
                             showNameChangeDialog = false
                             showJoinNameDialog = false
-                            Toast.makeText(context, "লাইভ ক্লাসে আপনার নাম '$clean' হিসেবে আপডেট হয়েছে ✨", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                com.example.utils.AppLang.tr(
+                                    "Your live class name has been updated to '$clean' ✨",
+                                    "লাইভ ক্লাসে আপনার নাম '$clean' হিসেবে আপডেট হয়েছে ✨"
+                                ),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     },
                     enabled = !isUpdatingNameInLiveClass,
@@ -3715,14 +3748,14 @@ fun LiveClassPage(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "আপডেট হচ্ছে...",
+                            text = com.example.utils.tr("Updating...", "আপডেট হচ্ছে..."),
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             fontSize = 12.5.sp
                         )
                     } else {
                         Text(
-                            text = if (isFirstJoin) "এই নামে যোগ দিন" else "সংরক্ষণ করুন",
+                            text = if (isFirstJoin) com.example.utils.tr("Join with Name", "এই নামে যোগ দিন") else com.example.utils.tr("Save", "সংরক্ষণ করুন"),
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             fontSize = 12.5.sp
@@ -3739,7 +3772,7 @@ fun LiveClassPage(
                     }
                 ) {
                     Text(
-                        text = if (isFirstJoin) "ডিফল্ট নাম রাখুন" else "বাতিল",
+                        text = if (isFirstJoin) com.example.utils.tr("Keep Default", "ডিফল্ট নাম রাখুন") else com.example.utils.tr("Cancel", "বাতিল"),
                         color = Color(0xFF94A3B8),
                         fontSize = 12.sp
                     )
@@ -3767,7 +3800,7 @@ fun LiveClassPage(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "অটো পোল লাইভ এক্সাম সেটিংস",
+                        text = com.example.utils.tr("Auto Poll Settings", "অটো পোল লাইভ এক্সাম সেটিংস"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -3784,7 +3817,7 @@ fun LiveClassPage(
             },
             confirmButton = {
                 TextButton(onClick = { showAutoPollDialog = false }) {
-                    Text("সম্পন্ন", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                    Text(com.example.utils.tr("Done", "সম্পন্ন"), color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -3809,7 +3842,7 @@ fun LiveClassPage(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "শিক্ষক আইডি জয়েন কন্ট্রোল (কো-সেশন)",
+                        text = com.example.utils.tr("Teacher ID Control (Co-Session)", "শিক্ষক আইডি জয়েন কন্ট্রোল (কো-সেশন)"),
                         fontSize = 15.5.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -3822,9 +3855,15 @@ fun LiveClassPage(
                 ) {
                     Text(
                         text = if (isJoinedAsTeacherIdentity) {
-                            "আপনি বর্তমানে কো-সেশন প্রযুক্তিতে শিক্ষকের আইডি দিয়ে কানেক্টেড আছেন (এতে আসল শিক্ষক ক্লাস থেকে বের হবেন না, দুজনেই একসাথে সেশনে থাকতে পারবেন)।"
+                            com.example.utils.tr(
+                                "You are currently connected with Teacher ID via Co-Session (the real teacher stays in class and both remain connected together).",
+                                "আপনি বর্তমানে কো-সেশন প্রযুক্তিতে শিক্ষকের আইডি দিয়ে কানেক্টেড আছেন (এতে আসল শিক্ষক ক্লাস থেকে বের হবেন না, দুজনেই একসাথে সেশনে থাকতে পারবেন)।"
+                            )
                         } else {
-                            "আপনি বর্তমানে সাধারণ শিক্ষার্থীর মতো নিজের আইডি দিয়ে ক্লাসে আছেন। আসল শিক্ষককে ক্লাস থেকে বের না করেই (Co-Session Mode) শিক্ষকের আইডি দিয়ে একসাথে জয়েন করতে নিচের বাটনে ক্লিক করুন:"
+                            com.example.utils.tr(
+                                "You are currently in class with your student ID. Tap below to join with Teacher ID in Co-Session Mode without disconnecting the teacher:",
+                                "আপনি বর্তমানে সাধারণ শিক্ষার্থীর মতো নিজের আইডি দিয়ে ক্লাসে আছেন। আসল শিক্ষককে ক্লাস থেকে বের না করেই (Co-Session Mode) শিক্ষকের আইডি দিয়ে একসাথে জয়েন করতে নিচের বাটনে ক্লিক করুন:"
+                            )
                         },
                         fontSize = 12.sp,
                         color = Color(0xFF94A3B8),
@@ -3849,7 +3888,7 @@ fun LiveClassPage(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "শিক্ষকের আইডি দিয়ে জয়েন করুন",
+                            text = com.example.utils.tr("Join with Teacher ID", "শিক্ষকের আইডি দিয়ে জয়েন করুন"),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -3878,7 +3917,7 @@ fun LiveClassPage(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "নিজের স্টুডেন্ট আইডিতে ফিরে যান",
+                                text = com.example.utils.tr("Switch Back to Student ID", "নিজের স্টুডেন্ট আইডিতে ফিরে যান"),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF38BDF8)
@@ -3889,7 +3928,7 @@ fun LiveClassPage(
             },
             confirmButton = {
                 TextButton(onClick = { showTeacherIdentityDialog = false }) {
-                    Text("বন্ধ করুন", color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
+                    Text(com.example.utils.tr("Close", "বন্ধ করুন"), color = Color(0xFF38BDF8), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -3981,10 +4020,11 @@ fun LiveViewMessagesDialog(
     var searchQuery by remember { mutableStateOf("") }
     var dialogMessageInput by remember { mutableStateOf("") }
 
+    val isBn = isBangla()
     // Compute unique senders and how many messages each person sent
-    val senderSummaryList = remember(messages.size, messages.toList()) {
+    val senderSummaryList = remember(messages.size, messages.toList(), isBn) {
         messages
-            .groupBy { it.senderName.trim().ifBlank { "শিক্ষার্থী" } }
+            .groupBy { it.senderName.trim().ifBlank { AppLang.tr("Student", "শিক্ষার্থী") } }
             .map { (name, list) ->
                 val isTeacherSender = list.any { it.isTeacher && !it.isMine }
                 Triple(name, list.size, isTeacherSender)
@@ -4001,7 +4041,7 @@ fun LiveViewMessagesDialog(
         myName
     ) {
         messages.filter { msg ->
-            val isMyMsg = msg.isMine || msg.senderName == "আপনি"
+            val isMyMsg = msg.isMine || msg.senderName == "আপনি" || msg.senderName == "You"
             val isTeacherMsg = msg.isTeacher && !isMyMsg
             val matchesCategory = when (selectedCategory) {
                 "student" -> !isTeacherMsg
@@ -4065,13 +4105,16 @@ fun LiveViewMessagesDialog(
 
                         Column {
                             Text(
-                                text = "ভিউ ম্যাসেজ (কে কী মেসেজ করছে)",
+                                text = tr("All Messages", "ভিউ ম্যাসেজ"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
                             )
                             Text(
-                                text = "মোট ${messages.size}টি মেসেজ • ${senderSummaryList.size} জন অংশগ্রহণকারী",
+                                text = tr(
+                                    "${messages.size} messages • ${senderSummaryList.size} participants",
+                                    "মোট ${messages.size}টি মেসেজ • ${senderSummaryList.size} জন অংশগ্রহণকারী"
+                                ),
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8)
                             )
@@ -4096,22 +4139,22 @@ fun LiveViewMessagesDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Category Filter Tabs: সব | স্টুডেন্ট | শিক্ষক | আমার মেসেজ
+                // Category Filter Tabs
                 val categoryTabs = listOf(
-                    Triple("all", "সব (${messages.size})", Icons.Default.AllInbox),
+                    Triple("all", tr("All (${messages.size})", "সব (${messages.size})"), Icons.Default.AllInbox),
                     Triple(
                         "student",
-                        "স্টুডেন্ট (${messages.count { !(it.isTeacher && !it.isMine) }})",
+                        tr("Students (${messages.count { !(it.isTeacher && !it.isMine) }})", "স্টুডেন্ট (${messages.count { !(it.isTeacher && !it.isMine) }})"),
                         Icons.Default.Groups
                     ),
                     Triple(
                         "teacher",
-                        "শিক্ষক (${messages.count { (it.isTeacher && !it.isMine) || it.targetRole == "teacher" }})",
+                        tr("Teacher (${messages.count { (it.isTeacher && !it.isMine) || it.targetRole == "teacher" }})", "শিক্ষক (${messages.count { (it.isTeacher && !it.isMine) || it.targetRole == "teacher" }})"),
                         Icons.Default.School
                     ),
                     Triple(
                         "mine",
-                        "আমার (${messages.count { it.isMine }})",
+                        tr("Mine (${messages.count { it.isMine }})", "আমার (${messages.count { it.isMine }})"),
                         Icons.Default.Person
                     )
                 )
@@ -4156,11 +4199,11 @@ fun LiveViewMessagesDialog(
                     }
                 }
 
-                // Active Senders Breakdown Strip ("কে কয়টি মেসেজ করেছে — নামের ওপর ক্লিক করে ফিল্টার করুন")
+                // Active Senders Breakdown Strip
                 if (senderSummaryList.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "কে মেসেজ করেছে (নামের ওপর ট্যাপ করে তার সব মেসেজ দেখুন):",
+                        text = tr("Senders (tap a name to filter):", "কে মেসেজ করেছে (নামের ওপর ট্যাপ করে ফিল্টার করুন):"),
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF94A3B8)
@@ -4183,7 +4226,7 @@ fun LiveViewMessagesDialog(
                                 modifier = Modifier.clickable { selectedSenderFilter = null }
                             ) {
                                 Text(
-                                    text = "সকল প্রেরক (${senderSummaryList.size})",
+                                    text = tr("All Senders (${senderSummaryList.size})", "সকল প্রেরক (${senderSummaryList.size})"),
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (allSendersSelected) Color(0xFF38BDF8) else Color(0xFFCBD5E1),
@@ -4243,7 +4286,7 @@ fun LiveViewMessagesDialog(
                     onValueChange = { searchQuery = it },
                     placeholder = {
                         Text(
-                            "নাম বা মেসেজ লিখে খুঁজুন...",
+                            tr("Search by name or message...", "নাম বা মেসেজ লিখে খুঁজুন..."),
                             fontSize = 11.5.sp,
                             color = Color(0xFF64748B)
                         )
@@ -4309,13 +4352,13 @@ fun LiveViewMessagesDialog(
                                         modifier = Modifier.size(34.dp)
                                     )
                                     Text(
-                                        text = "কোনো মেসেজ পাওয়া যায়নি",
+                                        text = tr("No messages found", "কোনো মেসেজ পাওয়া যায়নি"),
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF94A3B8)
                                     )
                                     Text(
-                                        text = "ক্লাসে কেউ মেসেজ পাঠালে তা সাথে সাথে এখানে দেখা যাবে",
+                                        text = tr("Messages sent in class will appear here instantly", "ক্লাসে কেউ মেসেজ পাঠালে তা সাথে সাথে এখানে দেখা যাবে"),
                                         fontSize = 11.5.sp,
                                         color = Color(0xFF64748B),
                                         textAlign = TextAlign.Center
@@ -4350,7 +4393,7 @@ fun LiveViewMessagesDialog(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "পাঠান:",
+                            text = tr("Send to:", "পাঠান:"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF94A3B8)
@@ -4392,7 +4435,7 @@ fun LiveViewMessagesDialog(
                             onValueChange = { dialogMessageInput = it },
                             placeholder = {
                                 Text(
-                                    "মেসেজ লিখুন...",
+                                    tr("Write a message...", "মেসেজ লিখুন..."),
                                     fontSize = 12.sp,
                                     color = Color(0xFF64748B)
                                 )
@@ -4446,13 +4489,13 @@ fun ChatMessageCard(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isMyMsg = item.isMine || item.senderName == "আপনি"
+    val isMyMsg = item.isMine || item.senderName == "আপনি" || item.senderName == "You"
     val isActualTeacherMsg = (item.isTeacher && !isMyMsg) || (item.role == "teacher" && !isMyMsg && item.isPinned)
 
     val targetAudienceLabel = when (item.targetRole.lowercase().trim()) {
-        "teacher" -> "➔ শিক্ষক"
-        "all", "*" -> "➔ সবাইকে (* All)"
-        else -> "➔ সকল স্টুডেন্ট"
+        "teacher" -> tr("➔ Teacher", "➔ শিক্ষক")
+        "all", "*" -> tr("➔ Everyone", "➔ সবাইকে (* All)")
+        else -> tr("➔ Students", "➔ সকল স্টুডেন্ট")
     }
 
     if (isActualTeacherMsg) {
@@ -4498,7 +4541,7 @@ fun ChatMessageCard(
                                     modifier = Modifier.size(11.dp)
                                 )
                                 Text(
-                                    text = "শিক্ষক (Teacher)",
+                                    text = tr("Teacher", "শিক্ষক"),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -4590,7 +4633,7 @@ fun ChatMessageCard(
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         val (badgeLabel, badgeBg) = if (isMyMsg) {
-                            Pair("আপনি", Color(0xFF0284C7))
+                            Pair(tr("You", "আপনি"), Color(0xFF0284C7))
                         } else if (item.role == "all" || item.role == "*") {
                             Pair("* All", Color(0xFF4F46E5))
                         } else {
@@ -4657,7 +4700,7 @@ fun ChatMessageCard(
                                             modifier = Modifier.size(11.dp)
                                         )
                                         Text(
-                                            text = "পাঠানো হচ্ছে...",
+                                            text = tr("Sending...", "পাঠানো হচ্ছে..."),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = Color(0xFF38BDF8)
@@ -4676,7 +4719,7 @@ fun ChatMessageCard(
                                             modifier = Modifier.size(13.dp)
                                         )
                                         Text(
-                                            text = "গেছে",
+                                            text = tr("Sent", "গেছে"),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF10B981)
@@ -4695,7 +4738,7 @@ fun ChatMessageCard(
                                             modifier = Modifier.size(12.dp)
                                         )
                                         Text(
-                                            text = "ব্যর্থ",
+                                            text = tr("Failed", "ব্যর্থ"),
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFFEF4444)
@@ -4707,7 +4750,7 @@ fun ChatMessageCard(
                                             modifier = Modifier.clickable { onRetry() }
                                         ) {
                                             Text(
-                                                text = "পুনরায় পাঠান",
+                                                text = tr("Retry", "পুনরায় পাঠান"),
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFFEF4444),

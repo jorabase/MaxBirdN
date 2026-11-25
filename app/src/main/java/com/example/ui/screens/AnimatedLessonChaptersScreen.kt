@@ -26,7 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.api.AcademicChapterItem
 import com.example.course.CourseViewModel
+import com.example.utils.AppLang
 import com.example.utils.toBengaliDigits
+import com.example.utils.tr
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,10 +85,13 @@ fun AnimatedLessonChaptersScreen(
                 chaptersList = fetched
 
                 if (chaptersList.isEmpty()) {
-                    errorMessage = "এই বিষয়ের কোনো অধ্যায় পাওয়া যায়নি"
+                    errorMessage = AppLang.tr("No chapters found for this subject", "এই বিষয়ের কোনো অধ্যায় পাওয়া যায়নি")
                 }
             } catch (e: Exception) {
-                errorMessage = "অধ্যায় লোড করতে সমস্যা হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক এরর"}"
+                errorMessage = AppLang.tr(
+                    "Failed to load chapters: ${e.localizedMessage ?: "Network error"}",
+                    "অধ্যায় লোড করতে সমস্যা হয়েছে: ${e.localizedMessage ?: "নেটওয়ার্ক এরর"}"
+                )
             } finally {
                 isLoading = false
             }
@@ -139,7 +144,7 @@ fun AnimatedLessonChaptersScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = subjectTitle.ifBlank { "অ্যানিমেটেড লেসনস" },
+                                text = subjectTitle.ifBlank { tr("Animated Lessons", "অ্যানিমেটেড লেসন") },
                                 fontSize = 19.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -149,9 +154,9 @@ fun AnimatedLessonChaptersScreen(
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (chaptersList.isNotEmpty()) {
-                                    "সর্বমোট ${toBengaliDigits(chaptersList.size)} টি অধ্যায়"
+                                    tr("${chaptersList.size} Chapters", "মোট ${toBengaliDigits(chaptersList.size)} টি অধ্যায়")
                                 } else {
-                                    "অধ্যায় নির্বাচন করুন"
+                                    tr("Select a chapter", "অধ্যায় নির্বাচন করুন")
                                 },
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Medium,
@@ -216,7 +221,7 @@ fun AnimatedLessonChaptersScreen(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "অধ্যায়সমূহ লোড হচ্ছে...",
+                            text = tr("Loading chapters...", "অধ্যায়সমূহ লোড হচ্ছে..."),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -248,7 +253,7 @@ fun AnimatedLessonChaptersScreen(
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = errorMessage ?: "কোনো অধ্যায় পাওয়া যায়নি",
+                            text = errorMessage ?: tr("No chapters found", "কোনো অধ্যায় পাওয়া যায়নি"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -262,7 +267,7 @@ fun AnimatedLessonChaptersScreen(
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("পুনরায় চেষ্টা করুন")
+                            Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                         }
                     }
                 }
@@ -280,9 +285,9 @@ fun AnimatedLessonChaptersScreen(
                             val chapterName = chapter.effectiveName
                             val rawNo = chapter.effectiveNo
                             val serialText = when (rawNo) {
-                                is Number -> "অধ্যায় ${toBengaliDigits(rawNo.toInt())}"
-                                is String -> if (rawNo.isNotBlank()) "অধ্যায় ${toBengaliDigits(rawNo)}" else "অধ্যায় ${toBengaliDigits(index)}"
-                                else -> "অধ্যায় ${toBengaliDigits(index)}"
+                                is Number -> tr("Chapter ${rawNo.toInt()}", "অধ্যায় ${toBengaliDigits(rawNo.toInt())}")
+                                is String -> if (rawNo.isNotBlank()) tr("Chapter $rawNo", "অধ্যায় ${toBengaliDigits(rawNo)}") else tr("Chapter $index", "অধ্যায় ${toBengaliDigits(index)}")
+                                else -> tr("Chapter $index", "অধ্যায় ${toBengaliDigits(index)}")
                             }
 
                             Column(

@@ -38,6 +38,9 @@ import com.example.api.GraphQlQuery
 import com.example.api.ShikhoApiService
 import com.example.auth.SessionManager
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import kotlinx.coroutines.launch
 
 data class EnrollmentPhaseDisplay(
@@ -65,7 +68,8 @@ fun CourseEnrollmentDetailsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var programsList by remember { mutableStateOf<List<EnrollmentProgramDisplay>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
+    val isBn = isBangla()
+    LaunchedEffect(isBn) {
         isLoading = true
         val commerceSnapshot = com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(
             context = context
@@ -105,10 +109,10 @@ fun CourseEnrollmentDetailsScreen(
                 val list = mutableListOf<EnrollmentProgramDisplay>()
                 for (prog in enrolled) {
                     val pId = prog.id
-                    val pTitle = prog.title_bn ?: "কোর্স"
+                    val pTitle = prog.title_bn ?: AppLang.tr("Course", "কোর্স")
                     val pBanner = prog.banner_url
                     val expiryRaw = prog.enrollment_details?.expiry_date
-                    val expiryFormatted = formatToBanglaDate(expiryRaw)
+                    val expiryFormatted = formatToLocalizedDate(expiryRaw)
 
                     // Fetch phases for this program
                     val phaseQuery = GraphQlQuery(
@@ -138,15 +142,15 @@ fun CourseEnrollmentDetailsScreen(
                         if (fetchedPhases.isNotEmpty()) {
                             fetchedPhases.map {
                                 EnrollmentPhaseDisplay(
-                                    title = it.title ?: "কোয়ার্টার",
+                                    title = it.title ?: AppLang.tr("Quarter", "কোয়ার্টার"),
                                     isEnrolled = it.has_enrolment ?: true
                                 )
                             }
                         } else {
-                            listOf(EnrollmentPhaseDisplay(title = "ফুল কোর্স", isEnrolled = true))
+                            listOf(EnrollmentPhaseDisplay(title = AppLang.tr("Full Course", "ফুল কোর্স"), isEnrolled = true))
                         }
                     } catch (e: Exception) {
-                        listOf(EnrollmentPhaseDisplay(title = "ফুল কোর্স", isEnrolled = true))
+                        listOf(EnrollmentPhaseDisplay(title = AppLang.tr("Full Course", "ফুল কোর্স"), isEnrolled = true))
                     }
 
                     list.add(
@@ -179,8 +183,8 @@ fun CourseEnrollmentDetailsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "কোর্সে ভর্তি",
-                        fontSize = 20.sp,
+                        text = tr("Enrollments", "কোর্স ভর্তি"),
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -242,13 +246,13 @@ fun CourseEnrollmentDetailsScreen(
                         }
                     }
                     Text(
-                        text = "কোনো এনরোল করা কোর্স পাওয়া যায়নি",
+                        text = tr("No Enrolled Courses Found", "কোনো এনরোল করা কোর্স পাওয়া যায়নি"),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "আপনার সক্রিয় কোর্সসমূহ এখানে প্রদর্শিত হবে।",
+                        text = tr("Your active courses will appear here.", "আপনার সক্রিয় কোর্সসমূহ এখানে প্রদর্শিত হবে।"),
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -405,7 +409,7 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay, isDark: Boo
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Text(
-                                        text = "ভর্তি হয়েছো",
+                                        text = tr("Enrolled", "ভর্তি হয়েছো"),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -431,14 +435,14 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay, isDark: Boo
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Footer Row: "ভর্তির মেয়াদ" | "৩১ ডিসেম্বর, ২০২৬"
+                    // Footer Row: Validity / Expiry Date
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "ভর্তির মেয়াদ",
+                            text = tr("Valid Until", "ভর্তির মেয়াদ"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -484,8 +488,9 @@ private fun DashedDivider(
     }
 }
 
-private fun formatToBanglaDate(dateString: String?): String {
-    if (dateString.isNullOrBlank()) return "৩১ ডিসেম্বর, ২০২৬"
+private fun formatToLocalizedDate(dateString: String?): String {
+    val fallback = AppLang.tr("31 Dec, 2026", "৩১ ডিসেম্বর, ২০২৬")
+    if (dateString.isNullOrBlank()) return fallback
     return try {
         val cleanDate = dateString.split("T")[0]
         val parts = cleanDate.split("-")
@@ -498,17 +503,25 @@ private fun formatToBanglaDate(dateString: String?): String {
                 "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
                 "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
             )
-            val monthName = monthsBn.getOrElse(monthInt - 1) { "ডিসেম্বর" }
+            val monthsEn = listOf(
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+            )
+            val monthName = if (AppLang.isBn()) {
+                monthsBn.getOrElse(monthInt - 1) { "ডিসেম্বর" }
+            } else {
+                monthsEn.getOrElse(monthInt - 1) { "Dec" }
+            }
 
-            val dayBn = com.example.utils.toBengaliDigits(dayStr.toIntOrNull()?.toString() ?: dayStr)
-            val yearBn = com.example.utils.toBengaliDigits(yearStr)
+            val dayFormatted = com.example.utils.toBengaliDigits(dayStr.toIntOrNull()?.toString() ?: dayStr)
+            val yearFormatted = com.example.utils.toBengaliDigits(yearStr)
 
-            "$dayBn $monthName, $yearBn"
+            "$dayFormatted $monthName, $yearFormatted"
         } else {
-            "৩১ ডিসেম্বর, ২০২৬"
+            fallback
         }
     } catch (e: Exception) {
-        "৩১ ডিসেম্বর, ২০২৬"
+        fallback
     }
 }
 
@@ -516,33 +529,33 @@ private fun getFallbackEnrollmentPrograms(): List<EnrollmentProgramDisplay> {
     return listOf(
         EnrollmentProgramDisplay(
             id = "6864d3a806800acba2e27099",
-            titleBn = "HSC '27 মানবিক - ২য় বর্ষ প্রস্তুতি",
+            titleBn = AppLang.tr("HSC '27 Humanities - 2nd Year", "HSC '27 মানবিক - ২য় বর্ষ প্রস্তুতি"),
             bannerUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1751437593/hftof9ha6mequpiqpkbh.jpg",
-            expiryDateBn = "৩১ ডিসেম্বর, ২০২৬",
+            expiryDateBn = AppLang.tr("31 Dec, 2026", "৩১ ডিসেম্বর, ২০২৬"),
             phases = listOf(
-                EnrollmentPhaseDisplay("কোয়ার্টার ১"),
-                EnrollmentPhaseDisplay("কোয়ার্টার ২"),
-                EnrollmentPhaseDisplay("কোয়ার্টার ৩"),
-                EnrollmentPhaseDisplay("কোয়ার্টার ৪"),
-                EnrollmentPhaseDisplay("কোয়ার্টার ৫")
+                EnrollmentPhaseDisplay(AppLang.tr("Quarter 1", "কোয়ার্টার ১")),
+                EnrollmentPhaseDisplay(AppLang.tr("Quarter 2", "কোয়ার্টার ২")),
+                EnrollmentPhaseDisplay(AppLang.tr("Quarter 3", "কোয়ার্টার ৩")),
+                EnrollmentPhaseDisplay(AppLang.tr("Quarter 4", "কোয়ার্টার ৪")),
+                EnrollmentPhaseDisplay(AppLang.tr("Quarter 5", "কোয়ার্টার ৫"))
             )
         ),
         EnrollmentProgramDisplay(
             id = "6862551806800acba2e22b27",
-            titleBn = "দুরন্ত HSC '27 - মানবিক",
+            titleBn = AppLang.tr("Duronto HSC '27 - Humanities", "দুরন্ত HSC '27 - মানবিক"),
             bannerUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1751274615/mqllgmiyqdg3mf7xyxva.jpg",
-            expiryDateBn = "১৫ সেপ্টেম্বর, ২০২৫",
+            expiryDateBn = AppLang.tr("15 Sep, 2025", "১৫ সেপ্টেম্বর, ২০২৫"),
             phases = listOf(
-                EnrollmentPhaseDisplay("ফুল কোর্স")
+                EnrollmentPhaseDisplay(AppLang.tr("Full Course", "ফুল কোর্স"))
             )
         ),
         EnrollmentProgramDisplay(
             id = "69f0a5053127a0e46e16de09",
             titleBn = "Think AI",
             bannerUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1777438148/mjpjbimt6wkkwsmtrh8l.jpg",
-            expiryDateBn = "৩০ এপ্রিল, ২০২৯",
+            expiryDateBn = AppLang.tr("30 Apr, 2029", "৩০ এপ্রিল, ২০২৯"),
             phases = listOf(
-                EnrollmentPhaseDisplay("ফুল কোর্স")
+                EnrollmentPhaseDisplay(AppLang.tr("Full Course", "ফুল কোর্স"))
             )
         )
     )

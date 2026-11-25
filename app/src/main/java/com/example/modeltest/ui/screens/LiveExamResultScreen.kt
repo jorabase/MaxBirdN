@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.components.SlideViewerDialog
 import com.example.ui.theme.isAppInDarkTheme
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,7 +52,7 @@ fun LiveExamResultScreen(
     var activePdfViewerUrl by remember { mutableStateOf<String?>(null) }
     var isSyllabusExpanded by remember { mutableStateOf(false) }
 
-    val examTitle = uiState.modelTestInfo?.title ?: "মডেল টেস্ট"
+    val examTitle = uiState.modelTestInfo?.title ?: tr("Model Test", "মডেল টেস্ট")
     val preResult = uiState.liveExamFinalResult ?: uiState.preResult
 
     val mcqCorrect = uiState.minimalScoreResult?.correct
@@ -68,9 +71,10 @@ fun LiveExamResultScreen(
     val mcqUnattempted = maxOf(0, mcqTotal - mcqCorrect - mcqWrong)
 
     val isPassed = mcqCorrect >= (mcqTotal * 0.33)
+    val isBn = isBangla()
 
     // Formatted publish time
-    val publishTimeDisplay = remember(uiState.liveExamPublishTime) {
+    val publishTimeDisplay = remember(uiState.liveExamPublishTime, isBn) {
         formatPublishDate(uiState.liveExamPublishTime)
     }
 
@@ -120,7 +124,7 @@ fun LiveExamResultScreen(
                             .height(48.dp)
                     ) {
                         Text(
-                            text = "হোম এ ফিরে যাও",
+                            text = tr("Back to Home", "হোম এ ফিরে যাও"),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -160,14 +164,14 @@ fun LiveExamResultScreen(
                                 .padding(20.dp)
                         ) {
                             Text(
-                                text = "অভিনন্দন!",
+                                text = tr("Congratulations!", "অভিনন্দন!"),
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "তোমার টেস্টটি সফলভাবে সম্পন্ন হয়েছে",
+                                text = tr("Your test has been completed", "তোমার টেস্টটি সফলভাবে সম্পন্ন হয়েছে"),
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -197,7 +201,7 @@ fun LiveExamResultScreen(
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
                                         Text(
-                                            text = "তোমার পুরো রেজাল্ট পাবলিশ হবে",
+                                            text = tr("Full result publishes at", "তোমার পুরো রেজাল্ট পাবলিশ হবে"),
                                             fontSize = 13.sp,
                                             color = if (isDark) Color(0xFFBFDBFE) else Color(0xFF1E40AF)
                                         )
@@ -240,7 +244,10 @@ fun LiveExamResultScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
-                                            text = "${formatToBengaliNumber(mcqTotal)}টি প্রশ্ন",
+                                            text = tr(
+                                                "${formatToBengaliNumber(mcqTotal)} Questions",
+                                                "${formatToBengaliNumber(mcqTotal)}টি প্রশ্ন"
+                                            ),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -250,12 +257,12 @@ fun LiveExamResultScreen(
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "সময়",
+                                        text = tr("Duration", "সময়"),
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "৩০ মিনিট",
+                                        text = tr("30 min", "৩০ মিনিট"),
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -274,7 +281,7 @@ fun LiveExamResultScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "MCQ এক্সাম রেজাল্ট",
+                                    text = tr("MCQ Result", "MCQ এক্সাম রেজাল্ট"),
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -289,7 +296,7 @@ fun LiveExamResultScreen(
                                     }
                                 ) {
                                     Text(
-                                        text = if (isPassed) "পাস" else "ফেল",
+                                        text = if (isPassed) tr("Passed", "পাস") else tr("Failed", "ফেল"),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isPassed) {
@@ -351,7 +358,7 @@ fun LiveExamResultScreen(
                                             .height(44.dp)
                                     ) {
                                         Text(
-                                            text = "মাস্টার সল্যুশন",
+                                            text = tr("Master Solution", "মাস্টার সল্যুশন"),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7)
@@ -371,7 +378,7 @@ fun LiveExamResultScreen(
                                         .height(44.dp)
                                 ) {
                                     Text(
-                                        text = "ফিডব্যাক দেখো",
+                                        text = tr("Feedback", "ফিডব্যাক দেখো"),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -382,7 +389,7 @@ fun LiveExamResultScreen(
                     }
                 }
 
-                // 3. CQ Result Card (Screenshot 13)
+                // 3. CQ Result Card
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -406,7 +413,7 @@ fun LiveExamResultScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
-                                            text = "২টি প্রশ্ন",
+                                            text = tr("2 Questions", "২টি প্রশ্ন"),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -416,12 +423,12 @@ fun LiveExamResultScreen(
 
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "সময়",
+                                        text = tr("Duration", "সময়"),
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = "১ ঘণ্টা ৪০ মিনিট",
+                                        text = tr("1 hr 40 min", "১ ঘণ্টা ৪০ মিনিট"),
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -448,7 +455,7 @@ fun LiveExamResultScreen(
                                         .height(44.dp)
                                 ) {
                                     Text(
-                                        text = "মাস্টার সল্যুশন",
+                                        text = tr("Master Solution", "মাস্টার সল্যুশন"),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7)
@@ -483,16 +490,16 @@ fun LiveExamResultScreen(
                                     Text(text = "📘", fontSize = 20.sp)
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
-                                        Text(text = "বিষয়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(text = "১টি", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        Text(text = tr("Subjects", "বিষয়"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(text = tr("1", "১টি"), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                     }
 
                                     Spacer(modifier = Modifier.width(24.dp))
 
                                     Column {
-                                        Text(text = "অধ্যায়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(text = tr("Chapters", "অধ্যায়"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(
-                                            text = "${formatToBengaliNumber(chapterCount)}টি",
+                                            text = tr("${formatToBengaliNumber(chapterCount)}", "${formatToBengaliNumber(chapterCount)}টি"),
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -514,7 +521,7 @@ fun LiveExamResultScreen(
                                     if (chapters.isNotEmpty()) {
                                         chapters.forEachIndexed { cIdx, ch ->
                                             Text(
-                                                text = "${formatToBengaliNumber(cIdx + 1)}. ${ch.name ?: "অধ্যায়"}",
+                                                text = "${formatToBengaliNumber(cIdx + 1)}. ${ch.name ?: tr("Chapter", "অধ্যায়")}",
                                                 fontSize = 13.sp,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 modifier = Modifier.padding(vertical = 3.dp)
@@ -522,7 +529,7 @@ fun LiveExamResultScreen(
                                         }
                                     } else {
                                         Text(
-                                            text = "১. ${info?.title ?: "অধ্যায়ভিত্তিক মডেল টেস্ট"}",
+                                            text = "${formatToBengaliNumber(1)}. ${info?.title ?: tr("Chapter Model Test", "অধ্যায়ভিত্তিক মডেল টেস্ট")}",
                                             fontSize = 13.sp,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
@@ -540,7 +547,7 @@ fun LiveExamResultScreen(
     activePdfViewerUrl?.let { url ->
         SlideViewerDialog(
             slideUrl = url,
-            title = "মাস্টার সল্যুশন",
+            title = tr("Master Solution", "মাস্টার সল্যুশন"),
             onDismiss = { activePdfViewerUrl = null }
         )
     }
@@ -572,7 +579,7 @@ private fun ScoreBadgeItem(
         }
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = "${formatToBengaliNumber(count)}টি",
+            text = tr("${formatToBengaliNumber(count)}", "${formatToBengaliNumber(count)}টি"),
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -619,7 +626,8 @@ fun ConfettiEffect() {
 }
 
 fun formatPublishDate(rawDateStr: String): String {
-    if (rawDateStr.isBlank()) return "ফলাফল শীঘ্রই প্রকাশিত হবে"
+    val soonText = AppLang.tr("Result will be published soon", "ফলাফল শীঘ্রই প্রকাশিত হবে")
+    if (rawDateStr.isBlank()) return soonText
     if (rawDateStr.contains("সেপ্টেম্বর") || rawDateStr.contains("অক্টোবর")) return rawDateStr
     return try {
         val dhakaZone = TimeZone.getTimeZone("Asia/Dhaka")
@@ -627,19 +635,26 @@ fun formatPublishDate(rawDateStr: String): String {
             timeZone = TimeZone.getTimeZone("UTC")
         }
         val clean = rawDateStr.replace("Z", "").substringBefore(".")
-        val date = inputFormat.parse(clean) ?: return "ফলাফল শীঘ্রই প্রকাশিত হবে"
+        val date = inputFormat.parse(clean) ?: return soonText
         val cal = java.util.Calendar.getInstance(dhakaZone).apply { time = date }
         val day = cal.get(java.util.Calendar.DAY_OF_MONTH)
-        val monthNames = arrayOf(
-            "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
-            "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
-        )
+        val monthNames = if (AppLang.isBn()) {
+            arrayOf(
+                "জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন",
+                "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"
+            )
+        } else {
+            arrayOf(
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+            )
+        }
         val month = monthNames.getOrElse(cal.get(java.util.Calendar.MONTH)) { "" }
         val year = cal.get(java.util.Calendar.YEAR)
         val timeFormat = SimpleDateFormat("hh:mm a", Locale.US).apply { timeZone = dhakaZone }
-        val timeBn = toBengaliDigits(timeFormat.format(date))
-        "${toBengaliDigits(day.toString())} $month, ${toBengaliDigits(year.toString())} | $timeBn"
+        val timeLocalized = toBengaliDigits(timeFormat.format(date))
+        "${toBengaliDigits(day.toString())} $month, ${toBengaliDigits(year.toString())} | $timeLocalized"
     } catch (_: Exception) {
-        "ফলাফল শীঘ্রই প্রকাশিত হবে"
+        soonText
     }
 }

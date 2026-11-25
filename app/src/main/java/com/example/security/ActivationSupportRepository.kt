@@ -32,28 +32,29 @@ object ActivationSupportRepository {
         .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
-    val fallbackLinks: List<ActivationSupportLink> = listOf(
-        ActivationSupportLink(
-            id = "default_telegram",
-            title = "Telegram সাপোর্ট",
-            subtitle = "@fahim017740 এ মেসেজ দিন",
-            iconType = "telegram",
-            url = "https://t.me/fahim017740",
-            colorHex = "#229ED9",
-            isActive = true,
-            priority = 10
-        ),
-        ActivationSupportLink(
-            id = "default_whatsapp",
-            title = "WhatsApp হেল্পলাইন",
-            subtitle = "সরাসরি WhatsApp এ যোগাযোগ করুন",
-            iconType = "whatsapp",
-            url = "https://wa.me/8801774092040",
-            colorHex = "#25D366",
-            isActive = true,
-            priority = 9
+    val fallbackLinks: List<ActivationSupportLink>
+        get() = listOf(
+            ActivationSupportLink(
+                id = "default_telegram",
+                title = com.example.utils.AppLang.tr("Telegram Support", "Telegram সাপোর্ট"),
+                subtitle = com.example.utils.AppLang.tr("Message @fahim017740", "@fahim017740 এ মেসেজ দিন"),
+                iconType = "telegram",
+                url = "https://t.me/fahim017740",
+                colorHex = "#229ED9",
+                isActive = true,
+                priority = 10
+            ),
+            ActivationSupportLink(
+                id = "default_whatsapp",
+                title = com.example.utils.AppLang.tr("WhatsApp Helpline", "WhatsApp হেল্পলাইন"),
+                subtitle = com.example.utils.AppLang.tr("Contact us directly on WhatsApp", "সরাসরি WhatsApp এ যোগাযোগ করুন"),
+                iconType = "whatsapp",
+                url = "https://wa.me/8801774092040",
+                colorHex = "#25D366",
+                isActive = true,
+                priority = 9
+            )
         )
-    )
 
     private fun getPrefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

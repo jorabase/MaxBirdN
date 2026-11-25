@@ -25,6 +25,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import com.example.utils.toBengaliDigits
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -181,32 +184,33 @@ fun HomeScreen(
     }
 
     // ===== LOGIC: Subtitle formatting (unchanged) =====
-    val subtitle = remember(uiState.userClass, uiState.userGroup, uiState.userSchool) {
+    val isBn = isBangla()
+    val subtitle = remember(uiState.userClass, uiState.userGroup, uiState.userSchool, isBn) {
         val classDisplay = when (uiState.userClass) {
-            "C11", "Class 11" -> "একাদশ শ্রেণি"
-            "C12", "Class 12" -> "দ্বাদশ শ্রেণি"
-            "C10", "Class 10" -> "দশম শ্রেণি"
-            "C9", "Class 9" -> "নবম শ্রেণি"
-            else -> uiState.userClass.ifBlank { "একাদশ শ্রেণি" }
+            "C11", "Class 11" -> if (isBn) "একাদশ শ্রেণি" else "Class 11"
+            "C12", "Class 12" -> if (isBn) "দ্বাদশ শ্রেণি" else "Class 12"
+            "C10", "Class 10" -> if (isBn) "দশম শ্রেণি" else "Class 10"
+            "C9", "Class 9" -> if (isBn) "নবম শ্রেণি" else "Class 9"
+            else -> uiState.userClass.ifBlank { if (isBn) "একাদশ শ্রেণি" else "Class 11" }
         }
         val groupDisplay = when (uiState.userGroup.lowercase()) {
-            "humanities", "humanities_group" -> "মানবিক"
-            "science", "science_group" -> "বিজ্ঞান"
-            "business", "business_studies", "commerce" -> "ব্যবসায় শিক্ষা"
+            "humanities", "humanities_group" -> if (isBn) "মানবিক" else "Humanities"
+            "science", "science_group" -> if (isBn) "বিজ্ঞান" else "Science"
+            "business", "business_studies", "commerce" -> if (isBn) "ব্যবসায় শিক্ষা" else "Business"
             else -> uiState.userGroup.ifBlank { "" }
         }
         listOf(classDisplay, groupDisplay, uiState.userSchool)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
-            .ifBlank { "এইচএসসি শিক্ষার্থী" }
+            .ifBlank { if (isBn) "এইচএসসি শিক্ষার্থী" else "HSC Student" }
     }
 
-    // ===== LOGIC: Display name (unchanged) =====
-    val displayName = remember(uiState.userFirstName, uiState.userName) {
+    val displayName = remember(uiState.userFirstName, uiState.userName, isBn) {
+        val fallback = if (isBn) "শিক্ষার্থী" else "Student"
         when {
-            uiState.userFirstName.isNotBlank() && uiState.userFirstName != "শিক্ষার্থী" -> uiState.userFirstName
-            uiState.userName.isNotBlank() && uiState.userName != "শিক্ষার্থী" -> uiState.userName
-            else -> "শিক্ষার্থী"
+            uiState.userFirstName.isNotBlank() && uiState.userFirstName != "শিক্ষার্থী" && uiState.userFirstName != "Student" -> uiState.userFirstName
+            uiState.userName.isNotBlank() && uiState.userName != "শিক্ষার্থী" && uiState.userName != "Student" -> uiState.userName
+            else -> fallback
         }
     }
 
@@ -235,7 +239,7 @@ fun HomeScreen(
                     subtitle = subtitle,
                     avatarUrl = uiState.userAvatar ?: "",
                     isPremium = uiState.isPremium,
-                    activeCourseTitle = uiState.activeProgram?.title_bn ?: "কোর্স নির্বাচন করো",
+                    activeCourseTitle = uiState.activeProgram?.title_bn ?: tr("Select Course", "কোর্স নির্বাচন করুন"),
                     onOpenCourseSwitcher = { viewModel.setCourseSwitcherVisible(true) },
                     onAvatarClick = { onNavigateToProfile() },
                     unreadNotificationCount = activeNoticesCount,
@@ -277,7 +281,7 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                     // ===== LOGIC: Banner condition (unchanged) =====
-                    if (displayName == "শিক্ষার্থী" || uiState.userFirstName.isBlank()) {
+                    if (displayName == "শিক্ষার্থী" || displayName == "Student" || uiState.userFirstName.isBlank()) {
                         AccountCompletionBanner(onCompleteClick = onNavigateToEditProfile)
                     }
 
@@ -337,14 +341,17 @@ fun HomeScreen(
                                             modifier = Modifier.size(32.dp)
                                         )
                                         Text(
-                                            text = "এখনো কোনো কোর্স আনলক করা হয়নি",
+                                            text = tr("No Active Courses", "কোনো সক্রিয় কোর্স নেই"),
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.onSurface,
                                             textAlign = TextAlign.Center
                                         )
                                         Text(
-                                            text = "কোর্স ট্যাবে গিয়ে তোমার পছন্দের কোর্সে 'কোর্সে এক্সেস পান' বাটনে ট্যাপ করো। অ্যাডমিন এক্সেস দিলে এককালীন অথবা সহজ কিস্তিতে কোর্সটি কিনে ক্লাস শুরু করতে পারবে!",
+                                            text = tr(
+                                                "Open the Courses tab to request access, start a free trial, or enroll in a course.",
+                                                "কোর্স ট্যাবে গিয়ে ফ্রি ট্রায়াল নিতে বা কোর্সে ভর্তি হয়ে ক্লাস শুরু করুন।"
+                                            ),
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             textAlign = TextAlign.Center,
@@ -357,7 +364,7 @@ fun HomeScreen(
                                         ) {
                                             Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("কোর্স আনলক / কিস্তিতে ভর্তি হোন", fontWeight = FontWeight.Bold)
+                                            Text(tr("Browse Courses", "কোর্স দেখুন"), fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -441,8 +448,8 @@ private fun HomeBottomFeaturesSection(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            text = "ফিচারস",
-            fontSize = 21.sp,
+            text = tr("Features", "ফিচারস"),
+            fontSize = 20.sp,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(start = 4.dp)
@@ -495,7 +502,7 @@ private fun HomeBottomFeaturesSection(
                                 }
                             }
                             Text(
-                                text = "সর্বমোট স্কোর",
+                                text = tr("Total Score", "মোট স্কোর"),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
@@ -543,7 +550,7 @@ private fun HomeBottomFeaturesSection(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "রিপোর্ট কার্ড দেখো",
+                                text = tr("Report Card", "রিপোর্ট কার্ড"),
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -622,7 +629,7 @@ private fun HomeBottomFeaturesSection(
 
                         Column {
                             Text(
-                                text = "প্র্যাকটিস কুইজ",
+                                text = tr("Practice Quiz", "প্র্যাকটিস কুইজ"),
                                 fontSize = 15.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
@@ -631,7 +638,7 @@ private fun HomeBottomFeaturesSection(
                             )
                             Spacer(modifier = Modifier.height(5.dp))
                             Text(
-                                text = "বিষয়, অধ্যায় ও টপিক নির্বাচন করে কুইজ প্র্যাকটিস করো",
+                                text = tr("Chapter-wise MCQ practice", "অধ্যায়ভিত্তিক কুইজ প্র্যাকটিস"),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White.copy(alpha = 0.88f),
@@ -685,15 +692,15 @@ private fun HomeBottomFeaturesSection(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "অ্যানিমেটেড লেসনস",
-                            fontSize = 18.sp,
+                            text = tr("Animated Lessons", "অ্যানিমেটেড লেসনস"),
+                            fontSize = 17.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "সব সাবজেক্টের অ্যানিমেটেড ভিডিও ঘুরে দেখো",
-                            fontSize = 13.sp,
+                            text = tr("Visual concept videos for every subject", "সব বিষয়ের অ্যানিমেটেড ভিডিও"),
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color.White.copy(alpha = 0.88f),
                             lineHeight = 18.sp
@@ -768,25 +775,23 @@ private fun HomeFeatureSubjectPickerSheet(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isQuiz) "প্র্যাকটিস কুইজ — বিষয় নির্বাচন করো" else "অ্যানিমেটেড লেসনস — বিষয় নির্বাচন করো",
+                        text = if (isQuiz) tr("Practice Quiz", "প্র্যাকটিস কুইজ") else tr("Animated Lessons", "অ্যানিমেটেড লেসনস"),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     if (!activeCourseTitle.isNullOrBlank()) {
                         Text(
-                            text = "কোর্স: $activeCourseTitle",
+                            text = activeCourseTitle,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isQuiz) Color(0xFF10B981) else Color(0xFF6366F1)
+                            color = if (isQuiz) Color(0xFF10B981) else Color(0xFF6366F1),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     } else {
                         Text(
-                            text = if (isQuiz) {
-                                "যেকোনো বিষয় সিলেক্ট করে অধ্যায়ভিত্তিক কুইজ ও পরীক্ষা দাও"
-                            } else {
-                                "যেকোনো বিষয় সিলেক্ট করে সব অধ্যায়ের অ্যানিমেটেড ভিডিও দেখো"
-                            },
+                            text = tr("Choose a subject to continue", "শুরু করতে একটি বিষয় বেছে নিন"),
                             fontSize = 12.5.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -808,7 +813,7 @@ private fun HomeFeatureSubjectPickerSheet(
                             CircularProgressIndicator(strokeWidth = 3.dp)
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "বিষয়সমূহ লোড হচ্ছে...",
+                                text = tr("Loading subjects...", "বিষয়সমূহ লোড হচ্ছে..."),
                                 fontSize = 13.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -825,7 +830,7 @@ private fun HomeFeatureSubjectPickerSheet(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "কোনো বিষয় পাওয়া যায়নি",
+                                text = tr("No Subjects Found", "কোনো বিষয় পাওয়া যায়নি"),
                                 fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -834,7 +839,7 @@ private fun HomeFeatureSubjectPickerSheet(
                             Button(onClick = onRetry, shape = RoundedCornerShape(12.dp)) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("পুনরায় চেষ্টা করুন")
+                                Text(tr("Retry", "পুনরায় চেষ্টা করুন"))
                             }
                         }
                     }
@@ -892,13 +897,13 @@ private fun HomeFeatureSubjectPickerSheet(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = sub.display_bn ?: sub.code ?: "বিষয়",
+                                            text = sub.display_bn ?: sub.code ?: tr("Subject", "বিষয়"),
                                             fontSize = 15.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = if (isQuiz) "সকল অধ্যায়ের কুইজ ও পরীক্ষা" else "সকল অধ্যায়ের অ্যানিমেটেড ভিডিও",
+                                            text = if (isQuiz) tr("Chapter quizzes & tests", "অধ্যায়ভিত্তিক কুইজ") else tr("Animated concept videos", "অ্যানিমেটেড ভিডিও"),
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1034,7 +1039,7 @@ private fun ReportCardQuickBanner(onClick: () -> Unit) {
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "রিপোর্ট কার্ড ও লিডারবোর্ড",
+                                text = tr("Report Card", "রিপোর্ট কার্ড"),
                                 fontSize = 15.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
@@ -1051,7 +1056,7 @@ private fun ReportCardQuickBanner(onClick: () -> Unit) {
                         }
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "কোয়ার্টার রেজাল্ট ও মেধা তালিকা দেখো",
+                            text = tr("Quarterly results & leaderboard", "রেজাল্ট ও মেধা তালিকা"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFBAE6FD),
@@ -1073,7 +1078,7 @@ private fun ReportCardQuickBanner(onClick: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "দেখো",
+                            text = tr("View", "দেখুন"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -1269,14 +1274,14 @@ private fun ErrorStateCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "কোর্স লোড করা যায়নি",
+                text = tr("Unable to Load Courses", "কোর্স লোড করা যায়নি"),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = errorMessage ?: "অনুগ্রহ করে ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করো",
+                text = errorMessage ?: tr("Check your internet connection and try again", "ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন"),
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -1306,7 +1311,7 @@ private fun ErrorStateCard(
                         modifier = Modifier.size(19.dp)
                     )
                     Text(
-                        "আবার চেষ্টা করো",
+                        tr("Try Again", "আবার চেষ্টা করুন"),
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -1405,14 +1410,17 @@ fun AccountCompletionBanner(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "আপনার অ্যাকাউন্ট সম্পূর্ণ করুন 🎉",
+                        text = tr("Complete Profile", "প্রোফাইল সম্পূর্ণ করুন"),
                         fontSize = 15.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "সঠিক সিলেবাস ও ক্লাসের নোটিফিকেশন পেতে আপনার পূর্ণাঙ্গ নাম ও কলেজের তথ্য যোগ করুন।",
+                        text = tr(
+                            "Add your name and institution for personalized routine & alerts.",
+                            "সঠিক সিলেবাস ও রুটিন পেতে নাম ও প্রতিষ্ঠানের তথ্য যোগ করুন।"
+                        ),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 16.5.sp
@@ -1438,7 +1446,7 @@ fun AccountCompletionBanner(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "এখনই সম্পূর্ণ করুন",
+                        text = tr("Complete Now", "এখনই করুন"),
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -1469,7 +1477,7 @@ private fun handleNoticeAction(
 
     if (rawUrl.endsWith(".pdf", ignoreCase = true) || rawUrl.contains(".pdf?", ignoreCase = true)) {
         if (onOpenPdf != null) {
-            onOpenPdf(rawUrl, notice.title.ifBlank { "নোটিশ ডকুমেন্টস" })
+            onOpenPdf(rawUrl, notice.title.ifBlank { AppLang.tr("Notice Document", "নোটিশ ডকুমেন্ট") })
             return
         }
     }
@@ -1489,7 +1497,10 @@ private fun handleNoticeAction(
     } catch (e: Exception) {
         Toast.makeText(
             context,
-            "লিংক ওপেন করা সম্ভব হয়নি: ${e.localizedMessage ?: "ব্রাউজার এরর"}",
+            AppLang.tr(
+                "Could not open link: ${e.localizedMessage ?: "Browser error"}",
+                "লিংক খোলা যায়নি: ${e.localizedMessage ?: "ব্রাউজার এরর"}"
+            ),
             Toast.LENGTH_SHORT
         ).show()
     }

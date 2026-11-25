@@ -81,6 +81,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
+import com.example.utils.AppLang
+import com.example.utils.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -159,7 +161,10 @@ fun LoginScreen(
         if (com.example.security.DeviceActivationRepository.isConfigured() &&
             !com.example.security.DeviceActivationRepository.isDeviceActivated(context)
         ) {
-            errorMessage = "অননুমোদিত ডিভাইস! আগে ডিভাইস এক্সেস সক্রিয় করতে হবে।"
+            errorMessage = AppLang.tr(
+                "Unauthorized device! Please activate device access first.",
+                "অননুমোদিত ডিভাইস! আগে ডিভাইস এক্সেস সক্রিয় করতে হবে।"
+            )
             onNavigateToActivation?.invoke()
         } else if (phoneInput.length >= 10) {
             viewModel.checkUser(phoneInput)
@@ -225,7 +230,7 @@ fun LoginScreen(
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
-                                text = "স্মার্ট লার্নিং প্ল্যাটফর্ম",
+                                text = tr("Smart Learning Platform", "স্মার্ট লার্নিং প্ল্যাটফর্ম"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = primary
@@ -249,7 +254,7 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "সহজ ও আনন্দদায়ক শেখার ডিজিটাল একাডেমি",
+                        text = tr("Your Digital Learning Academy", "সহজ ও আনন্দদায়ক ডিজিটাল একাডেমি"),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -321,14 +326,17 @@ fun LoginScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "মোবাইল নম্বর লিখুন",
+                                    text = tr("Phone Number", "মোবাইল নম্বর"),
                                     fontSize = 19.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "লগইন বা নতুন অ্যাকাউন্ট খুলতে ১১ ডিজিটের নম্বর দিন",
+                                    text = tr(
+                                        "Enter your 11-digit number to log in or sign up",
+                                        "লগইন বা নতুন অ্যাকাউন্টে ১১ ডিজিটের নম্বর দিন"
+                                    ),
                                     fontSize = 12.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     lineHeight = 17.sp
@@ -452,7 +460,7 @@ fun LoginScreen(
                                         ) {
                                             if (phoneInput.isEmpty()) {
                                                 Text(
-                                                    text = "০১XXXXXXXXX",
+                                                    text = tr("01XXXXXXXXX", "০১XXXXXXXXX"),
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                                     fontSize = 15.sp,
                                                     fontWeight = FontWeight.Medium,
@@ -534,9 +542,12 @@ fun LoginScreen(
                         ) {
                             Text(
                                 text = when {
-                                    isComplete -> "✓ নম্বরটি সম্পূর্ণ হয়েছে"
-                                    phoneInput.isNotEmpty() -> "আরও ${(11 - phoneInput.length).toBengaliDigits()} ডিজিট বাকি"
-                                    else -> "বাংলাদেশি মোবাইল নম্বর"
+                                    isComplete -> tr("✓ Number complete", "✓ নম্বরটি সম্পূর্ণ হয়েছে")
+                                    phoneInput.isNotEmpty() -> tr(
+                                        "${11 - phoneInput.length} digits remaining",
+                                        "আরও ${(11 - phoneInput.length).toBengaliDigits()} ডিজিট বাকি"
+                                    )
+                                    else -> tr("Bangladesh mobile number", "বাংলাদেশি মোবাইল নম্বর")
                                 },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
@@ -544,7 +555,7 @@ fun LoginScreen(
                             )
 
                             Text(
-                                text = "${phoneInput.length.toBengaliDigits()}/১১",
+                                text = "${phoneInput.length.toBengaliDigits()}/${11.toBengaliDigits()}",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = borderColor
@@ -597,7 +608,7 @@ fun LoginScreen(
                                             modifier = Modifier.align(Alignment.End)
                                         ) {
                                             Text(
-                                                text = "ইতিমধ্যে OTP পেয়েছেন? ওটিপি দিন →",
+                                                text = tr("Already have an OTP? Enter OTP →", "ইতিমধ্যে OTP পেয়েছেন? ওটিপি দিন →"),
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = primary
@@ -637,7 +648,10 @@ fun LoginScreen(
                                     }
                                 }
                                 Text(
-                                    text = "নতুন অ্যাকাউন্ট হলে ওটিপি ভেরিফিকেশনের পর আপনার নাম ও শিক্ষা প্রতিষ্ঠানের তথ্য দিয়ে অ্যাকাউন্ট কমপ্লিট করার সুযোগ থাকবে।",
+                                    text = tr(
+                                        "For new accounts, you can set up your name and institution after OTP verification.",
+                                        "নতুন অ্যাকাউন্ট হলে OTP ভেরিফিকেশনের পর নাম ও প্রতিষ্ঠানের তথ্য দিয়ে অ্যাকাউন্ট সম্পন্ন করতে পারবেন।"
+                                    ),
                                     fontSize = 11.5.sp,
                                     lineHeight = 16.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
@@ -709,7 +723,7 @@ fun LoginScreen(
                                         strokeWidth = 2.5.dp
                                     )
                                     Text(
-                                        text = "যাচাই করা হচ্ছে...",
+                                        text = tr("Verifying...", "যাচাই করা হচ্ছে..."),
                                         fontSize = 15.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -721,7 +735,7 @@ fun LoginScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "এগিয়ে যান",
+                                        text = tr("Continue", "এগিয়ে যান"),
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = if (isEnabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
@@ -739,7 +753,7 @@ fun LoginScreen(
                         if (canViewProfile) {
                             Spacer(modifier = Modifier.height(14.dp))
 
-                            // Modern "অথবা" Divider
+                            // Modern "OR" Divider
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
@@ -749,7 +763,7 @@ fun LoginScreen(
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                 )
                                 Text(
-                                    text = "অথবা",
+                                    text = tr("OR", "অথবা"),
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -783,7 +797,7 @@ fun LoginScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "কিউআর / সেশন কোড দিয়ে লগইন",
+                                    text = tr("QR / Session Login", "কিউআর / সেশন লগইন"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = primary,
@@ -836,7 +850,10 @@ fun LoginScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "এগিয়ে যাওয়ার মাধ্যমে আপনি MaxBird এর শর্তাবলী ও গোপনীয়তা নীতি মেনে নিচ্ছেন।",
+                            text = tr(
+                                "By continuing, you agree to MaxBird's Terms & Privacy Policy.",
+                                "এগিয়ে যাওয়ার মাধ্যমে আপনি MaxBird-এর শর্তাবলী ও গোপনীয়তা নীতি মেনে নিচ্ছেন।"
+                            ),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                             textAlign = TextAlign.Center,

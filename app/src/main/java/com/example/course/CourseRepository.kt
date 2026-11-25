@@ -156,7 +156,7 @@ class CourseRepository(
             val response = apiService.availTrial(query)
             if (!response.errors.isNullOrEmpty()) {
                 val errMsg = response.errors.mapNotNull { it.message }.joinToString(", ")
-                Result.failure(Exception(errMsg.ifBlank { "সার্ভার থেকে ত্রুটি এসেছে" }))
+                Result.failure(Exception(errMsg.ifBlank { com.example.utils.AppLang.tr("Server error occurred", "সার্ভার থেকে ত্রুটি এসেছে") }))
             } else {
                 val msg = response.data?.generateFreeTrialEnrolment?.message ?: response.message ?: "success"
                 Result.success(msg)
@@ -197,7 +197,7 @@ class CourseRepository(
             val response = apiService.enrollInFreeProgram(query)
             if (!response.errors.isNullOrEmpty()) {
                 val errMsg = response.errors.mapNotNull { it.message }.joinToString(", ")
-                Result.failure(Exception(errMsg.ifBlank { "সার্ভার থেকে ত্রুটি এসেছে" }))
+                Result.failure(Exception(errMsg.ifBlank { com.example.utils.AppLang.tr("Server error occurred", "সার্ভার থেকে ত্রুটি এসেছে") }))
             } else {
                 val msg = response.data?.enrollInFreeProgram?.message ?: response.message ?: "success"
                 Result.success(msg)

@@ -46,17 +46,21 @@ import com.example.database.DownloadedItemEntity
 import com.example.download.AppFileDownloadManager
 import com.example.ui.components.SlideViewerDialog
 import com.example.utils.NetworkUtils
+import com.example.utils.AppLang
+import com.example.utils.isBangla
+import com.example.utils.tr
 import com.example.utils.toBengaliDigits
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private fun formatDownloadDateBangla(timestampMs: Long): String {
+private fun formatDownloadDateLocalized(timestampMs: Long, isBn: Boolean): String {
     if (timestampMs <= 0L) return ""
     return try {
         val sdf = SimpleDateFormat("dd MMM, yyyy", Locale.US)
         val formatted = sdf.format(Date(timestampMs))
+        if (!isBn) return formatted
         formatted
             .replace("Jan", "জানু")
             .replace("Feb", "ফেব্রু")
@@ -76,13 +80,15 @@ private fun formatDownloadDateBangla(timestampMs: Long): String {
     }
 }
 
-private fun formatSpeedChipBangla(speedMBs: Float): String {
-    if (speedMBs <= 0.005f) return "সংযোগ হচ্ছে..."
+private fun formatSpeedChipLocalized(speedMBs: Float, isBn: Boolean): String {
+    if (speedMBs <= 0.005f) return if (isBn) "সংযোগ হচ্ছে..." else "Connecting..."
     return if (speedMBs >= 1.0f) {
-        String.format(Locale.US, "%.1f মেগাবাইট/সে.", speedMBs).toBengaliDigits()
+        if (isBn) String.format(Locale.US, "%.1f মেগাবাইট/সে.", speedMBs).toBengaliDigits()
+        else String.format(Locale.US, "%.1f MB/s", speedMBs)
     } else {
         val kb = (speedMBs * 1024f).coerceAtLeast(1f)
-        String.format(Locale.US, "%.0f কেবি/সে.", kb).toBengaliDigits()
+        if (isBn) String.format(Locale.US, "%.0f কেবি/সে.", kb).toBengaliDigits()
+        else String.format(Locale.US, "%.0f KB/s", kb)
     }
 }
 
@@ -103,6 +109,7 @@ fun DownloadsScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
+    val isBn = isBangla()
 
     val allDownloads by downloadManager.getAllDownloads().collectAsStateWithLifecycle(initialValue = emptyList())
     val activeSpeeds by downloadManager.activeSpeedsFlow.collectAsStateWithLifecycle()
@@ -136,7 +143,11 @@ fun DownloadsScreen(
             (context as? Activity)?.finish()
         } else {
             lastBackPressTime = currentTime
-            Toast.makeText(context, "অ্যাপ থেকে বের হতে আবার ব্যাক চাপুন", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                AppLang.tr("Press back again to exit", "অ্যাপ থেকে বের হতে আবার ব্যাক চাপুন"),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -234,7 +245,7 @@ fun DownloadsScreen(
             },
             title = {
                 Text(
-                    text = "ডাউনলোড মুছে ফেলবেন?",
+                    text = tr("Delete File?", "ফাইল মুছে ফেলবেন?"),
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.5.sp,
                     textAlign = TextAlign.Center
@@ -242,7 +253,10 @@ fun DownloadsScreen(
             },
             text = {
                 Text(
-                    text = "\"${item.title}\" ফাইলটি আপনার অফলাইন মেমোরি থেকে স্থায়ীভাবে মুছে ফেলা হবে।",
+                    text = tr(
+                        "\"${item.title}\" will be permanently deleted from offline storage.",
+                        "\"${item.title}\" ফাইলটি অফলাইন স্টোরেজ থেকে স্থায়ীভাবে মুছে যাবে।"
+                    ),
                     fontSize = 13.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -253,12 +267,16 @@ fun DownloadsScreen(
                     onClick = {
                         downloadManager.deleteDownloadedFile(item.id)
                         itemToDelete = null
-                        Toast.makeText(context, "ফাইলটি মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            AppLang.tr("File deleted", "ফাইল মুছে ফেলা হয়েছে"),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("মুছে ফেলুন", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(tr("Delete", "মুছে ফেলুন"), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -266,7 +284,7 @@ fun DownloadsScreen(
                     onClick = { itemToDelete = null },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("বাতিল", fontWeight = FontWeight.SemiBold)
+                    Text(tr("Cancel", "বাতিল"), fontWeight = FontWeight.SemiBold)
                 }
             },
             shape = RoundedCornerShape(22.dp)
@@ -330,7 +348,7 @@ fun DownloadsScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.DownloadForOffline,
-                                    contentDescription = "ডাউনলোডস",
+                                    contentDescription = tr("Downloads", "ডাউনলোড"),
                                     tint = Color(0xFF0284C7),
                                     modifier = Modifier.size(23.dp)
                                 )
@@ -341,8 +359,8 @@ fun DownloadsScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "অফলাইন ডাউনলোড সেন্টার",
-                                fontSize = 17.5.sp,
+                                text = tr("Downloads", "ডাউনলোড"),
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
@@ -350,9 +368,9 @@ fun DownloadsScreen(
                             )
                             Text(
                                 text = if (isOfflineOnly) {
-                                    "অফলাইন মোড • ইন্টারনেট ছাড়াই ক্লাস ও নোট দেখুন"
+                                    tr("Offline Mode", "অফলাইন মোড")
                                 } else {
-                                    "হাই-স্পিড ভিডিও ও লেকচার শিট ম্যানেজার"
+                                    tr("Saved videos, notes & books", "সেভড ভিডিও, নোট ও বই")
                                 },
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -379,7 +397,7 @@ fun DownloadsScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = "${completedCount.toBengaliDigits()} টি ফাইল",
+                                    text = if (isBn) "${completedCount.toBengaliDigits()} টি" else "$completedCount files",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF0284C7),
@@ -433,13 +451,13 @@ fun DownloadsScreen(
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "ইন্টারনেট সংযোগ সচল হয়েছে!",
+                                        text = tr("Back Online", "ইন্টারনেট সচল হয়েছে"),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) Color.White else Color(0xFF14532D)
                                     )
                                     Text(
-                                        text = "সম্পূর্ণ অনলাইন অ্যাপে ফিরে যেতে ট্যাপ করুন",
+                                        text = tr("Tap to return to online mode", "অনলাইন মোডে ফিরতে ট্যাপ করুন"),
                                         fontSize = 11.5.sp,
                                         color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF166534)
                                     )
@@ -452,7 +470,7 @@ fun DownloadsScreen(
                                     modifier = Modifier.heightIn(min = 38.dp)
                                 ) {
                                     Text(
-                                        text = "অনলাইনে যান",
+                                        text = tr("Go Online", "অনলাইন"),
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
@@ -505,7 +523,7 @@ fun DownloadsScreen(
                                             .background(if (anyDownloading) Color(0xFF0284C7) else Color(0xFFF59E0B))
                                     )
                                     Text(
-                                        text = "চলমান ডাউনলোড (${activeDownloads.size.toBengaliDigits()})",
+                                        text = tr("Active (${activeDownloads.size})", "চলমান (${activeDownloads.size.toBengaliDigits()})"),
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onBackground,
@@ -534,7 +552,7 @@ fun DownloadsScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = if (anyDownloading) "সব পজ করুন" else "সব চালু করুন",
+                                            text = if (anyDownloading) tr("Pause All", "সব পজ") else tr("Resume All", "সব চালু"),
                                             fontSize = 11.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF0284C7),
@@ -562,10 +580,10 @@ fun DownloadsScreen(
                 // Category Filter Chips Row (Scrollable 4-chip layout: All, Video, PDF, Library Books)
                 item {
                     val categories = listOf(
-                        "সবগুলো (${completedAndFailedDownloads.size.toBengaliDigits()})" to Icons.Default.Folder,
-                        "ভিডিও (${videoCount.toBengaliDigits()})" to Icons.Default.PlayCircleFilled,
-                        "নোট/পিডিএফ (${pdfCount.toBengaliDigits()})" to Icons.Default.PictureAsPdf,
-                        "বই (${htmlBookCount.toBengaliDigits()})" to Icons.Default.MenuBook
+                        tr("All (${completedAndFailedDownloads.size})", "সব (${completedAndFailedDownloads.size.toBengaliDigits()})") to Icons.Default.Folder,
+                        tr("Videos ($videoCount)", "ভিডিও (${videoCount.toBengaliDigits()})") to Icons.Default.PlayCircleFilled,
+                        tr("PDFs ($pdfCount)", "পিডিএফ (${pdfCount.toBengaliDigits()})") to Icons.Default.PictureAsPdf,
+                        tr("Books ($htmlBookCount)", "বই (${htmlBookCount.toBengaliDigits()})") to Icons.Default.MenuBook
                     )
                     Row(
                         modifier = Modifier
@@ -640,7 +658,7 @@ fun DownloadsScreen(
                                     downloadManager.resumeDownload(item.id)
                                     Toast.makeText(
                                         context,
-                                        "ডাউনলোড পুনরায় শুরু করা হচ্ছে...",
+                                        AppLang.tr("Resuming download...", "ডাউনলোড পুনরায় শুরু হচ্ছে..."),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     return@DownloadedItemCard
@@ -650,7 +668,7 @@ fun DownloadsScreen(
                                 if (!localFile.exists() || localFile.length() == 0L) {
                                     Toast.makeText(
                                         context,
-                                        "ফাইলটি ডিভাইসে পাওয়া যায়নি, পুনরায় ডাউনলোড করা হচ্ছে",
+                                        AppLang.tr("File missing, re-downloading...", "ফাইল পাওয়া যায়নি, পুনরায় ডাউনলোড হচ্ছে"),
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     downloadManager.resumeDownload(item.id)
@@ -662,7 +680,7 @@ fun DownloadsScreen(
                                         onPlayVideo(
                                             item.localFilePath,
                                             item.title,
-                                            item.subtitle ?: "অফলাইন লেকচার",
+                                            item.subtitle ?: AppLang.tr("Offline Lecture", "অফলাইন লেকচার"),
                                             "#0284C7",
                                             false
                                         )
@@ -672,14 +690,14 @@ fun DownloadsScreen(
                                             onOpenHtmlBook(
                                                 item.id,
                                                 item.title,
-                                                item.subtitle ?: "লাইব্রেরি বই",
+                                                item.subtitle ?: AppLang.tr("Library Book", "লাইব্রেরি বই"),
                                                 item.remoteUrl,
                                                 item.localFilePath
                                             )
                                         } else {
                                             Toast.makeText(
                                                 context,
-                                                "বই রিডার চালু করা যাচ্ছে না",
+                                                AppLang.tr("Unable to open book reader", "বই রিডার চালু করা যাচ্ছে না"),
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                         }
@@ -712,8 +730,9 @@ private fun StorageGaugeCard(
     downloadManager: AppFileDownloadManager,
     modifier: Modifier = Modifier
 ) {
-    val appUsedStr = remember(appUsedBytes) { downloadManager.formatFileSize(appUsedBytes, inBengali = true) }
-    val freeStr = remember(deviceFreeBytes) { downloadManager.formatFileSize(deviceFreeBytes, inBengali = true) }
+    val isBn = isBangla()
+    val appUsedStr = remember(appUsedBytes, isBn) { downloadManager.formatFileSize(appUsedBytes, inBengali = isBn) }
+    val freeStr = remember(deviceFreeBytes, isBn) { downloadManager.formatFileSize(deviceFreeBytes, inBengali = isBn) }
     val isLowStorage = deviceFreeBytes in 1L..(500L * 1024L * 1024L) // < 500 MB free
 
     val targetFraction = remember(appUsedBytes, deviceTotalBytes) {
@@ -774,14 +793,14 @@ private fun StorageGaugeCard(
                     }
                     Column {
                         Text(
-                            text = "অফলাইন স্টোরেজ মিটার",
-                            fontSize = 13.5.sp,
+                            text = tr("Storage", "স্টোরেজ"),
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1
                         )
                         Text(
-                            text = "সর্বমোট সংরক্ষিত ফাইল: ${completedCount.toBengaliDigits()} টি",
+                            text = tr("Saved files: $completedCount", "সংরক্ষিত ফাইল: ${completedCount.toBengaliDigits()} টি"),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -797,7 +816,7 @@ private fun StorageGaugeCard(
                     }
                 ) {
                     Text(
-                        text = if (isLowStorage) "মেমোরি কম" else "মেমোরি ঠিক আছে",
+                        text = if (isLowStorage) tr("Low Space", "জায়গা কম") else tr("Healthy", "স্বাভাবিক"),
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isLowStorage) Color(0xFFDC2626) else Color(0xFF059669),
@@ -849,7 +868,7 @@ private fun StorageGaugeCard(
                             .background(Color(0xFF0284C7))
                     )
                     Text(
-                        text = "অ্যাপ ডাউনলোড: $appUsedStr",
+                        text = tr("Used: $appUsedStr", "ব্যবহৃত: $appUsedStr"),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -871,7 +890,7 @@ private fun StorageGaugeCard(
                             .background(if (isLowStorage) Color(0xFFEF4444) else Color(0xFF10B981))
                     )
                     Text(
-                        text = "খালি জায়গা: $freeStr",
+                        text = tr("Free: $freeStr", "খালি: $freeStr"),
                         fontSize = 11.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -891,13 +910,14 @@ private fun ActiveDownloadProgressCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = com.example.ui.theme.isAppInDarkTheme()
+    val isBn = isBangla()
     val isPaused = item.status == DownloadedItemEntity.STATUS_PAUSED
 
-    val downloadedStr = remember(item.downloadedBytes) {
-        downloadManager.formatFileSize(item.downloadedBytes, inBengali = true)
+    val downloadedStr = remember(item.downloadedBytes, isBn) {
+        downloadManager.formatFileSize(item.downloadedBytes, inBengali = isBn)
     }
-    val totalStr = remember(item.totalBytes) {
-        if (item.totalBytes > 0L) downloadManager.formatFileSize(item.totalBytes, inBengali = true) else "..."
+    val totalStr = remember(item.totalBytes, isBn) {
+        if (item.totalBytes > 0L) downloadManager.formatFileSize(item.totalBytes, inBengali = isBn) else "..."
     }
 
     val animatedProgress by animateFloatAsState(
@@ -965,9 +985,12 @@ private fun ActiveDownloadProgressCard(
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     val statusLine = if (isPaused) {
-                        "পজ করা রয়েছে • $downloadedStr / $totalStr (${item.progressPercent.toBengaliDigits()}%)"
+                        tr(
+                            "Paused • $downloadedStr / $totalStr (${item.progressPercent}%)",
+                            "পজ করা • $downloadedStr / $totalStr (${item.progressPercent.toBengaliDigits()}%)"
+                        )
                     } else {
-                        val speedText = formatSpeedChipBangla(speedMBs)
+                        val speedText = formatSpeedChipLocalized(speedMBs, isBn)
                         "$downloadedStr / $totalStr • $speedText (${item.progressPercent.toBengaliDigits()}%)"
                     }
                     Text(
@@ -1053,6 +1076,7 @@ fun DownloadedItemCard(
     modifier: Modifier = Modifier
 ) {
     val isDark = com.example.ui.theme.isAppInDarkTheme()
+    val isBn = isBangla()
     val isVideo = item.isVideo
     val isHtmlBook = item.isHtmlBook
     val isFailed = item.status == DownloadedItemEntity.STATUS_FAILED
@@ -1060,18 +1084,18 @@ fun DownloadedItemCard(
 
     val subjectLabel = item.subtitle?.takeIf { it.isNotBlank() }
         ?: when {
-            isVideo -> "ভিডিও লেকচার"
-            isHtmlBook -> "লাইব্রেরি বই"
-            else -> "লেকচার শিট"
+            isVideo -> tr("Video", "ভিডিও")
+            isHtmlBook -> tr("Book", "বই")
+            else -> tr("PDF Note", "পিডিএফ")
         }
 
-    val sizeText = remember(item.totalBytes, item.downloadedBytes) {
+    val sizeText = remember(item.totalBytes, item.downloadedBytes, isBn) {
         val bytesToShow = if (item.totalBytes > 0L) item.totalBytes else item.downloadedBytes
-        if (bytesToShow > 0L) downloadManager.formatFileSize(bytesToShow, inBengali = true) else ""
+        if (bytesToShow > 0L) downloadManager.formatFileSize(bytesToShow, inBengali = isBn) else ""
     }
 
-    val dateText = remember(item.createdAt) {
-        formatDownloadDateBangla(item.createdAt)
+    val dateText = remember(item.createdAt, isBn) {
+        formatDownloadDateLocalized(item.createdAt, isBn)
     }
 
     val accentColor = when {
@@ -1138,7 +1162,7 @@ fun DownloadedItemCard(
                         modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Text(
-                            text = if (isFailed) "ডাউনলোড ব্যর্থ" else subjectLabel,
+                            text = if (isFailed) tr("Failed", "ব্যর্থ") else subjectLabel,
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = accentColor,
@@ -1181,7 +1205,7 @@ fun DownloadedItemCard(
                 if (isFailed) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "পুনরায় ডাউনলোড শুরু করতে ট্যাপ করুন",
+                        text = tr("Tap to retry download", "পুনরায় ডাউনলোড করতে ট্যাপ করুন"),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFFEF4444)
@@ -1270,11 +1294,11 @@ fun EmptyDownloadsView(
 
         Text(
             text = when {
-                isSearching -> "কোনো ফাইল খুঁজে পাওয়া যায়নি"
-                selectedCategoryIndex == 1 -> "কোনো ডাউনলোডকৃত ভিডিও নেই"
-                selectedCategoryIndex == 2 -> "কোনো ডাউনলোডকৃত নোট বা পিডিএফ নেই"
-                selectedCategoryIndex == 3 -> "কোনো ডাউনলোডকৃত বই নেই"
-                else -> "কোনো ডাউনলোডকৃত ফাইল নেই"
+                isSearching -> tr("No Matching Files", "কোনো ফাইল পাওয়া যায়নি")
+                selectedCategoryIndex == 1 -> tr("No Downloaded Videos", "কোনো ডাউনলোড ভিডিও নেই")
+                selectedCategoryIndex == 2 -> tr("No Downloaded PDFs", "কোনো ডাউনলোড পিডিএফ নেই")
+                selectedCategoryIndex == 3 -> tr("No Downloaded Books", "কোনো ডাউনলোড বই নেই")
+                else -> tr("No Downloads Yet", "কোনো ডাউনলোড নেই")
             },
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
@@ -1286,11 +1310,17 @@ fun EmptyDownloadsView(
 
         Text(
             text = if (isSearching) {
-                "অনুগ্রহ করে অন্য কোনো নাম বা কি-ওয়ার্ড দিয়ে খুঁজে দেখুন"
+                tr("Try searching with another keyword", "অন্য কি-ওয়ার্ড দিয়ে খুঁজে দেখুন")
             } else if (selectedCategoryIndex == 3) {
-                "লাইব্রেরি ট্যাব থেকে যেকোনো বই বা অধ্যায় ডাউনলোড করলে এখানে অফলাইনে পড়তে ও শুনতে পারবেন"
+                tr(
+                    "Download books from Library to read and listen offline",
+                    "লাইব্রেরি থেকে বই ডাউনলোড করলে এখানে অফলাইনে পড়তে পারবেন"
+                )
             } else {
-                "ডাউনলোড করা ক্লাস, বই ও নোট এখানে ইন্টারনেট ছাড়াই অফলাইনে দেখার জন্য জমা থাকবে"
+                tr(
+                    "Downloaded classes, notes and books appear here for offline access",
+                    "ডাউনলোড করা ক্লাস, নোট ও বই এখানে অফলাইনে দেখার জন্য থাকবে"
+                )
             },
             fontSize = 12.5.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
