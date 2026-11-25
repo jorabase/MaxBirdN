@@ -47,6 +47,19 @@ on:
         required: false
         default: false
         type: boolean
+      include_neural_tts_engine:
+        description: "🗣️ Include Sherpa-ONNX Neural TTS Engine (Voice packs still download on-demand inside app)"
+        required: false
+        default: true
+        type: boolean
+      target_abis:
+        description: "📱 Target Mobile CPU ABIs (arm64-v8a = smallest ~24 MB APK, arm64+arm32 = all phones ~32 MB)"
+        required: false
+        default: "arm64-v8a,armeabi-v7a"
+        type: choice
+        options:
+          - "arm64-v8a,armeabi-v7a"
+          - "arm64-v8a"
 
 jobs:
   build:
@@ -74,6 +87,8 @@ jobs:
       ENABLE_ANTI_NETWORK_CAPTURE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_network_capture) || 'true' }}
       ENABLE_ANTI_TAMPER: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.enable_anti_tamper) || 'true' }}
       BLOCK_VPN_CONNECTION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.block_vpn_connection) || 'false' }}
+      INCLUDE_NEURAL_TTS_ENGINE: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.include_neural_tts_engine) || 'true' }}
+      TARGET_ABIS: ${{ github.event_name == 'workflow_dispatch' && inputs.target_abis || 'arm64-v8a,armeabi-v7a' }}
 
     steps:
       - name: Checkout Code
@@ -251,6 +266,7 @@ jobs:
       # 1.5. AUTO-BUNDLE SHERPA-ONNX ANDROID AAR (OFFLINE NEURAL TTS)
       # -----------------------------------------------------------
       - name: Download Sherpa-ONNX Android AAR (Offline Neural TTS)
+        if: ${{ env.INCLUDE_NEURAL_TTS_ENGINE == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -286,7 +302,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release APK
         if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'all')) }}
-        run: ./gradlew assembleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PtargetAbis="$TARGET_ABIS" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 3. DEBUG APK
@@ -294,7 +310,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Debug APK
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PtargetAbis="$TARGET_ABIS" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 4. RELEASE AAB
@@ -302,7 +318,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Build Release AAB
         if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'aab' || github.event.inputs.build_type == 'all') }}
-        run: ./gradlew bundleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
+        run: ./gradlew bundleRelease --no-daemon --no-configuration-cache -Djava.awt.headless=true -PversionCode=$VERSION_CODE -PversionName="$VERSION_NAME" -PtargetAbis="$TARGET_ABIS" -PenableScreenshotProtection=$ENABLE_SCREENSHOT_PROTECTION -PenableAntiNetworkCapture=$ENABLE_ANTI_NETWORK_CAPTURE -PenableAntiTamper=$ENABLE_ANTI_TAMPER -PblockVpnConnection=$BLOCK_VPN_CONNECTION --stacktrace
 
       # -----------------------------------------------------------
       # 5. ORGANIZE & UPLOAD ARTIFACTS
@@ -368,18 +384,19 @@ jobs:
           echo "| Target | File | Status |" >> $GITHUB_STEP_SUMMARY
           echo "| --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
           if [ -f artifacts/MaxBird-Release.apk ]; then
-            echo "| Release APK | \`MaxBird-Release.apk\` | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
+            echo "| Release APK | \`MaxBird-Release.apk\` ($(du -h artifacts/MaxBird-Release.apk | cut -f1)) | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -f artifacts/MaxBird-Debug.apk ]; then
-            echo "| Debug APK | \`MaxBird-Debug.apk\` | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
+            echo "| Debug APK | \`MaxBird-Debug.apk\` ($(du -h artifacts/MaxBird-Debug.apk | cut -f1)) | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
           fi
           if [ -f artifacts/MaxBird-Release.aab ]; then
-            echo "| Release AAB | \`MaxBird-Release.aab\` | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
+            echo "| Release AAB | \`MaxBird-Release.aab\` ($(du -h artifacts/MaxBird-Release.aab | cut -f1)) | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Package Name:** \`com.maxbird.ff.app\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version Name:** \`$VERSION_NAME\`" >> $GITHUB_STEP_SUMMARY
           echo "**Version Code:** \`$VERSION_CODE\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Neural TTS Engine Bundled:** \`$INCLUDE_NEURAL_TTS_ENGINE\` (ABIs: \`$TARGET_ABIS\`)" >> $GITHUB_STEP_SUMMARY
           echo "**Screenshot & Screen Record Protection:** \`$ENABLE_SCREENSHOT_PROTECTION\`" >> $GITHUB_STEP_SUMMARY
           echo "**Anti-Reqable / Network Capture Protection:** \`$ENABLE_ANTI_NETWORK_CAPTURE\`" >> $GITHUB_STEP_SUMMARY
           echo "**Anti-Tamper & Hook Protection:** \`$ENABLE_ANTI_TAMPER\`" >> $GITHUB_STEP_SUMMARY

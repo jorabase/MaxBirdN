@@ -153,6 +153,14 @@ android {
     }
   }
 
+  val targetAbisProp = (findProperty("targetAbis") as? String)
+      ?: System.getenv("TARGET_ABIS")
+      ?: "arm64-v8a,armeabi-v7a"
+  val releaseAbiList = targetAbisProp
+      .split(",")
+      .map { it.trim() }
+      .filter { it.isNotBlank() }
+
   buildTypes {
     release {
       isCrunchPngs = false
@@ -160,8 +168,21 @@ android {
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
+      if (releaseAbiList.isNotEmpty()) {
+        ndk {
+          abiFilters += releaseAbiList
+        }
+      }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
+  }
+  val isAabBuild = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
+  packaging {
+    jniLibs {
+      // Compress native .so libraries inside direct-download APKs (~65% smaller APK);
+      // keep uncompressed for AAB so Play Store generates per-ABI compressed splits with 16KB alignment.
+      useLegacyPackaging = !isAabBuild
+    }
   }
   lint {
     checkReleaseBuilds = false
