@@ -858,7 +858,7 @@ fun LibraryHtmlReaderScreen(
 
                                 loadDataWithBaseURL(
                                     baseUrlForWebView,
-                                    htmlContent!!,
+                                    htmlContent.orEmpty(),
                                     "text/html",
                                     "UTF-8",
                                     null

@@ -67,25 +67,7 @@ object AppDownloadNotificationHelper {
     }
 
     private fun getAppLogoBitmap(context: Context): Bitmap? {
-        val current = cachedAppLogoBitmap
-        if (current != null && !current.isRecycled) {
-            return current
-        }
-        return synchronized(this) {
-            val recheck = cachedAppLogoBitmap
-            if (recheck != null && !recheck.isRecycled) {
-                recheck
-            } else {
-                try {
-                    BitmapFactory.decodeResource(
-                        context.applicationContext.resources,
-                        com.example.R.mipmap.ic_launcher
-                    )?.also { cachedAppLogoBitmap = it }
-                } catch (_: Exception) {
-                    null
-                }
-            }
-        }
+        return com.example.notification.NotificationLogoHelper.getCircularAppLogo(context)
     }
 
     private fun getNotificationId(id: String): Int {

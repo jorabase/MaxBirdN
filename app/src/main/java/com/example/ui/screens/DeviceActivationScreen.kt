@@ -111,6 +111,7 @@ fun DeviceActivationScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    com.example.ui.theme.StatusBarAppearanceEffect(lightIcons = true)
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
 

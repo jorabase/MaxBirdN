@@ -18,6 +18,8 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
@@ -47,6 +49,13 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
         const val EXTRA_CONTENT_ID = "extra_content_id"
 
         private val PROGRAM_TOPIC_REGEX = Regex("Program_([A-Za-z0-9]+)")
+    }
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onNewToken(token: String) {
@@ -225,34 +234,38 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
                 ?: ""
             ).trim()
 
-        // Process and display notification + refresh device/course status in background scope
-        CoroutineScope(Dispatchers.IO).launch {
-            if (isCriticalAdminUpdate) {
-                runCatching {
-                    com.example.security.DeviceActivationRepository.checkStudentVerificationStatus(applicationContext)
+        // Process and display notification + refresh device/course status in supervised background scope
+        serviceScope.launch {
+            try {
+                if (isCriticalAdminUpdate) {
+                    runCatching {
+                        com.example.security.DeviceActivationRepository.checkStudentVerificationStatus(applicationContext)
+                    }
+                    runCatching {
+                        com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(
+                            context = applicationContext,
+                            forceRefresh = true
+                        )
+                    }
                 }
-                runCatching {
-                    com.example.course.CourseCommerceRepository.fetchCourseCommerceStatus(
-                        context = applicationContext,
-                        forceRefresh = true
-                    )
-                }
+
+                val bitmap = if (!imageUrl.isNullOrBlank()) {
+                    downloadBitmap(imageUrl)
+                } else null
+
+                displayNotification(
+                    sessionManager = sessionManager,
+                    title = title,
+                    body = body,
+                    largeBitmap = bitmap,
+                    deeplink = deeplink,
+                    type = eventType,
+                    contentId = contentId,
+                    useLiveChannel = isLiveClassNotification || isExamNotification
+                )
+            } catch (e: Throwable) {
+                Log.w(TAG, "Error handling incoming push message: ${e.message}")
             }
-
-            val bitmap = if (!imageUrl.isNullOrBlank()) {
-                downloadBitmap(imageUrl)
-            } else null
-
-            displayNotification(
-                sessionManager = sessionManager,
-                title = title,
-                body = body,
-                largeBitmap = bitmap,
-                deeplink = deeplink,
-                type = eventType,
-                contentId = contentId,
-                useLiveChannel = isLiveClassNotification || isExamNotification
-            )
         }
     }
 
@@ -300,14 +313,11 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         } else null
 
-        val appLogoBitmap = try {
-            BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-        } catch (_: Exception) {
-            null
-        }
+        val appLogoBitmap = NotificationLogoHelper.getCircularAppLogo(this)
 
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_shikho_notification_small)
+            .setColor(0xFF0072EC.toInt())
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
@@ -348,18 +358,26 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     private fun downloadBitmap(urlString: String): Bitmap? {
+        var connection: HttpURLConnection? = null
         return try {
             val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.doInput = true
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.connect()
-            val input = connection.inputStream
-            BitmapFactory.decodeStream(input)
+            connection = (url.openConnection() as? HttpURLConnection)?.apply {
+                doInput = true
+                connectTimeout = 8000
+                readTimeout = 8000
+                connect()
+            }
+            connection?.inputStream?.use { input ->
+                BitmapFactory.decodeStream(input)
+            }
         } catch (e: Throwable) {
             Log.w(TAG, "Failed to download notification image: ${e.message}")
             null
+        } finally {
+            try {
+                connection?.disconnect()
+            } catch (_: Throwable) {
+            }
         }
     }
 }

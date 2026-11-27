@@ -79,6 +79,8 @@ fun HomeScreen(
     val scrollState = rememberScrollState()
     val context = LocalContext.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
+    val isHeaderUnderStatusBar by remember { derivedStateOf { scrollState.value < 180 } }
+    com.example.ui.theme.StatusBarAppearanceEffect(lightIcons = isHeaderUnderStatusBar || isDark)
 
     // Mode for standalone Home Feature Subject Picker: "practice_quiz" or "animated_lessons"
     var activeFeaturePickerMode by remember { mutableStateOf<String?>(null) }

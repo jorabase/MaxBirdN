@@ -48,6 +48,7 @@ fun SplashScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    com.example.ui.theme.StatusBarAppearanceEffect(lightIcons = true)
 
     var startAnimation by remember { mutableStateOf(false) }
     var statusState by remember { mutableStateOf(0) } // 0 = connecting, 1 = online, 2 = offline

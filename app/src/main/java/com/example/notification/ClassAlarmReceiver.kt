@@ -105,28 +105,34 @@ class ClassAlarmReceiver : BroadcastReceiver() {
         } else null
 
         val pendingResult = goAsync()
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+        ).launch {
             try {
                 val largeIconBitmap = if (!mentorAvatar.isNullOrBlank()) {
+                    var conn: java.net.HttpURLConnection? = null
                     try {
                         val url = java.net.URL(mentorAvatar)
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.doInput = true
-                        conn.connectTimeout = 3000
-                        conn.readTimeout = 3000
-                        conn.connect()
-                        val stream = conn.inputStream
-                        android.graphics.BitmapFactory.decodeStream(stream)
+                        conn = (url.openConnection() as? java.net.HttpURLConnection)?.apply {
+                            doInput = true
+                            connectTimeout = 3000
+                            readTimeout = 3000
+                            connect()
+                        }
+                        conn?.inputStream?.use { stream ->
+                            android.graphics.BitmapFactory.decodeStream(stream)
+                        }
                     } catch (_: Exception) {
                         null
+                    } finally {
+                        try {
+                            conn?.disconnect()
+                        } catch (_: Exception) {
+                        }
                     }
                 } else null
 
-                val appLogoBitmap = try {
-                    android.graphics.BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
-                } catch (_: Exception) {
-                    null
-                }
+                val appLogoBitmap = NotificationLogoHelper.getCircularAppLogo(context)
 
                 val builder = NotificationCompat.Builder(context, ClassAlarmScheduler.CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_shikho_notification_small)
@@ -154,6 +160,8 @@ class ClassAlarmReceiver : BroadcastReceiver() {
                 notificationManager.notify(notificationId, builder.build())
             } catch (e: SecurityException) {
                 Log.e("ClassAlarmReceiver", "SecurityException: ${e.message}")
+            } catch (e: Throwable) {
+                Log.e("ClassAlarmReceiver", "Error posting class alarm notification: ${e.message}")
             } finally {
                 pendingResult.finish()
             }

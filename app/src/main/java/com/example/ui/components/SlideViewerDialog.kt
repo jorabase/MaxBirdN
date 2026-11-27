@@ -823,6 +823,10 @@ fun SlideViewerDialog(
                 win.setDimAmount(1.0f)
                 win.statusBarColor = AndroidColor.BLACK
                 win.navigationBarColor = AndroidColor.BLACK
+                WindowCompat.getInsetsController(win, win.decorView).apply {
+                    isAppearanceLightStatusBars = false
+                    isAppearanceLightNavigationBars = false
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     win.attributes = win.attributes.apply {
                         width = WindowManager.LayoutParams.MATCH_PARENT

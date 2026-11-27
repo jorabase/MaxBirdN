@@ -96,7 +96,7 @@
             android:resource="@drawable/ic_notification" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
-            android:resource="@color/black" />
+            android:resource="@color/notification_brand_blue" />
         <meta-data
             android:name="firebase_messaging_auto_init_enabled"
             android:value="true" />

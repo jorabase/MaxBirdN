@@ -12,6 +12,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -136,5 +137,26 @@ fun MyApplicationTheme(
             shapes = ModernShapes,
             content = content
         )
+    }
+}
+
+/**
+ * Temporarily adjusts system status bar icon contrast for screens with dark top headers
+ * (e.g., Home wallpaper header, Splash, Device Activation) even while the app is in Light Mode,
+ * and cleanly restores the active app theme default when the composable leaves composition.
+ */
+@Composable
+fun StatusBarAppearanceEffect(lightIcons: Boolean) {
+    val view = LocalView.current
+    val isDark = isAppInDarkTheme()
+    if (!view.isInEditMode) {
+        DisposableEffect(view, lightIcons, isDark) {
+            val window = (view.context as? Activity)?.window
+            val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+            controller?.isAppearanceLightStatusBars = !lightIcons
+            onDispose {
+                controller?.isAppearanceLightStatusBars = !isDark
+            }
+        }
     }
 }
