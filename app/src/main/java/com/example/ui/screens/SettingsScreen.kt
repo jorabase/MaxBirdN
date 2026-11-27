@@ -158,55 +158,59 @@ fun SettingsScreen(
         EqualizerManager.getActiveStatusLabel(context)
     }
 
-    val pageBg = if (isDark) Color(0xFF070D19) else Color(0xFFF8FAFC)
-    val cardBg = if (isDark) Color(0xFF111C2D) else Color.White
-    val cardBorder = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-    val primaryText = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
-    val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val pageBg = MaterialTheme.colorScheme.background
+    val cardBg = MaterialTheme.colorScheme.surface
+    val cardBorder = MaterialTheme.colorScheme.outlineVariant
+    val primaryText = MaterialTheme.colorScheme.onSurface
+    val secondaryText = MaterialTheme.colorScheme.onSurfaceVariant
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(11.dp))
-                                .background(Color(0xFF0284C7).copy(alpha = 0.14f)),
-                            contentAlignment = Alignment.Center
+            Column {
+                TopAppBar(
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = Color(0xFF0284C7),
-                                modifier = Modifier.size(19.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = tr("Settings", "সেটিংস"),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = primaryText,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = tr("Account & preferences", "অ্যাকাউন্ট ও পছন্দ"),
+                                    fontSize = 11.5.sp,
+                                    color = secondaryText,
+                                    maxLines = 1
+                                )
+                            }
                         }
-                        Column {
-                            Text(
-                                text = tr("Settings", "সেটিংস"),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = primaryText,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = tr("Account & preferences", "অ্যাকাউন্ট ও পছন্দ"),
-                                fontSize = 11.5.sp,
-                                color = secondaryText,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = cardBg
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = cardBg
+                    )
                 )
-            )
+                HorizontalDivider(color = cardBorder.copy(alpha = 0.65f), thickness = 1.dp)
+            }
         },
         containerColor = pageBg
     ) { innerPadding ->

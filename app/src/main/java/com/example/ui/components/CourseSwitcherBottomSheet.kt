@@ -44,7 +44,7 @@ import java.util.Locale
 // LOGIC: badge states হুবহু সেম
 data class ProgramBadgeInfo(val text: String, val containerColor: Color, val textColor: Color)
 
-fun getProgramBadge(program: EnrolledProgram): ProgramBadgeInfo {
+fun getProgramBadge(program: EnrolledProgram, isDark: Boolean = false): ProgramBadgeInfo {
     val details = program.enrollment_details
     val type = details?.type
     val isActive = details?.is_active == true
@@ -65,11 +65,31 @@ fun getProgramBadge(program: EnrolledProgram): ProgramBadgeInfo {
     }
 
     return when {
-        isFree -> ProgramBadgeInfo(AppLang.tr("Free", "সম্পূর্ণ ফ্রি"), Color(0xFFDCFCE7), Color(0xFF15803D))
-        isTrial && (isTrialExpired || !isActive) -> ProgramBadgeInfo(AppLang.tr("Trial Ended", "ফ্রি ট্রায়াল শেষ"), Color(0xFFFFF3E0), Color(0xFFE65100))
-        isActive && !isTrial -> ProgramBadgeInfo(AppLang.tr("Enrolled", "ভর্তি হয়েছো"), Color(0xFFE8F5E9), Color(0xFF2E7D32))
-        isActive && isTrial -> ProgramBadgeInfo(AppLang.tr("Free Trial", "ফ্রি ট্রায়াল"), Color(0xFFE3F2FD), Color(0xFF1565C0))
-        else -> ProgramBadgeInfo(AppLang.tr("Program", "প্রোগ্রাম"), Color(0xFFF5F5F5), Color(0xFF616161))
+        isFree -> ProgramBadgeInfo(
+            AppLang.tr("Free", "সম্পূর্ণ ফ্রি"),
+            if (isDark) Color(0xFF064E3B).copy(alpha = 0.6f) else Color(0xFFDCFCE7),
+            if (isDark) Color(0xFF6EE7B7) else Color(0xFF15803D)
+        )
+        isTrial && (isTrialExpired || !isActive) -> ProgramBadgeInfo(
+            AppLang.tr("Trial Ended", "ফ্রি ট্রায়াল শেষ"),
+            if (isDark) Color(0xFF7C2D12).copy(alpha = 0.6f) else Color(0xFFFFF3E0),
+            if (isDark) Color(0xFFFDBA74) else Color(0xFFE65100)
+        )
+        isActive && !isTrial -> ProgramBadgeInfo(
+            AppLang.tr("Enrolled", "ভর্তি হয়েছো"),
+            if (isDark) Color(0xFF065F46).copy(alpha = 0.55f) else Color(0xFFE8F5E9),
+            if (isDark) Color(0xFF34D399) else Color(0xFF2E7D32)
+        )
+        isActive && isTrial -> ProgramBadgeInfo(
+            AppLang.tr("Free Trial", "ফ্রি ট্রায়াল"),
+            if (isDark) Color(0xFF0C4A6E).copy(alpha = 0.6f) else Color(0xFFE3F2FD),
+            if (isDark) Color(0xFF7DD3FC) else Color(0xFF1565C0)
+        )
+        else -> ProgramBadgeInfo(
+            AppLang.tr("Program", "প্রোগ্রাম"),
+            if (isDark) Color(0xFF1E293B) else Color(0xFFF5F5F5),
+            if (isDark) Color(0xFF94A3B8) else Color(0xFF616161)
+        )
     }
 }
 
@@ -216,13 +236,14 @@ fun CourseSwitcherBottomSheet(
                 }
             } else {
                 val isBn = isBangla()
+                val isDark = com.example.ui.theme.isAppInDarkTheme()
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(enrolledPrograms, key = { it.id }) { program ->
                         val isSelected = activeProgram?.id == program.id
-                        val badge = remember(program, isBn) { getProgramBadge(program) }
+                        val badge = remember(program, isBn, isDark) { getProgramBadge(program, isDark) }
 
                         // LOGIC: animated colors সেম
                         val animatedCardBg by animateColorAsState(

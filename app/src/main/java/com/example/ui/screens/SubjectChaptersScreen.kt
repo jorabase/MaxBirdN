@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.api.AcademicChapterItem
 import com.example.api.PhaseItem
 import com.example.api.TopicFullItem
@@ -55,7 +56,7 @@ fun SubjectChaptersScreen(
     onNavigateToAnimatedLessons: ((subjectCode: String, subjectTitle: String, subjectColor: String?, programId: String?, phaseId: String?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedMode by remember { mutableStateOf(0) } // 0: All, 2: Quiz, 3: E-Book
 
     val subjectColor = remember(subjectColorHex) {
@@ -194,26 +195,11 @@ fun SubjectChaptersScreen(
         ) {
             when {
                 uiState.isChaptersLoading -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = subjectColor,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(44.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = tr("Loading chapters...", "অধ্যায়সমূহ লোড হচ্ছে..."),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    com.example.ui.components.AppListLoadingSkeleton(
+                        modifier = Modifier.fillMaxSize(),
+                        itemCount = 6,
+                        showHeaderBanner = true
+                    )
                 }
 
                 uiState.chaptersErrorMessage != null && uiState.chapters.isEmpty() -> {
@@ -268,9 +254,11 @@ fun SubjectChaptersScreen(
 
                 else -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .navigationBarsPadding()
                     ) {
                         // Top Shortcuts: Practice Quiz, E-Book, Animated Lessons
                         item {

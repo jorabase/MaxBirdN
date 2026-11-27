@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.api.McqOptionItem
 import com.example.api.PracticeQuizQuestionItem
 import com.example.quiz.FeedbackFilter
@@ -75,7 +76,7 @@ fun PracticeQuizFeedbackScreen(
     onDone: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -361,7 +362,7 @@ fun PracticeQuizFeedbackScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = tr("Summary (${toBengaliDigits(totalCount)})", "সারসংক্ষেপ (${toBengaliDigits(totalCount)}টি)"),
+                                            text = tr("Summary ($totalCount)", "সারসংক্ষেপ (${toBengaliDigits(totalCount)}টি)"),
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -374,7 +375,7 @@ fun PracticeQuizFeedbackScreen(
                                                 color = Color(0xFF0072EC).copy(alpha = 0.1f)
                                             ) {
                                                 Text(
-                                                    text = tr("Accuracy: ${toBengaliDigits(accuracyPct)}%", "সঠিকতা: ${toBengaliDigits(accuracyPct)}%"),
+                                                    text = tr("Accuracy: $accuracyPct%", "সঠিকতা: ${toBengaliDigits(accuracyPct)}%"),
                                                     fontSize = 11.5.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = Color(0xFF0072EC),
@@ -387,27 +388,28 @@ fun PracticeQuizFeedbackScreen(
                                     Spacer(modifier = Modifier.height(12.dp))
 
                                     // 3 Status Pill Badges
+                                    val isDark = com.example.ui.theme.isAppInDarkTheme()
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         StatusCounterPill(
                                             icon = Icons.Default.CheckCircle,
-                                            label = tr("${toBengaliDigits(correctCount)} Right", "${toBengaliDigits(correctCount)}টি সঠিক"),
-                                            bgColor = Color(0xFF10B981).copy(alpha = 0.12f),
-                                            contentColor = Color(0xFF059669),
+                                            label = tr("$correctCount Right", "${toBengaliDigits(correctCount)}টি সঠিক"),
+                                            bgColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFF10B981).copy(alpha = 0.12f),
+                                            contentColor = if (isDark) Color(0xFF34D399) else Color(0xFF059669),
                                             modifier = Modifier.weight(1f)
                                         )
                                         StatusCounterPill(
                                             icon = Icons.Default.Cancel,
-                                            label = tr("${toBengaliDigits(incorrectCount)} Wrong", "${toBengaliDigits(incorrectCount)}টি ভুল"),
-                                            bgColor = Color(0xFFEF4444).copy(alpha = 0.12f),
-                                            contentColor = Color(0xFFDC2626),
+                                            label = tr("$incorrectCount Wrong", "${toBengaliDigits(incorrectCount)}টি ভুল"),
+                                            bgColor = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFEF4444).copy(alpha = 0.12f),
+                                            contentColor = if (isDark) Color(0xFFF87171) else Color(0xFFDC2626),
                                             modifier = Modifier.weight(1f)
                                         )
                                         StatusCounterPill(
                                             icon = Icons.Default.HelpOutline,
-                                            label = tr("${toBengaliDigits(unansweredCount)} Skipped", "${toBengaliDigits(unansweredCount)}টি বাকি"),
+                                            label = tr("$unansweredCount Skipped", "${toBengaliDigits(unansweredCount)}টি বাকি"),
                                             bgColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.weight(1f)
@@ -424,22 +426,22 @@ fun PracticeQuizFeedbackScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         FeedbackFilterChip(
-                                            title = tr("All (${toBengaliDigits(totalCount)})", "সব (${toBengaliDigits(totalCount)})"),
+                                            title = tr("All ($totalCount)", "সব (${toBengaliDigits(totalCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.ALL,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.ALL) }
                                         )
                                         FeedbackFilterChip(
-                                            title = tr("Correct (${toBengaliDigits(correctCount)})", "সঠিক (${toBengaliDigits(correctCount)})"),
+                                            title = tr("Correct ($correctCount)", "সঠিক (${toBengaliDigits(correctCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.CORRECT,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.CORRECT) }
                                         )
                                         FeedbackFilterChip(
-                                            title = tr("Wrong (${toBengaliDigits(incorrectCount)})", "ভুল (${toBengaliDigits(incorrectCount)})"),
+                                            title = tr("Wrong ($incorrectCount)", "ভুল (${toBengaliDigits(incorrectCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.INCORRECT,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.INCORRECT) }
                                         )
                                         FeedbackFilterChip(
-                                            title = tr("Skipped (${toBengaliDigits(unansweredCount)})", "উত্তরহীন (${toBengaliDigits(unansweredCount)})"),
+                                            title = tr("Skipped ($unansweredCount)", "উত্তরহীন (${toBengaliDigits(unansweredCount)})"),
                                             isSelected = uiState.feedbackFilter == FeedbackFilter.UNANSWERED,
                                             onClick = { viewModel.setFeedbackFilter(FeedbackFilter.UNANSWERED) }
                                         )
@@ -460,14 +462,14 @@ fun PracticeQuizFeedbackScreen(
                                             filteredQuestions.forEachIndexed { listIdx, item ->
                                                 val (chipBg, chipBorder, chipText) = when {
                                                     item.isCorrect -> Triple(
-                                                        Color(0xFFDCFCE7),
-                                                        Color(0xFF10B981),
-                                                        Color(0xFF047857)
+                                                        if (isDark) Color(0xFF064E3B).copy(alpha = 0.6f) else Color(0xFFDCFCE7),
+                                                        if (isDark) Color(0xFF34D399) else Color(0xFF10B981),
+                                                        if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
                                                     )
                                                     item.isAnswered -> Triple(
-                                                        Color(0xFFFEE2E2),
-                                                        Color(0xFFEF4444),
-                                                        Color(0xFFB91C1C)
+                                                        if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.6f) else Color(0xFFFEE2E2),
+                                                        if (isDark) Color(0xFFF87171) else Color(0xFFEF4444),
+                                                        if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
                                                     )
                                                     else -> Triple(
                                                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -619,15 +621,16 @@ private fun QuestionFeedbackCard(
     isBookmarked: Boolean,
     onBookmarkToggle: () -> Unit
 ) {
+    val isDark = com.example.ui.theme.isAppInDarkTheme()
     val statusColor = when {
-        !evaluated.isAnswered -> Color(0xFF64748B)
-        evaluated.isCorrect -> Color(0xFF059669)
-        else -> Color(0xFFDC2626)
+        !evaluated.isAnswered -> if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+        evaluated.isCorrect -> if (isDark) Color(0xFF34D399) else Color(0xFF059669)
+        else -> if (isDark) Color(0xFFF87171) else Color(0xFFDC2626)
     }
     val statusBgColor = when {
-        !evaluated.isAnswered -> Color(0xFFF1F5F9)
-        evaluated.isCorrect -> Color(0xFFDCFCE7)
-        else -> Color(0xFFFEE2E2)
+        !evaluated.isAnswered -> if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+        evaluated.isCorrect -> if (isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFFDCFCE7)
+        else -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFFEE2E2)
     }
     val statusLabel = when {
         !evaluated.isAnswered -> tr("Skipped", "উত্তরহীন")
@@ -666,7 +669,7 @@ private fun QuestionFeedbackCard(
                         color = Color(0xFF0072EC).copy(alpha = 0.12f)
                     ) {
                         Text(
-                            text = tr("Q${toBengaliDigits(evaluated.originalNumber)}", "প্রশ্ন ${toBengaliDigits(evaluated.originalNumber)}"),
+                            text = tr("Q${evaluated.originalNumber}", "প্রশ্ন ${toBengaliDigits(evaluated.originalNumber)}"),
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0072EC),
@@ -954,16 +957,17 @@ private fun FeedbackOptionRow(
     isUserSelection: Boolean,
     isCorrectOption: Boolean
 ) {
+    val isDark = com.example.ui.theme.isAppInDarkTheme()
     val (bgColor, borderColor, badgeColor) = when {
         isCorrectOption -> Triple(
-            Color(0xFFDCFCE7), // Light green
-            Color(0xFF10B981),
-            Color(0xFF059669)
+            if (isDark) Color(0xFF064E3B).copy(alpha = 0.42f) else Color(0xFFDCFCE7),
+            if (isDark) Color(0xFF34D399) else Color(0xFF10B981),
+            if (isDark) Color(0xFF6EE7B7) else Color(0xFF059669)
         )
         isUserSelection && !isCorrectOption -> Triple(
-            Color(0xFFFEE2E2), // Light red
-            Color(0xFFEF4444),
-            Color(0xFFDC2626)
+            if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.42f) else Color(0xFFFEE2E2),
+            if (isDark) Color(0xFFF87171) else Color(0xFFEF4444),
+            if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
         )
         else -> Triple(
             MaterialTheme.colorScheme.surface,
@@ -1010,7 +1014,7 @@ private fun FeedbackOptionRow(
             QuizRichContent(
                 text = cleanedOptionDescription,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
-                textColor = if (isCorrectOption || isUserSelection) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurface,
+                textColor = if (!isDark && (isCorrectOption || isUserSelection)) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurface,
                 fontWeight = if (isCorrectOption || isUserSelection) FontWeight.SemiBold else FontWeight.Normal,
                 maxImageHeight = 140.dp,
                 modifier = Modifier.weight(1f)

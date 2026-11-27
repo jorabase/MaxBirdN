@@ -1,4 +1,6 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.Base64
 import java.util.Properties
 
@@ -117,6 +119,42 @@ android {
     buildConfigField("boolean", "ENABLE_ANTI_NETWORK_CAPTURE", enableAntiNetworkCapture.toString())
     buildConfigField("boolean", "ENABLE_ANTI_TAMPER", enableAntiTamper.toString())
     buildConfigField("boolean", "BLOCK_VPN_CONNECTION", blockVpnConnection.toString())
+
+    // Pin the official release signing certificate SHA-256 (XOR-obfuscated) into BuildConfig
+    // so cloned / re-signed Mod APKs are blocked immediately on app launch.
+    val expectedReleaseCertObf = run {
+      try {
+        val ksPath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
+        val ksFileRelease = file(ksPath)
+        val storePwd = System.getenv("STORE_PASSWORD")?.takeIf { it.isNotBlank() }
+        val aliasEnv = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() }
+        if (ksFileRelease.exists() && ksFileRelease.length() > 0L && storePwd != null) {
+          val ks = KeyStore.getInstance(ksFileRelease, storePwd.toCharArray())
+          val aliases = ks.aliases().toList()
+          val matchedAlias = when {
+            aliasEnv != null && ks.containsAlias(aliasEnv) -> aliasEnv
+            aliasEnv != null -> aliases.firstOrNull { it.equals(aliasEnv, ignoreCase = true) }
+            else -> null
+          } ?: aliases.firstOrNull { ks.isKeyEntry(it) } ?: aliases.firstOrNull()
+          val cert = matchedAlias?.let { ks.getCertificate(it) }
+          if (cert != null) {
+            val digest = MessageDigest.getInstance("SHA-256").digest(cert.encoded)
+            val hex = digest.joinToString("") { "%02x".format(it) }
+            println("Pinned release signing certificate SHA-256 into BuildConfig (${hex.take(12)}...)")
+            val mask = 0x5A
+            hex.toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it.toInt() xor mask) }
+          } else {
+            ""
+          }
+        } else {
+          ""
+        }
+      } catch (e: Exception) {
+        println("Warning: Could not compute release cert SHA-256 for BuildConfig: ${e.message}")
+        ""
+      }
+    }
+    buildConfigField("String", "EXPECTED_RELEASE_CERT_OBF", "\"$expectedReleaseCertObf\"")
   }
 
   signingConfigs {

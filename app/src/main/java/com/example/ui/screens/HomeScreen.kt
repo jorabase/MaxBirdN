@@ -431,15 +431,57 @@ private fun HomeBottomFeaturesSection(
     onOpenPracticeQuiz: () -> Unit,
     onOpenAnimatedLessons: () -> Unit
 ) {
-    val cardGradient = remember {
+    val reportCardGradient = remember {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF1E2985),
-                Color(0xFF2835A8),
-                Color(0xFF3946C8)
+                Color(0xFF0B2252),
+                Color(0xFF1D4ED8),
+                Color(0xFF0284C7)
             )
         )
     }
+    val quizCardGradient = remember {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF052E24),
+                Color(0xFF047857),
+                Color(0xFF0D9488)
+            )
+        )
+    }
+    val animatedCardGradient = remember {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF1C1347),
+                Color(0xFF4338CA),
+                Color(0xFF7C3AED)
+            )
+        )
+    }
+
+    val reportInteraction = remember { MutableInteractionSource() }
+    val reportPressed by reportInteraction.collectIsPressedAsState()
+    val reportScale by animateFloatAsState(
+        targetValue = if (reportPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "reportCardScale"
+    )
+
+    val quizInteraction = remember { MutableInteractionSource() }
+    val quizPressed by quizInteraction.collectIsPressedAsState()
+    val quizScale by animateFloatAsState(
+        targetValue = if (quizPressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "quizCardScale"
+    )
+
+    val animInteraction = remember { MutableInteractionSource() }
+    val animPressed by animInteraction.collectIsPressedAsState()
+    val animScale by animateFloatAsState(
+        targetValue = if (animPressed) 0.98f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "animCardScale"
+    )
 
     Column(
         modifier = Modifier
@@ -447,57 +489,96 @@ private fun HomeBottomFeaturesSection(
             .padding(top = 6.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            text = tr("Features", "ফিচারস"),
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(start = 4.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(20.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                        )
+                    )
+            )
+            Text(
+                text = tr("Features", "ফিচারস"),
+                style = MaterialTheme.typography.headlineMedium,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
 
-        // Top Row: 1. সর্বমোট স্কোর (রিপোর্ট কার্ড দেখো) & 2. প্র্যাকটিস কুইজ
+        // Top Row: 1. Total Score (Report Card) & 2. Practice Quiz
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Max),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Card 1: সর্বমোট স্কোর -> রিপোর্ট কার্ড দেখো
+            // Card 1: Total Score -> Report Card (Royal Sapphire)
             Card(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                border = BorderStroke(1.dp, Color(0xFF7DD3FC).copy(alpha = 0.35f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .graphicsLayer { scaleX = reportScale; scaleY = reportScale }
                     .clip(RoundedCornerShape(22.dp))
-                    .clickable(onClick = onOpenReportCard)
+                    .clickable(
+                        interactionSource = reportInteraction,
+                        indication = ripple(color = Color.White),
+                        onClick = onOpenReportCard
+                    )
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(cardGradient)
-                        .padding(14.dp)
+                        .background(reportCardGradient)
                 ) {
+                    // Ambient corner glow
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 24.dp, y = (-24).dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(Color(0xFF38BDF8).copy(alpha = 0.38f), Color.Transparent)
+                                )
+                            )
+                    )
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(14.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color(0xFFF59E0B),
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.WorkspacePremium,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
@@ -517,6 +598,7 @@ private fun HomeBottomFeaturesSection(
                         Column {
                             Text(
                                 text = "${toBengaliDigits(totalScorePercent)}%",
+                                style = MaterialTheme.typography.displaySmall,
                                 fontSize = 30.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -527,7 +609,7 @@ private fun HomeBottomFeaturesSection(
                                     .fillMaxWidth()
                                     .height(8.dp)
                                     .clip(RoundedCornerShape(50))
-                                    .background(Color(0xFF141D66))
+                                    .background(Color.Black.copy(alpha = 0.28f))
                             ) {
                                 val progressFraction = (totalScorePercent / 100f).coerceIn(0f, 1f)
                                 if (progressFraction > 0f) {
@@ -536,7 +618,11 @@ private fun HomeBottomFeaturesSection(
                                             .fillMaxHeight()
                                             .fillMaxWidth(progressFraction.coerceAtLeast(0.06f))
                                             .clip(RoundedCornerShape(50))
-                                            .background(Color(0xFF38BDF8))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    listOf(Color(0xFF38BDF8), Color(0xFFFDE047))
+                                                )
+                                            )
                                     )
                                 }
                             }
@@ -551,9 +637,9 @@ private fun HomeBottomFeaturesSection(
                         ) {
                             Text(
                                 text = tr("Report Card", "রিপোর্ট কার্ড"),
-                                fontSize = 13.5.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
+                                color = Color.White.copy(alpha = 0.95f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
@@ -561,33 +647,52 @@ private fun HomeBottomFeaturesSection(
                             Icon(
                                 imageVector = Icons.Default.ChevronRight,
                                 contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
+                                tint = Color.White.copy(alpha = 0.9f),
+                                modifier = Modifier.size(19.dp)
                             )
                         }
                     }
                 }
             }
 
-            // Card 2: প্র্যাকটিস কুইজ
+            // Card 2: Practice Quiz (Deep Emerald-Teal)
             Card(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                border = BorderStroke(1.dp, Color(0xFF6EE7B7).copy(alpha = 0.35f)),
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .graphicsLayer { scaleX = quizScale; scaleY = quizScale }
                     .clip(RoundedCornerShape(22.dp))
-                    .clickable(onClick = onOpenPracticeQuiz)
+                    .clickable(
+                        interactionSource = quizInteraction,
+                        indication = ripple(color = Color.White),
+                        onClick = onOpenPracticeQuiz
+                    )
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(cardGradient)
-                        .padding(14.dp)
+                        .background(quizCardGradient)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 24.dp, y = (-24).dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(Color(0xFF34D399).copy(alpha = 0.35f), Color.Transparent)
+                                )
+                            )
+                    )
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(14.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
@@ -597,28 +702,28 @@ private fun HomeBottomFeaturesSection(
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
                                 color = Color.White.copy(alpha = 0.16f),
-                                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.55f)),
+                                border = BorderStroke(1.dp, Color(0xFF6EE7B7).copy(alpha = 0.55f)),
                                 modifier = Modifier.size(46.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Quiz,
                                         contentDescription = null,
-                                        tint = Color(0xFF4ADE80),
+                                        tint = Color(0xFFA7F3D0),
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
                             Surface(
                                 shape = CircleShape,
-                                color = Color(0xFF141D66).copy(alpha = 0.65f),
+                                color = Color.Black.copy(alpha = 0.22f),
                                 modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Bolt,
                                         contentDescription = null,
-                                        tint = Color(0xFFFBBF24),
+                                        tint = Color(0xFFFDE047),
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -652,40 +757,58 @@ private fun HomeBottomFeaturesSection(
             }
         }
 
-        // Bottom Card: 3. অ্যানিমেটেড লেসনস (Excluding SHIKHO AI as requested)
+        // Bottom Card: 3. Animated Lessons (Midnight Violet-Royal)
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            border = BorderStroke(1.dp, Color(0xFFC4B5FD).copy(alpha = 0.35f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
             modifier = Modifier
                 .fillMaxWidth()
+                .graphicsLayer { scaleX = animScale; scaleY = animScale }
                 .clip(RoundedCornerShape(24.dp))
-                .clickable(onClick = onOpenAnimatedLessons)
+                .clickable(
+                    interactionSource = animInteraction,
+                    indication = ripple(color = Color.White),
+                    onClick = onOpenAnimatedLessons
+                )
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(cardGradient)
-                    .padding(18.dp)
+                    .background(animatedCardGradient)
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(130.dp)
+                        .align(Alignment.CenterEnd)
+                        .offset(x = 34.dp, y = (-10).dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(Color(0xFFA78BFA).copy(alpha = 0.36f), Color.Transparent)
+                            )
+                        )
+                )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // White rounded box with "E=mc²" matching Screenshot 5
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = Color.White,
                         shadowElevation = 4.dp,
-                        modifier = Modifier.size(64.dp)
+                        modifier = Modifier.size(62.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "E=mc²",
-                                fontSize = 15.5.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFFBE185D)
+                                color = Color(0xFF6D28D9)
                             )
                         }
                     }
@@ -693,6 +816,7 @@ private fun HomeBottomFeaturesSection(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = tr("Animated Lessons", "অ্যানিমেটেড লেসনস"),
+                            style = MaterialTheme.typography.titleLarge,
                             fontSize = 17.5.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.White
@@ -709,8 +833,9 @@ private fun HomeBottomFeaturesSection(
 
                     Surface(
                         shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.16f),
-                        modifier = Modifier.size(38.dp)
+                        color = Color.White.copy(alpha = 0.18f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(

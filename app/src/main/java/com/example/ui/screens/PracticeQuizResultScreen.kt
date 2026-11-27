@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.auth.SessionManager
 import com.example.quiz.PracticeQuizViewModel
@@ -61,7 +62,12 @@ private fun formatSecondsToBengaliTime(
     if (effectiveSec <= 0L) return AppLang.tr("00:00 min", "০০:০০ মি.")
     val min = effectiveSec / 60
     val sec = effectiveSec % 60
-    return "${toBengaliDigits(String.format("%02d", min))}:${toBengaliDigits(String.format("%02d", sec))} ${AppLang.tr("min", "মি.")}"
+    val minStr = String.format("%02d", min)
+    val secStr = String.format("%02d", sec)
+    return AppLang.tr(
+        "$minStr:$secStr min",
+        "${toBengaliDigits(minStr)}:${toBengaliDigits(secStr)} মি."
+    )
 }
 
 @Composable
@@ -73,7 +79,7 @@ fun PracticeQuizResultScreen(
     onNavigateToFeedback: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(sessionId) {
         if (uiState.resultSummary == null || uiState.sessionId != sessionId) {
@@ -374,7 +380,7 @@ fun PracticeQuizResultScreen(
                                     icon = Icons.Default.CheckCircle,
                                     iconTint = Color(0xFF10B981),
                                     title = tr("Correct", "সঠিক"),
-                                    value = tr("${toBengaliDigits(result.correctCount)}", "${toBengaliDigits(result.correctCount)}টি")
+                                    value = tr("${result.correctCount}", "${toBengaliDigits(result.correctCount)}টি")
                                 )
 
                                 Box(
@@ -389,7 +395,7 @@ fun PracticeQuizResultScreen(
                                     icon = Icons.Default.Cancel,
                                     iconTint = Color(0xFFEF4444),
                                     title = tr("Wrong", "ভুল"),
-                                    value = tr("${toBengaliDigits(result.incorrectCount)}", "${toBengaliDigits(result.incorrectCount)}টি")
+                                    value = tr("${result.incorrectCount}", "${toBengaliDigits(result.incorrectCount)}টি")
                                 )
 
                                 Box(
@@ -486,7 +492,7 @@ fun PracticeQuizResultScreen(
                                     Spacer(modifier = Modifier.height(6.dp))
 
                                     Text(
-                                        text = tr("Accuracy: ${toBengaliDigits((pct * 100).toInt())}%", "সঠিকতা: ${toBengaliDigits((pct * 100).toInt())}%"),
+                                        text = tr("Accuracy: ${(pct * 100).toInt()}%", "সঠিকতা: ${toBengaliDigits((pct * 100).toInt())}%"),
                                         fontSize = 12.sp,
                                         color = Color.White.copy(alpha = 0.7f)
                                     )

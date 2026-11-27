@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.api.McqOptionItem
 import com.example.quiz.PracticeQuizViewModel
 import com.example.ui.components.QuizRichContent
@@ -56,7 +57,7 @@ fun PracticeQuizPlayerScreen(
     onNavigateToResult: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val subjectColor = remember(uiState.subjectColorHex) {
         try {
@@ -417,7 +418,7 @@ fun PracticeQuizPlayerScreen(
                                         ?: currentQuestion.allocated_marks?.toIntOrNull()
                                     if (marks != null) {
                                         Text(
-                                            text = tr("Marks: ${toBengaliDigits(marks)}", "মান: ${toBengaliDigits(marks)}"),
+                                            text = tr("Marks: $marks", "মান: ${toBengaliDigits(marks)}"),
                                             fontSize = 12.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )

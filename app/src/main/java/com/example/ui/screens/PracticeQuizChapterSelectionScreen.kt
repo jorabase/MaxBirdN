@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.api.HierarchyChapterItem
 import com.example.quiz.PracticeQuizUiState
@@ -55,7 +56,7 @@ fun PracticeQuizChapterSelectionScreen(
     onProceedToCountSelection: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val subjectColor = remember(subjectColorHex) {
         try {
@@ -569,7 +570,7 @@ private fun ChapterSelectionItem(
                         color = subjectColor.copy(alpha = 0.1f)
                     ) {
                         Text(
-                            text = tr("${toBengaliDigits(questionCount)} Questions", "${toBengaliDigits(questionCount)}টি প্রশ্ন"),
+                            text = tr("$questionCount Questions", "${toBengaliDigits(questionCount)}টি প্রশ্ন"),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = subjectColor,
@@ -579,7 +580,7 @@ private fun ChapterSelectionItem(
 
                     if (chapter.no != null && chapter.no.toString().isNotBlank()) {
                         Text(
-                            text = tr("Chapter ${toBengaliDigits(chapter.no.toString())}", "অধ্যায় ${toBengaliDigits(chapter.no.toString())}"),
+                            text = tr("Chapter ${chapter.no}", "অধ্যায় ${toBengaliDigits(chapter.no.toString())}"),
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

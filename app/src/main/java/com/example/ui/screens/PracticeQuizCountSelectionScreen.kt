@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.quiz.PracticeQuizViewModel
 import com.example.utils.tr
@@ -48,7 +49,7 @@ fun PracticeQuizCountSelectionScreen(
     onNavigateToPlayer: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val subjectColor = remember(uiState.subjectColorHex) {
         try {
@@ -411,7 +412,7 @@ private fun QuizSummaryBottomSheetContent(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = tr("${toBengaliDigits(uiState.selectedQuestionCount)} Questions", "${toBengaliDigits(uiState.selectedQuestionCount)} টি প্রশ্ন"),
+                        text = tr("${uiState.selectedQuestionCount} Questions", "${toBengaliDigits(uiState.selectedQuestionCount)} টি প্রশ্ন"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -443,7 +444,7 @@ private fun QuizSummaryBottomSheetContent(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = tr("${toBengaliDigits(uiState.selectedQuestionCount)} min", "${toBengaliDigits(uiState.selectedQuestionCount)} মিনিট"),
+                        text = tr("${uiState.selectedQuestionCount} min", "${toBengaliDigits(uiState.selectedQuestionCount)} মিনিট"),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface

@@ -274,11 +274,27 @@ fun TimelineRoutineCard(
                         if (!isLiveNow && !isExamNow) {
                             val (posLabel, posBg, posColor) = when {
                                 isLiveExam || isExam || isModelTest -> when {
-                                    lesson.isExamUpcoming -> Triple(tr("Upcoming Exam", "আপকামিং এক্সাম"), Color(0xFFEDE9FE), Color(0xFF7C3AED))
-                                    else -> Triple(tr("Recorded Exam", "রেকর্ড এক্সাম"), Color(0xFFFEF3C7), Color(0xFFD97706))
+                                    lesson.isExamUpcoming -> Triple(
+                                        tr("Upcoming Exam", "আপকামিং এক্সাম"),
+                                        if (isDark) Color(0xFF4C1D95).copy(alpha = 0.55f) else Color(0xFFEDE9FE),
+                                        if (isDark) Color(0xFFC4B5FD) else Color(0xFF7C3AED)
+                                    )
+                                    else -> Triple(
+                                        tr("Recorded Exam", "রেকর্ড এক্সাম"),
+                                        if (isDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7),
+                                        if (isDark) Color(0xFFFCD34D) else Color(0xFFD97706)
+                                    )
                                 }
-                                lesson.isUpcoming -> Triple(tr("Upcoming Class", "আপকামিং ক্লাস"), Color(0xFFE0F2FE), Color(0xFF0284C7))
-                                else -> Triple(tr("Recorded", "রেকর্ড ক্লাস"), Color(0xFFEFF6FF), Color(0xFF2563EB))
+                                lesson.isUpcoming -> Triple(
+                                    tr("Upcoming Class", "আপকামিং ক্লাস"),
+                                    if (isDark) Color(0xFF0C4A6E).copy(alpha = 0.55f) else Color(0xFFE0F2FE),
+                                    if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7)
+                                )
+                                else -> Triple(
+                                    tr("Recorded", "রেকর্ড ক্লাস"),
+                                    if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.55f) else Color(0xFFEFF6FF),
+                                    if (isDark) Color(0xFF93C5FD) else Color(0xFF2563EB)
+                                )
                             }
                             Surface(
                                 shape = RoundedCornerShape(8.dp),

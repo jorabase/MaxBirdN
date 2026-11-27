@@ -33,15 +33,15 @@ fun ResetSuccessScreen(
         if (isDark) {
             Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFF0B1120),
-                    Color(0xFF020617),
-                    Color(0xFF0F172A)
+                    Color(0xFF070D19),
+                    Color(0xFF0D1627),
+                    Color(0xFF111C2D)
                 )
             )
         } else {
             Brush.verticalGradient(
                 colors = listOf(
-                    Color(0xFFF8FAFC),
+                    Color(0xFFF6F9FC),
                     Color(0xFFEFF6FF),
                     Color(0xFFF1F5F9)
                 )
@@ -53,6 +53,7 @@ fun ResetSuccessScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundGradient)
+            .systemBarsPadding()
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {

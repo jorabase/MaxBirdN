@@ -93,33 +93,37 @@ fun ProfileScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToDownloads) {
-                        Icon(
-                            Icons.Default.DownloadDone,
-                            contentDescription = tr("Downloads", "ডাউনলোড"),
-                            tint = Color(0xFF10B981)
-                        )
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .size(40.dp)
+                    ) {
+                        IconButton(onClick = onNavigateToEditProfile) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = tr("Edit Profile", "প্রোফাইল এডিট"),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
-                    IconButton(onClick = onNavigateToSavedItems) {
-                        Icon(
-                            Icons.Default.Bookmark,
-                            contentDescription = tr("Saved", "সংরক্ষিত"),
-                            tint = Color(0xFFF59E0B)
-                        )
-                    }
-                    IconButton(onClick = onNavigateToEditProfile) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = tr("Edit Profile", "প্রোফাইল এডিট"),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(onClick = { showLogoutConfirmDialog = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ExitToApp,
-                            contentDescription = tr("Log Out", "লগআউট"),
-                            tint = MaterialTheme.colorScheme.error
-                        )
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .padding(end = 10.dp)
+                            .size(40.dp)
+                    ) {
+                        IconButton(onClick = { showLogoutConfirmDialog = true }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ExitToApp,
+                                contentDescription = tr("Log Out", "লগআউট"),
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -137,9 +141,8 @@ fun ProfileScreen(
         ) {
             when (authState) {
                 is AuthState.Loading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = MaterialTheme.colorScheme.primary
+                    com.example.ui.components.AppProfileLoadingSkeleton(
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
                 is AuthState.Error -> {
@@ -728,7 +731,11 @@ fun ProfileContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .height(32.dp)
+        )
     }
 }
 

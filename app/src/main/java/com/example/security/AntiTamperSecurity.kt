@@ -97,8 +97,70 @@ object AntiTamperSecurity {
         "com.swift.sandhook.SandHook",
         "just.trust.me.Main",
         "mobi.acpm.sslunpinning.Main",
-        "io.github.tehcneko.sslunpinning.Main"
+        "io.github.tehcneko.sslunpinning.Main",
+        "bin.mt.signature.KillerApplication",
+        "cc.binmt.signature.PmsHookApplication",
+        "bin.mt.apksignaturekillerplus.HookApplication",
+        "np.manager.HookApplication"
     )
+
+    private val VIRTUAL_CONTAINER_MARKERS = listOf(
+        "com.lbe.parallel",
+        "parallel.intl",
+        "dualspace",
+        "virtualxposed",
+        "io.va.exposed",
+        "dkplugin",
+        "sandvxposed",
+        "multi.parallel",
+        "ludashi.dualspace",
+        "excelliance.multiaccounts",
+        "cloneapp.parallelspace"
+    )
+
+    /**
+     * Reconstructs expected official package name ("com.maxbird.ff.app") from ASCII codes
+     * so MT Manager's automatic string-replace APK cloner cannot rewrite it.
+     */
+    private fun decodeExpectedPackageName(): String {
+        val codes = intArrayOf(
+            99, 111, 109, 46,
+            109, 97, 120, 98, 105, 114, 100, 46,
+            102, 102, 46,
+            97, 112, 112
+        )
+        return String(CharArray(codes.size) { codes[it].toChar() })
+    }
+
+    /**
+     * Reconstructs expected Application class ("com.example.ShikhoApp") from ASCII codes
+     * to detect MT Manager / NP Manager Signature-Killer Application wrappers.
+     */
+    private fun decodeExpectedAppClassName(): String {
+        val codes = intArrayOf(
+            99, 111, 109, 46,
+            101, 120, 97, 109, 112, 108, 101, 46,
+            83, 104, 105, 107, 104, 111, 65, 112, 112
+        )
+        return String(CharArray(codes.size) { codes[it].toChar() })
+    }
+
+    /**
+     * Decodes the XOR-obfuscated release signing certificate SHA-256 pinned at build time.
+     */
+    private fun decodeExpectedReleaseCertSha256(): String {
+        return try {
+            val obf = BuildConfig.EXPECTED_RELEASE_CERT_OBF.trim()
+            if (obf.length != 128) return ""
+            val bytes = ByteArray(64) { idx ->
+                val hexPair = obf.substring(idx * 2, idx * 2 + 2)
+                (hexPair.toInt(16) xor 0x5A).toByte()
+            }
+            String(bytes, Charsets.UTF_8).lowercase()
+        } catch (_: Throwable) {
+            ""
+        }
+    }
 
     fun init(context: Context) {
         appContextRef = context.applicationContext
@@ -208,8 +270,89 @@ object AntiTamperSecurity {
             }
         }
 
-        // 3. Anti-Tamper, Anti-Frida, Anti-Xposed & Debugger Check
+        // 3. Anti-Clone, Signing Certificate Integrity, Anti-Tamper, Anti-Frida & Debugger Check
         if (BuildConfig.ENABLE_ANTI_TAMPER) {
+            // 3A. Cloned / Repackaged Package Name Check (blocks MT Manager Clone APK immediately)
+            if (ctx != null) {
+                val expectedPkg = decodeExpectedPackageName()
+                val actualPkg = ctx.packageName.orEmpty()
+                if (actualPkg != expectedPkg) {
+                    return SecurityViolation(
+                        code = "CLONED_APP_DETECTED",
+                        titleBn = AppLang.tr(
+                            "Cloned / Modified App Detected!",
+                            "ক্লোন বা পরিবর্তিত (Mod) অ্যাপ শনাক্ত হয়েছে!"
+                        ),
+                        messageBn = AppLang.tr(
+                            "This APK has been cloned or repackaged with an unauthorized package name. Please uninstall it and install the official MaxBird app.",
+                            "এই অ্যাপটি ক্লোন বা পরিবর্তন (Repackage) করা হয়েছে। নিরাপত্তার কারণে ক্লোন/মড অ্যাপ চলবে না — অনুগ্রহ করে অফিশিয়াল MaxBird অ্যাপ ইনস্টল করুন।"
+                        ),
+                        detectedDetail = "Unauthorized Package: $actualPkg"
+                    )
+                }
+
+                // 3B. Virtual Space / Dual-App Cloner Container Check
+                val filesPath = runCatching { ctx.filesDir?.absolutePath?.lowercase().orEmpty() }.getOrDefault("")
+                val matchedVirtual = VIRTUAL_CONTAINER_MARKERS.firstOrNull { filesPath.contains(it) }
+                val unexpectedDataDir = filesPath.startsWith("/data/") && !filesPath.contains("/$expectedPkg/")
+                if (matchedVirtual != null || unexpectedDataDir) {
+                    return SecurityViolation(
+                        code = "VIRTUAL_CLONE_DETECTED",
+                        titleBn = AppLang.tr(
+                            "Virtual / Cloned Environment Detected!",
+                            "ভার্চুয়াল বা ক্লোন স্পেস শনাক্ত হয়েছে!"
+                        ),
+                        messageBn = AppLang.tr(
+                            "Running MaxBird inside a cloner or virtual space app is not permitted. Please open the official app directly.",
+                            "ক্লোনার বা ভার্চুয়াল স্পেসের ভেতর MaxBird চালানো অনুমোদিত নয়। অনুগ্রহ করে সরাসরি অফিশিয়াল অ্যাপটি ব্যবহার করুন।"
+                        ),
+                        detectedDetail = "Virtual Container (${matchedVirtual ?: "Sandboxed Clone"})"
+                    )
+                }
+
+                // 3C. Release-Only: Application Wrapper Check (blocks MT Manager Signature Killer PMS Hook)
+                if (!BuildConfig.DEBUG) {
+                    val appClassName = ctx.applicationContext?.javaClass?.name.orEmpty()
+                    val expectedAppClass = decodeExpectedAppClassName()
+                    if (appClassName.isNotBlank() && appClassName != expectedAppClass) {
+                        return SecurityViolation(
+                            code = "SIGNATURE_KILLER_DETECTED",
+                            titleBn = AppLang.tr(
+                                "Modified APK Detected!",
+                                "মডিফায়েড (Modded) APK শনাক্ত হয়েছে!"
+                            ),
+                            messageBn = AppLang.tr(
+                                "Unauthorized APK patching or signature bypass was detected. Please uninstall this APK and install the official MaxBird app.",
+                                "অ্যাপের ভেতরে অননুমোদিত প্যাচ বা সিগনেচার বাইপাস শনাক্ত হয়েছে। অনুগ্রহ করে এই অ্যাপটি আনইনস্টল করে অফিশিয়াল MaxBird অ্যাপ ব্যবহার করুন।"
+                            ),
+                            detectedDetail = "Tampered Application Wrapper ($appClassName)"
+                        )
+                    }
+
+                    // 3D. Release-Only: Signing Certificate SHA-256 Verification
+                    val expectedCert = decodeExpectedReleaseCertSha256()
+                    if (expectedCert.length == 64) {
+                        val actualCerts = DeviceSecurityManager.getAllAppSignaturesSha256(ctx)
+                        val signatureValid = actualCerts.isNotEmpty() &&
+                            actualCerts.all { it.equals(expectedCert, ignoreCase = true) }
+                        if (!signatureValid) {
+                            return SecurityViolation(
+                                code = "INVALID_APP_SIGNATURE",
+                                titleBn = AppLang.tr(
+                                    "Unauthorized / Modded APK!",
+                                    "অননুমোদিত বা পরিবর্তিত (Modded) APK!"
+                                ),
+                                messageBn = AppLang.tr(
+                                    "This APK's signing certificate does not match the official MaxBird release signature. Please uninstall it and download the official APK.",
+                                    "এই APK-এর ডিজিটাল সিগনেচার অফিশিয়াল MaxBird রিলিজ সিগনেচারের সাথে মেলেনি। অনুগ্রহ করে এটি আনইনস্টল করে অফিশিয়াল অ্যাপ ইনস্টল করুন।"
+                                ),
+                                detectedDetail = "Invalid Signing Certificate (Repackaged / Cloned APK)"
+                            )
+                        }
+                    }
+                }
+            }
+
             if (ctx != null && isDebuggerAttached(ctx)) {
                 return SecurityViolation(
                     code = "DEBUGGER_DETECTED",

@@ -447,28 +447,11 @@ private fun MyCoursesListView(
         }
 
         if (isLoading && enrolled.isEmpty() && other.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 60.dp),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator(
-                        color = Color(0xFF0284C7),
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(36.dp)
-                    )
-                    Text(
-                        text = tr("Loading courses...", "কোর্স লোড হচ্ছে..."),
-                        fontSize = 14.sp,
-                        color = Color(0xFF64748B)
-                    )
-                }
-            }
+            com.example.ui.components.AppListLoadingSkeleton(
+                modifier = Modifier.fillMaxSize(),
+                itemCount = 5,
+                showHeaderBanner = true
+            )
         } else if (!isLoading && enrolled.isEmpty() && other.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -2152,26 +2135,10 @@ private fun CourseSubjectsDetailView(
         ) {
             when {
                 uiState.isSubjectsLoading -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(40.dp)
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            text = tr("Loading subjects...", "বিষয়সমূহ লোড হচ্ছে..."),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    com.example.ui.components.AppGridLoadingSkeleton(
+                        modifier = Modifier.fillMaxSize(),
+                        rows = 3
+                    )
                 }
 
                 uiState.subjectsErrorMessage != null && uiState.subjects.isEmpty() -> {

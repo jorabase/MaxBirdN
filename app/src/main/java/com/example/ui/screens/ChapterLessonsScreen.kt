@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.example.api.StudentLessonItem
 import com.example.auth.SessionManager
 import com.example.course.CourseViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.chapter.*
 import com.example.utils.AppLang
 import com.example.utils.ClassTypeUtils
@@ -59,7 +60,7 @@ fun ChapterLessonsScreen(
     val coroutineScope = rememberCoroutineScope()
     val sessionManager = remember { SessionManager(context) }
     var lessonCompletionCounter by remember { mutableIntStateOf(0) }
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var selectedFilter by remember(initialTab) {
         mutableStateOf(
@@ -176,26 +177,11 @@ fun ChapterLessonsScreen(
         ) {
             when {
                 uiState.isLessonsLoading -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = subjectColor,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(44.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = tr("Loading lessons...", "ক্লাস ও লেকচার লোড হচ্ছে..."),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    com.example.ui.components.AppListLoadingSkeleton(
+                        modifier = Modifier.fillMaxSize(),
+                        itemCount = 6,
+                        showHeaderBanner = true
+                    )
                 }
 
                 uiState.lessons.isEmpty() -> {
@@ -258,9 +244,11 @@ fun ChapterLessonsScreen(
 
                 else -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .navigationBarsPadding()
                     ) {
                         // 1. Top Shortcuts: Practice Quiz, E-Book, Animated Lessons
                         item {

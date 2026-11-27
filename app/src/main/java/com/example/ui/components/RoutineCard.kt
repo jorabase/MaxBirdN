@@ -828,25 +828,25 @@ fun ShikhoRoutineCard(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Status / Exam / Live Badge
+                    // Status / Exam / Live Badge (Dark & Light mode adaptive)
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = when {
-                            isLiveNow -> Color(0xFFFEE2E2)
-                            isModelTestNow || isModelTest -> Color(0xFFEDE9FE)
-                            isExamNow -> Color(0xFFFEF3C7)
-                            isExam -> Color(0xFFFFF7ED)
-                            lesson.isUpcoming -> Color(0xFFE0F2FE)
-                            else -> Color(0xFFF1F5F9)
+                            isLiveNow -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFFEE2E2)
+                            isModelTestNow || isModelTest -> if (isDark) Color(0xFF4C1D95).copy(alpha = 0.52f) else Color(0xFFEDE9FE)
+                            isExamNow -> if (isDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7)
+                            isExam -> if (isDark) Color(0xFF7C2D12).copy(alpha = 0.45f) else Color(0xFFFFF7ED)
+                            lesson.isUpcoming -> if (isDark) Color(0xFF0C4A6E).copy(alpha = 0.55f) else Color(0xFFE0F2FE)
+                            else -> if (isDark) Color(0xFF1E3A5F).copy(alpha = 0.65f) else Color(0xFFF1F5F9)
                         },
                         border = BorderStroke(
                             0.8.dp,
                             when {
-                                isLiveNow -> Color(0xFFEF4444).copy(alpha = 0.4f)
-                                isModelTestNow || isModelTest -> Color(0xFF7C3AED).copy(alpha = 0.35f)
-                                isExamNow || isExam -> Color(0xFFF59E0B).copy(alpha = 0.3f)
-                                lesson.isUpcoming -> Color(0xFF0284C7).copy(alpha = 0.3f)
-                                else -> Color(0xFF94A3B8).copy(alpha = 0.3f)
+                                isLiveNow -> Color(0xFFEF4444).copy(alpha = 0.45f)
+                                isModelTestNow || isModelTest -> Color(0xFF8B5CF6).copy(alpha = 0.4f)
+                                isExamNow || isExam -> Color(0xFFF59E0B).copy(alpha = 0.4f)
+                                lesson.isUpcoming -> Color(0xFF38BDF8).copy(alpha = 0.4f)
+                                else -> Color(0xFF94A3B8).copy(alpha = 0.35f)
                             }
                         )
                     ) {
@@ -868,7 +868,7 @@ fun ShikhoRoutineCard(
                                         tr("Live Class", "লাইভ ক্লাস"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFDC2626)
+                                        color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
                                     )
                                 }
                             }
@@ -883,13 +883,13 @@ fun ShikhoRoutineCard(
                                             .size(6.dp)
                                             .graphicsLayer { scaleX = liveDotScale; scaleY = liveDotScale }
                                             .clip(CircleShape)
-                                            .background(Color(0xFFEA580C))
+                                            .background(Color(0xFFF59E0B))
                                     )
                                     Text(
                                         tr("Live Exam", "লাইভ এক্সাম"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFC2410C)
+                                        color = if (isDark) Color(0xFFFDE68A) else Color(0xFFC2410C)
                                     )
                                 }
                             }
@@ -899,7 +899,7 @@ fun ShikhoRoutineCard(
                                         text = tr("Upcoming Exam", "আপকামিং এক্সাম"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF7C3AED),
+                                        color = if (isDark) Color(0xFFC4B5FD) else Color(0xFF7C3AED),
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 } else {
@@ -907,7 +907,7 @@ fun ShikhoRoutineCard(
                                         text = tr("Recorded Exam", "রেকর্ড এক্সাম"),
                                         fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFB45309),
+                                        color = if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                     )
                                 }
@@ -917,7 +917,7 @@ fun ShikhoRoutineCard(
                                     text = tr("Upcoming Class", "আপকামিং ক্লাস"),
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0284C7),
+                                    color = if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
@@ -926,7 +926,7 @@ fun ShikhoRoutineCard(
                                     text = tr("Recorded", "রেকর্ড ক্লাস"),
                                     fontSize = 9.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF2563EB),
+                                    color = if (isDark) Color(0xFF93C5FD) else Color(0xFF2563EB),
                                     modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }

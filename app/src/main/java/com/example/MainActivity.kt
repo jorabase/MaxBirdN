@@ -451,7 +451,7 @@ private fun SecurityViolationShieldScreen(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
-                    text = com.example.utils.tr("Security Warning", violation.titleBn),
+                    text = violation.titleBn,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
@@ -461,10 +461,7 @@ private fun SecurityViolationShieldScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = com.example.utils.tr(
-                        "A restricted proxy, packet capture, VPN, or tampering environment was detected. Please disable it and try again.",
-                        violation.messageBn
-                    ),
+                    text = violation.messageBn,
                     fontSize = 14.sp,
                     color = Color(0xFFCBD5E1),
                     textAlign = TextAlign.Center,
@@ -498,21 +495,30 @@ private fun SecurityViolationShieldScreen(
 
                 Spacer(modifier = Modifier.height(22.dp))
 
-                Button(
-                    onClick = onRecheck,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("security_recheck_button")
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(com.example.utils.tr("Verify Again", "পুনরায় যাচাই করুন"), fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                }
+                val isPermanentIntegrityViolation = violation.code in setOf(
+                    "CLONED_APP_DETECTED",
+                    "VIRTUAL_CLONE_DETECTED",
+                    "SIGNATURE_KILLER_DETECTED",
+                    "INVALID_APP_SIGNATURE"
+                )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                if (!isPermanentIntegrityViolation) {
+                    Button(
+                        onClick = onRecheck,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("security_recheck_button")
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(com.example.utils.tr("Verify Again", "পুনরায় যাচাই করুন"), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
 
                 OutlinedButton(
                     onClick = onExitApp,

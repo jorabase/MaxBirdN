@@ -296,17 +296,9 @@ fun ReportCardScreen(
                 // 3. Tab Content
                 if (uiState.isLoading && uiState.reportData == null) {
                     item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                color = Color(0xFF1E3A8A),
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
+                        com.example.ui.components.AppReportLoadingSkeleton(
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 } else if (uiState.selectedTab == ReportTab.RESULT_DETAILS) {
                     // TAB 1: RESULT DETAILS
@@ -1971,12 +1963,13 @@ fun PodiumColumn(
         }
 
         // Avatar with border
+        val podiumPalette = LocalReportCardPalette.current
         Box(
             modifier = Modifier
                 .size(if (isWinner) 56.dp else 46.dp)
                 .clip(CircleShape)
                 .border(2.dp, podiumColor, CircleShape)
-                .background(Color(0xFFF1F5F9)),
+                .background(podiumPalette.subtleSurface),
             contentAlignment = Alignment.Center
         ) {
             val formattedAvatar = AvatarUtils.formatAvatarUrl(avatarUrl, name)
@@ -1989,7 +1982,7 @@ fun PodiumColumn(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
                 loading = {
-                    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF1F5F9)), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxSize().background(podiumPalette.subtleSurface), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = podiumColor, strokeWidth = 1.5.dp)
                     }
                 },
@@ -2005,7 +1998,6 @@ fun PodiumColumn(
         Spacer(modifier = Modifier.height(6.dp))
 
         // Student Name
-        val podiumPalette = LocalReportCardPalette.current
         Text(
             text = name,
             fontSize = if (isWinner) 13.sp else 11.sp,
@@ -2588,8 +2580,8 @@ fun SocialContactSection(
                             }
                         },
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFDCFCE7),
-                    border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                    color = if (palette.isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFFDCFCE7),
+                    border = BorderStroke(1.dp, if (palette.isDark) Color(0xFF34D399).copy(alpha = 0.45f) else Color(0xFF86EFAC))
                 ) {
                     Row(
                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
@@ -2602,7 +2594,7 @@ fun SocialContactSection(
                             text = "WhatsApp",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF15803D)
+                            color = if (palette.isDark) Color(0xFF6EE7B7) else Color(0xFF15803D)
                         )
                     }
                 }
@@ -2622,8 +2614,8 @@ fun SocialContactSection(
                             }
                         },
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFE0F2FE),
-                    border = BorderStroke(1.dp, Color(0xFF7DD3FC))
+                    color = if (palette.isDark) Color(0xFF0C4A6E).copy(alpha = 0.55f) else Color(0xFFE0F2FE),
+                    border = BorderStroke(1.dp, if (palette.isDark) Color(0xFF38BDF8).copy(alpha = 0.45f) else Color(0xFF7DD3FC))
                 ) {
                     Row(
                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
@@ -2636,7 +2628,7 @@ fun SocialContactSection(
                             text = "Telegram",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0369A1)
+                            color = if (palette.isDark) Color(0xFF7DD3FC) else Color(0xFF0369A1)
                         )
                     }
                 }
@@ -2654,8 +2646,8 @@ fun SocialContactSection(
                             } catch (_: Exception) {}
                         },
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFFF1F5F9),
-                    border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+                    color = palette.subtleSurface,
+                    border = BorderStroke(1.dp, palette.borderStrong)
                 ) {
                     Row(
                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
@@ -2665,7 +2657,7 @@ fun SocialContactSection(
                         Icon(
                             imageVector = Icons.Default.Call,
                             contentDescription = tr("Call", "কল"),
-                            tint = Color(0xFF334155),
+                            tint = palette.textBody,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -2673,7 +2665,7 @@ fun SocialContactSection(
                             text = tr("Call", "কল করুন"),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
+                            color = palette.textBody
                         )
                     }
                 }
@@ -2920,7 +2912,7 @@ fun StudentProfileDetailDialog(
                                 .size(84.dp)
                                 .clip(CircleShape)
                                 .border(3.dp, Color(0xFF3B82F6), CircleShape)
-                                .background(Color(0xFFE0F2FE))
+                                .background(palette.accentBg)
                                 .clickable { showFullScreenAvatar = true },
                             contentAlignment = Alignment.Center
                         ) {
@@ -2934,7 +2926,7 @@ fun StudentProfileDetailDialog(
                                 modifier = Modifier.fillMaxSize(),
                                 loading = {
                                     Box(
-                                        modifier = Modifier.fillMaxSize().background(Color(0xFFE0F2FE)),
+                                        modifier = Modifier.fillMaxSize().background(palette.accentBg),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -2996,8 +2988,8 @@ fun StudentProfileDetailDialog(
                             if (rank != null) {
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
-                                    color = Color(0xFFFEF3C7),
-                                    border = BorderStroke(1.dp, Color(0xFFFCD34D))
+                                    color = if (palette.isDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7),
+                                    border = BorderStroke(1.dp, if (palette.isDark) Color(0xFFF59E0B).copy(alpha = 0.5f) else Color(0xFFFCD34D))
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -3007,7 +2999,7 @@ fun StudentProfileDetailDialog(
                                             text = tr("🏆 Rank: #$rank", "🏆 র‍্যাংক: #${rank.toBn()}"),
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFFB45309)
+                                            color = if (palette.isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
                                         )
                                     }
                                 }
@@ -3016,14 +3008,14 @@ fun StudentProfileDetailDialog(
                             if (score != null) {
                                 Surface(
                                     shape = RoundedCornerShape(16.dp),
-                                    color = Color(0xFFDCFCE7),
-                                    border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                                    color = if (palette.isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFFDCFCE7),
+                                    border = BorderStroke(1.dp, if (palette.isDark) Color(0xFF34D399).copy(alpha = 0.5f) else Color(0xFF86EFAC))
                                 ) {
                                     Text(
                                         text = tr("📊 Score: $score%", "📊 স্কোর: ${score.toBn()}%"),
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF15803D),
+                                        color = if (palette.isDark) Color(0xFF6EE7B7) else Color(0xFF15803D),
                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                     )
                                 }
@@ -3052,7 +3044,7 @@ fun StudentProfileDetailDialog(
                         value = name,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Phone,
                         iconTint = Color(0xFF16A34A),
@@ -3071,7 +3063,7 @@ fun StudentProfileDetailDialog(
                             }
                         }
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Wc,
                         iconTint = Color(0xFF8B5CF6),
@@ -3079,7 +3071,7 @@ fun StudentProfileDetailDialog(
                         value = gender,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Cake,
                         iconTint = Color(0xFFEC4899),
@@ -3088,7 +3080,7 @@ fun StudentProfileDetailDialog(
                         missingText = notSetText
                     )
                     if (!email.isNullOrBlank()) {
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                        HorizontalDivider(color = palette.border)
                         ProfileInfoRow(
                             icon = Icons.Default.Email,
                             iconTint = Color(0xFF2563EB),
@@ -3112,7 +3104,7 @@ fun StudentProfileDetailDialog(
                         value = guardianName,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Phone,
                         iconTint = Color(0xFF16A34A),
@@ -3149,7 +3141,7 @@ fun StudentProfileDetailDialog(
                         value = classDisplay,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Schedule,
                         iconTint = Color(0xFF0284C7),
@@ -3157,7 +3149,7 @@ fun StudentProfileDetailDialog(
                         value = shift,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Map,
                         iconTint = Color(0xFF059669),
@@ -3165,7 +3157,7 @@ fun StudentProfileDetailDialog(
                         value = division,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.LocationOn,
                         iconTint = Color(0xFFE11D48),
@@ -3173,7 +3165,7 @@ fun StudentProfileDetailDialog(
                         value = district,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.School,
                         iconTint = Color(0xFF2563EB),
@@ -3182,7 +3174,7 @@ fun StudentProfileDetailDialog(
                         missingText = notSetText
                     )
                     if (!passingYear.isNullOrBlank()) {
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
+                        HorizontalDivider(color = palette.border)
                         ProfileInfoRow(
                             icon = Icons.Default.CalendarToday,
                             iconTint = Color(0xFF8B5CF6),
@@ -3206,7 +3198,7 @@ fun StudentProfileDetailDialog(
                         value = sscBoard,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Numbers,
                         iconTint = Color(0xFF6366F1),
@@ -3214,7 +3206,7 @@ fun StudentProfileDetailDialog(
                         value = sscRoll,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Pin,
                         iconTint = Color(0xFF8B5CF6),
@@ -3222,7 +3214,7 @@ fun StudentProfileDetailDialog(
                         value = regNo,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.AccountBalance,
                         iconTint = Color(0xFF0284C7),
@@ -3230,7 +3222,7 @@ fun StudentProfileDetailDialog(
                         value = hscBoard,
                         missingText = notSetText
                     )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    HorizontalDivider(color = palette.border)
                     ProfileInfoRow(
                         icon = Icons.Default.Numbers,
                         iconTint = Color(0xFFD97706),

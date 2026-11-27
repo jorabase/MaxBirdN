@@ -101,6 +101,39 @@ object DeviceSecurityManager {
     }
 
     /**
+     * Returns the lowercase 64-char SHA-256 digests of ALL active APK signing certificates.
+     * Used by AntiTamperSecurity on startup to reject re-signed / cloned / multi-signer Mod APKs.
+     */
+    @Suppress("DEPRECATION")
+    fun getAllAppSignaturesSha256(context: Context): List<String> {
+        return try {
+            val pm = context.packageManager
+            val packageName = context.packageName
+            val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val signingInfo = pm.getPackageInfo(
+                    packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                ).signingInfo
+                if (signingInfo?.hasMultipleSigners() == true) {
+                    signingInfo.apkContentsSigners
+                } else {
+                    signingInfo?.signingCertificateHistory
+                }
+            } else {
+                pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES).signatures
+            }
+
+            signatures
+                ?.mapNotNull { sig -> runCatching { sha256Bytes(sig.toByteArray()) }.getOrNull() }
+                ?.filter { it.length == 64 }
+                ?.distinct()
+                ?: emptyList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    /**
      * Signs a raw session token with HMAC-SHA256 using the device's hardware identity as key.
      * Format: rawToken###timestamp###hmacSignature
      */

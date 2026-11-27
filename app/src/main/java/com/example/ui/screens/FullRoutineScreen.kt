@@ -37,6 +37,7 @@ import com.example.home.HomeViewModel
 import com.example.ui.components.SubjectFilterDialog
 import com.example.ui.components.routine.MonthYearPickerDialog
 import com.example.ui.components.routine.TimelineRoutineCard
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.utils.AppLang
 import com.example.utils.ClassTypeUtils
 import com.example.utils.RoutineDateUtils
@@ -73,7 +74,7 @@ fun FullRoutineScreen(
     onNavigateToExam: ((sessionId: String, lessonId: String, title: String, chapter: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val dhakaZone = remember { TimeZone.getTimeZone("Asia/Dhaka") }
     val coroutineScope = rememberCoroutineScope()
 
@@ -568,9 +569,10 @@ fun FullRoutineScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .navigationBarsPadding()
                             .padding(horizontal = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(bottom = 20.dp)
+                        contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
                         items(displayedLessons, key = { it.id }) { lesson ->
                             TimelineRoutineCard(

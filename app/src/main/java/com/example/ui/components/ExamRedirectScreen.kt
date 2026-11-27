@@ -23,14 +23,15 @@ fun ExamRedirectScreen(
     onStartExam: () -> Unit,
     onBack: () -> Unit
 ) {
+    val isDark = com.example.ui.theme.isAppInDarkTheme()
     Scaffold(
         topBar = {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding(),
-                color = Color.White,
-                shadowElevation = 2.dp
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = if (isDark) 0.dp else 2.dp
             ) {
                 Row(
                     modifier = Modifier
@@ -43,7 +44,7 @@ fun ExamRedirectScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = tr("Back", "পেছনে"),
-                            tint = Color(0xFF1E293B)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -51,24 +52,25 @@ fun ExamRedirectScreen(
                         text = tr("Exam", "পরীক্ষা"),
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
-                        color = Color(0xFF1E293B)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
         },
-        containerColor = Color(0xFFF8FAFC)
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .navigationBarsPadding()
                 .padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(
                 shape = CircleShape,
-                color = Color(0xFFFEF3C7),
+                color = if (isDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7),
                 modifier = Modifier.size(84.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -80,13 +82,13 @@ fun ExamRedirectScreen(
 
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFFFEDD5)
+                color = if (isDark) Color(0xFF7C2D12).copy(alpha = 0.55f) else Color(0xFFFFEDD5)
             ) {
                 Text(
                     text = tr("Live Exam", "লাইভ পরীক্ষা"),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFEA580C),
+                    color = if (isDark) Color(0xFFFDBA74) else Color(0xFFEA580C),
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                 )
             }
@@ -97,7 +99,7 @@ fun ExamRedirectScreen(
                 text = title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A),
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
 
@@ -106,7 +108,7 @@ fun ExamRedirectScreen(
                 Text(
                     text = tr("Subject: $subjectName", "বিষয়: $subjectName"),
                     fontSize = 14.sp,
-                    color = Color(0xFF64748B),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
@@ -119,7 +121,7 @@ fun ExamRedirectScreen(
                     "এটি একটি লাইভ পরীক্ষা, কোনো রেকর্ডেড ভিডিও লেকচার নয়। পরীক্ষায় অংশ নিতে নিচের বাটনে চাপ দিন।"
                 ),
                 fontSize = 14.sp,
-                color = Color(0xFF475569),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 lineHeight = 22.sp
             )
@@ -128,7 +130,7 @@ fun ExamRedirectScreen(
 
             Button(
                 onClick = onStartExam,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0072EC)),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
                     .fillMaxWidth()

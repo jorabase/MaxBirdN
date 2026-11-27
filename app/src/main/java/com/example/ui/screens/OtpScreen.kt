@@ -27,6 +27,7 @@ import com.example.auth.AuthState
 import com.example.auth.AuthViewModel
 import com.example.ui.components.ResponsiveDigitInputField
 import com.example.utils.AppLang
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.utils.tr
 import kotlinx.coroutines.delay
 
@@ -36,8 +37,12 @@ private fun formatOtpCountdown(totalSeconds: Int): String {
     val safeSec = totalSeconds.coerceAtLeast(0)
     val mins = (safeSec / 60).toString().padStart(2, '0')
     val secs = (safeSec % 60).toString().padStart(2, '0')
-    val unit = if (mins == "00") AppLang.tr("sec", "সেকেন্ড") else AppLang.tr("min", "মিনিট")
-    return "${toBengaliDigits(mins)} : ${toBengaliDigits(secs)} $unit"
+    val enUnit = if (mins == "00") "sec" else "min"
+    val bnUnit = if (mins == "00") "সেকেন্ড" else "মিনিট"
+    return AppLang.tr(
+        "$mins : $secs $enUnit",
+        "${toBengaliDigits(mins)} : ${toBengaliDigits(secs)} $bnUnit"
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,8 +58,8 @@ fun OtpScreen(
     var otpValue by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val serverOtpSeconds by viewModel.otpRemainingSeconds.collectAsState()
-    val timerResetTrigger by viewModel.otpTimerResetTrigger.collectAsState()
+    val serverOtpSeconds by viewModel.otpRemainingSeconds.collectAsStateWithLifecycle()
+    val timerResetTrigger by viewModel.otpTimerResetTrigger.collectAsStateWithLifecycle()
     var timer by remember(serverOtpSeconds, timerResetTrigger) {
         mutableStateOf(serverOtpSeconds.coerceAtLeast(0))
     }

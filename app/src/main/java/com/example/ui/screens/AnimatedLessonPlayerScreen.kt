@@ -142,7 +142,7 @@ fun AnimatedLessonPlayerScreen(
             val videoData = topic.videos?.data?.firstOrNull { !it.playback_url.isNullOrBlank() }
             val pbUrl = videoData?.playback_url?.takeIf { it.isNotBlank() } ?: return@mapIndexedNotNull null
             val thumb = videoData.video_thumbnail_url?.firstOrNull()
-            val tName = topic.name ?: AppLang.tr("Animated Lesson ${toBengaliDigits(index + 1)}", "অ্যানিমেটেড লেসন ${toBengaliDigits(index + 1)}")
+            val tName = topic.name ?: AppLang.tr("Animated Lesson ${index + 1}", "অ্যানিমেটেড লেসন ${toBengaliDigits(index + 1)}")
             val sNo = topic.no?.let { toBengaliDigits(it) } ?: toBengaliDigits(index + 1)
             AnimatedPlaylistEntry(
                 id = topic.id ?: "topic_$index",
@@ -829,7 +829,7 @@ fun AnimatedLessonPlayerScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = tr("Brightness ${toBengaliDigits(percent.toString())}%", "উজ্জ্বলতা ${toBengaliDigits(percent.toString())}%"),
+                                text = tr("Brightness $percent%", "উজ্জ্বলতা ${toBengaliDigits(percent.toString())}%"),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
@@ -866,7 +866,7 @@ fun AnimatedLessonPlayerScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = tr("Volume ${toBengaliDigits(percent.toString())}%", "ভলিউম ${toBengaliDigits(percent.toString())}%"),
+                                text = tr("Volume $percent%", "ভলিউম ${toBengaliDigits(percent.toString())}%"),
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
@@ -1238,7 +1238,7 @@ fun AnimatedLessonPlayerScreen(
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
-                                        text = tr("Videos (${toBengaliDigits(playlistEntries.size)})", "ভিডিও (${toBengaliDigits(playlistEntries.size)})"),
+                                        text = tr("Videos (${playlistEntries.size})", "ভিডিও (${toBengaliDigits(playlistEntries.size)})"),
                                         color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
@@ -2281,7 +2281,7 @@ fun AnimatedLessonPlayerScreen(
                     }
 
                     Text(
-                        text = tr("${toBengaliDigits(playlistEntries.size)} total", "মোট ${toBengaliDigits(playlistEntries.size)}টি"),
+                        text = tr("${playlistEntries.size} total", "মোট ${toBengaliDigits(playlistEntries.size)}টি"),
                         color = Color(0xFFA78BFA),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold

@@ -110,7 +110,7 @@ fun CourseProgressSection(
                 ) {
                     Text(
                         text = tr(
-                            "${completedCount.toString().toBengaliDigits()}/${displayPhases.size.toString().toBengaliDigits()} Done",
+                            "$completedCount/${displayPhases.size} Done",
                             "${completedCount.toString().toBengaliDigits()}/${displayPhases.size.toString().toBengaliDigits()} সম্পন্ন"
                         ),
                         fontSize = 11.5.sp,
@@ -269,9 +269,21 @@ private fun QuarterCard(
     val isBn = isBangla()
 
     val (badgeText, badgeBg, badgeTextColor) = when {
-        isCompleted -> Triple(tr("Completed", "পড়ানো শেষ"), Color(0xFFDCFCE7), Color(0xFF15803D))
-        isActive -> Triple(tr("Ongoing", "চলছে"), Color(0xFFDBEAFE), Color(0xFF1E40AF))
-        else -> Triple(tr("Enrolled", "ভর্তি হয়েছো"), Color(0xFFDCFCE7), Color(0xFF15803D))
+        isCompleted -> Triple(
+            tr("Completed", "পড়ানো শেষ"),
+            Color(0xFF052E24).copy(alpha = 0.72f),
+            Color(0xFF6EE7B7)
+        )
+        isActive -> Triple(
+            tr("Ongoing", "চলছে"),
+            Color.White.copy(alpha = 0.22f),
+            Color.White
+        )
+        else -> Triple(
+            tr("Enrolled", "ভর্তি হয়েছো"),
+            if (isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFFDCFCE7),
+            if (isDark) Color(0xFF6EE7B7) else Color(0xFF15803D)
+        )
     }
 
     val interaction = remember { MutableInteractionSource() }

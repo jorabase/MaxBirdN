@@ -28,11 +28,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.database.ParsedOption
 import com.example.database.SavedItemEntity
 import com.example.saved.SavedItemFilter
 import com.example.saved.SavedViewModel
 import com.example.ui.components.QuizRichContent
+import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.AppLang
 import com.example.utils.tr
 import java.text.SimpleDateFormat
@@ -56,7 +58,7 @@ fun SavedItemsScreen(
     onPlayLesson: ((lessonId: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.message) {
@@ -165,8 +167,10 @@ fun SavedItemsScreen(
                 EmptySavedState(filter = uiState.currentFilter)
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .navigationBarsPadding(),
+                    contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(
@@ -233,11 +237,12 @@ fun SavedItemCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     // Type Badge
+                    val isDark = isAppInDarkTheme()
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = when (item.type) {
                             SavedItemEntity.TYPE_QUESTION -> MaterialTheme.colorScheme.primaryContainer
-                            SavedItemEntity.TYPE_NOTE -> Color(0xFFFEF3C7)
+                            SavedItemEntity.TYPE_NOTE -> if (isDark) Color(0xFF78350F).copy(alpha = 0.5f) else Color(0xFFFEF3C7)
                             else -> MaterialTheme.colorScheme.secondaryContainer
                         }
                     ) {
@@ -252,7 +257,7 @@ fun SavedItemCard(
                             fontWeight = FontWeight.Bold,
                             color = when (item.type) {
                                 SavedItemEntity.TYPE_QUESTION -> MaterialTheme.colorScheme.onPrimaryContainer
-                                SavedItemEntity.TYPE_NOTE -> Color(0xFFB45309)
+                                SavedItemEntity.TYPE_NOTE -> if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
                                 else -> MaterialTheme.colorScheme.onSecondaryContainer
                             },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
