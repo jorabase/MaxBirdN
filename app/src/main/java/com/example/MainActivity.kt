@@ -44,6 +44,7 @@ import com.example.notification.ShikhoFirebaseMessagingService
 import com.example.notification.ShikhoNotificationManager
 import com.example.security.AntiTamperSecurity
 import com.example.security.SecurityViolation
+import com.example.ui.components.NetworkStatusBanner
 import com.example.ui.dialogs.KillSwitchMaintenanceScreen
 import com.example.ui.dialogs.UpdateDialog
 import com.example.ui.theme.MyApplicationTheme
@@ -225,6 +226,9 @@ class MainActivity : ComponentActivity() {
                                 }
                             } else {
                                 AppNavigation()
+                                NetworkStatusBanner(
+                                    modifier = Modifier.align(Alignment.TopCenter)
+                                )
                             }
                         }
                     }
@@ -267,7 +271,7 @@ class MainActivity : ComponentActivity() {
             com.google.firebase.messaging.FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
                 if (task.isSuccessful && !task.result.isNullOrBlank()) {
                     val token = task.result
-                    android.util.Log.d("MainActivity", "Fetched FCM Token: $token")
+                    android.util.Log.d("MainActivity", "Fetched FCM token successfully")
                     val sessionManager = SessionManager.getInstance(applicationContext)
                     sessionManager.setFcmToken(token)
 

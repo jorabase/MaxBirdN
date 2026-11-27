@@ -45,6 +45,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.BuildConfig
 import com.example.ui.theme.isAppInDarkTheme
 import com.example.update.ApkUpdateDownloadState
@@ -263,7 +264,7 @@ fun UpdateDialog(
     val lifecycleOwner = LocalLifecycleOwner.current
     val isDark = isAppInDarkTheme()
     val isDowngrade = AppUpdateRepository.isDowngradeRequired(updateInfo, BuildConfig.VERSION_CODE)
-    val downloadState by InAppApkUpdater.downloadState.collectAsState()
+    val downloadState by InAppApkUpdater.downloadState.collectAsStateWithLifecycle()
 
     // Ensure state is synchronized with the current target version & URL and verify cached APK still exists
     LaunchedEffect(updateInfo.versionCode, updateInfo.versionName, updateInfo.downloadUrl) {

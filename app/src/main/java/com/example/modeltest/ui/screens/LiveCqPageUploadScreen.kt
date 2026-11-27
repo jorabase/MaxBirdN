@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.LocalCqPageUploadItem
@@ -45,7 +46,7 @@ fun LiveCqPageUploadScreen(
     onNavigateBack: () -> Unit,
     onSubmittedSuccessfully: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val totalSec = uiState.liveCqRemainingSeconds

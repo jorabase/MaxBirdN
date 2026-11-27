@@ -45,8 +45,7 @@ object LibraryRepository {
     private var lastFetchedElapsedMs: Long = 0L
 
     private val httpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+        com.example.network.SharedHttpClient.newBuilder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(25, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)

@@ -46,15 +46,17 @@ fun QuestionPaletteBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
+            val isDark = com.example.ui.theme.isAppInDarkTheme()
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = tr("All Questions (${toBengaliDigits(totalQuestions)})", "সবগুলো প্রশ্ন (${toBengaliDigits(totalQuestions)})"),
+                    text = tr("All Questions ($totalQuestions)", "সবগুলো প্রশ্ন (${toBengaliDigits(totalQuestions)})"),
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -73,7 +75,11 @@ fun QuestionPaletteBottomSheet(
             ) {
                 LegendItem(color = Color(0xFF10B981), label = tr("Answered", "উত্তর দেওয়া"))
                 LegendItem(color = Color(0xFF3B82F6), label = tr("Current", "বর্তমান"))
-                LegendItem(color = Color(0xFFE2E8F0), label = tr("Unanswered", "উত্তরহীন"), textColor = Color(0xFF64748B))
+                LegendItem(
+                    color = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0),
+                    label = tr("Unanswered", "উত্তরহীন"),
+                    textColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -94,11 +100,11 @@ fun QuestionPaletteBottomSheet(
                     val bgColor = when {
                         isCurrent -> Color(0xFF3B82F6)
                         isAnswered -> Color(0xFF10B981)
-                        else -> Color(0xFFF1F5F9)
+                        else -> if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                     }
                     val textColor = when {
                         isCurrent || isAnswered -> Color.White
-                        else -> Color(0xFF334155)
+                        else -> MaterialTheme.colorScheme.onSurface
                     }
 
                     Box(
@@ -118,7 +124,7 @@ fun QuestionPaletteBottomSheet(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = toBengaliDigits(index + 1),
+                            text = tr("${index + 1}", toBengaliDigits(index + 1)),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = textColor

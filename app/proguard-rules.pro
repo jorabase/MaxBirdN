@@ -75,16 +75,13 @@
 -keep @androidx.room.Entity class * { *; }
 -dontwarn androidx.room.paging.**
 
-# 8. Jetpack Compose Rules
+# 8. Jetpack Compose Rules (Compose bundles its own consumer R8 rules)
 -keepclassmembers class * {
     @androidx.compose.runtime.Composable <methods>;
     @androidx.compose.runtime.ReadOnlyComposable <methods>;
 }
--keep class androidx.compose.ui.** { *; }
 
-# 9. Firebase & Google Play Services Rules (Suppresses recaptchabase R8 warnings & speeds up build)
--keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
+# 9. Firebase & Google Play Services Rules (AARs bundle consumer R8 rules; suppress optional warnings)
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
 -dontwarn com.google.android.gms.internal.**
@@ -95,10 +92,8 @@
 -dontnote com.google.firebase.**
 -ignorewarnings
 
-# 10. ExoPlayer / Media3 & Coil Image Loading
--keep class androidx.media3.** { *; }
+# 10. ExoPlayer / Media3 & Coil Image Loading (AARs bundle consumer R8 rules)
 -dontwarn androidx.media3.**
--keep class coil.** { *; }
 -dontwarn coil.**
 
 # 11. WebView @JavascriptInterface (window.AndroidApp TTS Bridge)

@@ -52,6 +52,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -204,7 +205,7 @@ fun AnimatedLessonPlayerScreen(
     val downloadId = remember(activeVideoUrl, activeTitle) {
         "anim_vid_" + (activeVideoUrl.hashCode().toString() + "_" + activeTitle.hashCode().toString()).replace("-", "n")
     }
-    val downloadedItem by downloadManager.getDownloadedItemById(downloadId).collectAsState(initial = null)
+    val downloadedItem by downloadManager.getDownloadedItemById(downloadId).collectAsStateWithLifecycle(initialValue = null)
     var showDownloadQualityDialog by remember { mutableStateOf(false) }
     var showDeleteDownloadDialog by remember { mutableStateOf(false) }
 

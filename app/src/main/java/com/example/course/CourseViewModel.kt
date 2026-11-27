@@ -829,8 +829,7 @@ class CourseViewModel(
                         }
                     }
 
-                    android.util.Log.d("LectureDebug", "api response (chosen id=$foundWorkingId): $liveClassData")
-                    android.util.Log.d("LectureDebug", "playback_url: ${liveClassData?.playback_url}")
+                    android.util.Log.d("LectureDebug", "Resolved live class details (id=$foundWorkingId, hasStream=${!liveClassData?.playback_url.isNullOrBlank()})")
 
                     var pbUrl = liveClassData?.playback_url?.takeIf { it.isNotBlank() && it != "null" }
                         ?: liveClassData?.recording_url?.takeIf { it.isNotBlank() && it != "null" }
@@ -904,8 +903,7 @@ class CourseViewModel(
                         )
 
                         var currentLessonState = updatedLesson
-                        android.util.Log.d("LectureDebug", "resolved video url: ${currentLessonState.resolvedVideoUrl}")
-                        android.util.Log.d("LectureDebug", "resolved slide url: ${currentLessonState.resolvedSlideUrl}, attachments: ${currentLessonState.allAttachments.size}")
+                        android.util.Log.d("LectureDebug", "Resolved lesson media (hasVideo=${!currentLessonState.resolvedVideoUrl.isNullOrBlank()}, hasSlide=${!currentLessonState.resolvedSlideUrl.isNullOrBlank()}, attachments=${currentLessonState.allAttachments.size})")
 
                         // 1. Fetch Teacher Details if teacher_id exists
                         val teacherId = liveClassData?.teacher?.id

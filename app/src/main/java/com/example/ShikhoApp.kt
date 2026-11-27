@@ -2,13 +2,21 @@ package com.example
 
 import android.app.Activity
 import android.app.Application
+import android.content.ComponentCallbacks2
 import android.os.Bundle
 import android.util.Log
+import coil.Coil
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.SvgDecoder
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import com.example.network.SharedHttpClient
 import com.example.notification.ClassAlarmScheduler
 import com.example.security.AntiTamperSecurity
 import com.google.firebase.FirebaseApp
 
-class ShikhoApp : Application() {
+class ShikhoApp : Application(), ImageLoaderFactory {
     companion object {
         private const val TAG = "ShikhoApp"
         lateinit var instance: ShikhoApp
@@ -59,5 +67,37 @@ class ShikhoApp : Application() {
 
         // 3. Initialize OneSignal + FCM Push Notification Registration & Sync
         com.example.notification.OneSignalPushManager.init(this)
+    }
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .okHttpClient { SharedHttpClient.baseClient }
+            .components {
+                add(SvgDecoder.Factory())
+            }
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.22)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(60L * 1024L * 1024L)
+                    .build()
+            }
+            .crossfade(200)
+            .build()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+        ) {
+            runCatching {
+                Coil.imageLoader(this).memoryCache?.clear()
+            }
+        }
     }
 }

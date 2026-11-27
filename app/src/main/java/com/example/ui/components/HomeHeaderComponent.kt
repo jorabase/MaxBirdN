@@ -213,40 +213,42 @@ fun HomeHeader(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Notification Bell Button
+                // Notification Bell Button (Compact, softly frosted glass over live wallpaper)
                 Box(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onNotificationClick),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
-                        onClick = onNotificationClick,
                         shape = CircleShape,
-                        color = Color(0xFF051226).copy(alpha = 0.58f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
-                        modifier = Modifier.size(44.dp)
+                        color = Color.White.copy(alpha = 0.14f),
+                        border = BorderStroke(0.8.dp, Color.White.copy(alpha = 0.22f)),
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Default.Notifications,
                                 contentDescription = com.example.utils.tr("Notifications", "নোটিফিকেশন"),
-                                tint = Color.White,
-                                modifier = Modifier.size(21.dp)
+                                tint = Color.White.copy(alpha = 0.82f),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                     if (unreadNotificationCount > 0) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFFEF4444),
-                            border = BorderStroke(1.5.dp, Color(0xFF07152B)),
+                            color = Color(0xFFEF4444).copy(alpha = 0.92f),
+                            border = BorderStroke(1.2.dp, Color(0xFF07152B).copy(alpha = 0.85f)),
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .offset(x = (-2).dp, y = 2.dp)
-                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                                .offset(x = (-4).dp, y = 4.dp)
+                                .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
                         ) {
                             Box(
                                 contentAlignment = Alignment.Center,
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                                modifier = Modifier.padding(horizontal = 3.5.dp)
                             ) {
                                 Text(
                                     text = if (unreadNotificationCount > 9) {
@@ -255,7 +257,7 @@ fun HomeHeader(
                                         com.example.utils.toBengaliDigits(unreadNotificationCount)
                                     },
                                     color = Color.White,
-                                    fontSize = 9.5.sp,
+                                    fontSize = 8.5.sp,
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }

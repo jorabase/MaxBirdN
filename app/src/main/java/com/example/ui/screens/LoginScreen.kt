@@ -983,7 +983,7 @@ private fun LoginAnimatedLogoBadge(
 
         Box(
             modifier = Modifier
-                .size(78.dp)
+                .size(82.dp)
                 .shadow(
                     elevation = if (isDark) 18.dp else 12.dp,
                     shape = RoundedCornerShape(24.dp),
@@ -993,7 +993,7 @@ private fun LoginAnimatedLogoBadge(
                 .clip(RoundedCornerShape(24.dp))
                 .background(
                     if (isDark) Brush.linearGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
-                    else Brush.linearGradient(listOf(Color.White, Color(0xFFF1F5F9)))
+                    else Brush.linearGradient(listOf(Color.White, Color(0xFFF8FAFC)))
                 )
                 .border(2.2.dp, borderBrush, RoundedCornerShape(24.dp)),
             contentAlignment = Alignment.Center
@@ -1002,7 +1002,7 @@ private fun LoginAnimatedLogoBadge(
                 painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                 contentDescription = "MaxBird Logo",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.size(62.dp)
             )
         }
     }

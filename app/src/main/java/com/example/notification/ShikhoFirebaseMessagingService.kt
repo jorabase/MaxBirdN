@@ -51,7 +51,7 @@ class ShikhoFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d(TAG, "Refreshed FCM Token: $token")
+        Log.d(TAG, "Refreshed FCM token received")
         val sessionManager = SessionManager.getInstance(applicationContext)
         sessionManager.setFcmToken(token)
         ShikhoNotificationManager.logTerminal("INFO", "🔄 FCM Token Refreshed: ${token.take(20)}...")

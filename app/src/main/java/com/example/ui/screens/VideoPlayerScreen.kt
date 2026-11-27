@@ -40,6 +40,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -117,7 +118,7 @@ fun VideoPlayerScreen(
     val downloadId = remember(videoUrl, title) {
         "vid_" + (videoUrl.hashCode().toString() + "_" + title.hashCode().toString()).replace("-", "n")
     }
-    val downloadedItem by downloadManager.getDownloadedItemById(downloadId).collectAsState(initial = null)
+    val downloadedItem by downloadManager.getDownloadedItemById(downloadId).collectAsStateWithLifecycle(initialValue = null)
     var showDeleteDownloadDialog by remember { mutableStateOf(false) }
 
     val sessionManager = remember { com.example.auth.SessionManager(context) }

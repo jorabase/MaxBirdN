@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.api.StudentLessonItem
 import com.example.modeltest.ui.ModelTestTab
 import com.example.modeltest.ui.ModelTestViewModel
@@ -73,7 +74,7 @@ fun ModelTestDashboardScreen(
     onNavigateToSmartNotes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val subjectColor = remember(subjectColorHex) {
         try {
@@ -249,13 +250,18 @@ fun ModelTestDashboardScreen(
                         onClick = onNavigateToPracticeQuiz,
                         modifier = Modifier.weight(1f)
                     ) {
+                        val isDark = com.example.ui.theme.isAppInDarkTheme()
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
                                 .background(
                                     Brush.linearGradient(
-                                        colors = listOf(Color(0xFFFEF3C7), Color(0xFFE0F2FE))
+                                        colors = if (isDark) {
+                                            listOf(Color(0xFF78350F).copy(alpha = 0.65f), Color(0xFF0C4A6E).copy(alpha = 0.65f))
+                                        } else {
+                                            listOf(Color(0xFFFEF3C7), Color(0xFFE0F2FE))
+                                        }
                                     )
                                 ),
                             contentAlignment = Alignment.Center
@@ -445,7 +451,7 @@ private fun ModelTestTabsHeader(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (modelTestCount > 0) {
-                            tr("Model Tests (${toBengaliDigits(modelTestCount)})", "মডেল টেস্ট (${toBengaliDigits(modelTestCount)})")
+                            tr("Model Tests ($modelTestCount)", "মডেল টেস্ট (${toBengaliDigits(modelTestCount)})")
                         } else {
                             tr("Model Tests", "মডেল টেস্ট")
                         },
@@ -479,7 +485,7 @@ private fun ModelTestTabsHeader(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (classCount > 0) {
-                            tr("Classes (${toBengaliDigits(classCount)})", "ক্লাস (${toBengaliDigits(classCount)})")
+                            tr("Classes ($classCount)", "ক্লাস (${toBengaliDigits(classCount)})")
                         } else {
                             tr("Classes", "ক্লাস")
                         },
@@ -517,11 +523,28 @@ private fun ModelTestCard(
     )
 
     // Live, Completed, Ended, Upcoming detection
+    val isDark = com.example.ui.theme.isAppInDarkTheme()
     val (statusLabel, statusBg, statusText) = when {
-        isLive -> Triple(tr("🔴 Live Exam", "🔴 লাইভ এক্সাম"), Color(0xFFEF4444).copy(alpha = 0.15f), Color(0xFFDC2626))
-        isCompleted -> Triple(tr("Completed", "সম্পন্ন"), Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
-        isMissed -> Triple(tr("Recorded Exam", "রেকর্ড এক্সাম"), Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
-        else -> Triple(tr("Upcoming Exam", "আপকামিং এক্সাম"), Color(0xFF7C3AED).copy(alpha = 0.12f), Color(0xFF7C3AED))
+        isLive -> Triple(
+            tr("🔴 Live Exam", "🔴 লাইভ এক্সাম"),
+            if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFEF4444).copy(alpha = 0.15f),
+            if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
+        )
+        isCompleted -> Triple(
+            tr("Completed", "সম্পন্ন"),
+            if (isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFF10B981).copy(alpha = 0.12f),
+            if (isDark) Color(0xFF6EE7B7) else Color(0xFF059669)
+        )
+        isMissed -> Triple(
+            tr("Recorded Exam", "রেকর্ড এক্সাম"),
+            if (isDark) Color(0xFF1E293B) else Color(0xFF64748B).copy(alpha = 0.12f),
+            if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569)
+        )
+        else -> Triple(
+            tr("Upcoming Exam", "আপকামিং এক্সাম"),
+            if (isDark) Color(0xFF4C1D95).copy(alpha = 0.52f) else Color(0xFF7C3AED).copy(alpha = 0.12f),
+            if (isDark) Color(0xFFC4B5FD) else Color(0xFF7C3AED)
+        )
     }
 
     Card(

@@ -4,6 +4,7 @@ import com.example.auth.SessionManager
 import com.example.course.LessonCacheManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +15,7 @@ class CompletedItemRepository(
     private val completedItemDao: CompletedItemDao,
     private val sessionManager: SessionManager
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _completedIdsState = MutableStateFlow<Set<String>>(emptySet())
     val completedIdsState: StateFlow<Set<String>> = _completedIdsState.asStateFlow()
 

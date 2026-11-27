@@ -26,8 +26,7 @@ object ActivationSupportRepository {
     private const val PREFS_NAME = "maxbird_activation_support_prefs"
     private const val KEY_CACHED_LINKS = "cached_support_links"
 
-    private val httpClient = OkHttpClient.Builder()
-        .applyAntiCaptureSecurity()
+    private val httpClient = com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(12, TimeUnit.SECONDS)
         .build()

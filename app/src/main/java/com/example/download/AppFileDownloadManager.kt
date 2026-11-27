@@ -669,7 +669,7 @@ class AppFileDownloadManager private constructor(
         streamDir: File,
         remoteUrl: String
     ) = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Starting/Resuming HLS download for: $remoteUrl")
+        Log.d(TAG, "Starting/Resuming HLS download for id=$id")
 
         if (!streamDir.exists()) {
             streamDir.mkdirs()

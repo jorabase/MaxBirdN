@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.example.LocalPictureInPictureMode
 import com.example.auth.SessionManager
@@ -224,18 +225,18 @@ fun LiveClassPage(
     var activeLiveSlideUrl by remember { mutableStateOf<String?>(null) }
     var isLiveOnGoing by remember { mutableStateOf(true) }
 
-    val masterUrl by wsManager.masterUrl.collectAsState()
-    val candidateUrls by wsManager.candidateUrls.collectAsState()
-    val viewerCount by wsManager.viewerCount.collectAsState()
-    val wsError by wsManager.error.collectAsState()
-    val isConnected by wsManager.isConnected.collectAsState()
-    val roomTeacherName by wsManager.teacherName.collectAsState()
-    val serverRoomTitle by wsManager.roomTitle.collectAsState()
-    val isChatEnabled by wsManager.isChatEnabled.collectAsState()
-    val isHandRaised by wsManager.isHandRaised.collectAsState()
-    val activeRoomTeacher by wsManager.activeRoomTeacher.collectAsState()
-    val discoveredTeachers by wsManager.discoveredTeachers.collectAsState()
-    val isJoinedAsTeacherIdentity by wsManager.isJoinedAsTeacherIdentity.collectAsState()
+    val masterUrl by wsManager.masterUrl.collectAsStateWithLifecycle()
+    val candidateUrls by wsManager.candidateUrls.collectAsStateWithLifecycle()
+    val viewerCount by wsManager.viewerCount.collectAsStateWithLifecycle()
+    val wsError by wsManager.error.collectAsStateWithLifecycle()
+    val isConnected by wsManager.isConnected.collectAsStateWithLifecycle()
+    val roomTeacherName by wsManager.teacherName.collectAsStateWithLifecycle()
+    val serverRoomTitle by wsManager.roomTitle.collectAsStateWithLifecycle()
+    val isChatEnabled by wsManager.isChatEnabled.collectAsStateWithLifecycle()
+    val isHandRaised by wsManager.isHandRaised.collectAsStateWithLifecycle()
+    val activeRoomTeacher by wsManager.activeRoomTeacher.collectAsStateWithLifecycle()
+    val discoveredTeachers by wsManager.discoveredTeachers.collectAsStateWithLifecycle()
+    val isJoinedAsTeacherIdentity by wsManager.isJoinedAsTeacherIdentity.collectAsStateWithLifecycle()
 
     LaunchedEffect(activeRoomTeacher) {
         if (selectedTeacherForJoin == null && activeRoomTeacher != null) {
@@ -294,11 +295,11 @@ fun LiveClassPage(
     }
 
     // 100ms Real Live Poll / Quiz State & Auto Poll Engine State
-    val activePoll by wsManager.activePoll.collectAsState()
-    val previousPolls by wsManager.previousPolls.collectAsState()
-    val autoPollEnabled by wsManager.autoPollEnabled.collectAsState()
-    val autoPollDelayMs by wsManager.autoPollDelayMs.collectAsState()
-    val autoPollToastEvent by wsManager.autoPollToastEvent.collectAsState()
+    val activePoll by wsManager.activePoll.collectAsStateWithLifecycle()
+    val previousPolls by wsManager.previousPolls.collectAsStateWithLifecycle()
+    val autoPollEnabled by wsManager.autoPollEnabled.collectAsStateWithLifecycle()
+    val autoPollDelayMs by wsManager.autoPollDelayMs.collectAsStateWithLifecycle()
+    val autoPollToastEvent by wsManager.autoPollToastEvent.collectAsStateWithLifecycle()
     var selectedPollIdForQuestion by remember { mutableStateOf<String?>(null) }
     var selectedPollIdForResult by remember { mutableStateOf<String?>(null) }
     var showPreviousPollsDialog by remember { mutableStateOf(false) }
@@ -726,7 +727,7 @@ fun LiveClassPage(
         }
     }
 
-    val incomingHistory by wsManager.receivedMessagesHistory.collectAsState()
+    val incomingHistory by wsManager.receivedMessagesHistory.collectAsStateWithLifecycle()
     LaunchedEffect(incomingHistory, canViewProfiles) {
         if (!canViewProfiles) {
             chatMessages.removeAll { !it.isMine && !it.isTeacher }

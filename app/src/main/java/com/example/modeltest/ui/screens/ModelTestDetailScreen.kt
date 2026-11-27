@@ -32,6 +32,7 @@ import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestCountdownTimer
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.modeltest.ui.components.parseIsoDateToMillis
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.SlideViewerDialog
 import com.example.ui.theme.isAppInDarkTheme
 import com.example.utils.AppLang
@@ -56,7 +57,7 @@ fun ModelTestDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var activePdfUrl by remember { mutableStateOf<String?>(null) }
     var activePdfTitle by remember { mutableStateOf("") }
@@ -488,8 +489,8 @@ fun ModelTestDetailScreen(
                     count = tr("${info?.mcq_count ?: 30} Questions", "${toBengaliDigits((info?.mcq_count ?: 30).toString())}টি প্রশ্ন"),
                     duration = tr("${mcqMinutes} min", "সময় ${toBengaliDigits(mcqMinutes.toString())} মিনিট"),
                     icon = Icons.Default.FactCheck,
-                    iconBg = Color(0xFFE0F2FE),
-                    iconTint = Color(0xFF0284C7),
+                    iconBg = if (isDark) Color(0xFF0C4A6E).copy(alpha = 0.55f) else Color(0xFFE0F2FE),
+                    iconTint = if (isDark) Color(0xFF7DD3FC) else Color(0xFF0284C7),
                     showMasterSolution = !uiState.mcqMasterSolutionUrl.isNullOrBlank(),
                     onMasterSolutionClick = {
                         uiState.mcqMasterSolutionUrl?.let { url ->
@@ -505,8 +506,8 @@ fun ModelTestDetailScreen(
                     count = tr("${info?.cq_count ?: 2} Questions", "${toBengaliDigits((info?.cq_count ?: 2).toString())}টি প্রশ্ন"),
                     duration = tr(cqDurationFormatted, "সময় $cqDurationFormatted"),
                     icon = Icons.Default.EditNote,
-                    iconBg = Color(0xFFFEF3C7),
-                    iconTint = Color(0xFFD97706),
+                    iconBg = if (isDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7),
+                    iconTint = if (isDark) Color(0xFFFCD34D) else Color(0xFFD97706),
                     showMasterSolution = !uiState.cqMasterSolutionUrl.isNullOrBlank(),
                     onMasterSolutionClick = {
                         uiState.cqMasterSolutionUrl?.let { url ->
@@ -564,7 +565,7 @@ fun ModelTestDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = tr("${toBengaliDigits(subjectCount.toString())}", "${toBengaliDigits(subjectCount.toString())}টি"),
+                                    text = tr("$subjectCount", "${toBengaliDigits(subjectCount.toString())}টি"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -589,7 +590,7 @@ fun ModelTestDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = tr("${toBengaliDigits(chapterCount.toString())}", "${toBengaliDigits(chapterCount.toString())}টি"),
+                                    text = tr("$chapterCount", "${toBengaliDigits(chapterCount.toString())}টি"),
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -800,7 +801,7 @@ fun ModelTestDetailScreen(
                                         .padding(vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = tr("Practice Test ${toBengaliDigits(attemptNum.toString())}", "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}"),
+                                        text = tr("Practice Test $attemptNum", "প্র্যাকটিস টেস্ট ${toBengaliDigits(attemptNum.toString())}"),
                                         fontSize = 14.5.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A)

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ModelTestDetailSkeleton
 import com.example.utils.toBengaliDigits
@@ -39,7 +40,7 @@ fun ModelTestResultScreen(
     onNavigateHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(sessionId) {
         viewModel.loadPreResult(sessionId)
@@ -237,7 +238,7 @@ fun ModelTestResultScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = tr("#${toBengaliDigits(result.rank.toString())}", "${toBengaliDigits(result.rank.toString())} তম"),
+                                    text = tr("#${result.rank}", "${toBengaliDigits(result.rank.toString())} তম"),
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF3B82F6)

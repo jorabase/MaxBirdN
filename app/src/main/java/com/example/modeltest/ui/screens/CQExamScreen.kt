@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.ui.components.QuizRichContent
 import com.example.modeltest.ui.ModelTestViewModel
@@ -43,7 +44,7 @@ fun CQExamScreen(
     onFinishPracticeExam: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showThankYouDialog by remember { mutableStateOf(false) }
 
     BackHandler {

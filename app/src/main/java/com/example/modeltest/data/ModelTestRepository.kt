@@ -36,8 +36,7 @@ class ModelTestRepository(
         .addLast(KotlinJsonAdapterFactory())
         .build()
 
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this, sessionManager?.appContext) }
+    private val httpClient: OkHttpClient = com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .addInterceptor { chain ->

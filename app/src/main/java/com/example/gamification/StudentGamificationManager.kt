@@ -2,6 +2,7 @@ package com.example.gamification
 
 import android.content.Context
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.database.AppDatabase
 import com.example.database.CompletedItemRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -219,9 +220,9 @@ fun rememberGamificationStats(context: Context): GamificationStats {
     val db = remember(context) { AppDatabase.getInstance(context) }
     val sessionManager = remember(context) { com.example.auth.SessionManager(context) }
     val completedRepo = remember(db, sessionManager) { CompletedItemRepository(db.completedItemDao(), sessionManager) }
-    val completedIds by completedRepo.completedIdsState.collectAsState()
-    val savedIds by db.savedItemDao().getAllSavedItemIds().collectAsState(initial = emptyList())
-    val trigger by StudentGamificationManager.refreshTrigger.collectAsState()
+    val completedIds by completedRepo.completedIdsState.collectAsStateWithLifecycle()
+    val savedIds by db.savedItemDao().getAllSavedItemIds().collectAsStateWithLifecycle(initialValue = emptyList())
+    val trigger by StudentGamificationManager.refreshTrigger.collectAsStateWithLifecycle()
 
     return remember(completedIds.size, savedIds.size, trigger) {
         StudentGamificationManager.computeStats(

@@ -1204,8 +1204,9 @@ private fun LibraryFileCard(
 
     val isBn = isBangla()
     val sizeText = remember(file.fileSizeBytes, downloadedItem?.totalBytes, isBn) {
+        val dlBytes = downloadedItem?.totalBytes ?: 0L
         val bytes = when {
-            (downloadedItem?.totalBytes ?: 0L) > 0L -> downloadedItem!!.totalBytes
+            dlBytes > 0L -> dlBytes
             file.fileSizeBytes > 0L -> file.fileSizeBytes
             else -> 0L
         }
@@ -1227,7 +1228,7 @@ private fun LibraryFileCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .clickable {
-                onReadClick(if (localFileExists) downloadedItem!!.localFilePath else "")
+                onReadClick(if (localFileExists) downloadedItem?.localFilePath.orEmpty() else "")
             }
             .testTag("library_file_card_${file.id}")
     ) {

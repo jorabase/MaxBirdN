@@ -211,15 +211,15 @@ fun SplashScreen(
 
                 Surface(
                     modifier = Modifier
-                        .size(84.dp)
+                        .size(92.dp)
                         .shadow(
                             elevation = 20.dp,
                             shape = CircleShape,
                             spotColor = Color(0xFF38BDF8).copy(alpha = 0.45f)
                         ),
                     shape = CircleShape,
-                    color = Color(0xFFF8FAFC),
-                    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.75f))
+                    color = Color.White,
+                    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.85f))
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -229,7 +229,7 @@ fun SplashScreen(
                             painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                             contentDescription = "MaxBird",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.size(52.dp)
+                            modifier = Modifier.size(68.dp)
                         )
                     }
                 }

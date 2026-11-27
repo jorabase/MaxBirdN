@@ -422,7 +422,7 @@ class AuthViewModel(
                     profile = ProfileDevice(device_id = deviceId),
                     google_ads_id = adsId
                 )
-                android.util.Log.d("AuthViewModel", "Logging in with PIN, device_id (FCM token): $deviceId")
+                android.util.Log.d("AuthViewModel", "Logging in with PIN")
 
                 val response = apiService.login(request)
                 val tokens = response.tokens

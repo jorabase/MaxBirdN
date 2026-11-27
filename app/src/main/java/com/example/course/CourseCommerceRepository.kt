@@ -353,8 +353,7 @@ object CourseCommerceRepository {
         } catch (_: Throwable) {}
     }
 
-    private val httpClient = OkHttpClient.Builder()
-        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+    private val httpClient = com.example.network.SharedHttpClient.newBuilder()
         .addInterceptor(Interceptor { chain ->
             val response = chain.proceed(chain.request())
             syncServerClockFromHttpDate(response.header("Date"))

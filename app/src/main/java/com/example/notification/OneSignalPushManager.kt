@@ -67,8 +67,7 @@ object OneSignalPushManager {
     @Volatile
     private var lastTriggeredIdentityKey: String = ""
 
-    private val httpClient = OkHttpClient.Builder()
-        .applyAntiCaptureSecurity()
+    private val httpClient = com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)

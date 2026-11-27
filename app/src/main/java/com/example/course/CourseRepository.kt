@@ -893,9 +893,9 @@ class CourseRepository(
                 variables = mapOf("id" to liveClassId)
             )
             val res = apiService.getAcademicLiveClassDetails(query)
-            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails standard response: $res")
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails standard loaded=${res.data?.academicProgramLiveClass != null}")
             if (!res.errors.isNullOrEmpty()) {
-                android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails errors: ${res.errors}")
+                android.util.Log.w("LectureDebug", "GetAcademicLiveClassDetails returned ${res.errors.size} error(s)")
             }
             if (res.data?.academicProgramLiveClass != null) {
                 val item = res.data.academicProgramLiveClass
@@ -933,7 +933,7 @@ class CourseRepository(
                 variables = mapOf("id" to liveClassId)
             )
             val res = apiService.getAcademicLiveClassDetails(query)
-            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails minimal response: $res")
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails minimal loaded=${res.data?.academicProgramLiveClass != null}")
             if (res.data?.academicProgramLiveClass != null) {
                 val item = res.data.academicProgramLiveClass
                 liveClassDetailsCache[liveClassId] = item
@@ -960,7 +960,7 @@ class CourseRepository(
                 variables = mapOf("id" to liveClassId)
             )
             val res = apiService.getAcademicLiveClassDetails(query)
-            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal response: $res")
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal loaded=${res.data?.academicProgramLiveClass != null}")
             if (res.data?.academicProgramLiveClass != null) {
                 val item = res.data.academicProgramLiveClass
                 liveClassDetailsCache[liveClassId] = item
@@ -992,7 +992,7 @@ class CourseRepository(
                 variables = mapOf("id" to liveClassId)
             )
             val res = apiService.getAcademicLiveClassDetails(query)
-            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails (ID! type) response: $res")
+            android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails (ID! type) loaded=${res.data?.academicProgramLiveClass != null}")
             if (res.data?.academicProgramLiveClass != null) {
                 return res.data.academicProgramLiveClass
             }

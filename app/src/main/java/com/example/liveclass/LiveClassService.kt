@@ -42,8 +42,7 @@ data class AcademicLiveClassInfo(
 )
 
 class LiveClassService(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+    private val client: OkHttpClient = com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)

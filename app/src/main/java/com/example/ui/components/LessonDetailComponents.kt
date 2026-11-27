@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -258,7 +259,7 @@ fun LessonDocumentsSection(
                     val downloadManager = remember { com.example.download.AppFileDownloadManager.getInstance(context) }
                     val downloadUrl = primarySlideAttachment.downloadUrl
                     val pdfId = remember(downloadUrl) { "pdf_" + (downloadUrl?.hashCode().toString()) }
-                    val downloadedPdf by downloadManager.getDownloadedItemById(pdfId).collectAsState(initial = null)
+                    val downloadedPdf by downloadManager.getDownloadedItemById(pdfId).collectAsStateWithLifecycle(initialValue = null)
 
                     Row(
                         modifier = Modifier

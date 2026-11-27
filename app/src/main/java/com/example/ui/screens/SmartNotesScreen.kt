@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
@@ -46,6 +47,8 @@ import com.example.api.AcademicChapterItem
 import com.example.api.TaggableResourceItem
 import com.example.smartnotes.SmartNotesUiEvent
 import com.example.smartnotes.SmartNotesViewModel
+import com.example.ui.components.AppGridLoadingSkeleton
+import com.example.ui.components.AppListLoadingSkeleton
 import com.example.ui.components.AttachmentListDialog
 import com.example.ui.components.SlideViewerDialog
 import com.example.utils.AppLang
@@ -67,7 +70,7 @@ fun SmartNotesScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val parsedSubjectColor = remember(subjectColorHex) {
         try {
@@ -290,25 +293,10 @@ fun SmartNotesScreen(
                     // ==========================================
                     when {
                         uiState.isSubjectResourcesLoading -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(24.dp),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator(
-                                    color = parsedSubjectColor,
-                                    modifier = Modifier.size(36.dp),
-                                    strokeWidth = 3.dp
-                                )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Text(
-                                    text = tr("Loading resources...", "রিসোর্স লোড হচ্ছে..."),
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            AppGridLoadingSkeleton(
+                                modifier = Modifier.fillMaxSize(),
+                                rows = 3
+                            )
                         }
 
                         uiState.subjectResources.isEmpty() -> {
@@ -323,10 +311,12 @@ fun SmartNotesScreen(
                         else -> {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(3),
-                                contentPadding = PaddingValues(16.dp),
+                                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 32.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .navigationBarsPadding()
                             ) {
                                 items(uiState.subjectResources, key = { it.id ?: it.title ?: "" }) { resource ->
                                     val isOpeningThis = uiState.isOpeningPdf && uiState.openingTagId == resource.id
@@ -357,25 +347,10 @@ fun SmartNotesScreen(
                     // ==========================================
                     when {
                         uiState.isChaptersLoading -> {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(24.dp),
-                                verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator(
-                                    color = parsedSubjectColor,
-                                    modifier = Modifier.size(36.dp),
-                                    strokeWidth = 3.dp
-                                )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Text(
-                                    text = tr("Loading chapters...", "অধ্যায়সমূহ লোড হচ্ছে..."),
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            AppListLoadingSkeleton(
+                                modifier = Modifier.fillMaxSize(),
+                                itemCount = 6
+                            )
                         }
 
                         uiState.chapters.isEmpty() -> {
@@ -389,9 +364,11 @@ fun SmartNotesScreen(
 
                         else -> {
                             LazyColumn(
-                                contentPadding = PaddingValues(16.dp),
+                                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 32.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .navigationBarsPadding()
                             ) {
                                 items(uiState.chapters, key = { it.id ?: it.chapter_id ?: "" }) { chapter ->
                                     ChapterResourceListItem(

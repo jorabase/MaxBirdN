@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -381,9 +382,9 @@ fun PdfViewerContent(
         }
     }
 
-    val downloadedItemById by downloadManager.getDownloadedItemById(downloadId).collectAsState(initial = null)
+    val downloadedItemById by downloadManager.getDownloadedItemById(downloadId).collectAsStateWithLifecycle(initialValue = null)
     val downloadedItemByPath by if (directCleanPath.isNotBlank()) {
-        downloadManager.getDownloadedItemByPath(directCleanPath).collectAsState(initial = null)
+        downloadManager.getDownloadedItemByPath(directCleanPath).collectAsStateWithLifecycle(initialValue = null)
     } else {
         remember { mutableStateOf<DownloadedItemEntity?>(null) }
     }
@@ -2546,8 +2547,17 @@ private fun JumpToPageDialog(
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { str ->
-                        val filtered = str.filter { it.isDigit() }
-                        inputText = filtered
+                        val bnDigits = "০১২৩৪৫৬৭৮৯"
+                        val normalized = buildString {
+                            for (ch in str) {
+                                val bnIdx = bnDigits.indexOf(ch)
+                                when {
+                                    bnIdx >= 0 -> append('0' + bnIdx)
+                                    ch in '0'..'9' -> append(ch)
+                                }
+                            }
+                        }
+                        inputText = normalized
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
@@ -2739,8 +2749,7 @@ private fun PdfErrorCard(
 }
 
 private val sharedSlidePdfHttpClient: OkHttpClient by lazy {
-    OkHttpClient.Builder()
-        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+    com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()

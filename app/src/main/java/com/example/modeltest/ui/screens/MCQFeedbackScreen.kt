@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.modeltest.data.FeedbackQuestionItem
 import com.example.modeltest.ui.FeedbackFilter
@@ -48,7 +49,7 @@ fun MCQFeedbackScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var filterMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(sessionId) {
@@ -276,22 +277,35 @@ private fun FeedbackQuestionCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Status Tag
+            val isDark = com.example.ui.theme.isAppInDarkTheme()
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = tr("Question ${toBengaliDigits(index.toString())}", "প্রশ্ন ${toBengaliDigits(index.toString())}"),
+                    text = tr("Question $index", "প্রশ্ন ${toBengaliDigits(index.toString())}"),
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
 
                 val (badgeText, badgeBg, badgeColor) = when {
-                    item.is_correct == true -> Triple(tr("Correct", "সঠিক"), Color(0xFF10B981).copy(alpha = 0.12f), Color(0xFF059669))
-                    item.user_selected_option != null -> Triple(tr("Wrong", "ভুল"), Color(0xFFEF4444).copy(alpha = 0.12f), Color(0xFFDC2626))
-                    else -> Triple(tr("Skipped", "অনুত্তরিত"), Color(0xFF64748B).copy(alpha = 0.12f), Color(0xFF475569))
+                    item.is_correct == true -> Triple(
+                        tr("Correct", "সঠিক"),
+                        if (isDark) Color(0xFF064E3B).copy(alpha = 0.55f) else Color(0xFF10B981).copy(alpha = 0.12f),
+                        if (isDark) Color(0xFF6EE7B7) else Color(0xFF059669)
+                    )
+                    item.user_selected_option != null -> Triple(
+                        tr("Wrong", "ভুল"),
+                        if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.55f) else Color(0xFFEF4444).copy(alpha = 0.12f),
+                        if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
+                    )
+                    else -> Triple(
+                        tr("Skipped", "অনুত্তরিত"),
+                        if (isDark) Color(0xFF1E293B) else Color(0xFF64748B).copy(alpha = 0.12f),
+                        if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569)
+                    )
                 }
 
                 Surface(
@@ -325,7 +339,7 @@ private fun FeedbackQuestionCard(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     QuizRichContent(
-                        text = item.question_text?.takeIf { it.isNotBlank() } ?: tr("Question ${toBengaliDigits(index.toString())}", "প্রশ্ন নং ${toBengaliDigits(index.toString())}"),
+                        text = item.question_text?.takeIf { it.isNotBlank() } ?: tr("Question $index", "প্রশ্ন নং ${toBengaliDigits(index.toString())}"),
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -376,16 +390,16 @@ private fun FeedbackQuestionCard(
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = when {
-                    item.user_selected_option == null -> Color(0xFFF1F5F9)
-                    isUserCorrect -> Color(0xFFDCFCE7)
-                    else -> Color(0xFFFEE2E2)
+                    item.user_selected_option == null -> if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+                    isUserCorrect -> if (isDark) Color(0xFF064E3B).copy(alpha = 0.5f) else Color(0xFFDCFCE7)
+                    else -> if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.5f) else Color(0xFFFEE2E2)
                 },
                 border = BorderStroke(
                     1.dp,
                     when {
-                        item.user_selected_option == null -> Color(0xFFCBD5E1)
-                        isUserCorrect -> Color(0xFF10B981)
-                        else -> Color(0xFFEF4444)
+                        item.user_selected_option == null -> if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)
+                        isUserCorrect -> if (isDark) Color(0xFF34D399) else Color(0xFF10B981)
+                        else -> if (isDark) Color(0xFFF87171) else Color(0xFFEF4444)
                     }
                 ),
                 modifier = Modifier.fillMaxWidth()
@@ -413,9 +427,9 @@ private fun FeedbackQuestionCard(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = when {
-                            item.user_selected_option == null -> Color(0xFF475569)
-                            isUserCorrect -> Color(0xFF047857)
-                            else -> Color(0xFFB91C1C)
+                            item.user_selected_option == null -> if (isDark) Color(0xFFCBD5E1) else Color(0xFF475569)
+                            isUserCorrect -> if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
+                            else -> if (isDark) Color(0xFFFCA5A5) else Color(0xFFB91C1C)
                         }
                     )
                 }

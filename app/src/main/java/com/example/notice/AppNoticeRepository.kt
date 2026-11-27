@@ -19,8 +19,7 @@ object AppNoticeRepository {
     private const val KEY_DONT_SHOW_DATE = "dont_show_date"
     private const val KEY_SEEN_IDS = "seen_notice_ids"
 
-    private val httpClient = OkHttpClient.Builder()
-        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+    private val httpClient = com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

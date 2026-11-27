@@ -51,8 +51,7 @@ object AppUpdateRepository {
     @Volatile
     private var lastFetchElapsedMs: Long = 0L
 
-    private val httpClient = OkHttpClient.Builder()
-        .apply { com.example.security.AntiTamperSecurity.applyToOkHttpBuilder(this) }
+    private val httpClient = com.example.network.SharedHttpClient.newBuilder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build()

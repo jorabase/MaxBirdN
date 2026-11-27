@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.components.QuizRichContent
@@ -35,7 +36,7 @@ fun LiveCqExamScreen(
     onNavigateBack: () -> Unit,
     onNavigateToUploadDashboard: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val totalSec = uiState.liveCqRemainingSeconds
     val min = totalSec / 60

@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.modeltest.data.ShikhoCqQuestionRaw
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.ui.components.QuizRichContent
@@ -38,7 +39,7 @@ fun LiveCqUploadDashboardScreen(
     onNavigateToPageUpload: (questionId: String) -> Unit,
     onFinalSubmitted: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val totalSec = uiState.liveCqRemainingSeconds
     val min = totalSec / 60
@@ -518,17 +519,18 @@ fun LiveCqUploadDashboardScreen(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    val isDialogDark = isAppInDarkTheme()
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .size(72.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFEF3C7))
+                            .background(if (isDialogDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7))
                     ) {
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = "Warning",
-                            tint = Color(0xFFD97706),
+                            tint = if (isDialogDark) Color(0xFFFCD34D) else Color(0xFFD97706),
                             modifier = Modifier.size(36.dp)
                         )
                     }

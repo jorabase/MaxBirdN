@@ -244,14 +244,12 @@ interface ShikhoApiService {
                     val origRequest = chain.request()
                     val response = chain.proceed(origRequest)
                     if (!response.isSuccessful) {
-                        try {
-                            val peek = response.peekBody(1024 * 32).string()
-                            if (response.code == 401) {
-                                android.util.Log.d("ShikhoApiService", "HTTP 401 unauthorized on ${origRequest.url}: $peek")
-                            } else {
-                                android.util.Log.e("ShikhoApiService", "HTTP ${response.code} error on ${origRequest.url}: $peek")
-                            }
-                        } catch (_: Exception) {}
+                        val path = origRequest.url.encodedPath
+                        if (response.code == 401) {
+                            android.util.Log.d("ShikhoApiService", "HTTP 401 unauthorized on $path")
+                        } else {
+                            android.util.Log.e("ShikhoApiService", "HTTP ${response.code} error on $path")
+                        }
                     }
                     try {
                         val body = response.body

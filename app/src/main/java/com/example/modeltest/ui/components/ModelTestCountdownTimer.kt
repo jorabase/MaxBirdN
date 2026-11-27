@@ -147,14 +147,17 @@ fun parseIsoDateToMillis(dateStr: String?, isEndOfDay: Boolean = false): Long? {
         try {
             val datePart = clean.take(10)
             val parts = datePart.split("-")
-            val year = parts[0].toInt()
-            val month = parts[1].toInt() - 1
-            val day = parts[2].toInt()
-
-            val dhakaCal = java.util.Calendar.getInstance(dhakaZone)
-            dhakaCal.set(year, month, day, if (isEndOfDay) 23 else 0, if (isEndOfDay) 59 else 0, if (isEndOfDay) 59 else 0)
-            dhakaCal.set(java.util.Calendar.MILLISECOND, if (isEndOfDay) 999 else 0)
-            return dhakaCal.timeInMillis
+            if (parts.size == 3) {
+                val year = parts[0].toIntOrNull()
+                val monthRaw = parts[1].toIntOrNull()
+                val day = parts[2].toIntOrNull()
+                if (year != null && monthRaw != null && day != null) {
+                    val dhakaCal = java.util.Calendar.getInstance(dhakaZone)
+                    dhakaCal.set(year, monthRaw - 1, day, if (isEndOfDay) 23 else 0, if (isEndOfDay) 59 else 0, if (isEndOfDay) 59 else 0)
+                    dhakaCal.set(java.util.Calendar.MILLISECOND, if (isEndOfDay) 999 else 0)
+                    return dhakaCal.timeInMillis
+                }
+            }
         } catch (_: Exception) {}
     }
 

@@ -202,9 +202,9 @@ object AppDownloadNotificationHelper {
             }
 
             val subText = if (isPaused) {
-                AppLang.tr("Paused ($bnPercent%)", "পজকৃত ($bnPercent%)")
+                AppLang.tr("Paused ($safePercent%)", "পজকৃত ($bnPercent%)")
             } else {
-                AppLang.tr("$bnPercent% complete", "$bnPercent% সম্পন্ন")
+                AppLang.tr("$safePercent% complete", "$bnPercent% সম্পন্ন")
             }
 
             val builder = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)

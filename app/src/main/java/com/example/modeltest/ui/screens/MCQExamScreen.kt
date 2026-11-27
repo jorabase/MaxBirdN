@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.modeltest.ui.ModelTestViewModel
 import com.example.modeltest.ui.components.ExitExamConfirmDialog
@@ -51,7 +52,7 @@ fun MCQExamScreen(
     onExitExam: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showPaletteSheet by remember { mutableStateOf(false) }
 
     // Preserve lifecycle state (onPause / onStop)

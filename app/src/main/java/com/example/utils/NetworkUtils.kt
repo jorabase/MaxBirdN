@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -102,7 +103,8 @@ object NetworkUtils {
                 trySend(true)
             }
             override fun onLost(network: Network) {
-                trySend(false)
+                // Re-check active network so Wi-Fi <-> Cellular handoff doesn't flash false offline
+                trySend(isNetworkConnected(context))
             }
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                 val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -126,5 +128,5 @@ object NetworkUtils {
                 cm.unregisterNetworkCallback(networkCallback)
             } catch (_: Exception) {}
         }
-    }
+    }.distinctUntilChanged()
 }
