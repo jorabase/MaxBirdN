@@ -344,65 +344,7 @@ object DeviceActivationRepository {
                     }
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "RPC check_student_verification_status fallback to REST: ${e.message}")
-            }
-
-            // 2. Direct REST Fallback against `devices` table
-            val encHash = android.net.Uri.encode(deviceHardwareHash)
-            val encDisplayId = android.net.Uri.encode(displayDeviceId)
-            val directUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$encHash,device_id.eq.$encHash,display_device_id.eq.$encDisplayId)&select=*&limit=1"
-            val directReq = Request.Builder()
-                .url(directUrl)
-                .addHeader("apikey", anonKey)
-                .addHeader("Authorization", "Bearer $anonKey")
-                .get()
-                .build()
-
-            httpClient.newCall(directReq).execute().use { directResp ->
-                if (directResp.isSuccessful) {
-                    val arr = org.json.JSONArray(directResp.body?.string() ?: "[]")
-                if (arr.length() > 0) {
-                    val obj = arr.getJSONObject(0)
-                    val isBanned = obj.optBoolean("is_banned", false)
-                    val isBlocked = obj.optBoolean("is_blocked", false)
-                    val status = obj.optCleanString("status").lowercase()
-                    val reason = obj.optCleanString("ban_reason").ifBlank {
-                        obj.optCleanString("rejection_reason").ifBlank {
-                            com.example.utils.AppLang.tr("Access on this device has been suspended.", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।")
-                        }
-                    }
-                    val canViewProfiles = obj.optBoolean("can_view_profiles", false)
-
-                    if (isDeviceBlockedState(status, isBanned, isBlocked)) {
-                        clearActivation(context)
-                        getPrefs(context).edit().putBoolean(KEY_PENDING_REQUESTED_LOCAL, false).apply()
-                        return@withContext StudentVerificationStatus.Blocked(reason)
-                    }
-
-                    if (status == "active" || status == "approved") {
-                        val token = obj.optCleanString("session_token").ifBlank { "VERIFIED-$deviceHardwareHash" }
-                        saveLocalVerifiedSession(
-                            context = context,
-                            deviceHardwareHash = deviceHardwareHash,
-                            rawToken = token,
-                            canViewProfiles = canViewProfiles
-                        )
-                        return@withContext StudentVerificationStatus.Approved()
-                    }
-
-                    if (status == "pending" || status == "requested") {
-                        getPrefs(context).edit().putBoolean(KEY_PENDING_REQUESTED_LOCAL, true).apply()
-                        val resolvedNote = obj.optCleanString("student_note").ifBlank {
-                            obj.optCleanString("student_name").ifBlank {
-                                getSavedStudentName(context)
-                            }
-                        }
-                        return@withContext StudentVerificationStatus.Pending(
-                            studentName = resolvedNote
-                        )
-                    }
-                }
-            }
+                Log.w(TAG, "RPC check_student_verification_status error: ${e.message}")
             }
 
             if (isPendingRequestedLocally(context)) {
@@ -452,106 +394,53 @@ object DeviceActivationRepository {
             val androidVersion = "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
             val appVersion = try { BuildConfig.VERSION_NAME } catch (_: Throwable) { "1.0.0" }
 
-            // 1. Call RPC `request_student_verification` first
-            try {
-                val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/request_student_verification"
-                val rpcPayload = JSONObject().apply {
-                    put("p_device_hash", deviceHardwareHash)
-                    put("p_display_device_id", displayDeviceId)
-                    put("p_device_model", deviceModel)
-                    put("p_device_brand", deviceBrand)
-                    put("p_android_version", androidVersion)
-                    put("p_app_version", appVersion)
-                    put("p_student_note", cleanName)
-                    put("p_app_signature", appSignature)
-                }
-
-                val rpcReq = Request.Builder()
-                    .url(rpcUrl)
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .addHeader("Content-Type", "application/json")
-                    .post(rpcPayload.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-
-                httpClient.newCall(rpcReq).execute().use { rpcResp ->
-                    val rpcBody = rpcResp.body?.string() ?: ""
-                    if (rpcResp.isSuccessful && rpcBody.isNotBlank()) {
-                        val json = JSONObject(rpcBody)
-                        val isBanned = json.optBoolean("is_banned", false) || json.optBoolean("banned", false)
-                        val isBlocked = json.optBoolean("is_blocked", false) || json.optBoolean("blocked", false)
-                        val status = json.optCleanString("status", "pending").lowercase()
-                        if (isDeviceBlockedState(status, isBanned, isBlocked)) {
-                            clearActivation(context)
-                            val banReason = json.optCleanString("ban_reason").ifBlank {
-                                json.optCleanString("rejection_reason").ifBlank {
-                                    json.optCleanString("message", com.example.utils.AppLang.tr("Access on this device has been suspended.", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।"))
-                                }
-                            }
-                            return@withContext StudentVerificationStatus.Blocked(banReason)
-                        }
-                        if (status == "error" || (json.has("success") && !json.optBoolean("success", true))) {
-                            val errMsg = json.optCleanString("message", com.example.utils.AppLang.tr("Could not submit request. Please try again.", "আবেদন পাঠানো যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।"))
-                            return@withContext StudentVerificationStatus.Error(errMsg)
-                        }
-                        if (status == "active" || status == "approved") {
-                            val token = json.optCleanString("session_token").ifBlank { "VERIFIED-$deviceHardwareHash" }
-                            val canViewProfiles = if (json.has("can_view_profiles")) json.optBoolean("can_view_profiles", false) else null
-                            saveLocalVerifiedSession(context, deviceHardwareHash, token, canViewProfiles = canViewProfiles)
-                            return@withContext StudentVerificationStatus.Approved()
-                        }
-                        getPrefs(context).edit().putBoolean(KEY_PENDING_REQUESTED_LOCAL, true).commit()
-                        com.example.notification.OneSignalPushManager.notifyAdminDeviceAccessRequest(
-                            context = context,
-                            studentName = cleanName,
-                            displayDeviceId = displayDeviceId,
-                            deviceModel = deviceModel
-                        )
-                        return@withContext StudentVerificationStatus.Pending(studentName = cleanName)
-                    }
-                }
-            } catch (e: Throwable) {
-                Log.w(TAG, "RPC request_student_verification fallback to REST: ${e.message}")
+            // RPC-only: `request_student_verification` (direct `devices` REST access is disabled for anon)
+            val rpcUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/rpc/request_student_verification"
+            val rpcPayload = JSONObject().apply {
+                put("p_device_hash", deviceHardwareHash)
+                put("p_display_device_id", displayDeviceId)
+                put("p_device_model", deviceModel)
+                put("p_device_brand", deviceBrand)
+                put("p_android_version", androidVersion)
+                put("p_app_version", appVersion)
+                put("p_student_note", cleanName)
+                put("p_app_signature", appSignature)
             }
 
-            // 2. First check if already active or banned in `devices`
-            val existingCheck = checkStudentVerificationStatus(context)
-            if (existingCheck is StudentVerificationStatus.Approved || existingCheck is StudentVerificationStatus.Blocked) {
-                return@withContext existingCheck
-            }
-
-            // 3. Direct REST upsert to `devices` table with status = 'pending'
-            val upsertPayload = JSONObject().apply {
-                put("device_hash", deviceHardwareHash)
-                put("device_id", deviceHardwareHash)
-                put("display_device_id", displayDeviceId)
-                put("device_model", deviceModel)
-                put("device_brand", deviceBrand)
-                put("device_manufacturer", android.os.Build.MANUFACTURER ?: "")
-                put("android_version", androidVersion)
-                put("sdk_version", android.os.Build.VERSION.SDK_INT)
-                put("app_version", appVersion)
-                put("student_note", cleanName)
-                put("student_name", cleanName)
-                if (studentPhone.isNotBlank()) put("student_phone", studentPhone)
-                if (oneSignalPlayerId.isNotBlank()) put("onesignal_player_id", oneSignalPlayerId)
-                if (fcmToken.isNotBlank()) put("fcm_token", fcmToken)
-                put("status", "pending")
-                put("is_banned", false)
-                put("is_blocked", false)
-            }
-
-            val upsertReq = Request.Builder()
-                .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices?on_conflict=device_hash")
+            val rpcReq = Request.Builder()
+                .url(rpcUrl)
                 .addHeader("apikey", anonKey)
                 .addHeader("Authorization", "Bearer $anonKey")
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "resolution=merge-duplicates")
-                .post(upsertPayload.toString().toRequestBody("application/json".toMediaType()))
+                .post(rpcPayload.toString().toRequestBody("application/json".toMediaType()))
                 .build()
 
-            httpClient.newCall(upsertReq).execute().use { upsertResp ->
-                if (upsertResp.isSuccessful) {
+            httpClient.newCall(rpcReq).execute().use { rpcResp ->
+                val rpcBody = rpcResp.body?.string() ?: ""
+                if (rpcResp.isSuccessful && rpcBody.isNotBlank()) {
+                    val json = JSONObject(rpcBody)
+                    val isBanned = json.optBoolean("is_banned", false) || json.optBoolean("banned", false)
+                    val isBlocked = json.optBoolean("is_blocked", false) || json.optBoolean("blocked", false)
+                    val status = json.optCleanString("status", "pending").lowercase()
+                    if (isDeviceBlockedState(status, isBanned, isBlocked)) {
+                        clearActivation(context)
+                        val banReason = json.optCleanString("ban_reason").ifBlank {
+                            json.optCleanString("rejection_reason").ifBlank {
+                                json.optCleanString("message", com.example.utils.AppLang.tr("Access on this device has been suspended.", "এই ডিভাইসে প্রবেশাধিকার স্থগিত করা হয়েছে।"))
+                            }
+                        }
+                        return@withContext StudentVerificationStatus.Blocked(banReason)
+                    }
+                    if (status == "error" || (json.has("success") && !json.optBoolean("success", true))) {
+                        val errMsg = json.optCleanString("message", com.example.utils.AppLang.tr("Could not submit request. Please try again.", "আবেদন পাঠানো যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।"))
+                        return@withContext StudentVerificationStatus.Error(errMsg)
+                    }
+                    if (status == "active" || status == "approved") {
+                        val token = json.optCleanString("session_token").ifBlank { "VERIFIED-$deviceHardwareHash" }
+                        val canViewProfiles = if (json.has("can_view_profiles")) json.optBoolean("can_view_profiles", false) else null
+                        saveLocalVerifiedSession(context, deviceHardwareHash, token, canViewProfiles = canViewProfiles)
+                        return@withContext StudentVerificationStatus.Approved()
+                    }
                     getPrefs(context).edit().putBoolean(KEY_PENDING_REQUESTED_LOCAL, true).commit()
                     com.example.notification.OneSignalPushManager.notifyAdminDeviceAccessRequest(
                         context = context,
@@ -561,7 +450,12 @@ object DeviceActivationRepository {
                     )
                     return@withContext StudentVerificationStatus.Pending(studentName = cleanName)
                 } else {
-                    return@withContext StudentVerificationStatus.Error(com.example.utils.AppLang.tr("Could not submit request (HTTP ${upsertResp.code}). Check your internet connection.", "আবেদন পাঠানো যায়নি (HTTP ${upsertResp.code})। ইন্টারনেট সংযোগ চেক করুন।"))
+                    return@withContext StudentVerificationStatus.Error(
+                        com.example.utils.AppLang.tr(
+                            "Could not submit request (HTTP ${rpcResp.code}). Check your internet connection.",
+                            "আবেদন পাঠানো যায়নি (HTTP ${rpcResp.code})। ইন্টারনেট সংযোগ চেক করুন।"
+                        )
+                    )
                 }
             }
         } catch (t: Throwable) {
@@ -635,45 +529,6 @@ object DeviceActivationRepository {
                             Log.w(TAG, "Heartbeat returned invalid: $reason. Clearing activation.")
                             clearActivation(context)
                             return@withContext HeartbeatResult.Revoked(reason)
-                        }
-                    }
-                }
-            } catch (_: Throwable) {}
-
-            // 2. Fallback: Check `devices` table directly if RPC was unreachable
-            try {
-                val encHash = android.net.Uri.encode(hardwareHash)
-                val encDisplayId = android.net.Uri.encode(displayDeviceId)
-                val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$encHash,device_id.eq.$encHash,display_device_id.eq.$encDisplayId)&select=status,is_banned,is_blocked,ban_reason,rejection_reason&limit=1"
-                val devReq = Request.Builder()
-                    .url(devUrl)
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .get()
-                    .build()
-                httpClient.newCall(devReq).execute().use { devResp ->
-                    if (devResp.isSuccessful) {
-                        val arr = org.json.JSONArray(devResp.body?.string() ?: "[]")
-                        if (arr.length() > 0) {
-                            val obj = arr.getJSONObject(0)
-                            val isBanned = obj.optBoolean("is_banned", false)
-                            val isBlocked = obj.optBoolean("is_blocked", false)
-                            val status = obj.optCleanString("status", "active").lowercase()
-                            if (isDeviceBlockedState(status, isBanned, isBlocked) || status == "pending" || status == "unverified") {
-                                val reason = obj.optCleanString("ban_reason").ifBlank {
-                                    obj.optCleanString("rejection_reason").ifBlank {
-                                        com.example.utils.AppLang.tr("Device verification has been suspended.", "ডিভাইস ভেরিফিকেশন স্থগিত করা হয়েছে।")
-                                    }
-                                }
-                                clearActivation(context)
-                                return@withContext HeartbeatResult.Revoked(reason)
-                            }
-                            if (status == "active" || status == "approved") {
-                                getPrefs(context).edit()
-                                    .putLong(KEY_LAST_HEARTBEAT_AT, System.currentTimeMillis())
-                                    .apply()
-                                return@withContext HeartbeatResult.Valid
-                            }
                         }
                     }
                 }
@@ -754,38 +609,8 @@ object DeviceActivationRepository {
                 }
             } catch (_: Throwable) {}
 
-            // 2. Fallback: Check `devices` table directly
             if (!resolvedByRpc) {
-                try {
-                    val encHash = android.net.Uri.encode(deviceHardwareHash)
-                    val encDisplayId = android.net.Uri.encode(displayDeviceId)
-                    val devUrl = "${supabaseUrl.trimEnd('/')}/rest/v1/devices?or=(device_hash.eq.$encHash,device_id.eq.$encHash,display_device_id.eq.$encDisplayId)&select=can_view_profiles,status,is_banned,is_blocked"
-                    val devReq = Request.Builder()
-                        .url(devUrl)
-                        .addHeader("apikey", anonKey)
-                        .addHeader("Authorization", "Bearer $anonKey")
-                        .get()
-                        .build()
-                    httpClient.newCall(devReq).execute().use { devResp ->
-                        if (devResp.isSuccessful) {
-                            val devBody = devResp.body?.string() ?: "[]"
-                            val devArr = org.json.JSONArray(devBody)
-                            for (i in 0 until devArr.length()) {
-                                val obj = devArr.getJSONObject(i)
-                                val isBanned = obj.optBoolean("is_banned", false)
-                                val isBlocked = obj.optBoolean("is_blocked", false)
-                                val status = obj.optCleanString("status", "active")
-                                if (isDeviceBlockedState(status, isBanned, isBlocked)) {
-                                    canView = false
-                                    break
-                                }
-                                if (obj.optBoolean("can_view_profiles", false)) {
-                                    canView = true
-                                }
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {}
+                return@withContext prefs.getBoolean(KEY_CAN_VIEW_PROFILES, false)
             }
 
             prefs.edit()

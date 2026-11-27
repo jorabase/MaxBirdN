@@ -565,44 +565,7 @@ object OneSignalPushManager {
                     .putString(KEY_LAST_SUPABASE_SYNC_SIG, rpcSignature)
                     .putLong(KEY_LAST_SUPABASE_SYNC_AT, syncedAt)
                     .apply()
-                return
             }
-
-            // 2. Fallback: Scoped PATCH on `devices` table only if RPC is unavailable
-            try {
-                val devPatch = JSONObject().apply {
-                    put("device_id", deviceHardwareHash)
-                    if (oneSignalPlayerId.isNotBlank()) put("onesignal_player_id", oneSignalPlayerId)
-                    if (fcmToken.isNotBlank()) put("fcm_token", fcmToken)
-                    if (currentAppVersion.isNotBlank()) put("app_version", currentAppVersion)
-                    if (studentName.isNotBlank()) {
-                        put("student_name", studentName)
-                        put("student_note", studentName)
-                    }
-                    if (studentPhone.isNotBlank()) {
-                        put("student_phone", studentPhone)
-                    }
-                }
-                val encodedHash = android.net.Uri.encode(deviceHardwareHash)
-                val devReq = Request.Builder()
-                    .url("${supabaseUrl.trimEnd('/')}/rest/v1/devices?device_hash=eq.$encodedHash")
-                    .addHeader("apikey", anonKey)
-                    .addHeader("Authorization", "Bearer $anonKey")
-                    .addHeader("Content-Type", "application/json")
-                    .patch(devPatch.toString().toRequestBody("application/json".toMediaType()))
-                    .build()
-                httpClient.newCall(devReq).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val syncedAt = System.currentTimeMillis()
-                        lastSupabaseSyncedSignature = rpcSignature
-                        lastSupabaseSyncedAtMs = syncedAt
-                        prefs.edit()
-                            .putString(KEY_LAST_SUPABASE_SYNC_SIG, rpcSignature)
-                            .putLong(KEY_LAST_SUPABASE_SYNC_AT, syncedAt)
-                            .apply()
-                    }
-                }
-            } catch (_: Throwable) {}
         } catch (_: Throwable) {}
     }
 
