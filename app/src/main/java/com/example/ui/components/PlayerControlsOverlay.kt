@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.media.AudioManager
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -7,13 +11,19 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,8 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,10 +46,12 @@ import com.example.player.PlayerClassType
 import com.example.player.ShikhoPlayerManager
 import com.example.utils.AppLang
 import com.example.utils.isBangla
+import com.example.utils.toBengaliDigits
 import com.example.utils.tr
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -89,21 +104,40 @@ fun PlayerControlsOverlay(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     val isBn = isBangla()
+    val audioManager = remember(context) {
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
 
     // Screen Touch Lock State
     var isScreenLocked by remember { mutableStateOf(false) }
     var showUnlockPill by remember { mutableStateOf(false) }
 
-    // Double tap feedback state
+    // Accumulative Double-Tap Seek Feedback State (-10s, -20s, -30s ...)
     var doubleTapFeedbackSide by remember { mutableStateOf<String?>(null) }
+    var doubleTapAccumulatedSeconds by remember { mutableIntStateOf(10) }
     var doubleTapTriggerKey by remember { mutableIntStateOf(0) }
+
+    // Fullscreen Brightness (left) / Volume (right) Vertical Swipe Gesture State
+    var gestureHudMode by remember { mutableStateOf<String?>(null) } // "BRIGHTNESS" or "VOLUME"
+    var gestureHudLevel by remember { mutableFloatStateOf(0.5f) }
+    var gestureHudDismissKey by remember { mutableIntStateOf(0) }
+    var isVerticalGesturing by remember { mutableStateOf(false) }
 
     LaunchedEffect(doubleTapTriggerKey) {
         if (doubleTapFeedbackSide != null) {
-            delay(650)
+            delay(750)
             doubleTapFeedbackSide = null
+            doubleTapAccumulatedSeconds = 10
+        }
+    }
+
+    LaunchedEffect(gestureHudDismissKey, isVerticalGesturing) {
+        if (gestureHudMode != null && !isVerticalGesturing) {
+            delay(900)
+            gestureHudMode = null
         }
     }
 
@@ -125,8 +159,9 @@ fun PlayerControlsOverlay(
                         var is2xActive = false
                         val holdJob = coroutineScope.launch {
                             delay(400) // Press & hold for 400ms to trigger 2X speed
-                            if (isPlaying && !isLive && !isScreenLocked) {
+                            if (isPlaying && !isLive && !isScreenLocked && !isVerticalGesturing) {
                                 is2xActive = true
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onStartTemporaryFastForward()
                             }
                         }
@@ -147,16 +182,25 @@ fun PlayerControlsOverlay(
                         if (!isLive && !isScreenLocked) {
                             val screenWidth = size.width
                             if (offset.x < screenWidth * 0.38f) {
-                                // Left double tap -> Rewind 10s
+                                // Left double tap -> Rewind 10s (accumulates on rapid taps)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onSeekBack()
+                                doubleTapAccumulatedSeconds = if (doubleTapFeedbackSide == "LEFT") {
+                                    (doubleTapAccumulatedSeconds + 10).coerceAtMost(120)
+                                } else 10
                                 doubleTapFeedbackSide = "LEFT"
                                 doubleTapTriggerKey++
                             } else if (offset.x > screenWidth * 0.62f) {
-                                // Right double tap -> Fast Forward 10s
+                                // Right double tap -> Fast Forward 10s (accumulates on rapid taps)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 onSeekForward()
+                                doubleTapAccumulatedSeconds = if (doubleTapFeedbackSide == "RIGHT") {
+                                    (doubleTapAccumulatedSeconds + 10).coerceAtMost(120)
+                                } else 10
                                 doubleTapFeedbackSide = "RIGHT"
                                 doubleTapTriggerKey++
                             } else {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 if (manualZoomScale > 1.05f) {
                                     onResetManualZoom()
                                 } else {
@@ -164,6 +208,84 @@ fun PlayerControlsOverlay(
                                 }
                             }
                         }
+                    }
+                )
+            }
+            .pointerInput(isFullscreen, isScreenLocked, manualZoomScale) {
+                if (!isFullscreen || isScreenLocked || manualZoomScale > 1.05f) return@pointerInput
+                var activeSide: String? = null
+                var runningLevel = 0.5f
+                detectVerticalDragGestures(
+                    onDragStart = { startOffset ->
+                        val w = size.width.coerceAtLeast(1)
+                        val h = size.height.coerceAtLeast(1)
+                        // Ignore top/bottom system edge zones so notification shade & nav bar work normally
+                        if (startOffset.y < h * 0.12f || startOffset.y > h * 0.88f) {
+                            activeSide = null
+                            return@detectVerticalDragGestures
+                        }
+                        isVerticalGesturing = true
+                        if (startOffset.x < w * 0.5f) {
+                            activeSide = "BRIGHTNESS"
+                            val win = (context as? Activity)?.window
+                            val currentWinBrightness = win?.attributes?.screenBrightness ?: -1f
+                            runningLevel = if (currentWinBrightness in 0f..1f) {
+                                currentWinBrightness
+                            } else {
+                                val sysVal = runCatching {
+                                    Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS)
+                                }.getOrDefault(128)
+                                (sysVal / 255f).coerceIn(0.05f, 1f)
+                            }
+                            gestureHudMode = "BRIGHTNESS"
+                            gestureHudLevel = runningLevel
+                        } else {
+                            activeSide = "VOLUME"
+                            val maxVol = audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.coerceAtLeast(1) ?: 15
+                            val curVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: (maxVol / 2)
+                            runningLevel = (curVol.toFloat() / maxVol.toFloat()).coerceIn(0f, 1f)
+                            gestureHudMode = "VOLUME"
+                            gestureHudLevel = runningLevel
+                        }
+                    },
+                    onVerticalDrag = { _, dragAmount ->
+                        val side = activeSide ?: return@detectVerticalDragGestures
+                        val sensitivityPx = (size.height * 0.65f).coerceAtLeast(220f)
+                        val delta = -dragAmount / sensitivityPx
+                        if (side == "BRIGHTNESS") {
+                            runningLevel = (runningLevel + delta).coerceIn(0.02f, 1f)
+                            (context as? Activity)?.window?.let { win ->
+                                val lp = win.attributes
+                                lp.screenBrightness = runningLevel
+                                win.attributes = lp
+                            }
+                            gestureHudMode = "BRIGHTNESS"
+                            gestureHudLevel = runningLevel
+                        } else if (side == "VOLUME") {
+                            runningLevel = (runningLevel + delta).coerceIn(0f, 1f)
+                            audioManager?.let { am ->
+                                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+                                val targetVol = (runningLevel * maxVol).roundToInt().coerceIn(0, maxVol)
+                                val currentVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                if (targetVol != currentVol) {
+                                    runCatching {
+                                        am.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+                                    }
+                                }
+                            }
+                            gestureHudMode = "VOLUME"
+                            gestureHudLevel = runningLevel
+                        }
+                    },
+                    onDragEnd = {
+                        activeSide = null
+                        isVerticalGesturing = false
+                        gestureHudDismissKey++
+                    },
+                    onDragCancel = {
+                        activeSide = null
+                        isVerticalGesturing = false
+                        gestureHudDismissKey++
                     }
                 )
             }
@@ -285,9 +407,12 @@ fun PlayerControlsOverlay(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = tr("-10s", "-১০ সেকেন্ড"),
+                        text = tr(
+                            "-${doubleTapAccumulatedSeconds}s",
+                            "-${toBengaliDigits(doubleTapAccumulatedSeconds)} সেকেন্ড"
+                        ),
                         color = Color.White,
-                        fontSize = 12.sp,
+                        fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -304,7 +429,7 @@ fun PlayerControlsOverlay(
         ) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
-                color = Color.Black.copy(alpha = 0.75f),
+                color = Color.Black.copy(alpha = 0.78f),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
             ) {
                 Column(
@@ -320,10 +445,101 @@ fun PlayerControlsOverlay(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = tr("+10s", "+১০ সেকেন্ড"),
+                        text = tr(
+                            "+${doubleTapAccumulatedSeconds}s",
+                            "+${toBengaliDigits(doubleTapAccumulatedSeconds)} সেকেন্ড"
+                        ),
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 3B. FULLSCREEN BRIGHTNESS / VOLUME GESTURE INDICATOR PILL
+        // -------------------------------------------------------------
+        AnimatedVisibility(
+            visible = gestureHudMode != null,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.92f),
+            exit = fadeOut(tween(180)) + scaleOut(targetScale = 0.92f),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .then(if (shouldApplySystemInsets) Modifier.statusBarsPadding() else Modifier)
+                .padding(top = 18.dp)
+        ) {
+            val isBrightness = gestureHudMode == "BRIGHTNESS"
+            val pct = (gestureHudLevel * 100f).roundToInt().coerceIn(0, 100)
+            val accentColor = if (isBrightness) Color(0xFFFBBF24) else Color(0xFF38BDF8)
+            val hudIcon = when {
+                isBrightness -> Icons.Default.Brightness6
+                pct == 0 -> Icons.AutoMirrored.Filled.VolumeOff
+                pct < 50 -> Icons.AutoMirrored.Filled.VolumeDown
+                else -> Icons.AutoMirrored.Filled.VolumeUp
+            }
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF071120).copy(alpha = 0.88f),
+                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f)),
+                shadowElevation = 10.dp
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                ) {
+                    Icon(
+                        imageVector = hudIcon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(104.dp)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.White.copy(alpha = 0.22f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(gestureHudLevel.coerceIn(0f, 1f))
+                                .clip(RoundedCornerShape(50))
+                                .background(accentColor)
+                        )
+                    }
+                    Text(
+                        text = "${toBengaliDigits(pct)}%",
                         color = Color.White,
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 3C. CALM STANDALONE BUFFERING SPINNER (When Controls Are Hidden)
+        // -------------------------------------------------------------
+        AnimatedVisibility(
+            visible = isBuffering && !areControlsVisible,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.62f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                modifier = Modifier.size(if (isFullscreen) 62.dp else 52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(if (isFullscreen) 30.dp else 26.dp)
                     )
                 }
             }
@@ -333,7 +549,7 @@ fun PlayerControlsOverlay(
         // 4. OVERLAY CONTROLS (Top Bar + Center Play + Bottom Seekbar)
         // -------------------------------------------------------------
         AnimatedVisibility(
-            visible = areControlsVisible || isBuffering,
+            visible = areControlsVisible,
             enter = fadeIn(animationSpec = tween(200)),
             exit = fadeOut(animationSpec = tween(200)),
             modifier = Modifier.fillMaxSize()
@@ -344,9 +560,9 @@ fun PlayerControlsOverlay(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.84f),
-                                Color.Black.copy(alpha = 0.20f),
-                                Color.Black.copy(alpha = 0.90f)
+                                Color.Black.copy(alpha = 0.80f),
+                                Color.Black.copy(alpha = 0.16f),
+                                Color.Black.copy(alpha = 0.88f)
                             )
                         )
                     )
@@ -694,25 +910,39 @@ fun PlayerControlsOverlay(
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(if (isFullscreen) 36.dp else 22.dp)
+                    horizontalArrangement = Arrangement.spacedBy(if (isFullscreen) 38.dp else 24.dp)
                 ) {
                     if (!isLive) {
-                        // Quick 10s Rewind
+                        val backInteraction = remember { MutableInteractionSource() }
+                        val backPressed by backInteraction.collectIsPressedAsState()
+                        val backScale by animateFloatAsState(
+                            targetValue = if (backPressed) 0.88f else 1f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            label = "seekBackScale"
+                        )
+                        // Quick 10s Rewind (minimum 48dp accessible touch target)
                         Surface(
                             shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.55f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            color = Color.Black.copy(alpha = 0.52f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
                             modifier = Modifier
-                                .size(if (isFullscreen) 52.dp else 42.dp)
+                                .size(if (isFullscreen) 54.dp else 48.dp)
+                                .graphicsLayer { scaleX = backScale; scaleY = backScale }
                                 .clip(CircleShape)
-                                .clickable { onSeekBack() }
+                                .clickable(
+                                    interactionSource = backInteraction,
+                                    indication = ripple(color = Color.White)
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSeekBack()
+                                }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Replay10,
                                     contentDescription = tr("Rewind 10 seconds", "১০ সেকেন্ড পেছনে"),
                                     tint = Color.White,
-                                    modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
+                                    modifier = Modifier.size(if (isFullscreen) 28.dp else 24.dp)
                                 )
                             }
                         }
@@ -721,28 +951,45 @@ fun PlayerControlsOverlay(
                     if (isBuffering) {
                         Surface(
                             shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.65f),
+                            color = Color.Black.copy(alpha = 0.62f),
                             border = BorderStroke(1.2.dp, Color.White.copy(alpha = 0.35f)),
-                            modifier = Modifier.size(if (isFullscreen) 68.dp else 56.dp)
+                            modifier = Modifier.size(if (isFullscreen) 68.dp else 58.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
                                     color = Color.White,
                                     strokeWidth = 3.dp,
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(32.dp)
                                 )
                             }
                         }
                     } else {
+                        val playInteraction = remember { MutableInteractionSource() }
+                        val playPressed by playInteraction.collectIsPressedAsState()
+                        val playScale by animateFloatAsState(
+                            targetValue = if (playPressed) 0.90f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMedium
+                            ),
+                            label = "heroPlayScale"
+                        )
                         // Clean Hero Play / Pause Button
                         Surface(
                             shape = CircleShape,
                             color = Color.White,
-                            shadowElevation = 8.dp,
+                            shadowElevation = 10.dp,
                             modifier = Modifier
-                                .size(if (isFullscreen) 68.dp else 56.dp)
+                                .size(if (isFullscreen) 68.dp else 58.dp)
+                                .graphicsLayer { scaleX = playScale; scaleY = playScale }
                                 .clip(CircleShape)
-                                .clickable { onTogglePlayPause() }
+                                .clickable(
+                                    interactionSource = playInteraction,
+                                    indication = ripple(color = Color(0xFF0284C7))
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onTogglePlayPause()
+                                }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
@@ -756,22 +1003,36 @@ fun PlayerControlsOverlay(
                     }
 
                     if (!isLive) {
-                        // Quick 10s Forward
+                        val fwdInteraction = remember { MutableInteractionSource() }
+                        val fwdPressed by fwdInteraction.collectIsPressedAsState()
+                        val fwdScale by animateFloatAsState(
+                            targetValue = if (fwdPressed) 0.88f else 1f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            label = "seekFwdScale"
+                        )
+                        // Quick 10s Forward (minimum 48dp accessible touch target)
                         Surface(
                             shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.55f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            color = Color.Black.copy(alpha = 0.52f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
                             modifier = Modifier
-                                .size(if (isFullscreen) 52.dp else 42.dp)
+                                .size(if (isFullscreen) 54.dp else 48.dp)
+                                .graphicsLayer { scaleX = fwdScale; scaleY = fwdScale }
                                 .clip(CircleShape)
-                                .clickable { onSeekForward() }
+                                .clickable(
+                                    interactionSource = fwdInteraction,
+                                    indication = ripple(color = Color.White)
+                                ) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSeekForward()
+                                }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Forward10,
                                     contentDescription = tr("Forward 10 seconds", "১০ সেকেন্ড সামনে"),
                                     tint = Color.White,
-                                    modifier = Modifier.size(if (isFullscreen) 28.dp else 22.dp)
+                                    modifier = Modifier.size(if (isFullscreen) 28.dp else 24.dp)
                                 )
                             }
                         }
@@ -927,6 +1188,7 @@ fun PlayerControlsOverlay(
                                 value = sliderValue,
                                 onValueChange = { fraction ->
                                     if (!isDraggingSlider) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         val target = (fraction * totalDuration).toLong().coerceIn(0L, totalDuration)
                                         onSeekStarted(target)
                                     }
@@ -940,7 +1202,7 @@ fun PlayerControlsOverlay(
                                 },
                                 colors = SliderDefaults.colors(
                                     thumbColor = Color.White,
-                                    activeTrackColor = Color(0xFFE11D48),
+                                    activeTrackColor = Color(0xFF38BDF8),
                                     inactiveTrackColor = Color.Transparent
                                 ),
                                 thumb = {
@@ -948,7 +1210,7 @@ fun PlayerControlsOverlay(
                                         shape = CircleShape,
                                         color = Color.White,
                                         shadowElevation = 8.dp,
-                                        border = BorderStroke(2.dp, Color(0xFFE11D48)),
+                                        border = BorderStroke(2.5.dp, Color(0xFF38BDF8)),
                                         modifier = Modifier.size(if (isDraggingSlider) 22.dp else 16.dp)
                                     ) {}
                                 },

@@ -466,7 +466,7 @@ fun DeviceActivationScreen(
                                 painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                                 contentDescription = "MaxBird Logo",
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.size(58.dp)
+                                modifier = Modifier.size(54.dp)
                             )
                         } else {
                             Icon(

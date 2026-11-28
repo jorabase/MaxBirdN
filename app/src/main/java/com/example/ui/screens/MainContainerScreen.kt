@@ -11,11 +11,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
@@ -71,6 +73,9 @@ fun MainContainerScreen(
     val haptic = LocalHapticFeedback.current
     val isDark = com.example.ui.theme.isAppInDarkTheme()
     val context = LocalContext.current
+    val uiScope = rememberCoroutineScope()
+    val homeScrollState = rememberScrollState()
+    val settingsScrollState = rememberScrollState()
     var lastBackPressedTime by remember { mutableLongStateOf(0L) }
 
     // Observe active downloads count for live bottom dock badge indicator
@@ -168,6 +173,7 @@ fun MainContainerScreen(
                 0 -> {
                     HomeScreen(
                         viewModel = homeViewModel,
+                        scrollState = homeScrollState,
                         onNavigateToProfile = { selectedIndex = 4 },
                         onNavigateToEditProfile = onNavigateToEditProfile,
                         onNavigateToChangeSyllabus = onNavigateToChangeSyllabus,
@@ -227,6 +233,7 @@ fun MainContainerScreen(
                 4 -> {
                     SettingsScreen(
                         sessionManager = sessionManager,
+                        scrollState = settingsScrollState,
                         onNavigateToEditProfile = onNavigateToEditProfile,
                         onNavigateToChangeSyllabus = onNavigateToChangeSyllabus,
                         onNavigateToProfile = onNavigateToProfile,
@@ -274,12 +281,18 @@ fun MainContainerScreen(
                                 courseViewModel.loadSubjects()
                             }
                         }
+                    } else if (index == 0 && homeScrollState.value > 0) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        uiScope.launch { homeScrollState.animateScrollTo(0) }
                     } else if (index == 1 && courseViewModel.uiState.value.selectedCourseProgram != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         courseViewModel.closeCourseDetails()
                     } else if (index == 2) {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         libraryViewModel.jumpToRoot()
+                    } else if (index == 4 && settingsScrollState.value > 0) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        uiScope.launch { settingsScrollState.animateScrollTo(0) }
                     }
                 },
                 activeDownloadsCount = activeDownloadsCount
@@ -411,7 +424,26 @@ fun ElementalFloatingBottomBar(
                             label = "itemScale$index"
                         )
 
-                        val slotWeight = if (isSelected) 1.38f else 0.92f
+                        val slotWeight by animateFloatAsState(
+                            targetValue = if (isSelected) 1.44f else 0.90f,
+                            animationSpec = spring(
+                                dampingRatio = 0.78f,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
+                            label = "slotWeight$index"
+                        )
+
+                        val animatedPillBg by animateColorAsState(
+                            targetValue = if (isSelected) activePillBg else Color.Transparent,
+                            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                            label = "pillBg$index"
+                        )
+
+                        val pillBorderAlpha by animateFloatAsState(
+                            targetValue = if (isSelected) 1f else 0f,
+                            animationSpec = tween(durationMillis = 220),
+                            label = "pillBorderAlpha$index"
+                        )
 
                         Box(
                             modifier = Modifier
@@ -422,11 +454,15 @@ fun ElementalFloatingBottomBar(
                             if (isSelected) {
                                 Surface(
                                     shape = RoundedCornerShape(24.dp),
-                                    color = activePillBg,
+                                    color = animatedPillBg,
                                     border = BorderStroke(
                                         1.2.dp,
                                         Brush.horizontalGradient(
-                                            listOf(theme.border, theme.border.copy(alpha = 0.55f), theme.border)
+                                            listOf(
+                                                theme.border.copy(alpha = pillBorderAlpha),
+                                                theme.border.copy(alpha = 0.55f * pillBorderAlpha),
+                                                theme.border.copy(alpha = pillBorderAlpha)
+                                            )
                                         )
                                     ),
                                     shadowElevation = if (isDark) 6.dp else 2.dp,

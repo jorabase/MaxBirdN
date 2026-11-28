@@ -230,7 +230,7 @@ fun SplashScreen(
                             painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                             contentDescription = "MaxBird",
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.size(68.dp)
+                            modifier = Modifier.size(62.dp)
                         )
                     }
                 }

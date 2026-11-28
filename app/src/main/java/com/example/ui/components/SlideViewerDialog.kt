@@ -75,9 +75,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -397,15 +399,63 @@ fun PdfViewerContent(
     var remoteErrorMessage by remember { mutableStateOf<String?>(null) }
     var cachedFileState by remember { mutableStateOf<File?>(null) }
 
-    // User viewing preferences (persisted across rotation via rememberSaveable)
-    var viewModeOrdinal by rememberSaveable { mutableIntStateOf(PdfViewMode.VERTICAL_SCROLL.ordinal) }
+    val haptic = LocalHapticFeedback.current
+    val localView = LocalView.current
+    val readerPrefs = remember(context) {
+        context.getSharedPreferences("maxbird_pdf_reader_prefs", Context.MODE_PRIVATE)
+    }
+
+    // Keep screen awake while student is actively reading PDF notes
+    DisposableEffect(localView) {
+        val prevKeepScreenOn = localView.keepScreenOn
+        localView.keepScreenOn = true
+        onDispose {
+            localView.keepScreenOn = prevKeepScreenOn
+        }
+    }
+
+    // User viewing preferences (restored from SharedPreferences & preserved across rotation)
+    val initialViewModeOrdinal = remember(readerPrefs) {
+        readerPrefs.getInt("pref_view_mode", PdfViewMode.VERTICAL_SCROLL.ordinal)
+            .coerceIn(0, PdfViewMode.entries.lastIndex)
+    }
+    var viewModeOrdinal by rememberSaveable { mutableIntStateOf(initialViewModeOrdinal) }
     val viewMode = PdfViewMode.entries.getOrElse(viewModeOrdinal) { PdfViewMode.VERTICAL_SCROLL }
 
-    var readingThemeOrdinal by rememberSaveable { mutableIntStateOf(ReadingTheme.DAY.ordinal) }
+    val initialThemeOrdinal = remember(readerPrefs) {
+        readerPrefs.getInt("pref_reading_theme", ReadingTheme.DAY.ordinal)
+            .coerceIn(0, ReadingTheme.entries.lastIndex)
+    }
+    var readingThemeOrdinal by rememberSaveable { mutableIntStateOf(initialThemeOrdinal) }
     val readingTheme = ReadingTheme.entries.getOrElse(readingThemeOrdinal) { ReadingTheme.DAY }
 
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
-    var currentSavedPage by rememberSaveable(slideUrl) { mutableIntStateOf(0) }
+
+    val initialPersistedPage = remember(downloadId, readerPrefs) {
+        readerPrefs.getInt("last_page_$downloadId", 0).coerceAtLeast(0)
+    }
+    var currentSavedPage by rememberSaveable(slideUrl) { mutableIntStateOf(initialPersistedPage) }
+    var resumedBannerPage by rememberSaveable(slideUrl) { mutableIntStateOf(initialPersistedPage) }
+
+    // Persist preferred view mode & reading theme across sessions
+    LaunchedEffect(viewModeOrdinal, readingThemeOrdinal) {
+        readerPrefs.edit()
+            .putInt("pref_view_mode", viewModeOrdinal)
+            .putInt("pref_reading_theme", readingThemeOrdinal)
+            .apply()
+    }
+
+    // Debounced persistence of per-PDF last-read page + immediate flush on exit
+    val latestSavedPage by rememberUpdatedState(currentSavedPage)
+    LaunchedEffect(downloadId, currentSavedPage) {
+        delay(300L)
+        readerPrefs.edit().putInt("last_page_$downloadId", currentSavedPage).apply()
+    }
+    DisposableEffect(downloadId) {
+        onDispose {
+            readerPrefs.edit().putInt("last_page_$downloadId", latestSavedPage).apply()
+        }
+    }
 
     var showShareBottomSheet by remember { mutableStateOf(false) }
     var showThumbnailsSheet by remember { mutableStateOf(false) }
@@ -628,6 +678,8 @@ fun PdfViewerContent(
                     isLandscape = isLandscapeMode,
                     topBarHeightPx = topBarHeightPx,
                     currentSavedPage = currentSavedPage,
+                    initialResumedPageIndex = resumedBannerPage,
+                    onResumedBannerConsumed = { resumedBannerPage = 0 },
                     onCurrentPageChanged = { pageIdx -> currentSavedPage = pageIdx },
                     onToggleFullscreen = { isFullscreen = !isFullscreen },
                     onOpenThumbnails = { showThumbnailsSheet = true },
@@ -678,10 +730,12 @@ fun PdfViewerContent(
                 onDismiss = onBack,
                 onOpenThumbnails = {
                     if ((rendererState?.pageCount ?: 0) > 0) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         showThumbnailsSheet = true
                     }
                 },
                 onToggleOrientation = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     val newLandscape = !isLandscapeMode
                     isLandscapeRequested = newLandscape
                     activity?.requestedOrientation = if (newLandscape) {
@@ -692,10 +746,12 @@ fun PdfViewerContent(
                 },
                 onShareClick = {
                     if (canViewProfiles) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         showShareBottomSheet = true
                     }
                 },
                 onToggleViewMode = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     viewModeOrdinal = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
                         PdfViewMode.HORIZONTAL_SLIDES.ordinal
                     } else {
@@ -703,6 +759,7 @@ fun PdfViewerContent(
                     }
                 },
                 onCycleTheme = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     readingThemeOrdinal = when (readingTheme) {
                         ReadingTheme.DAY -> ReadingTheme.SEPIA.ordinal
                         ReadingTheme.SEPIA -> ReadingTheme.NIGHT.ordinal
@@ -710,6 +767,7 @@ fun PdfViewerContent(
                     }
                 },
                 onBookmarkClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     coroutineScope.launch {
                         if (isSlideBookmarked) {
                             savedDao.deleteSavedItemById(bookmarkItemId)
@@ -818,7 +876,8 @@ fun SlideViewerDialog(
                     WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                        WindowManager.LayoutParams.FLAG_DIM_BEHIND
+                        WindowManager.LayoutParams.FLAG_DIM_BEHIND or
+                        WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 )
                 win.setDimAmount(1.0f)
                 win.statusBarColor = AndroidColor.BLACK
@@ -1264,6 +1323,8 @@ private fun NativePdfViewerContent(
     isLandscape: Boolean,
     topBarHeightPx: Int = 0,
     currentSavedPage: Int,
+    initialResumedPageIndex: Int = 0,
+    onResumedBannerConsumed: () -> Unit = {},
     onCurrentPageChanged: (Int) -> Unit,
     onToggleFullscreen: () -> Unit,
     onOpenThumbnails: () -> Unit,
@@ -1271,6 +1332,7 @@ private fun NativePdfViewerContent(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
     val safeInitialPage = currentSavedPage.coerceIn(0, (renderer.pageCount - 1).coerceAtLeast(0))
@@ -1711,7 +1773,96 @@ private fun NativePdfViewerContent(
             }
         }
 
-        // Sleek Floating Bottom HUD: Scrubber Slider + Zoom Controls + Page Navigation
+        // Subtle Auto-Hiding "Resumed at Page X" Pill with 1-Tap Jump to Page 1
+        var showResumedBanner by remember(renderer) {
+            mutableStateOf(
+                initialResumedPageIndex > 0 &&
+                    renderer.pageCount > 1 &&
+                    initialResumedPageIndex < renderer.pageCount
+            )
+        }
+        LaunchedEffect(showResumedBanner) {
+            if (showResumedBanner) {
+                delay(2800L)
+                showResumedBanner = false
+                onResumedBannerConsumed()
+            }
+        }
+        AnimatedVisibility(
+            visible = showResumedBanner && !isFullscreen,
+            enter = fadeIn(tween(200)) + slideInVertically(initialOffsetY = { -it / 2 }),
+            exit = fadeOut(tween(220)) + slideOutVertically(targetOffsetY = { -it / 2 }),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = topBarPadding + 10.dp, start = 16.dp, end = 16.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xFF0F172A).copy(alpha = 0.94f),
+                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.42f)),
+                shadowElevation = 8.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = tr(
+                            "Resumed at Page ${initialResumedPageIndex + 1}",
+                            "পৃষ্ঠা ${toBengaliDigits(initialResumedPageIndex + 1)} থেকে শুরু হয়েছে"
+                        ),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = Color(0xFF38BDF8).copy(alpha = 0.2f),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showResumedBanner = false
+                                onResumedBannerConsumed()
+                                onCurrentPageChanged(0)
+                                coroutineScope.launch {
+                                    if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                        verticalListState.animateScrollToItem(0)
+                                    } else {
+                                        horizontalPagerState.animateScrollToPage(0)
+                                    }
+                                }
+                            }
+                    ) {
+                        Text(
+                            text = tr("Page 1", "১ম পৃষ্ঠা"),
+                            color = Color(0xFF7DD3FC),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Sleek Floating Bottom HUD: Scrubber Slider + Live Drag Page Pill + Zoom Controls + Page Navigation
+        var sliderValue by remember(currentVisiblePageIndex) {
+            mutableFloatStateOf(currentVisiblePageIndex.toFloat())
+        }
+        var isDraggingSlider by remember { mutableStateOf(false) }
+
         AnimatedVisibility(
             visible = !isFullscreen,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(tween(180)),
@@ -1721,241 +1872,281 @@ private fun NativePdfViewerContent(
                 .navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = if (isLandscape) 6.dp else 10.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = Color(0xFF0B1120).copy(alpha = 0.95f),
-                shadowElevation = 10.dp,
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.widthIn(max = 560.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(
-                        horizontal = 12.dp,
-                        vertical = if (isLandscape) 4.dp else 8.dp
-                    )
+                // Floating Page Preview Pill while scrubbing the slider
+                AnimatedVisibility(
+                    visible = isDraggingSlider && renderer.pageCount > 1 && !isLandscape,
+                    enter = fadeIn(tween(120)) + slideInVertically(initialOffsetY = { it / 2 }),
+                    exit = fadeOut(tween(150))
                 ) {
-                    // Fast Page Scrubber Slider (no cramped fixed height so thumb & track never collide with controls)
-                    if (renderer.pageCount > 1 && !isLandscape) {
-                        var sliderValue by remember(currentVisiblePageIndex) {
-                            mutableFloatStateOf(currentVisiblePageIndex.toFloat())
-                        }
-                        var isDraggingSlider by remember { mutableStateOf(false) }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp)
-                        ) {
-                            Text(
-                                text = toBengaliDigits(1),
-                                fontSize = 11.sp,
-                                color = Color(0xFF94A3B8),
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Slider(
-                                value = if (isDraggingSlider) sliderValue else currentVisiblePageIndex.toFloat(),
-                                onValueChange = { newVal ->
-                                    isDraggingSlider = true
-                                    sliderValue = newVal
-                                    val targetIdx = newVal.roundToInt().coerceIn(0, renderer.pageCount - 1)
-                                    onCurrentPageChanged(targetIdx)
-                                    coroutineScope.launch {
-                                        if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                            verticalListState.scrollToItem(targetIdx)
-                                        } else {
-                                            horizontalPagerState.scrollToPage(targetIdx)
-                                        }
-                                    }
-                                },
-                                onValueChangeFinished = {
-                                    isDraggingSlider = false
-                                },
-                                valueRange = 0f..(renderer.pageCount - 1).coerceAtLeast(1).toFloat(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color(0xFF38BDF8),
-                                    activeTrackColor = Color(0xFF38BDF8),
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                                ),
-                                thumb = {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color(0xFF38BDF8),
-                                        border = BorderStroke(1.5.dp, Color.White),
-                                        shadowElevation = 4.dp,
-                                        modifier = Modifier.size(if (isDraggingSlider) 18.dp else 14.dp)
-                                    ) {}
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp)
-                            )
-                            Text(
-                                text = toBengaliDigits(renderer.pageCount),
-                                fontSize = 11.sp,
-                                color = Color(0xFF94A3B8),
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    // Bottom Controls Row: Zoom Out | Zoom % Reset | Zoom In | Divider | Prev | Page Pill | Next
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
+                    val previewPageNum = (sliderValue.roundToInt().coerceIn(0, renderer.pageCount - 1)) + 1
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = Color(0xFF0F172A).copy(alpha = 0.96f),
+                        border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.65f)),
+                        shadowElevation = 8.dp,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     ) {
-                        // Zoom Out Button
-                        IconButton(
-                            onClick = {
-                                val newScale = (scale - 0.25f).coerceAtLeast(1f)
-                                scale = newScale
-                                if (newScale <= 1.01f) {
-                                    panOffsetX = 0f
-                                    slidePanOffsetY = 0f
-                                }
-                            },
-                            enabled = scale > 1.01f,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ZoomOut,
-                                contentDescription = tr("Zoom out", "জুম আউট"),
-                                tint = if (scale > 1.01f) Color.White else Color.White.copy(alpha = 0.3f),
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-
-                        // Zoom Level Pill (Tap to Reset to 100%)
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (scale > 1.05f) Color(0xFF0284C7).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    scale = 1f
-                                    panOffsetX = 0f
-                                    slidePanOffsetY = 0f
-                                }
-                        ) {
-                            Text(
-                                text = "${toBengaliDigits((scale * 100).roundToInt())}%",
-                                color = if (scale > 1.05f) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.9f),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        // Zoom In Button
-                        IconButton(
-                            onClick = {
-                                scale = (scale + 0.25f).coerceAtMost(4.0f)
-                            },
-                            enabled = scale < 4.0f,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ZoomIn,
-                                contentDescription = tr("Zoom in", "জুম ইন"),
-                                tint = if (scale < 4.0f) Color.White else Color.White.copy(alpha = 0.3f),
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-
-                        VerticalDivider(
-                            modifier = Modifier
-                                .height(18.dp)
-                                .padding(horizontal = 6.dp),
-                            color = Color.White.copy(alpha = 0.2f)
+                        Text(
+                            text = tr(
+                                "Page $previewPageNum / ${renderer.pageCount}",
+                                "পৃষ্ঠা ${toBengaliDigits(previewPageNum)} / ${toBengaliDigits(renderer.pageCount)}"
+                            ),
+                            color = Color.White,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
+                    }
+                }
 
-                        // Previous Page Button
-                        IconButton(
-                            onClick = {
-                                val prev = (currentVisiblePageIndex - 1).coerceAtLeast(0)
-                                onCurrentPageChanged(prev)
-                                coroutineScope.launch {
-                                    if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                        verticalListState.animateScrollToItem(prev)
-                                    } else {
-                                        horizontalPagerState.animateScrollToPage(prev)
-                                    }
-                                }
-                            },
-                            enabled = currentVisiblePageIndex > 0,
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                    Icons.Default.KeyboardArrowUp
-                                } else {
-                                    Icons.AutoMirrored.Filled.KeyboardArrowLeft
-                                },
-                                contentDescription = tr("Previous page", "আগের পৃষ্ঠা"),
-                                tint = if (currentVisiblePageIndex > 0) Color.White else Color.White.copy(alpha = 0.3f),
-                                modifier = Modifier.size(21.dp)
-                            )
-                        }
-
-                        // Page Indicator Pill (Tap to open Jump Dialog)
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = Color(0xFF1E293B),
-                            border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.35f)),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable { showJumpDialog = true }
-                        ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xFF0B1120).copy(alpha = 0.95f),
+                    shadowElevation = 10.dp,
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(
+                            horizontal = 12.dp,
+                            vertical = if (isLandscape) 4.dp else 8.dp
+                        )
+                    ) {
+                        // Fast Page Scrubber Slider (no cramped fixed height so thumb & track never collide with controls)
+                        if (renderer.pageCount > 1 && !isLandscape) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp)
                             ) {
                                 Text(
-                                    text = "${toBengaliDigits(currentVisiblePageNumber)} / ${toBengaliDigits(renderer.pageCount)}",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    text = toBengaliDigits(1),
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF94A3B8),
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Slider(
+                                    value = if (isDraggingSlider) sliderValue else currentVisiblePageIndex.toFloat(),
+                                    onValueChange = { newVal ->
+                                        if (!isDraggingSlider) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                        isDraggingSlider = true
+                                        sliderValue = newVal
+                                        val targetIdx = newVal.roundToInt().coerceIn(0, renderer.pageCount - 1)
+                                        onCurrentPageChanged(targetIdx)
+                                        coroutineScope.launch {
+                                            if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                                verticalListState.scrollToItem(targetIdx)
+                                            } else {
+                                                horizontalPagerState.scrollToPage(targetIdx)
+                                            }
+                                        }
+                                    },
+                                    onValueChangeFinished = {
+                                        isDraggingSlider = false
+                                    },
+                                    valueRange = 0f..(renderer.pageCount - 1).coerceAtLeast(1).toFloat(),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color(0xFF38BDF8),
+                                        activeTrackColor = Color(0xFF38BDF8),
+                                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                                    ),
+                                    thumb = {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFF38BDF8),
+                                            border = BorderStroke(1.5.dp, Color.White),
+                                            shadowElevation = 4.dp,
+                                            modifier = Modifier.size(if (isDraggingSlider) 20.dp else 15.dp)
+                                        ) {}
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 8.dp)
+                                )
+                                Text(
+                                    text = toBengaliDigits(renderer.pageCount),
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF94A3B8),
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
                                     softWrap = false
                                 )
                             }
                         }
 
-                        // Next Page Button
-                        IconButton(
-                            onClick = {
-                                val next = (currentVisiblePageIndex + 1).coerceAtMost(renderer.pageCount - 1)
-                                onCurrentPageChanged(next)
-                                coroutineScope.launch {
-                                    if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                        verticalListState.animateScrollToItem(next)
-                                    } else {
-                                        horizontalPagerState.animateScrollToPage(next)
-                                    }
-                                }
-                            },
-                            enabled = currentVisiblePageIndex < renderer.pageCount - 1,
-                            modifier = Modifier.size(34.dp)
+                        // Bottom Controls Row: Zoom Out | Zoom % Reset | Zoom In | Divider | Prev | Page Pill | Next
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
                         ) {
-                            Icon(
-                                imageVector = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
-                                    Icons.Default.KeyboardArrowDown
-                                } else {
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                            // Zoom Out Button
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    val newScale = (scale - 0.25f).coerceAtLeast(1f)
+                                    scale = newScale
+                                    if (newScale <= 1.01f) {
+                                        panOffsetX = 0f
+                                        slidePanOffsetY = 0f
+                                    }
                                 },
-                                contentDescription = tr("Next page", "পরের পৃষ্ঠা"),
-                                tint = if (currentVisiblePageIndex < renderer.pageCount - 1) Color.White else Color.White.copy(alpha = 0.3f),
-                                modifier = Modifier.size(21.dp)
+                                enabled = scale > 1.01f,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ZoomOut,
+                                    contentDescription = tr("Zoom out", "জুম আউট"),
+                                    tint = if (scale > 1.01f) Color.White else Color.White.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Zoom Level Pill (Tap to Reset to 100%)
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (scale > 1.05f) Color(0xFF0284C7).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        scale = 1f
+                                        panOffsetX = 0f
+                                        slidePanOffsetY = 0f
+                                    }
+                            ) {
+                                Text(
+                                    text = "${toBengaliDigits((scale * 100).roundToInt())}%",
+                                    color = if (scale > 1.05f) Color(0xFF38BDF8) else Color.White.copy(alpha = 0.9f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)
+                                )
+                            }
+
+                            // Zoom In Button
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    scale = (scale + 0.25f).coerceAtMost(4.0f)
+                                },
+                                enabled = scale < 4.0f,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ZoomIn,
+                                    contentDescription = tr("Zoom in", "জুম ইন"),
+                                    tint = if (scale < 4.0f) Color.White else Color.White.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            VerticalDivider(
+                                modifier = Modifier
+                                    .height(20.dp)
+                                    .padding(horizontal = 6.dp),
+                                color = Color.White.copy(alpha = 0.2f)
                             )
+
+                            // Previous Page Button
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    val prev = (currentVisiblePageIndex - 1).coerceAtLeast(0)
+                                    onCurrentPageChanged(prev)
+                                    coroutineScope.launch {
+                                        if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                            verticalListState.animateScrollToItem(prev)
+                                        } else {
+                                            horizontalPagerState.animateScrollToPage(prev)
+                                        }
+                                    }
+                                },
+                                enabled = currentVisiblePageIndex > 0,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                        Icons.Default.KeyboardArrowUp
+                                    } else {
+                                        Icons.AutoMirrored.Filled.KeyboardArrowLeft
+                                    },
+                                    contentDescription = tr("Previous page", "আগের পৃষ্ঠা"),
+                                    tint = if (currentVisiblePageIndex > 0) Color.White else Color.White.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+
+                            // Page Indicator Pill (Tap to open Jump Dialog)
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFF1E293B),
+                                border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        showJumpDialog = true
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${toBengaliDigits(currentVisiblePageNumber)} / ${toBengaliDigits(renderer.pageCount)}",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+
+                            // Next Page Button
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    val next = (currentVisiblePageIndex + 1).coerceAtMost(renderer.pageCount - 1)
+                                    onCurrentPageChanged(next)
+                                    coroutineScope.launch {
+                                        if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                            verticalListState.animateScrollToItem(next)
+                                        } else {
+                                            horizontalPagerState.animateScrollToPage(next)
+                                        }
+                                    }
+                                },
+                                enabled = currentVisiblePageIndex < renderer.pageCount - 1,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (viewMode == PdfViewMode.VERTICAL_SCROLL) {
+                                        Icons.Default.KeyboardArrowDown
+                                    } else {
+                                        Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                    },
+                                    contentDescription = tr("Next page", "পরের পৃষ্ঠা"),
+                                    tint = if (currentVisiblePageIndex < renderer.pageCount - 1) Color.White else Color.White.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }

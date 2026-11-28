@@ -15,6 +15,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +40,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import com.example.api.EnrolledProgram
 import com.example.api.StudentLessonItem
 import com.example.home.HomeViewModel
+import com.example.player.VideoProgressManager
+import com.example.ui.components.ContinueLearningCard
 import com.example.ui.components.CourseProgressSection
 import com.example.ui.components.CourseSwitcherBottomSheet
 import com.example.ui.components.HomeHeader
@@ -72,12 +77,16 @@ fun HomeScreen(
     onNavigateToAnimatedLessons: (subjectCode: String, subjectTitle: String, subjectColor: String?, programId: String?, phaseId: String?) -> Unit = { _, _, _, _, _ -> },
     onNavigateToNotificationHistory: () -> Unit = {},
     onOpenPdf: ((filePath: String, title: String) -> Unit)? = null,
+    scrollState: ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val wallpaperConfig by viewModel.wallpaperConfigFlow.collectAsStateWithLifecycle()
-    val scrollState = rememberScrollState()
     val context = LocalContext.current
+    val videoProgressManager = remember(context) { VideoProgressManager.getInstance(context) }
+    val latestResumableLesson by remember(videoProgressManager) {
+        videoProgressManager.getLatestResumableLessonFlow()
+    }.collectAsStateWithLifecycle(initialValue = null)
     val isDark = com.example.ui.theme.isAppInDarkTheme()
     val isHeaderUnderStatusBar by remember { derivedStateOf { scrollState.value < 180 } }
     com.example.ui.theme.StatusBarAppearanceEffect(lightIcons = isHeaderUnderStatusBar || isDark)
@@ -372,6 +381,41 @@ fun HomeScreen(
                                 }
                             }
 
+                            // Flagship "Continue Learning" resume card (auto-surfaces latest paused class)
+                            AnimatedVisibility(
+                                visible = latestResumableLesson != null && onOpenLessonDetail != null,
+                                enter = fadeIn(tween(260)),
+                                exit = fadeOut(tween(180))
+                            ) {
+                                latestResumableLesson?.let { resumable ->
+                                    ContinueLearningCard(
+                                        item = resumable,
+                                        onResumeClick = {
+                                            val targetId = resumable.lessonId?.trim().orEmpty()
+                                            if (targetId.isNotBlank()) {
+                                                val matchedLesson = uiState.weeklyRoutine.firstOrNull {
+                                                    it.id == targetId || it.content_id == targetId
+                                                } ?: StudentLessonItem(
+                                                    id = targetId,
+                                                    content_id = targetId,
+                                                    title = resumable.title,
+                                                    subject_name = resumable.subjectName,
+                                                    phase_id = resumable.courseId,
+                                                    program_id = uiState.activeProgram?.id
+                                                )
+                                                onOpenLessonDetail?.invoke(matchedLesson)
+                                            }
+                                        },
+                                        onDismissClick = {
+                                            videoProgressManager.dismissContinueCard(
+                                                videoKey = resumable.videoKey,
+                                                watchedTimestamp = resumable.lastWatchedTimestamp
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+
                             WeeklyRoutineSection(
                                 lessons = uiState.filteredWeeklyRoutine,
                                 isLoading = uiState.isRoutineLoading,
@@ -433,6 +477,12 @@ private fun HomeBottomFeaturesSection(
     onOpenPracticeQuiz: () -> Unit,
     onOpenAnimatedLessons: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    val animatedScoreFraction by animateFloatAsState(
+        targetValue = (totalScorePercent / 100f).coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
+        label = "homeScoreBarFraction"
+    )
     val reportCardGradient = remember {
         Brush.linearGradient(
             colors = listOf(
@@ -539,7 +589,10 @@ private fun HomeBottomFeaturesSection(
                     .clickable(
                         interactionSource = reportInteraction,
                         indication = ripple(color = Color.White),
-                        onClick = onOpenReportCard
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onOpenReportCard()
+                        }
                     )
             ) {
                 Box(
@@ -613,12 +666,11 @@ private fun HomeBottomFeaturesSection(
                                     .clip(RoundedCornerShape(50))
                                     .background(Color.Black.copy(alpha = 0.28f))
                             ) {
-                                val progressFraction = (totalScorePercent / 100f).coerceIn(0f, 1f)
-                                if (progressFraction > 0f) {
+                                if (animatedScoreFraction > 0.01f) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxHeight()
-                                            .fillMaxWidth(progressFraction.coerceAtLeast(0.06f))
+                                            .fillMaxWidth(animatedScoreFraction.coerceAtLeast(0.06f))
                                             .clip(RoundedCornerShape(50))
                                             .background(
                                                 Brush.horizontalGradient(
@@ -671,7 +723,10 @@ private fun HomeBottomFeaturesSection(
                     .clickable(
                         interactionSource = quizInteraction,
                         indication = ripple(color = Color.White),
-                        onClick = onOpenPracticeQuiz
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onOpenPracticeQuiz()
+                        }
                     )
             ) {
                 Box(
@@ -772,7 +827,10 @@ private fun HomeBottomFeaturesSection(
                 .clickable(
                     interactionSource = animInteraction,
                     indication = ripple(color = Color.White),
-                    onClick = onOpenAnimatedLessons
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onOpenAnimatedLessons()
+                    }
                 )
         ) {
             Box(

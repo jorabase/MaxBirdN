@@ -1,10 +1,16 @@
 package com.example.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,9 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +66,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SettingsScreen(
     sessionManager: SessionManager = SessionManager.getInstance(LocalContext.current),
+    scrollState: ScrollState = rememberScrollState(),
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToChangeSyllabus: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
@@ -218,18 +228,46 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Student Profile Hero Card
+            // 1. Student Profile Hero Card — spring press scale, luminous rim & ambient depth
+            val heroInteraction = remember { MutableInteractionSource() }
+            val heroPressed by heroInteraction.collectIsPressedAsState()
+            val heroScale by animateFloatAsState(
+                targetValue = if (heroPressed) 0.978f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                label = "settingsHeroScale"
+            )
+            val heroHaptic = LocalHapticFeedback.current
+
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                border = BorderStroke(
+                    1.dp,
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFF38BDF8).copy(alpha = 0.45f),
+                            Color.White.copy(alpha = 0.22f),
+                            Color(0xFF38BDF8).copy(alpha = 0.35f)
+                        )
+                    )
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onNavigateToProfile() }
+                    .graphicsLayer { scaleX = heroScale; scaleY = heroScale }
+                    .clip(RoundedCornerShape(24.dp))
+                    .clickable(
+                        interactionSource = heroInteraction,
+                        indication = ripple(color = Color.White),
+                        onClick = {
+                            heroHaptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onNavigateToProfile()
+                        }
+                    )
                     .testTag("settings_profile_hero_card")
             ) {
                 Box(
@@ -244,9 +282,27 @@ fun SettingsScreen(
                                 )
                             )
                         )
-                        .padding(18.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // Ambient luminous corner orb
+                    Box(
+                        modifier = Modifier
+                            .size(130.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = 34.dp, y = (-34).dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFF38BDF8).copy(alpha = 0.32f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.padding(18.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -1414,11 +1470,15 @@ private fun SettingsActionRow(
 ) {
     val primaryText = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
     val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val haptic = LocalHapticFeedback.current
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
             .padding(horizontal = 14.dp, vertical = 13.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically

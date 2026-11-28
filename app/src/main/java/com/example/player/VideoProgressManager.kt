@@ -8,6 +8,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.security.MessageDigest
 
@@ -24,6 +26,7 @@ class VideoProgressManager private constructor(private val context: Context) {
         context.getSharedPreferences("shikho_video_progress_cache", Context.MODE_PRIVATE)
     private val database: AppDatabase by lazy { AppDatabase.getDatabase(context) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val dismissTick = MutableStateFlow(0)
 
     data class ProgressInfo(
         val positionMs: Long,
@@ -121,6 +124,40 @@ class VideoProgressManager private constructor(private val context: Context) {
      */
     fun getProgressFlow(videoKey: String): Flow<VideoPlaybackProgressEntity?> {
         return database.videoPlaybackProgressDao().getProgressFlow(videoKey)
+    }
+
+    /**
+     * Emits the most recently watched unfinished lesson eligible for one-tap resume
+     * on the Home screen, respecting non-destructive card dismissal until re-watched.
+     */
+    fun getLatestResumableLessonFlow(): Flow<VideoPlaybackProgressEntity?> {
+        return combine(
+            database.videoPlaybackProgressDao().getAllProgress(),
+            dismissTick
+        ) { allItems, _ ->
+            allItems.firstOrNull { item ->
+                val hasLessonId = !item.lessonId.isNullOrBlank() && item.lessonId != "null"
+                val hasTitle = item.title.isNotBlank()
+                val eligible = item.lastPositionMs > 5_000L &&
+                    !item.isCompleted &&
+                    (item.totalDurationMs <= 0L || item.lastPositionMs < (item.totalDurationMs - 10_000L))
+                hasLessonId && hasTitle && eligible && !isContinueCardDismissed(item.videoKey, item.lastWatchedTimestamp)
+            }
+        }
+    }
+
+    fun dismissContinueCard(videoKey: String, watchedTimestamp: Long) {
+        prefs.edit()
+            .putString("dismissed_continue_key", videoKey)
+            .putLong("dismissed_continue_ts", watchedTimestamp)
+            .apply()
+        dismissTick.value = dismissTick.value + 1
+    }
+
+    private fun isContinueCardDismissed(videoKey: String, watchedTimestamp: Long): Boolean {
+        val dismissedKey = prefs.getString("dismissed_continue_key", null) ?: return false
+        val dismissedTs = prefs.getLong("dismissed_continue_ts", 0L)
+        return dismissedKey == videoKey && watchedTimestamp <= dismissedTs
     }
 
     /**

@@ -62,8 +62,8 @@ object NotificationLogoHelper {
             }
             canvas.drawCircle(radius, radius, radius, bgPaint)
 
-            // Draw the Maxbird artwork centered with balanced breathing room (~76% diameter)
-            val inset = (LOGO_SIZE_PX * 0.12f).toInt()
+            // Draw the Maxbird artwork centered with safe circular breathing room (70% diameter)
+            val inset = (LOGO_SIZE_PX * 0.15f).toInt()
             val destRect = Rect(inset, inset, LOGO_SIZE_PX - inset, LOGO_SIZE_PX - inset)
             val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
             canvas.drawBitmap(raw, null, destRect, bitmapPaint)

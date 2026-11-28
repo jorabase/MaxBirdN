@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -307,6 +309,8 @@ private fun QuarterCard(
     val upcomingTitleColor = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
     val upcomingSubColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
+    val haptic = LocalHapticFeedback.current
+
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
@@ -314,13 +318,20 @@ private fun QuarterCard(
         border = if (isUpcoming) {
             BorderStroke(1.dp, if (isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1).copy(alpha = 0.6f))
         } else {
-            BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+            BorderStroke(1.dp, Color.White.copy(alpha = 0.22f))
         },
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = cardScale; scaleY = cardScale }
             .clip(RoundedCornerShape(22.dp))
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(color = if (isUpcoming) MaterialTheme.colorScheme.primary else Color.White),
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                }
+            )
     ) {
         Box(modifier = Modifier.fillMaxWidth().background(cardBrush)) {
             // Left accent bar

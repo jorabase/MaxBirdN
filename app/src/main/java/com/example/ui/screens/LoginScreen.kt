@@ -1002,7 +1002,7 @@ private fun LoginAnimatedLogoBadge(
                 painter = painterResource(id = R.drawable.ic_launcher_foreground_asset),
                 contentDescription = "MaxBird Logo",
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(62.dp)
+                modifier = Modifier.size(56.dp)
             )
         }
     }
