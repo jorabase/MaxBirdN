@@ -465,7 +465,8 @@ class SessionManager(context: Context) {
         className: String?,
         group: String?,
         vendor: String? = null,
-        passingYear: String? = null
+        passingYear: String? = null,
+        clearPassingYearIfNull: Boolean = false
     ) {
         val editor = sharedPreferences.edit()
             .putString("academic_batch_id", batchId)
@@ -476,6 +477,8 @@ class SessionManager(context: Context) {
         }
         if (!passingYear.isNullOrBlank()) {
             editor.putString("academic_passing_year", passingYear)
+        } else if (clearPassingYearIfNull) {
+            editor.remove("academic_passing_year")
         }
         editor.apply()
         _sharedUserProfileUpdateFlow.value = System.currentTimeMillis()
@@ -584,6 +587,9 @@ class SessionManager(context: Context) {
 
     fun getUserFirstName(): String? =
         sharedPreferences.getString("user_first_name", null) ?: fallbackPrefs.getString("user_first_name", null)
+
+    fun getUserLastName(): String? =
+        sharedPreferences.getString("user_last_name", null) ?: fallbackPrefs.getString("user_last_name", null)
 
     fun getUserSchoolName(): String? = sharedPreferences.getString("user_school_name", null)
     fun getUserClassDisplay(): String? = sharedPreferences.getString("user_class_display", null)

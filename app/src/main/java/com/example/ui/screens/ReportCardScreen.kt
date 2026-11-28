@@ -3175,11 +3175,16 @@ fun StudentProfileDetailDialog(
                     )
                     if (!passingYear.isNullOrBlank()) {
                         HorizontalDivider(color = palette.border)
+                        val dynamicBatch = com.example.syllabus.formatSyllabusBatchId(
+                            classCode = className,
+                            passingYear = passingYear,
+                            fallbackBatchLabel = null
+                        ) ?: passingYear
                         ProfileInfoRow(
                             icon = Icons.Default.CalendarToday,
                             iconTint = Color(0xFF8B5CF6),
                             label = tr("Batch", "শিক্ষাবর্ষ / ব্যাচ"),
-                            value = tr("HSC $passingYear", "এইচএসসি $passingYear"),
+                            value = dynamicBatch,
                             missingText = notSetText
                         )
                     }

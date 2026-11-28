@@ -69,11 +69,11 @@ fun AnimatedLessonChaptersScreen(
                 val courseState = viewModel.uiState.value
                 val effectiveProgId = programId?.takeIf { it.isNotBlank() }
                     ?: courseState.programId.takeIf { it.isNotBlank() }
-                    ?: "6864d3a806800acba2e27099"
+                    ?: ""
                 val effectivePhaseId = phaseId?.takeIf { it.isNotBlank() }
                     ?: courseState.selectedPhase?.id?.takeIf { it.isNotBlank() }
                     ?: courseState.activePhaseId.takeIf { it.isNotBlank() }
-                    ?: "6864d62506800acba2e27111"
+                    ?: ""
 
                 val fetched = viewModel.getAllChaptersForAnimatedLessons(
                     programId = effectiveProgId,

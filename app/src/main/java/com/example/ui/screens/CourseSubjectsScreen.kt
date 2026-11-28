@@ -200,7 +200,7 @@ fun CourseSubjectsScreen(
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = {
-                viewModel.fetchEnrolledPrograms()
+                viewModel.fetchEnrolledPrograms(forceRefresh = true)
                 if (selectedProgram != null) {
                     viewModel.loadSubjects(forceRefresh = true)
                 }
@@ -252,7 +252,7 @@ fun CourseSubjectsScreen(
                             )
                         },
                         onRefresh = {
-                            viewModel.fetchEnrolledPrograms()
+                            viewModel.fetchEnrolledPrograms(forceRefresh = true)
                         }
                     )
                 } else {

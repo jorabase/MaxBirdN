@@ -132,19 +132,12 @@ fun SettingsScreen(
     val schoolName = remember(profileUpdateTick) {
         sessionManager.getUserSchoolName() ?: ""
     }
-    val classDisplay = remember(profileUpdateTick) {
-        sessionManager.getUserClassDisplay()
-            ?: sessionManager.getUserClassName()
-            ?: "HSC"
+    val classDisplay = remember(profileUpdateTick, isBn) {
+        val raw = sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName()
+        com.example.syllabus.formatClassDisplayName(raw)
     }
     val groupDisplay = remember(profileUpdateTick, isBn) {
-        val raw = sessionManager.getUserGroup() ?: ""
-        when (raw.lowercase()) {
-            "science" -> AppLang.tr("Science", "বিজ্ঞান")
-            "humanities", "arts", "hum" -> AppLang.tr("Humanities", "মানবিক")
-            "business", "commerce", "business studies" -> AppLang.tr("Business", "ব্যবসায়")
-            else -> raw.ifBlank { AppLang.tr("Science", "বিজ্ঞান") }
-        }
+        com.example.syllabus.formatStudyGroupDisplayName(sessionManager.getUserGroup())
     }
     val activeCourseTitle = remember(profileUpdateTick, isBn) {
         sessionManager.getActiveProgramTitleBn() ?: AppLang.tr("Academic Program", "একাডেমিক প্রোগ্রাম")

@@ -103,9 +103,12 @@ class CourseViewModel(
             }
             val byPhaseDeferred = async {
                 runCatching {
-                    val effectiveProgId = programId.ifBlank { _uiState.value.programId.ifBlank { "6864d3a806800acba2e27099" } }
-                    val effectivePhaseId = phaseId.ifBlank { _uiState.value.activePhaseId.ifBlank { "6864d62506800acba2e27111" } }
-                    val phaseList = repository.getPhaseWiseChapters(effectiveProgId, effectivePhaseId, subjectCode)
+                    val effectiveProgId = programId.ifBlank { _uiState.value.programId.ifBlank { sessionManager.getActiveProgramId().orEmpty() } }
+                    val effectivePhaseId = phaseId.ifBlank { _uiState.value.activePhaseId.ifBlank { sessionManager.getActiveProgramPhaseId().orEmpty() } }
+                    if (effectiveProgId.isBlank()) return@runCatching emptyList<AcademicChapterItem>()
+                    val phaseList = if (effectivePhaseId.isNotBlank()) {
+                        repository.getPhaseWiseChapters(effectiveProgId, effectivePhaseId, subjectCode)
+                    } else emptyList()
                     val progList = repository.getAcademicProgramChaptersFallback(effectiveProgId, subjectCode)
                     (phaseList + progList)
                 }.getOrNull().orEmpty()
@@ -144,9 +147,11 @@ class CourseViewModel(
 
     suspend fun getPhaseWiseChapters(programId: String, phaseId: String, subjectCode: String): List<AcademicChapterItem> {
         return try {
-            val effectiveProgId = programId.ifBlank { "6864d3a806800acba2e27099" }
-            val effectivePhaseId = phaseId.ifBlank { "6864d62506800acba2e27111" }
-            val list = repository.getPhaseWiseChapters(effectiveProgId, effectivePhaseId, subjectCode)
+            val effectiveProgId = programId.ifBlank { _uiState.value.programId.ifBlank { sessionManager.getActiveProgramId().orEmpty() } }
+            val effectivePhaseId = phaseId.ifBlank { _uiState.value.activePhaseId.ifBlank { sessionManager.getActiveProgramPhaseId().orEmpty() } }
+            val list = if (effectiveProgId.isNotBlank() && effectivePhaseId.isNotBlank()) {
+                repository.getPhaseWiseChapters(effectiveProgId, effectivePhaseId, subjectCode)
+            } else emptyList()
             if (list.isNotEmpty()) {
                 list
             } else {
@@ -435,9 +440,13 @@ class CourseViewModel(
                 )
             }
 
-            val classCode = sessionManager.getUserClassName() ?: "C11"
-            val groupCode = sessionManager.getUserGroup() ?: "Humanities"
-            val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
+            val classCode = sessionManager.getUserClassName().orEmpty()
+            val groupCode = sessionManager.getUserGroup().orEmpty()
+            val batchId = com.example.syllabus.formatSyllabusBatchId(
+                classCode = classCode,
+                passingYear = sessionManager.getAcademicPassingYear(),
+                fallbackBatchLabel = sessionManager.getUserBatchId()
+            )
 
             val result = CourseCommerceRepository.requestCoursePurchaseAccess(
                 context = sessionManager.appContext,
@@ -606,23 +615,44 @@ class CourseViewModel(
         _uiState.value = CourseUiState()
     }
 
-    fun fetchEnrolledPrograms() {
+    fun fetchEnrolledPrograms(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isProgramsLoading = true) }
             try {
-                if (sessionManager.getNormalizedUserPhone().isBlank() && !sessionManager.getAccessToken().isNullOrBlank()) {
+                if ((sessionManager.getNormalizedUserPhone().isBlank() || sessionManager.getUserClassName().isNullOrBlank()) &&
+                    !sessionManager.getAccessToken().isNullOrBlank()
+                ) {
                     try {
                         val uid = sessionManager.getUserId() ?: ""
                         if (uid.isNotBlank()) {
                             val profileQuery = GraphQlQuery(
                                 operationName = "GetProfile",
-                                query = "query GetProfile(\$user_id: String, \$type: String!) { profile(user_id: \$user_id, type: \$type) { id first_name last_name avatar study_group class { code display } school { id name } user { phone email } } }",
+                                query = "query GetProfile(\$user_id: String, \$type: String!) { profile(user_id: \$user_id, type: \$type) { id first_name last_name avatar study_group passing_year class { code display } school { id name } user { phone email } } }",
                                 variables = mapOf("user_id" to uid, "type" to "student")
                             )
                             val profResp = apiService.getProfile(profileQuery)
-                            val profPhone = profResp.data?.profile?.user?.phone
+                            val prof = profResp.data?.profile
+                            val profPhone = prof?.user?.phone
                             if (!profPhone.isNullOrBlank()) {
                                 sessionManager.saveUserPhone(profPhone)
+                            }
+                            if (prof != null && sessionManager.getUserClassName().isNullOrBlank()) {
+                                val resolvedCls = prof.`class`?.code?.takeIf { it.isNotBlank() }
+                                val resolvedGrp = prof.study_group?.takeIf { it.isNotBlank() }
+                                val resolvedYear = com.example.syllabus.extractPassingYear(prof.passing_year)
+                                    ?: com.example.syllabus.extractPassingYear(sessionManager.getAcademicPassingYear())
+                                val resolvedBatch = com.example.syllabus.formatSyllabusBatchId(
+                                    classCode = resolvedCls,
+                                    passingYear = resolvedYear,
+                                    fallbackBatchLabel = sessionManager.getUserBatchId()
+                                )
+                                sessionManager.saveUserAcademicInfo(
+                                    batchId = resolvedBatch,
+                                    className = resolvedCls,
+                                    group = resolvedGrp,
+                                    vendor = sessionManager.getUserVendor() ?: "BD",
+                                    passingYear = resolvedYear
+                                )
                             }
                         }
                     } catch (_: Exception) {}
@@ -630,16 +660,26 @@ class CourseViewModel(
 
                 val commerceSnapshot = CourseCommerceRepository.fetchCourseCommerceStatus(sessionManager.appContext)
 
-                val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
-                val userClassName = sessionManager.getUserClassName() ?: "C11"
-                val group = sessionManager.getUserGroup() ?: "Humanities"
+                val userClassName = sessionManager.getUserClassName()?.takeIf { it.isNotBlank() }
+                if (userClassName == null) {
+                    _uiState.update { it.copy(isProgramsLoading = false) }
+                    return@launch
+                }
+                // Always query catalog using the user's CURRENT syllabus batch (never active_program_batch_id from a previous course)
+                val batchId = com.example.syllabus.formatSyllabusBatchId(
+                    classCode = userClassName,
+                    passingYear = sessionManager.getAcademicPassingYear(),
+                    fallbackBatchLabel = sessionManager.getUserBatchId()
+                )
+                val group = sessionManager.getUserGroup()
                 val vendor = sessionManager.getUserVendor() ?: "BD"
 
                 val response = repository.getAcademicProgramByEnrollment(
                     batchId = batchId,
                     className = userClassName,
                     group = group,
-                    vendor = vendor
+                    vendor = vendor,
+                    forceRefresh = forceRefresh
                 )
                 val rawEnrolled = response.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
                 val rawOtherAll = response.data?.listAcademicProgramByEnrollment?.other_programs ?: emptyList()
@@ -784,25 +824,44 @@ class CourseViewModel(
         }
     }
 
-    fun selectLesson(lesson: StudentLessonItem) {
-        val hasDirectStream = lesson.candidateStreamUrls.any { it.isNotBlank() && it != "null" }
+    fun selectLesson(lesson: StudentLessonItem, forceRefresh: Boolean = false) {
+        val cachedMatch = LessonCacheManager.getLessonById(lesson.id)
+            ?: lesson.content_id?.let { LessonCacheManager.getLessonById(it) }
+        val enrichedInput = if (cachedMatch != null && cachedMatch !== lesson) {
+            lesson.copy(
+                content_id = lesson.content_id?.takeIf { it.isNotBlank() && it != lesson.id } ?: cachedMatch.content_id ?: lesson.content_id,
+                content_type = lesson.content_type?.takeIf { it.isNotBlank() } ?: cachedMatch.content_type,
+                chapter_id = lesson.chapter_id?.takeIf { it.isNotBlank() } ?: cachedMatch.chapter_id,
+                chapter_name = lesson.chapter_name?.takeIf { it.isNotBlank() } ?: cachedMatch.chapter_name,
+                subject_id = lesson.subject_id?.takeIf { it.isNotBlank() } ?: cachedMatch.subject_id,
+                subject_name = lesson.subject_name?.takeIf { it.isNotBlank() } ?: cachedMatch.subject_name,
+                start_time = lesson.start_time?.takeIf { it.isNotBlank() } ?: cachedMatch.start_time,
+                end_time = lesson.end_time?.takeIf { it.isNotBlank() } ?: cachedMatch.end_time,
+                live_class = lesson.live_class ?: cachedMatch.live_class,
+                topics = lesson.topics?.takeIf { it.isNotEmpty() } ?: cachedMatch.topics
+            )
+        } else {
+            lesson
+        }
+
+        val hasDirectStream = !forceRefresh && enrichedInput.candidateStreamUrls.any { it.isNotBlank() && it != "null" }
         val candidateIds = listOfNotNull(
-            lesson.content_id?.takeIf { it.isNotBlank() },
-            lesson.live_class?.id?.takeIf { it.isNotBlank() },
-            lesson.id.takeIf { it.isNotBlank() },
-            lesson.session_id?.takeIf { it.isNotBlank() }
+            enrichedInput.content_id?.takeIf { it.isNotBlank() },
+            enrichedInput.live_class?.id?.takeIf { it.isNotBlank() },
+            enrichedInput.id.takeIf { it.isNotBlank() },
+            enrichedInput.session_id?.takeIf { it.isNotBlank() }
         ).distinct()
-        // If the lesson already has a playable URL, start playing immediately (0ms delay!)
+        // If the lesson already has a playable URL (and not forcing refresh), start playing immediately (0ms delay!)
         val needsBlockingWait = !hasDirectStream && candidateIds.isNotEmpty()
 
         _uiState.update {
             it.copy(
-                selectedLesson = lesson,
+                selectedLesson = enrichedInput,
                 isLessonDetailLoading = needsBlockingWait
             )
         }
 
-        android.util.Log.d("LectureDebug", "selectLesson: ${lesson.title}, candidateIds: $candidateIds, hasDirectStream: $hasDirectStream, needsBlockingWait: $needsBlockingWait")
+        android.util.Log.d("LectureDebug", "selectLesson: ${lesson.title}, candidateIds: $candidateIds, hasDirectStream: $hasDirectStream, needsBlockingWait: $needsBlockingWait, forceRefresh: $forceRefresh")
 
         if (candidateIds.isNotEmpty()) {
             viewModelScope.launch {
@@ -812,7 +871,7 @@ class CourseViewModel(
 
                     // Query candidate IDs concurrently in parallel for blazing-fast response
                     val deferredList = candidateIds.map { cid ->
-                        async { cid to repository.getLiveClassDetails(cid) }
+                        async { cid to repository.getLiveClassDetails(cid, forceRefresh = forceRefresh) }
                     }
                     val results = deferredList.awaitAll()
                     for ((cid, details) in results) {
@@ -854,56 +913,76 @@ class CourseViewModel(
                                 )
                             }
                         }
-                        lesson.attachments?.let { newAttachments.addAll(it) }
+                        enrichedInput.attachments?.let { newAttachments.addAll(it) }
 
                         val primarySlideUrl = liveClassData?.study_materials?.firstNotNullOfOrNull { it.file_url?.takeIf { u -> u.isNotBlank() } }
-                            ?: lesson.slide_url
-                            ?: lesson.live_class?.slide_url
+                            ?: enrichedInput.slide_url
+                            ?: enrichedInput.live_class?.slide_url
                             ?: newAttachments.firstOrNull { it.downloadUrl?.contains(".pdf", ignoreCase = true) == true }?.downloadUrl
 
                         val subjectNameResolved = liveClassData?.subject?.display_bn
                             ?: liveClassData?.subject?.display
-                            ?: lesson.subject_name
-                            ?: lesson.live_class?.subject_name
+                            ?: enrichedInput.subject_name
+                            ?: enrichedInput.live_class?.subject_name
 
-                        val chapterIdResolved = lesson.chapter_id?.takeIf { it.isNotBlank() }
+                        val chapterIdResolved = enrichedInput.chapter_id?.takeIf { it.isNotBlank() }
                             ?: liveClassData?.chapter?.id?.takeIf { it.isNotBlank() }
 
                         val chapterNameResolved = liveClassData?.chapter?.name
-                            ?: lesson.chapter_name
-                            ?: lesson.live_class?.chapter_name
+                            ?: enrichedInput.chapter_name
+                            ?: enrichedInput.live_class?.chapter_name
 
-                        val updatedLiveClass = (lesson.live_class ?: LiveClassDetails()).copy(
-                            id = liveClassData?.id ?: lesson.live_class?.id ?: foundWorkingId,
-                            playback_url = pbUrl ?: lesson.live_class?.playback_url,
-                            recording_url = pbUrl ?: lesson.live_class?.recording_url,
-                            stream_url = pbUrl ?: lesson.live_class?.stream_url,
-                            video_url = pbUrl ?: lesson.live_class?.video_url,
+                        val updatedLiveClass = (enrichedInput.live_class ?: LiveClassDetails()).copy(
+                            id = liveClassData?.id ?: enrichedInput.live_class?.id ?: foundWorkingId,
+                            playback_url = pbUrl ?: enrichedInput.live_class?.playback_url,
+                            recording_url = pbUrl ?: enrichedInput.live_class?.recording_url,
+                            stream_url = pbUrl ?: enrichedInput.live_class?.stream_url,
+                            video_url = pbUrl ?: enrichedInput.live_class?.video_url,
                             slide_url = primarySlideUrl,
                             attachments = newAttachments.distinctBy { it.downloadUrl },
-                            start_time = liveClassData?.start_time ?: lesson.live_class?.start_time,
-                            end_time = liveClassData?.end_time ?: lesson.live_class?.end_time,
+                            start_time = liveClassData?.start_time ?: enrichedInput.live_class?.start_time,
+                            end_time = liveClassData?.end_time ?: enrichedInput.live_class?.end_time,
                             chapter_id = chapterIdResolved,
                             chapter_name = chapterNameResolved,
                             subject_name = subjectNameResolved,
-                            is_on_going = liveClassData?.on_going ?: lesson.live_class?.is_on_going,
-                            teacher = liveClassData?.teacher ?: liveClassData?.instructor ?: lesson.live_class?.teacher,
-                            topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else lesson.live_class?.topics
+                            is_on_going = liveClassData?.on_going ?: enrichedInput.live_class?.is_on_going,
+                            teacher = liveClassData?.teacher ?: liveClassData?.instructor ?: enrichedInput.live_class?.teacher,
+                            topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else enrichedInput.live_class?.topics
                         )
 
-                        val updatedLesson = lesson.copy(
-                            title = liveClassData?.title ?: lesson.title,
+                        val updatedLesson = enrichedInput.copy(
+                            title = liveClassData?.title ?: enrichedInput.title,
                             slide_url = primarySlideUrl,
                             subject_name = subjectNameResolved,
                             chapter_name = chapterNameResolved,
                             chapter_id = chapterIdResolved,
                             live_class = updatedLiveClass,
                             attachments = newAttachments.distinctBy { it.downloadUrl },
-                            topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else lesson.topics
+                            topics = if (!liveClassData?.topics.isNullOrEmpty()) liveClassData.topics else enrichedInput.topics
                         )
 
                         var currentLessonState = updatedLesson
                         android.util.Log.d("LectureDebug", "Resolved lesson media (hasVideo=${!currentLessonState.resolvedVideoUrl.isNullOrBlank()}, hasSlide=${!currentLessonState.resolvedSlideUrl.isNullOrBlank()}, attachments=${currentLessonState.allAttachments.size})")
+
+                        fun matchesSelected(cur: StudentLessonItem?): Boolean {
+                            if (cur == null) return true
+                            if (cur.id == enrichedInput.id) return true
+                            if (!enrichedInput.content_id.isNullOrBlank() && cur.content_id == enrichedInput.content_id) return true
+                            val curLiveId = cur.live_class?.id
+                            if (!curLiveId.isNullOrBlank() && candidateIds.contains(curLiveId)) return true
+                            return false
+                        }
+
+                        // Publish resolved stream & slides immediately so ExoPlayer starts playing right away
+                        LessonCacheManager.saveLessons(listOf(currentLessonState))
+                        if (matchesSelected(_uiState.value.selectedLesson)) {
+                            _uiState.update {
+                                it.copy(
+                                    selectedLesson = currentLessonState,
+                                    isLessonDetailLoading = false
+                                )
+                            }
+                        }
 
                         // 1. Fetch Teacher Details if teacher_id exists
                         val teacherId = liveClassData?.teacher?.id
@@ -913,6 +992,7 @@ class CourseViewModel(
                                 if (fullTeacher != null) {
                                     val withTeacher = currentLessonState.live_class?.copy(teacher = fullTeacher)
                                     currentLessonState = currentLessonState.copy(live_class = withTeacher)
+                                    LessonCacheManager.saveLessons(listOf(currentLessonState))
                                 }
                             } catch (_: Exception) {}
                         }
@@ -931,14 +1011,13 @@ class CourseViewModel(
                             }
                         }
 
-                        val cur = _uiState.value.selectedLesson
-                        if (cur == null || cur.id == lesson.id || cur.content_id == lesson.content_id || candidateIds.contains(cur.live_class?.id)) {
-                            _uiState.update { 
+                        if (matchesSelected(_uiState.value.selectedLesson)) {
+                            _uiState.update {
                                 it.copy(
                                     selectedLesson = currentLessonState,
                                     selectedLessonTopicVideos = topicVideos,
                                     isLessonDetailLoading = false
-                                ) 
+                                )
                             }
                         }
                     } else {
@@ -959,23 +1038,8 @@ class CourseViewModel(
      */
     fun reloadSelectedLesson() {
         val current = _uiState.value.selectedLesson
-        val currentChapterId = _uiState.value.selectedChapterId
-        val currentLessonId = current?.id
-
         if (current != null) {
-            selectLesson(current)
-        }
-
-        if (currentChapterId.isNotBlank()) {
-            viewModelScope.launch {
-                loadLessonsForChapter(currentChapterId)
-                if (!currentLessonId.isNullOrBlank()) {
-                    val updated = _uiState.value.lessons.find { it.id == currentLessonId }
-                    if (updated != null) {
-                        _uiState.update { it.copy(selectedLesson = updated) }
-                    }
-                }
-            }
+            selectLesson(current, forceRefresh = true)
         }
     }
 
@@ -984,6 +1048,7 @@ class CourseViewModel(
      */
     fun selectLessonById(lessonId: String) {
         val existing = _uiState.value.lessons.find { it.id == lessonId }
+            ?: LessonCacheManager.getLessonById(lessonId)
             ?: StudentLessonItem(id = lessonId, title = com.example.utils.AppLang.tr("Class Lecture", "ক্লাস লেকচার"))
         selectLesson(existing)
     }
@@ -1000,7 +1065,7 @@ class CourseViewModel(
     ) {
         chaptersCache.clear()
         lessonsCache.clear()
-        val title = if (!newProgramTitle.isNullOrBlank()) newProgramTitle else com.example.utils.AppLang.tr("HSC Course", "এইচএসসি কোর্স")
+        val title = if (!newProgramTitle.isNullOrBlank()) newProgramTitle else com.example.utils.AppLang.tr("Course", "কোর্স")
         // NOTE: Do NOT call sessionManager.saveActiveProgram(...) here!
         // sessionManager.saveActiveProgram is strictly reserved for the Home screen's Course Switcher.
         _uiState.update {
@@ -1034,7 +1099,7 @@ class CourseViewModel(
             val currentProgId = _uiState.value.programId
             val programId = if (currentProgId.isNotBlank()) currentProgId else (sessionManager.getActiveProgramId() ?: "")
             val currentProgTitle = _uiState.value.programTitle
-            val programTitle = if (currentProgTitle.isNotBlank()) currentProgTitle else (sessionManager.getActiveProgramTitleBn() ?: com.example.utils.AppLang.tr("HSC Course", "এইচএসসি কোর্স"))
+            val programTitle = if (currentProgTitle.isNotBlank()) currentProgTitle else (sessionManager.getActiveProgramTitleBn() ?: com.example.utils.AppLang.tr("Course", "কোর্স"))
 
             val oldProgramId = _uiState.value.programId
             val isProgramChanged = oldProgramId.isNotBlank() && oldProgramId != programId

@@ -499,11 +499,23 @@ class AuthViewModel(
                         classDisplay = profile.`class`?.display ?: profile.`class`?.code,
                         phone = profile.user?.phone
                     )
+                    val resolvedClass = profile.`class`?.code?.takeIf { it.isNotBlank() }
+                        ?: sessionManager.getUserClassName()
+                    val resolvedGroup = profile.study_group?.takeIf { it.isNotBlank() }
+                        ?: sessionManager.getUserGroup()
+                    val resolvedPassingYear = com.example.syllabus.extractPassingYear(profile.passing_year)
+                        ?: com.example.syllabus.extractPassingYear(sessionManager.getAcademicPassingYear())
+                    val resolvedBatchId = com.example.syllabus.formatSyllabusBatchId(
+                        classCode = resolvedClass,
+                        passingYear = resolvedPassingYear,
+                        fallbackBatchLabel = sessionManager.getUserBatchId()
+                    )
                     sessionManager.saveUserAcademicInfo(
-                        batchId = profile.passing_year ?: sessionManager.getUserBatchId(),
-                        className = profile.`class`?.code ?: "C11",
-                        group = profile.study_group ?: "Humanities",
-                        vendor = "BD"
+                        batchId = resolvedBatchId,
+                        className = resolvedClass,
+                        group = resolvedGroup,
+                        vendor = sessionManager.getUserVendor() ?: "BD",
+                        passingYear = resolvedPassingYear
                     )
                     runCatching {
                         com.example.notification.OneSignalPushManager.triggerSyncAsync(

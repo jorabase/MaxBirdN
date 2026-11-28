@@ -177,34 +177,47 @@ fun VideoPlayerScreen(
         effectivePlaybackUrl.startsWith("/") || effectivePlaybackUrl.startsWith("file://")
     }
 
-    // TrackSelector with AdaptiveTrackSelection for dynamic bitrate adaptation
-    val trackSelector = remember { DefaultTrackSelector(context, ShikhoPlayerManager.createAdaptiveTrackSelectionFactory()) }
+    // Single persistent TrackSelector + ExoPlayer pair (prevents TrackSelector release crash when URL resolves to offline file)
+    val trackSelector = remember(context) {
+        DefaultTrackSelector(context, ShikhoPlayerManager.createAdaptiveTrackSelectionFactory())
+    }
+    val exoPlayer = remember(context, trackSelector) {
+        ShikhoPlayerManager.buildExoPlayer(context, trackSelector)
+    }
 
-    // ExoPlayer instance configured with Shikho CDN headers or Local Offline source
-    val exoPlayer = remember(context, effectivePlaybackUrl) {
-        ShikhoPlayerManager.buildExoPlayer(context, trackSelector).apply {
-            val dbProg = videoProgressManager.getCachedProgress(videoKey)
-            val mediaSource = ShikhoPlayerManager.createMediaSource(
-                url = effectivePlaybackUrl,
-                isLive = isLive && !isPlayingOffline,
-                context = context
-            )
-            val targetResumeMs = if (lastPlaybackPositionMs > 1000L) {
-                lastPlaybackPositionMs
-            } else if (pendingResumeSeekMs > 1000L) {
-                pendingResumeSeekMs
-            } else if (dbProg != null && dbProg.isEligibleForResume) {
-                pendingResumeSeekMs = dbProg.positionMs
-                dbProg.positionMs
-            } else 0L
+    LaunchedEffect(exoPlayer, effectivePlaybackUrl) {
+        if (effectivePlaybackUrl.isNotBlank()) {
+            isBuffering = true
+            try {
+                val dbProg = videoProgressManager.getCachedProgress(videoKey)
+                val mediaSource = ShikhoPlayerManager.createMediaSource(
+                    url = effectivePlaybackUrl,
+                    isLive = isLive && !isPlayingOffline,
+                    context = context
+                )
+                val targetResumeMs = if (lastPlaybackPositionMs > 1000L) {
+                    lastPlaybackPositionMs
+                } else if (pendingResumeSeekMs > 1000L) {
+                    pendingResumeSeekMs
+                } else if (dbProg != null && dbProg.isEligibleForResume) {
+                    pendingResumeSeekMs = dbProg.positionMs
+                    dbProg.positionMs
+                } else 0L
 
-            if (targetResumeMs > 1000L) {
-                setMediaSource(mediaSource, targetResumeMs)
-            } else {
-                setMediaSource(mediaSource)
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
+                if (targetResumeMs > 1000L) {
+                    exoPlayer.setMediaSource(mediaSource, targetResumeMs)
+                } else {
+                    exoPlayer.setMediaSource(mediaSource)
+                }
+                exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
+            } catch (_: Exception) {
+                isBuffering = false
             }
-            prepare()
-            playWhenReady = true
+        } else {
+            isBuffering = false
         }
     }
 

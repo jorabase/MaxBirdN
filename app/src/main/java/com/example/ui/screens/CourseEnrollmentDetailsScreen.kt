@@ -75,12 +75,20 @@ fun CourseEnrollmentDetailsScreen(
             context = context
         )
         try {
-            val className = sessionManager.getUserClassName() ?: "C11"
+            val className = sessionManager.getUserClassName()?.takeIf { it.isNotBlank() }
+            val formattedGroup = com.example.syllabus.normalizeStudyGroupEnum(className, sessionManager.getUserGroup())
+            val batchId = com.example.syllabus.formatSyllabusBatchId(
+                classCode = className,
+                passingYear = sessionManager.getAcademicPassingYear(),
+                fallbackBatchLabel = sessionManager.getUserBatchId()
+            )
+            val vendor = sessionManager.getUserVendor() ?: "BD"
+
             val query = GraphQlQuery(
                 operationName = "GetEnrolledAcademicProgram",
                 query = """
-                    query GetEnrolledAcademicProgram(${'$'}className: AcademicProgramClassEnum) {
-                      listAcademicProgramByEnrollment(class: ${'$'}className) {
+                    query GetEnrolledAcademicProgram(${'$'}batch_id: String, ${'$'}className: AcademicProgramClassEnum, ${'$'}group: StudyGroupTypeEnum, ${'$'}vendor: VendorEnum) {
+                      listAcademicProgramByEnrollment(batch_id: ${'$'}batch_id, class: ${'$'}className, group: ${'$'}group, vendor: ${'$'}vendor) {
                         enrolled_programs {
                           id
                           title_bn
@@ -93,7 +101,12 @@ fun CourseEnrollmentDetailsScreen(
                       }
                     }
                 """.trimIndent(),
-                variables = mutableMapOf("className" to className)
+                variables = mapOf(
+                    "batch_id" to batchId,
+                    "className" to className,
+                    "group" to formattedGroup,
+                    "vendor" to vendor
+                )
             )
 
             val response = apiService.getAcademicProgram(query)
@@ -166,12 +179,8 @@ fun CourseEnrollmentDetailsScreen(
                 programsList = list
             }
         } catch (e: Exception) {
-            // Error handling fallback
+            // Error handling
         } finally {
-            if (programsList.isEmpty()) {
-                val fb = getFallbackEnrollmentPrograms()
-                programsList = fb.filter { commerceSnapshot.isCourseActivelyUnlocked(it.id, it.titleBn) }
-            }
             isLoading = false
         }
     }
@@ -326,11 +335,19 @@ private fun EnrollmentProgramCard(program: EnrollmentProgramDisplay, isDark: Boo
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
+                        val badgeLabel = program.titleBn
+                            .split(" ")
+                            .take(2)
+                            .joinToString(" ")
+                            .ifBlank { tr("Course", "কোর্স") }
                         Text(
-                            text = if (program.titleBn.contains("Think", ignoreCase = true)) "Think AI" else "HSC '27",
+                            text = badgeLabel,
                             color = Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp)
                         )
                     }
                 }
@@ -489,7 +506,7 @@ private fun DashedDivider(
 }
 
 private fun formatToLocalizedDate(dateString: String?): String {
-    val fallback = AppLang.tr("31 Dec, 2026", "৩১ ডিসেম্বর, ২০২৬")
+    val fallback = AppLang.tr("Active", "সক্রিয়")
     if (dateString.isNullOrBlank()) return fallback
     return try {
         val cleanDate = dateString.split("T")[0]
@@ -523,40 +540,4 @@ private fun formatToLocalizedDate(dateString: String?): String {
     } catch (e: Exception) {
         fallback
     }
-}
-
-private fun getFallbackEnrollmentPrograms(): List<EnrollmentProgramDisplay> {
-    return listOf(
-        EnrollmentProgramDisplay(
-            id = "6864d3a806800acba2e27099",
-            titleBn = AppLang.tr("HSC '27 Humanities - 2nd Year", "HSC '27 মানবিক - ২য় বর্ষ প্রস্তুতি"),
-            bannerUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1751437593/hftof9ha6mequpiqpkbh.jpg",
-            expiryDateBn = AppLang.tr("31 Dec, 2026", "৩১ ডিসেম্বর, ২০২৬"),
-            phases = listOf(
-                EnrollmentPhaseDisplay(AppLang.tr("Quarter 1", "কোয়ার্টার ১")),
-                EnrollmentPhaseDisplay(AppLang.tr("Quarter 2", "কোয়ার্টার ২")),
-                EnrollmentPhaseDisplay(AppLang.tr("Quarter 3", "কোয়ার্টার ৩")),
-                EnrollmentPhaseDisplay(AppLang.tr("Quarter 4", "কোয়ার্টার ৪")),
-                EnrollmentPhaseDisplay(AppLang.tr("Quarter 5", "কোয়ার্টার ৫"))
-            )
-        ),
-        EnrollmentProgramDisplay(
-            id = "6862551806800acba2e22b27",
-            titleBn = AppLang.tr("Duronto HSC '27 - Humanities", "দুরন্ত HSC '27 - মানবিক"),
-            bannerUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1751274615/mqllgmiyqdg3mf7xyxva.jpg",
-            expiryDateBn = AppLang.tr("15 Sep, 2025", "১৫ সেপ্টেম্বর, ২০২৫"),
-            phases = listOf(
-                EnrollmentPhaseDisplay(AppLang.tr("Full Course", "ফুল কোর্স"))
-            )
-        ),
-        EnrollmentProgramDisplay(
-            id = "69f0a5053127a0e46e16de09",
-            titleBn = "Think AI",
-            bannerUrl = "https://res.cloudinary.com/cross-border-education-technologies-pte-ltd/image/upload/v1777438148/mjpjbimt6wkkwsmtrh8l.jpg",
-            expiryDateBn = AppLang.tr("30 Apr, 2029", "৩০ এপ্রিল, ২০২৯"),
-            phases = listOf(
-                EnrollmentPhaseDisplay(AppLang.tr("Full Course", "ফুল কোর্স"))
-            )
-        )
-    )
 }

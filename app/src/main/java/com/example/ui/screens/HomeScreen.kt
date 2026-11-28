@@ -197,23 +197,12 @@ fun HomeScreen(
     // ===== LOGIC: Subtitle formatting (unchanged) =====
     val isBn = isBangla()
     val subtitle = remember(uiState.userClass, uiState.userGroup, uiState.userSchool, isBn) {
-        val classDisplay = when (uiState.userClass) {
-            "C11", "Class 11" -> if (isBn) "একাদশ শ্রেণি" else "Class 11"
-            "C12", "Class 12" -> if (isBn) "দ্বাদশ শ্রেণি" else "Class 12"
-            "C10", "Class 10" -> if (isBn) "দশম শ্রেণি" else "Class 10"
-            "C9", "Class 9" -> if (isBn) "নবম শ্রেণি" else "Class 9"
-            else -> uiState.userClass.ifBlank { if (isBn) "একাদশ শ্রেণি" else "Class 11" }
-        }
-        val groupDisplay = when (uiState.userGroup.lowercase()) {
-            "humanities", "humanities_group" -> if (isBn) "মানবিক" else "Humanities"
-            "science", "science_group" -> if (isBn) "বিজ্ঞান" else "Science"
-            "business", "business_studies", "commerce" -> if (isBn) "ব্যবসায় শিক্ষা" else "Business"
-            else -> uiState.userGroup.ifBlank { "" }
-        }
+        val classDisplay = com.example.syllabus.formatClassDisplayName(uiState.userClass)
+        val groupDisplay = com.example.syllabus.formatStudyGroupDisplayName(uiState.userGroup)
         listOf(classDisplay, groupDisplay, uiState.userSchool)
             .filter { it.isNotBlank() }
             .joinToString(" • ")
-            .ifBlank { if (isBn) "এইচএসসি শিক্ষার্থী" else "HSC Student" }
+            .ifBlank { if (isBn) "শিক্ষার্থী" else "Student" }
     }
 
     val displayName = remember(uiState.userFirstName, uiState.userName, isBn) {
@@ -393,16 +382,41 @@ fun HomeScreen(
                                         onResumeClick = {
                                             val targetId = resumable.lessonId?.trim().orEmpty()
                                             if (targetId.isNotBlank()) {
-                                                val matchedLesson = uiState.weeklyRoutine.firstOrNull {
-                                                    it.id == targetId || it.content_id == targetId
-                                                } ?: StudentLessonItem(
-                                                    id = targetId,
-                                                    content_id = targetId,
-                                                    title = resumable.title,
-                                                    subject_name = resumable.subjectName,
-                                                    phase_id = resumable.courseId,
-                                                    program_id = uiState.activeProgram?.id
+                                                val meta = videoProgressManager.getResumeMetadata(resumable.videoKey)
+                                                val routineMatch = uiState.weeklyRoutine.firstOrNull {
+                                                    it.id == targetId ||
+                                                        it.content_id == targetId ||
+                                                        (!meta.contentId.isNullOrBlank() && it.content_id == meta.contentId) ||
+                                                        (!meta.liveClassId.isNullOrBlank() && it.live_class?.id == meta.liveClassId)
+                                                } ?: com.example.course.LessonCacheManager.getLessonById(targetId)
+                                                    ?: meta.contentId?.let { com.example.course.LessonCacheManager.getLessonById(it) }
+                                                    ?: meta.liveClassId?.let { com.example.course.LessonCacheManager.getLessonById(it) }
+                                                val resolvedLiveClass = (routineMatch?.live_class ?: com.example.api.LiveClassDetails()).copy(
+                                                    id = routineMatch?.live_class?.id ?: meta.liveClassId ?: meta.contentId,
+                                                    playback_url = routineMatch?.live_class?.playback_url ?: meta.streamUrl,
+                                                    recording_url = routineMatch?.live_class?.recording_url ?: meta.streamUrl,
+                                                    chapter_id = routineMatch?.live_class?.chapter_id ?: meta.chapterId
                                                 )
+                                                val matchedLesson = if (routineMatch != null) {
+                                                    routineMatch.copy(
+                                                        content_id = routineMatch.content_id ?: meta.contentId,
+                                                        chapter_id = routineMatch.chapter_id ?: meta.chapterId,
+                                                        recording_url = routineMatch.recording_url ?: meta.streamUrl,
+                                                        live_class = if (resolvedLiveClass.id != null || resolvedLiveClass.playback_url != null) resolvedLiveClass else routineMatch.live_class
+                                                    )
+                                                } else {
+                                                    StudentLessonItem(
+                                                        id = targetId,
+                                                        content_id = meta.contentId ?: meta.liveClassId ?: targetId,
+                                                        title = resumable.title,
+                                                        subject_name = resumable.subjectName,
+                                                        chapter_id = meta.chapterId,
+                                                        phase_id = resumable.courseId,
+                                                        program_id = uiState.activeProgram?.id,
+                                                        recording_url = meta.streamUrl,
+                                                        live_class = if (resolvedLiveClass.id != null || resolvedLiveClass.playback_url != null) resolvedLiveClass else null
+                                                    )
+                                                }
                                                 onOpenLessonDetail?.invoke(matchedLesson)
                                             }
                                         },

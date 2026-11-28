@@ -41,6 +41,22 @@ class VideoProgressManager private constructor(private val context: Context) {
             get() = positionMs > 5_000L && (durationMs <= 0 || positionMs < (durationMs - 10_000L)) && !isCompleted
     }
 
+    data class ResumeMetadata(
+        val contentId: String? = null,
+        val liveClassId: String? = null,
+        val streamUrl: String? = null,
+        val chapterId: String? = null
+    )
+
+    fun getResumeMetadata(videoKey: String): ResumeMetadata {
+        return ResumeMetadata(
+            contentId = prefs.getString("meta_cid_$videoKey", null)?.takeIf { it.isNotBlank() && it != "null" },
+            liveClassId = prefs.getString("meta_lcid_$videoKey", null)?.takeIf { it.isNotBlank() && it != "null" },
+            streamUrl = prefs.getString("meta_url_$videoKey", null)?.takeIf { it.isNotBlank() && it != "null" },
+            chapterId = prefs.getString("meta_chap_$videoKey", null)?.takeIf { it.isNotBlank() && it != "null" }
+        )
+    }
+
     /**
      * Generates a stable, unique key for a video regardless of whether it's streaming, offline, or renamed.
      */
@@ -170,20 +186,28 @@ class VideoProgressManager private constructor(private val context: Context) {
         subjectName: String? = null,
         courseId: String? = null,
         positionMs: Long,
-        durationMs: Long
+        durationMs: Long,
+        contentId: String? = null,
+        liveClassId: String? = null,
+        streamUrl: String? = null,
+        chapterId: String? = null
     ) {
         if (videoKey.isBlank() || positionMs < 2000L) return
 
         val isCompleted = durationMs > 0 && (positionMs >= (durationMs * 0.80f) || (durationMs - positionMs) < 15_000L)
         val now = System.currentTimeMillis()
 
-        // 1. Fast synchronous save
-        prefs.edit()
-            .putLong("pos_$videoKey", positionMs)
-            .putLong("dur_$videoKey", durationMs)
-            .putBoolean("done_$videoKey", isCompleted)
-            .putLong("time_$videoKey", now)
-            .apply()
+        // 1. Fast synchronous save (including instant-resume metadata)
+        prefs.edit().apply {
+            putLong("pos_$videoKey", positionMs)
+            putLong("dur_$videoKey", durationMs)
+            putBoolean("done_$videoKey", isCompleted)
+            putLong("time_$videoKey", now)
+            if (!contentId.isNullOrBlank() && contentId != "null") putString("meta_cid_$videoKey", contentId)
+            if (!liveClassId.isNullOrBlank() && liveClassId != "null") putString("meta_lcid_$videoKey", liveClassId)
+            if (!streamUrl.isNullOrBlank() && streamUrl != "null") putString("meta_url_$videoKey", streamUrl)
+            if (!chapterId.isNullOrBlank() && chapterId != "null") putString("meta_chap_$videoKey", chapterId)
+        }.apply()
 
         // 2. Persistent Room save (survives course switching, cache clearing)
         scope.launch {

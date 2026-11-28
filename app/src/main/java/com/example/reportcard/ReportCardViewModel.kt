@@ -24,7 +24,7 @@ enum class ReportTab {
 
 data class ReportCardUiState(
     val selectedTab: ReportTab = ReportTab.RESULT_DETAILS,
-    val programTitle: String = com.example.utils.AppLang.tr("HSC 2026 Academic Program", "এইচএসসি ২০২৬ একাডেমিক প্রোগ্রাম"),
+    val programTitle: String = com.example.utils.AppLang.tr("Academic Program", "একাডেমিক প্রোগ্রাম"),
     val programId: String = "",
     val phases: List<PhaseItem> = emptyList(),
     val selectedPhase: PhaseItem? = null,
@@ -145,23 +145,39 @@ class ReportCardViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
-                var actualProgramId = programId ?: _uiState.value.programId
+                var actualProgramId = programId?.takeIf { it.isNotBlank() }
+                    ?: _uiState.value.programId.takeIf { it.isNotBlank() }
+                    ?: sessionManager.getActiveProgramId().orEmpty()
 
                 // 1. Fetch academic programs if programId is empty
                 if (actualProgramId.isBlank()) {
                     try {
+                        val className = sessionManager.getUserClassName()?.takeIf { it.isNotBlank() }
+                        val group = com.example.syllabus.normalizeStudyGroupEnum(className, sessionManager.getUserGroup())
+                        val batchId = com.example.syllabus.formatSyllabusBatchId(
+                            classCode = className,
+                            passingYear = sessionManager.getAcademicPassingYear(),
+                            fallbackBatchLabel = sessionManager.getUserBatchId()
+                        )
+                        val vendor = sessionManager.getUserVendor() ?: "BD"
                         val progQuery = GraphQlQuery(
                             operationName = "GetAcademicProgram",
                             query = """
-                                query GetAcademicProgram {
-                                  listAcademicProgramByEnrollment {
+                                query GetAcademicProgram(${'$'}batch_id: String, ${'$'}className: AcademicProgramClassEnum, ${'$'}group: StudyGroupTypeEnum, ${'$'}vendor: VendorEnum) {
+                                  listAcademicProgramByEnrollment(batch_id: ${'$'}batch_id, class: ${'$'}className, group: ${'$'}group, vendor: ${'$'}vendor) {
                                     enrolled_programs {
                                       id
                                       title_bn
                                     }
                                   }
                                 }
-                            """.trimIndent()
+                            """.trimIndent(),
+                            variables = mapOf(
+                                "batch_id" to batchId,
+                                "className" to className,
+                                "group" to group,
+                                "vendor" to vendor
+                            )
                         )
                         val progRes = apiService.getAcademicProgram(progQuery)
                         val enrolled = progRes.data?.listAcademicProgramByEnrollment?.enrolled_programs ?: emptyList()
@@ -177,7 +193,14 @@ class ReportCardViewModel(
                 }
 
                 if (actualProgramId.isBlank()) {
-                    actualProgramId = "66f4ef8a51351187491cf0eb" // Fallback default program
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = com.example.utils.AppLang.tr(
+                            "No active course found for report card.",
+                            "রিপোর্ট কার্ড দেখার জন্য কোনো সক্রিয় কোর্স পাওয়া যায়নি।"
+                        )
+                    )
+                    return@launch
                 }
                 _uiState.value = _uiState.value.copy(programId = actualProgramId)
 
@@ -1061,17 +1084,19 @@ class ReportCardViewModel(
             ?: studentItem?.study_group
             ?: studentItem?.user?.effectiveGroup
             ?: sessionManager.getUserGroup()
-            ?: com.example.utils.AppLang.tr("Science", "বিজ্ঞান")
+            ?: ""
 
         val batchDisplay = studentItem?.batch
             ?: studentItem?.user?.batch
+            ?: sessionManager.getUserBatchId()
             ?: sessionManager.getActiveProgramBatchId()
-            ?: com.example.utils.AppLang.tr("HSC 2027", "এইচএসসি ২০২৭")
+            ?: ""
 
         val passingYear = studentItem?.passing_year
             ?: studentItem?.user?.passing_year
-            ?: batchDisplay.filter { it.isDigit() }.takeIf { it.isNotBlank() }
-            ?: "2027"
+            ?: com.example.syllabus.extractPassingYear(batchDisplay)
+            ?: sessionManager.getAcademicPassingYear()
+            ?: ""
 
         val gender = studentItem?.gender ?: studentItem?.user?.gender
         val dob = studentItem?.dob ?: studentItem?.user?.dob

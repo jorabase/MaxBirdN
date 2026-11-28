@@ -94,7 +94,11 @@ fun PracticeQuizResultScreen(
     val isBn = isBangla()
     val result = uiState.resultSummary
     val userName = remember(isBn) { sessionManager.getUserFullName() ?: AppLang.tr("Student", "শিক্ষার্থী") }
-    val userClass = remember(isBn) { sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: AppLang.tr("Class 11", "একাদশ শ্রেণি") }
+    val userClass = remember(isBn) {
+        sessionManager.getUserClassDisplay()?.takeIf { it.isNotBlank() }
+            ?: com.example.syllabus.formatClassDisplayName(sessionManager.getUserClassName())
+            ?: ""
+    }
     val userAvatar = remember { sessionManager.getUserAvatar() }
 
     // Dark Navy theme colors

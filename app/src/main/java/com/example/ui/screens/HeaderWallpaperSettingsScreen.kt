@@ -75,7 +75,9 @@ fun HeaderWallpaperSettingsScreen(
         sessionManager.getUserFullName()?.takeIf { it.isNotBlank() } ?: AppLang.tr("Student", "শিক্ষার্থী")
     }
     val classDisplay = remember {
-        sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: "HSC"
+        sessionManager.getUserClassDisplay()?.takeIf { it.isNotBlank() }
+            ?: com.example.syllabus.formatClassDisplayName(sessionManager.getUserClassName())
+            ?: ""
     }
     val activeCourseTitle = remember {
         sessionManager.getActiveProgramTitleBn() ?: AppLang.tr("Academic Program", "একাডেমিক প্রোগ্রাম")

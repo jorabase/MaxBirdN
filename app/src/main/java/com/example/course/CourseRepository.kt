@@ -41,22 +41,16 @@ class CourseRepository(
         batchId: String? = null,
         className: String,
         group: String? = null,
-        vendor: String = "BD"
+        vendor: String = "BD",
+        forceRefresh: Boolean = false
     ): AcademicProgramResponse {
-        val classUpper = className.uppercase()
-        val formattedGroup = if (classUpper in listOf("C5", "C6", "C7", "C8", "C05", "C06", "C07", "C08")) {
-            "None"
-        } else {
-            when (group?.lowercase()) {
-                "humanities", "arts", "hum" -> "Humanities"
-                "science", "sci" -> "Science"
-                "business_studies", "businessstudies", "business", "commerce", "bus" -> "BusinessStudies"
-                else -> "None"
-            }
-        }
+        val formattedGroup = com.example.syllabus.normalizeStudyGroupEnum(className, group)
+        val cleanBatchId = batchId?.trim()?.takeIf { it.isNotBlank() }
 
-        val cacheKey = "$batchId-$className-$formattedGroup-$vendor"
-        programCache[cacheKey]?.let { return it }
+        val cacheKey = "${cleanBatchId.orEmpty()}-$className-$formattedGroup-$vendor"
+        if (!forceRefresh) {
+            programCache[cacheKey]?.let { return it }
+        }
 
         val query = GraphQlQuery(
             operationName = "GetAcademicProgram",
@@ -120,21 +114,23 @@ class CourseRepository(
                 }
             """.trimIndent(),
             variables = mapOf(
-                "batch_id" to batchId,
+                "batch_id" to cleanBatchId,
                 "className" to className,
                 "group" to formattedGroup,
                 "vendor" to vendor
             )
         )
         val response = apiService.getAcademicProgram(query)
-        if (response.data?.listAcademicProgramByEnrollment?.enrolled_programs?.isNotEmpty() == true) {
+        val hasAnyPrograms = !response.data?.listAcademicProgramByEnrollment?.enrolled_programs.isNullOrEmpty() ||
+            !response.data?.listAcademicProgramByEnrollment?.other_programs.isNullOrEmpty()
+        if (hasAnyPrograms) {
             programCache[cacheKey] = response
         }
         return response
     }
 
     suspend fun getAcademicProgramByEnrollment(className: String): AcademicProgramResponse {
-        return getAcademicProgramByEnrollment(null, className, null, "BD")
+        return getAcademicProgramByEnrollment(null, className, null, "BD", false)
     }
 
     suspend fun generateFreeTrialEnrolment(programId: String, userId: String): Result<String> {
@@ -422,25 +418,18 @@ class CourseRepository(
         userClass: String? = null,
         userGroup: String? = null
     ): List<AcademicChapterItem> {
-        val rawClass = userClass ?: "C11"
-        val rawGroup = userGroup ?: "Humanities"
-
+        val rawClass = userClass?.trim().orEmpty()
         val classEnumVal = when (rawClass.uppercase()) {
             "C11", "C12", "HSC" -> "HSC"
-            "C9", "C10", "SSC" -> "SSC"
+            "C9", "C09", "C10", "SSC" -> "SSC"
+            "C5", "C05" -> "C5"
             "C6", "C06" -> "C6"
             "C7", "C07" -> "C7"
             "C8", "C08" -> "C8"
-            else -> "HSC"
+            else -> rawClass.ifBlank { "HSC" }
         }
 
-        val groupEnumVal = when (rawGroup.lowercase()) {
-            "science", "sci", "বিজ্ঞান" -> "Science"
-            "humanities", "arts", "hum", "মানবিক" -> "Humanities"
-            "business_studies", "businessstudies", "business", "commerce", "bus", "ব্যবসায় শিক্ষা", "ব্যবসায় শিক্ষা" -> "BusinessStudies"
-            "none", "" -> "None"
-            else -> if (classEnumVal in listOf("C6", "C7", "C8")) "None" else "Humanities"
-        }
+        val groupEnumVal = com.example.syllabus.normalizeStudyGroupEnum(rawClass, userGroup)
 
         val queryStr = """
             query GetSubjectHierarchyWithQuestionCounts(${'$'}class: ClassEnum, ${'$'}group: StudyGroupTypeEnum) {
@@ -465,12 +454,15 @@ class CourseRepository(
             }
         """.trimIndent()
 
-        val attempts = listOf(
-            mapOf("class" to classEnumVal, "group" to groupEnumVal),
-            mapOf("class" to classEnumVal, "group" to "None"),
-            mapOf("class" to "HSC", "group" to "Humanities"),
-            mapOf("class" to "SSC", "group" to "Science")
-        ).distinct()
+        val attempts = buildList {
+            add(mapOf("class" to classEnumVal, "group" to groupEnumVal))
+            if (classEnumVal in listOf("HSC", "SSC")) {
+                add(mapOf("class" to classEnumVal, "group" to "Science"))
+                add(mapOf("class" to classEnumVal, "group" to "Humanities"))
+                add(mapOf("class" to classEnumVal, "group" to "BusinessStudies"))
+            }
+            add(mapOf("class" to classEnumVal, "group" to "None"))
+        }.distinct()
 
         for (vars in attempts) {
             try {
@@ -835,9 +827,15 @@ class CourseRepository(
         return emptyList()
     }
 
-    suspend fun getLiveClassDetails(liveClassId: String): AcademicProgramLiveClassItem? {
+    suspend fun getLiveClassDetails(liveClassId: String, forceRefresh: Boolean = false): AcademicProgramLiveClassItem? {
         if (liveClassId.isBlank()) return null
-        liveClassDetailsCache[liveClassId]?.let { return it }
+        if (!forceRefresh) {
+            liveClassDetailsCache[liveClassId]?.let { cached ->
+                if (!cached.playback_url.isNullOrBlank() && cached.playback_url != "null") {
+                    return cached
+                }
+            }
+        }
 
         // 1. Standard GetAcademicLiveClassDetails (exact schema from Shikho API)
         val standardQueryStr = """
@@ -899,7 +897,9 @@ class CourseRepository(
             }
             if (res.data?.academicProgramLiveClass != null) {
                 val item = res.data.academicProgramLiveClass
-                liveClassDetailsCache[liveClassId] = item
+                if (!item.playback_url.isNullOrBlank() && item.playback_url != "null") {
+                    liveClassDetailsCache[liveClassId] = item
+                }
                 return item
             }
         } catch (e: Exception) {
@@ -936,7 +936,9 @@ class CourseRepository(
             android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails minimal loaded=${res.data?.academicProgramLiveClass != null}")
             if (res.data?.academicProgramLiveClass != null) {
                 val item = res.data.academicProgramLiveClass
-                liveClassDetailsCache[liveClassId] = item
+                if (!item.playback_url.isNullOrBlank() && item.playback_url != "null") {
+                    liveClassDetailsCache[liveClassId] = item
+                }
                 return item
             }
         } catch (e: Exception) {
@@ -963,7 +965,9 @@ class CourseRepository(
             android.util.Log.d("LectureDebug", "GetAcademicLiveClassDetails ultra-minimal loaded=${res.data?.academicProgramLiveClass != null}")
             if (res.data?.academicProgramLiveClass != null) {
                 val item = res.data.academicProgramLiveClass
-                liveClassDetailsCache[liveClassId] = item
+                if (!item.playback_url.isNullOrBlank() && item.playback_url != "null") {
+                    liveClassDetailsCache[liveClassId] = item
+                }
                 return item
             }
         } catch (e: Exception) {

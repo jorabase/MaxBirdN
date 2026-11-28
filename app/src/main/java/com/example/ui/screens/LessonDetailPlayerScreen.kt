@@ -172,8 +172,6 @@ fun LessonDetailPlayerScreen(
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var livePlayerMode by remember { mutableStateOf("STREAM") }
-
     // Parse Subject Color
     val subjectThemeColor = remember(subjectColorHex) {
         if (!subjectColorHex.isNullOrBlank()) {
@@ -223,8 +221,8 @@ fun LessonDetailPlayerScreen(
     }
 
     // 3. Determine if recording is currently processing (live ended, upload delay 0-60 mins)
-    val isRecordingProcessing = remember(lesson, lesson?.isRecordingProcessing, isLiveOngoing, isUpcomingLesson, activeStreamUrl, candidateStreams) {
-        if (isLiveOngoing || isUpcomingLesson) return@remember false
+    val isRecordingProcessing = remember(lesson, lesson?.isRecordingProcessing, isLessonLoading, isLiveOngoing, isUpcomingLesson, activeStreamUrl, candidateStreams) {
+        if (isLessonLoading || isLiveOngoing || isUpcomingLesson) return@remember false
         if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) return@remember false
         lesson?.isLiveClass == true && !lesson.hasRecording && (
             (lesson.classEndMs != Long.MAX_VALUE && System.currentTimeMillis() >= lesson.classEndMs)
@@ -251,11 +249,11 @@ fun LessonDetailPlayerScreen(
         }
     }
 
-    // Diagnostics & Dialog States
+    // Diagnostics & Retry States
     var playbackError by remember { mutableStateOf<String?>(null) }
     var playbackErrorDetails by remember { mutableStateOf<String?>(null) }
-
-    var showCustomUrlDialog = false
+    var retryTrigger by remember(activeStreamUrl) { mutableIntStateOf(0) }
+    var bypassDiskCache by remember(activeStreamUrl) { mutableStateOf(false) }
 
     // Player States
     var isPlaying by remember { mutableStateOf(false) }
@@ -317,12 +315,16 @@ fun LessonDetailPlayerScreen(
     var videoScale by remember { mutableFloatStateOf(1.0f) }
     var videoPan by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
-    // ExoPlayer Instance with Shikho CDN headers & DefaultTrackSelector for HLS quality selection
-    val trackSelector = remember { DefaultTrackSelector(context, ShikhoPlayerManager.createAdaptiveTrackSelectionFactory()) }
-    val exoPlayer = remember(classType) {
-        ShikhoPlayerManager.buildExoPlayer(context, trackSelector, classType).apply {
-            repeatMode = if (classType == PlayerClassType.ANIMATED) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        }
+    // Single persistent TrackSelector + ExoPlayer pair for the entire screen lifecycle.
+    // Never recreate ExoPlayer with a shared TrackSelector (releasing the old player would release the shared TrackSelector and throw "Unexpected runtime error").
+    val trackSelector = remember(context) {
+        DefaultTrackSelector(context, ShikhoPlayerManager.createAdaptiveTrackSelectionFactory())
+    }
+    val exoPlayer = remember(context, trackSelector) {
+        ShikhoPlayerManager.buildExoPlayer(context, trackSelector, PlayerClassType.RECORDED_LECTURE)
+    }
+    LaunchedEffect(exoPlayer, classType) {
+        exoPlayer.repeatMode = if (classType == PlayerClassType.ANIMATED) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
     // Temporary 2X Fast Forward state (on Press & Hold)
@@ -475,21 +477,12 @@ fun LessonDetailPlayerScreen(
         )
     }
 
-    // Initialize media source when activeStreamUrl or mode changes
-    LaunchedEffect(activeStreamUrl, livePlayerMode, isUpcomingLesson, isLiveOngoing, isRecordingProcessing) {
-        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl, isUpcoming: $isUpcomingLesson, isLiveOngoing: $isLiveOngoing")
+    // Initialize media source when activeStreamUrl or retry state changes
+    LaunchedEffect(activeStreamUrl, retryTrigger, bypassDiskCache, isUpcomingLesson, isLiveOngoing, isRecordingProcessing) {
+        android.util.Log.d("LectureDebug", "calling player with URL: $activeStreamUrl, isUpcoming: $isUpcomingLesson, isLiveOngoing: $isLiveOngoing, bypassCache: $bypassDiskCache")
         playbackError = null
         playbackErrorDetails = null
         if (isUpcomingLesson || isLiveOngoing || isRecordingProcessing) {
-            try {
-                exoPlayer.stop()
-                exoPlayer.clearMediaItems()
-            } catch (_: Exception) {}
-            isBuffering = false
-            return@LaunchedEffect
-        }
-        if (livePlayerMode == "WEB_PLAYER") {
-            // When in WebView mode, stop ExoPlayer to prevent background stream fetching
             try {
                 exoPlayer.stop()
                 exoPlayer.clearMediaItems()
@@ -529,8 +522,11 @@ fun LessonDetailPlayerScreen(
                     url = urlToPlay,
                     isLive = false,
                     classType = classType,
-                    context = context
+                    context = context,
+                    useDiskCache = !bypassDiskCache
                 )
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
                 if (targetResumeMs > 1000L) {
                     exoPlayer.setMediaSource(mediaSource, targetResumeMs)
                 } else {
@@ -603,16 +599,15 @@ fun LessonDetailPlayerScreen(
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                if (livePlayerMode == "MEETING") {
-                    // Do not process or display ExoPlayer errors when user is in 100ms MEETING WebView
-                    isBuffering = false
-                    isPlaying = false
+                // 1. Try next candidate stream URL if available
+                if (currentStreamIndex + 1 < candidateStreams.size) {
+                    currentStreamIndex += 1
                     return
                 }
 
-                if (currentStreamIndex + 1 < candidateStreams.size) {
-                    currentStreamIndex += 1
-                    // Updating currentStreamIndex automatically changes activeStreamUrl, which triggers LaunchedEffect
+                // 2. Auto-recover once by bypassing disk cache (fixes stale/partial cached HLS segments)
+                if (!bypassDiskCache && activeStreamUrl.isNotBlank()) {
+                    bypassDiskCache = true
                     return
                 }
 
@@ -656,7 +651,11 @@ fun LessonDetailPlayerScreen(
                     subjectName = subjectName,
                     courseId = lesson?.phase_id,
                     positionMs = pos,
-                    durationMs = dur
+                    durationMs = dur,
+                    contentId = lesson?.content_id,
+                    liveClassId = lesson?.live_class?.id,
+                    streamUrl = activeStreamUrl.takeIf { it.isNotBlank() && it != "null" },
+                    chapterId = lesson?.chapter_id ?: lesson?.live_class?.chapter_id
                 )
             }
         } catch (_: Exception) {}
@@ -1134,6 +1133,41 @@ fun LessonDetailPlayerScreen(
                                 onNavigateToLiveClass?.invoke(classId, lessonId, title, subjectName)
                             }
                         )
+                    } else if (isLessonLoading && activeStreamUrl.isBlank() && candidateStreams.isEmpty()) {
+                        // Actively fetching stream and materials from server/database
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF0F172A)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(20.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(40.dp),
+                                    strokeWidth = 3.5.dp,
+                                    color = Color(0xFF38BDF8)
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text(
+                                    text = tr("Loading video & materials...", "ভিডিও ও স্টাডি মেটেরিয়াল লোড করা হচ্ছে..."),
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = tr("Please wait a moment", "অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করুন"),
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     } else if (isRecordingProcessing) {
                         RecordingProcessingHeader(
                             lesson = lesson,
@@ -1151,25 +1185,6 @@ fun LessonDetailPlayerScreen(
                             },
                             onViewSlide = handleViewSlide
                         )
-                    } else if (livePlayerMode == "WEB_PLAYER") {
-                        val webStreamUrl = activeStreamUrl
-                        if (webStreamUrl.isNotBlank()) {
-                            HlsWebPlayerView(
-                                streamUrl = webStreamUrl,
-                                onBackToStream = { livePlayerMode = "STREAM" },
-                                onOpenExternal = {
-                                    if (com.example.security.DeviceActivationRepository.isProfileViewPermissionCached(context)) {
-                                        try {
-                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webStreamUrl)).apply {
-                                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                            }
-                                            context.startActivity(intent)
-                                        } catch (_: Exception) {}
-                                    }
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
                     } else if (activeStreamUrl.isNotBlank() || candidateStreams.isNotEmpty()) {
                         // Portrait Video Surface with Manual Pinch-to-Zoom & Pan
                         Box(
@@ -1239,14 +1254,9 @@ fun LessonDetailPlayerScreen(
                                 slideUrl = slideUrlForError,
                                 onRefreshLesson = onRefreshLesson,
                                 onRetryPlayback = {
-                                    val curr = activeStreamUrl
-                                    activeStreamUrl = ""
-                                    coroutineScope.launch {
-                                        delay(150)
-                                        activeStreamUrl = curr
-                                    }
+                                    bypassDiskCache = true
+                                    retryTrigger += 1
                                 },
-                                onLaunchWebPlayer = { livePlayerMode = "WEB_PLAYER" },
                                 onViewSlide = handleViewSlide,
                                 onBack = onBack
                             )

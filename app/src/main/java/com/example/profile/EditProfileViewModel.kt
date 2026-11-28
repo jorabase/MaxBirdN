@@ -203,7 +203,7 @@ class EditProfileViewModel(
                         userClassDisplay = profile?.`class`?.display
                             ?: sessionManager.getUserClassDisplay() ?: "",
                         userClassCode = profile?.`class`?.code
-                            ?: sessionManager.getUserClassName() ?: "C11",
+                            ?: sessionManager.getUserClassName() ?: "",
                         userGroup = profile?.study_group
                             ?: sessionManager.getUserGroup() ?: "",
                         passingYear = profile?.passing_year ?: "",

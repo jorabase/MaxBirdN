@@ -57,11 +57,14 @@ enum class PlayerClassType(
 
             val lowerContent = (contentType ?: "").lowercase()
             val lowerClass = (classType ?: "").lowercase()
-            val lowerTitle = (title ?: "").lowercase()
             val lowerUrl = (url ?: "").lowercase()
 
-            if (lowerContent.contains("live") || lowerClass.contains("live") || lowerTitle.contains("live") || lowerUrl.contains("100ms.live")) {
+            if (lowerUrl.contains("100ms.live")) {
                 return LIVE
+            }
+
+            if (lowerContent.contains("anim") || lowerClass.contains("anim")) {
+                return ANIMATED
             }
 
             return RECORDED_LECTURE
@@ -232,7 +235,6 @@ object ShikhoPlayerManager {
             .setUserAgent(userAgent)
             .setDefaultRequestProperties(
                 mapOf(
-                    "referer" to referer,
                     "Referer" to referer,
                     "Origin" to "https://shikho.com",
                     "Accept-Encoding" to "identity",
@@ -245,12 +247,13 @@ object ShikhoPlayerManager {
     /**
      * Creates a CacheDataSource.Factory that transparently writes stream chunks to disk cache
      * as they arrive from OkHttp, giving instant playback on seek-back and offline continuity.
+     * Safely falls back to direct network upstream if SimpleCache cannot be initialized.
      */
     fun createCacheDataSourceFactory(
         context: Context,
         upstreamFactory: DataSource.Factory = createHttpDataSourceFactory()
     ): DataSource.Factory {
-        val cache = getMediaCache(context)
+        val cache = runCatching { getMediaCache(context) }.getOrNull() ?: return upstreamFactory
         return CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstreamFactory)
@@ -353,7 +356,8 @@ object ShikhoPlayerManager {
         isLive: Boolean = false,
         classType: PlayerClassType = if (isLive) PlayerClassType.LIVE else PlayerClassType.RECORDED_LECTURE,
         dataSourceFactory: DataSource.Factory? = null,
-        context: Context? = null
+        context: Context? = null,
+        useDiskCache: Boolean = true
     ): MediaSource {
         val isLocalFile = url.startsWith("/") || url.startsWith("file://")
         val uri = if (url.startsWith("/") && !url.startsWith("file://")) {
@@ -362,7 +366,17 @@ object ShikhoPlayerManager {
             Uri.parse(url)
         }
 
-        val isHls = url.contains(".m3u8", ignoreCase = true) || url.contains("hls", ignoreCase = true) || isLive || classType == PlayerClassType.LIVE
+        val cleanPath = url.substringBefore("?").lowercase(Locale.US)
+        val isExplicitProgressive = cleanPath.endsWith(".mp4") ||
+            cleanPath.endsWith(".webm") ||
+            cleanPath.endsWith(".mkv") ||
+            cleanPath.endsWith(".mov")
+        val isHls = !isExplicitProgressive && (
+            cleanPath.endsWith(".m3u8") ||
+                url.contains(".m3u8", ignoreCase = true) ||
+                isLive ||
+                classType == PlayerClassType.LIVE
+            )
 
         val mediaItem = MediaItem.Builder()
             .setUri(uri)
@@ -389,8 +403,8 @@ object ShikhoPlayerManager {
             DefaultDataSource.Factory(context)
         } else if (dataSourceFactory != null) {
             dataSourceFactory
-        } else if (isLive || classType == PlayerClassType.LIVE) {
-            // Never disk-cache live stream segments; use direct high-throughput OkHttp sockets
+        } else if (isLive || classType == PlayerClassType.LIVE || !useDiskCache) {
+            // Live streams or error-recovery retries bypass disk cache and use direct OkHttp streaming
             createHttpDataSourceFactory()
         } else if (context != null) {
             createCacheDataSourceFactory(context)

@@ -271,24 +271,14 @@ fun ProfileContent(
     }
 
     val classDisplayBn = remember(profile.`class`?.display, sessionManager, isBn) {
-        val raw = profile.`class`?.display ?: sessionManager?.getUserClassDisplay() ?: sessionManager?.getUserClassName() ?: ""
-        when (raw.trim().uppercase()) {
-            "C11", "CLASS 11", "11", "XI" -> AppLang.tr("Class 11", "একাদশ শ্রেণি")
-            "C12", "CLASS 12", "12", "XII" -> AppLang.tr("Class 12", "দ্বাদশ শ্রেণি")
-            "C10", "CLASS 10", "10", "X" -> AppLang.tr("Class 10", "দশম শ্রেণি")
-            "C9", "CLASS 9", "9", "IX" -> AppLang.tr("Class 9", "নবম শ্রেণি")
-            else -> raw.ifBlank { AppLang.tr("HSC", "এইচএসসি") }
-        }
+        val raw = profile.`class`?.display ?: sessionManager?.getUserClassDisplay() ?: sessionManager?.getUserClassName()
+        com.example.syllabus.formatClassDisplayName(raw).ifBlank { AppLang.tr("Not Set", "নির্ধারিত নয়") }
     }
 
     val groupDisplayBn = remember(profile.study_group, sessionManager, isBn) {
-        val raw = profile.study_group ?: sessionManager?.getUserGroup() ?: ""
-        when (raw.trim().lowercase()) {
-            "humanities", "humanities_group", "hum", "arts" -> AppLang.tr("Humanities", "মানবিক বিভাগ")
-            "science", "science_group", "sci" -> AppLang.tr("Science", "বিজ্ঞান বিভাগ")
-            "business", "business_studies", "commerce", "bs", "bba" -> AppLang.tr("Business Studies", "ব্যবসায় শিক্ষা বিভাগ")
-            else -> raw.ifBlank { AppLang.tr("Not Set", "নির্ধারিত নয়") }
-        }
+        val raw = profile.study_group ?: sessionManager?.getUserGroup()
+        com.example.syllabus.formatStudyGroupDisplayName(raw, includeDepartmentSuffix = true)
+            .ifBlank { AppLang.tr("Not Set", "নির্ধারিত নয়") }
     }
 
     val schoolDisplayBn = remember(profile.school?.name, isBn) {

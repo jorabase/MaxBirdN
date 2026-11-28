@@ -10,6 +10,10 @@ import java.util.concurrent.ConcurrentHashMap
 object LessonCacheManager {
     private val allLessons = ConcurrentHashMap<String, StudentLessonItem>()
 
+    fun clearCache() {
+        allLessons.clear()
+    }
+
     fun markLessonCompletedInCache(lessonId: String) {
         if (lessonId.isBlank()) return
         allLessons.forEach { (key, item) ->

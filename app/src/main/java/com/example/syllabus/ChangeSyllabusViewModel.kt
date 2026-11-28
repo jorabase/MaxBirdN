@@ -72,8 +72,8 @@ data class ChangeSyllabusUiState(
                 if (selectedGroup?.matchesCodeOrName(currentGroupCode) != true) return false
             }
             if (batchOptions.isNotEmpty() && selectedBatch != null) {
-                val selectedYear = selectedBatch.yearString.trim()
-                val currentYear = currentPassingYear?.trim()
+                val selectedYear = extractPassingYear(selectedBatch.yearString) ?: selectedBatch.yearString.trim()
+                val currentYear = extractPassingYear(currentPassingYear) ?: extractPassingYear(currentBatchLabel) ?: currentPassingYear?.trim()
                 val selectedLabel = selectedBatch.label?.trim()
                 val currentLabel = currentBatchLabel?.trim()
 
@@ -135,8 +135,9 @@ class ChangeSyllabusViewModel(
 
                 val storedClassCode = sessionManager.getUserClassName()
                 val storedGroupRaw = sessionManager.getUserGroup()
-                val storedPassingYear = sessionManager.getAcademicPassingYear()
                 val storedBatchLabel = sessionManager.getUserBatchId()
+                val storedPassingYear = extractPassingYear(sessionManager.getAcademicPassingYear())
+                    ?: extractPassingYear(storedBatchLabel)
 
                 val preselectedClass = classes.find {
                     it.code.equals(storedClassCode, true)
@@ -189,12 +190,16 @@ class ChangeSyllabusViewModel(
         if (_uiState.value.selectedClass?.code == classItem.code) return
 
         val availableGroups = resolveFilteredGroupsForClass(classItem)
-        val storedGroupRaw = sessionManager.getUserGroup()
+        val preferredGroupRaw = _uiState.value.selectedGroup?.code ?: sessionManager.getUserGroup()
 
         val defaultGroup = if (classItem.isGroupRequired) {
-            availableGroups.find { it.matchesCodeOrName(storedGroupRaw) }
+            availableGroups.find { it.matchesCodeOrName(preferredGroupRaw) }
                 ?: availableGroups.firstOrNull()
         } else null
+
+        val preferredYear = extractPassingYear(_uiState.value.selectedBatch?.yearString)
+            ?: extractPassingYear(sessionManager.getAcademicPassingYear())
+            ?: extractPassingYear(sessionManager.getUserBatchId())
 
         _uiState.value = _uiState.value.copy(
             selectedClass = classItem,
@@ -208,7 +213,7 @@ class ChangeSyllabusViewModel(
         fetchBatchOptions(
             classCode = classItem.code,
             preferredLabel = sessionManager.getUserBatchId(),
-            preferredYear = sessionManager.getAcademicPassingYear()
+            preferredYear = preferredYear
         )
     }
 
@@ -365,9 +370,10 @@ class ChangeSyllabusViewModel(
                     }
                 }
 
-                // ===== 3) UpdateExamYear mutation =====
-                val passingYear = selectedBatch?.yearString.orEmpty()
+                // ===== 3) UpdateExamYear mutation + token refresh =====
+                val passingYear = selectedBatch?.yearString?.trim().orEmpty()
                 if (passingYear.isNotBlank()) {
+                    var examYearUpdated = false
                     try {
                         val updateExamQuery = GraphQlQuery(
                             operationName = "UpdateExamYear",
@@ -383,41 +389,80 @@ class ChangeSyllabusViewModel(
                                 "type" to "student"
                             )
                         )
-                        apiService.updateExamYear(updateExamQuery)
-                    } catch (_: Exception) {
-                        // non-fatal — token already updated, exam year failed চুপচাপ ignore
+                        val examRes = apiService.updateExamYear(updateExamQuery)
+                        examYearUpdated = examRes.errors.isNullOrEmpty()
+                    } catch (e: Exception) {
+                        android.util.Log.w("ChangeSyllabusVM", "UpdateExamYear warning: ${e.message}")
+                    }
+
+                    // Re-mint auth tokens after UpdateExamYear so JWT claims also reflect the updated passing_year
+                    if (examYearUpdated) {
+                        try {
+                            val refreshVars = mutableMapOf<String, Any?>("userclass" to selectedClass.code)
+                            if (successfulEnumVal != null) refreshVars["study_group"] = successfulEnumVal
+                            val refreshQuery = GraphQlQuery(
+                                operationName = "ChangeSyllabus",
+                                query = """
+                                    mutation ChangeSyllabus(${'$'}study_group: StudyGroupTypeEnum, ${'$'}userclass: ClassEnumCommon) {
+                                      changeSyllabus(study_group: ${'$'}study_group, class: ${'$'}userclass) {
+                                        access_token
+                                        id_token
+                                        refresh_token
+                                      }
+                                    }
+                                """.trimIndent(),
+                                variables = refreshVars
+                            )
+                            val refreshed = apiService.changeSyllabus(refreshQuery).data?.changeSyllabus
+                            if (!refreshed?.access_token.isNullOrBlank()) {
+                                sessionManager.updateAuthTokens(
+                                    accessToken = refreshed!!.access_token!!,
+                                    refreshToken = refreshed.refresh_token,
+                                    idToken = refreshed.id_token
+                                )
+                            }
+                        } catch (_: Exception) {
+                            // non-fatal — first ChangeSyllabus tokens are already valid
+                        }
                     }
                 }
 
                 // ===== 4) Local persistence =====
-                val effectiveBatchId = when {
-                    selectedClass.code.equals("C11", true) && passingYear.isNotBlank() -> "HSC $passingYear"
-                    selectedClass.code.equals("C12", true) && passingYear.isNotBlank() -> "HSC $passingYear"
-                    selectedClass.code.equals("C10", true) && passingYear.isNotBlank() -> "SSC $passingYear"
-                    selectedClass.code.equals("C9", true) && passingYear.isNotBlank() -> "SSC $passingYear"
-                    else -> selectedBatch?.label ?: passingYear.ifBlank { null }
+                val effectiveBatchId = formatSyllabusBatchId(
+                    classCode = selectedClass.code,
+                    passingYear = passingYear,
+                    fallbackBatchLabel = selectedBatch?.label
+                )
+
+                val effectiveGroupToSave = if (selectedClass.isGroupRequired) {
+                    successfulEnumVal ?: selectedGroup?.code
+                } else {
+                    null
                 }
 
                 sessionManager.saveUserAcademicInfo(
                     batchId = effectiveBatchId,
                     className = selectedClass.code,
-                    group = successfulEnumVal ?: selectedGroup?.code,
+                    group = effectiveGroupToSave,
                     vendor = selectedClass.vendor ?: "BD",
-                    passingYear = passingYear.ifBlank { null }
+                    passingYear = passingYear.ifBlank { null },
+                    clearPassingYearIfNull = true
                 )
 
                 sessionManager.saveUserProfile(
                     firstName = sessionManager.getUserFirstName(),
-                    lastName = "",
+                    lastName = sessionManager.getUserLastName().orEmpty(),
                     avatar = sessionManager.getUserAvatar(),
                     schoolName = sessionManager.getUserSchoolName(),
-                    // FIX #4: Settings-এর সাথে consistent বাংলা ordinal নাম
                     classDisplay = selectedClass.bengaliClassName(),
                     phone = sessionManager.getUserPhone()
                 )
 
+                // Purge all active-program & in-memory course/lesson caches before in-process Activity restart
                 com.example.notification.ClassAlarmScheduler.cancelAllAlarms(context)
                 com.example.notification.ShikhoNotificationManager.unsubscribeActiveCourseTopics(context)
+                com.example.course.CourseRepository.clearCache()
+                com.example.course.LessonCacheManager.clearCache()
                 sessionManager.clearActiveProgram()
 
                 _uiState.value = _uiState.value.copy(

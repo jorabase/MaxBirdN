@@ -42,7 +42,6 @@ fun PlayerErrorOverlay(
     slideUrl: String?,
     onRefreshLesson: (() -> Unit)?,
     onRetryPlayback: () -> Unit,
-    onLaunchWebPlayer: () -> Unit,
     onViewSlide: (LessonAttachmentItem) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -86,27 +85,29 @@ fun PlayerErrorOverlay(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
+                Button(
                     onClick = onRetryPlayback,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(tr("Retry", "পুনরায় চেষ্টা"), fontSize = 12.sp)
+                    Text(tr("Retry", "পুনরায় চেষ্টা"), fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                 }
 
-                Button(
-                    onClick = onLaunchWebPlayer,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(tr("Web Player", "ব্রাউজার প্লেয়ার"), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                if (onRefreshLesson != null) {
+                    OutlinedButton(
+                        onClick = onRefreshLesson,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(tr("Reload", "রিলোড"), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
 

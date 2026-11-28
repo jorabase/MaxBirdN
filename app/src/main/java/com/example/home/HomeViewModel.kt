@@ -94,8 +94,8 @@ class HomeViewModel(
             userName = sessionManager.getUserFullName() ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী"),
             userFirstName = sessionManager.getUserFirstName() ?: (sessionManager.getUserFullName()?.split(" ")?.firstOrNull() ?: com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")),
             userAvatar = sessionManager.getUserAvatar(),
-            userClass = sessionManager.getUserClassDisplay() ?: sessionManager.getUserClassName() ?: com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি"),
-            userGroup = sessionManager.getUserGroup() ?: com.example.utils.AppLang.tr("Humanities", "মানবিক"),
+            userClass = sessionManager.getUserClassDisplay() ?: com.example.syllabus.formatClassDisplayName(sessionManager.getUserClassName()),
+            userGroup = sessionManager.getUserGroup().orEmpty(),
             userSchool = sessionManager.getUserSchoolName() ?: ""
         )
     )
@@ -450,17 +450,7 @@ class HomeViewModel(
     }
 
     private fun classCodeToBengaliName(code: String?): String {
-        return when (code?.trim()?.uppercase()) {
-            "C5", "C05" -> com.example.utils.AppLang.tr("Class 5", "পঞ্চম শ্রেণি")
-            "C6", "C06" -> com.example.utils.AppLang.tr("Class 6", "ষষ্ঠ শ্রেণি")
-            "C7", "C07" -> com.example.utils.AppLang.tr("Class 7", "সপ্তম শ্রেণি")
-            "C8", "C08" -> com.example.utils.AppLang.tr("Class 8", "অষ্টম শ্রেণি")
-            "C9", "C09" -> com.example.utils.AppLang.tr("Class 9", "নবম শ্রেণি")
-            "C10" -> com.example.utils.AppLang.tr("Class 10", "দশম শ্রেণি")
-            "C11" -> com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি")
-            "C12" -> com.example.utils.AppLang.tr("Class 12", "দ্বাদশ শ্রেণি")
-            else -> code ?: com.example.utils.AppLang.tr("Class 11", "একাদশ শ্রেণি")
-        }
+        return com.example.syllabus.formatClassDisplayName(code)
     }
 
     private suspend fun fetchUserProfile() {
@@ -468,7 +458,7 @@ class HomeViewModel(
             val userId = sessionManager.getUserId() ?: ""
             val profileQuery = GraphQlQuery(
                 operationName = "GetProfile",
-                query = "query GetProfile(\$user_id: String, \$type: String!) { profile(user_id: \$user_id, type: \$type) { id first_name last_name avatar gender dob study_group class { code display } school { id name } user { phone email } } }",
+                query = "query GetProfile(\$user_id: String, \$type: String!) { profile(user_id: \$user_id, type: \$type) { id first_name last_name avatar gender dob study_group passing_year class { code display } school { id name } user { phone email } } }",
                 variables = mapOf(
                     "user_id" to userId,
                     "type" to "student"
@@ -491,10 +481,20 @@ class HomeViewModel(
                     else -> com.example.utils.AppLang.tr("Student", "শিক্ষার্থী")
                 }
 
-                val currentBatchId = sessionManager.getUserBatchId() ?: "HSC 2027"
-                val effectiveClass = profile.`class`?.code ?: sessionManager.getUserClassName() ?: "C11"
-                val effectiveGroup = profile.study_group ?: sessionManager.getUserGroup() ?: "Humanities"
-                val effectiveClassDisplay = profile.`class`?.display ?: classCodeToBengaliName(effectiveClass)
+                val effectiveClass = profile.`class`?.code?.takeIf { it.isNotBlank() }
+                    ?: sessionManager.getUserClassName()
+                val effectiveGroup = profile.study_group?.takeIf { it.isNotBlank() }
+                    ?: sessionManager.getUserGroup()
+                val effectivePassingYear = com.example.syllabus.extractPassingYear(profile.passing_year)
+                    ?: com.example.syllabus.extractPassingYear(sessionManager.getAcademicPassingYear())
+                    ?: com.example.syllabus.extractPassingYear(sessionManager.getUserBatchId())
+                val currentBatchId = com.example.syllabus.formatSyllabusBatchId(
+                    classCode = effectiveClass,
+                    passingYear = effectivePassingYear,
+                    fallbackBatchLabel = sessionManager.getUserBatchId()
+                )
+                val effectiveClassDisplay = profile.`class`?.display?.takeIf { it.isNotBlank() }
+                    ?: classCodeToBengaliName(effectiveClass)
 
                 sessionManager.saveUserProfile(
                     firstName = firstName.ifBlank { first },
@@ -508,8 +508,8 @@ class HomeViewModel(
                     batchId = currentBatchId,
                     className = effectiveClass,
                     group = effectiveGroup,
-                    vendor = "BD",
-                    passingYear = sessionManager.getAcademicPassingYear()
+                    vendor = sessionManager.getUserVendor() ?: "BD",
+                    passingYear = effectivePassingYear
                 )
 
                 _uiState.value = _uiState.value.copy(
@@ -518,7 +518,7 @@ class HomeViewModel(
                     userFirstName = first,
                     userAvatar = profile.avatar,
                     userClass = effectiveClassDisplay,
-                    userGroup = effectiveGroup,
+                    userGroup = effectiveGroup.orEmpty(),
                     userSchool = profile.school?.name ?: ""
                 )
             }
@@ -528,9 +528,18 @@ class HomeViewModel(
     }
 
     private suspend fun fetchAcademicPrograms() {
-        val className = sessionManager.getUserClassName() ?: "C11"
-        val group = sessionManager.getUserGroup() ?: "Humanities"
-        val batchId = sessionManager.getActiveProgramBatchId() ?: sessionManager.getUserBatchId()
+        val className = sessionManager.getUserClassName()?.takeIf { it.isNotBlank() }
+        if (className == null) {
+            _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false)
+            return
+        }
+        val formattedGroup = com.example.syllabus.normalizeStudyGroupEnum(className, sessionManager.getUserGroup())
+        // Always use the user's current syllabus batch (NOT active_program_batch_id of a previously enrolled course)
+        val batchId = com.example.syllabus.formatSyllabusBatchId(
+            classCode = className,
+            passingYear = sessionManager.getAcademicPassingYear(),
+            fallbackBatchLabel = sessionManager.getUserBatchId()
+        )
         val vendor = sessionManager.getUserVendor() ?: "BD"
 
         try {
@@ -554,12 +563,7 @@ class HomeViewModel(
                     variables = mapOf(
                         "batch_id" to batchId,
                         "className" to className,
-                        "group" to (if (className.uppercase() in listOf("C5", "C6", "C7", "C8", "C05", "C06", "C07", "C08")) "None" else when(group.lowercase()) {
-                            "humanities", "arts", "hum", "মানবিক" -> "Humanities"
-                            "science", "sci", "বিজ্ঞান" -> "Science"
-                            "business_studies", "businessstudies", "business", "commerce", "bus", "ব্যবসায় শিক্ষা", "ব্যবসায় শিক্ষা" -> "BusinessStudies"
-                            else -> "None"
-                        }),
+                        "group" to formattedGroup,
                         "vendor" to vendor
                     )
                 )
